@@ -1,7 +1,8 @@
 asgiref==3.6.0
 Django==4.1.6
 djangorestframework==3.14.0
-psycopg2-binary==2.9.5
+mysqlclient==2.1.1
 python-decouple==3.7
 pytz==2022.7.1
 sqlparse==0.4.3
+tzdata==2022.7
