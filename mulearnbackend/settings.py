@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     # custom apps
     'utils.apps.UtilsConfig',
     'api.apps.ApiConfig',
+    'user',
 ]
 
 MIDDLEWARE = [
