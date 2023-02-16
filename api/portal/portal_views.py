@@ -5,6 +5,7 @@ from utils.utils_views import CustomResponse
 
 # class AddPortal(APIView):
 #     def post(self, request):
+#         print(request)
 #         serializer = PortalSerializer(data=request.data)
 #         if serializer.is_valid():
 #             obj = serializer.save()
