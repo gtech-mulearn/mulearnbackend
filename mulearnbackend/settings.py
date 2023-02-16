@@ -40,7 +40,8 @@ INSTALLED_APPS = [
     # custom apps
     'utils.apps.UtilsConfig',
     'api.apps.ApiConfig',
-    'user',
+    'user.apps.UserConfig',
+    'portal.apps.PortalConfig',
 ]
 
 MIDDLEWARE = [

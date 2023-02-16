@@ -1,8 +1,6 @@
-from django.urls import path
-
-from . import views
+from django.urls import path, include
 
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
-    path('', views.ArticleView.as_view()),
+    path('portal/', include('api.portal.urls'))
 ]
