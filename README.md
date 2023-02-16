@@ -24,14 +24,16 @@ pip install -r requirements.txt
 ### Set environment variables
 Create a .env file in the project root directory and add the following properties:
 ```markdown
-SECRET_KEY=
-DEBUG=
-DATABASE_ENGINE=
-DATABASE_USER=
-DATABASE_PASSWORD=
-DATABASE_NAME=
-DATABASE_HOST=
-DATABASE_PORT=
+SECRET_KEY =
+DEBUG =
+ALLOWED_HOSTS =
+
+DATABASE_ENGINE =
+DATABASE_USER =
+DATABASE_PASSWORD =
+DATABASE_NAME =
+DATABASE_HOST =
+DATABASE_PORT =
 ```
 Replace the properties with actual values.
 
