@@ -6,8 +6,9 @@ from user.models import Student
 from decouple import config
 from uuid import uuid4
 from datetime import datetime, timedelta
-
-
+from django.core.mail import send_mail
+from decouple import config
+from django.conf import settings
 
 # class AddPortal(APIView):
 #     def post(self, request):
@@ -37,7 +38,13 @@ class MuidValidate(APIView):
         mail_token = uuid4()
         expiry_time = datetime.now() + timedelta(seconds=1800)
         PortalUserMailValidate.objects.create(portal_id=portal,user_id=user,token=mail_token,expiry=expiry_time)
-
+        DOMAIN_NAME = config('DOMAIN_NAME')
+        portal_name = portal.name
+        recipient_list = [user.email]
+        subject = "Validate mu-id"
+        email_from = settings.EMAIL_HOST_USER
+        mail_message = f"{user.fullname} have requested to approve muid for {portal_name}.If its you click the following link to authorize {DOMAIN_NAME}/portal/user/validate/{mail_token}"
+        send_mail(subject,mail_message,email_from,recipient_list)
         return CustomResponse({"hasError":False,"statusCode":200,"message":"Success","response":{"name":user.fullname,"muid":user.mu_id}}).get_success_response()
     
     

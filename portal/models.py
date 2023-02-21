@@ -7,7 +7,7 @@ from user.models import Student
 class Portal(models.Model):
     id = models.CharField(max_length=36, primary_key=True)
     portal_token = models.CharField(max_length=36)
-    title = models.CharField(max_length=75)
+    name = models.CharField(max_length=75)
     link = models.CharField(max_length=100, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
