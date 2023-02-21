@@ -16,8 +16,8 @@ class Portal(models.Model):
 
 
 class PortalUserAuth(models.Model):
-    portal_id = models.ForeignKey(Portal, on_delete=models.CASCADE)
-    user_id = models.ForeignKey(Student, on_delete=models.CASCADE)
+    portal = models.ForeignKey(Portal, on_delete=models.CASCADE)
+    user = models.ForeignKey(Student, on_delete=models.CASCADE)
     is_authenticated = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -26,9 +26,9 @@ class PortalUserAuth(models.Model):
 
 
 class PortalUserMailValidate(models.Model):
-    portal_id = models.ForeignKey(Portal, on_delete=models.CASCADE)
-    user_id = models.ForeignKey(Student, on_delete=models.CASCADE)
-    token = models.CharField(max_length=36,null=False)
+    portal = models.ForeignKey(Portal, on_delete=models.CASCADE)
+    user = models.ForeignKey(Student, on_delete=models.CASCADE)
+    token = models.CharField(max_length=36, null=False)
     expiry = models.DateTimeField(null=False)
     created_at = models.DateTimeField(auto_now_add=True)
 
