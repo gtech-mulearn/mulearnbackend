@@ -27,6 +27,7 @@ Create a .env file in the project root directory and add the following propertie
 SECRET_KEY =
 DEBUG =
 ALLOWED_HOSTS =
+LOGGER_PATH = 
 
 DATABASE_ENGINE =
 DATABASE_USER =
@@ -34,6 +35,14 @@ DATABASE_PASSWORD =
 DATABASE_NAME =
 DATABASE_HOST =
 DATABASE_PORT =
+
+EMAIL_BACKEND = 
+EMAIL_HOST = 
+EMAIL_HOST_USER =
+EMAIL_HOST_PASSWORD = 
+EMAIL_PORT = 
+EMAIL_USE_TLS = 
+
 ```
 Replace the properties with actual values.
 
