@@ -34,4 +34,3 @@ class PortalUserMailValidate(models.Model):
 
     class Meta:
         db_table = 'portal_user_mail_validate'
-    
