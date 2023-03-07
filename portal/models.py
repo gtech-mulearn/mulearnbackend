@@ -16,6 +16,7 @@ class Portal(models.Model):
         managed = False
         db_table = 'portal'
 
+
 class PortalUserAuth(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     portal = models.ForeignKey(Portal, models.DO_NOTHING)
@@ -26,6 +27,7 @@ class PortalUserAuth(models.Model):
     class Meta:
         managed = False
         db_table = 'portal_user_auth'
+
 
 class PortalUserMailValidate(models.Model):
     id = models.CharField(primary_key=True, max_length=36)

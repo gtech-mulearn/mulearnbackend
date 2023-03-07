@@ -40,7 +40,8 @@ class Students(models.Model):
     email = models.CharField(max_length=100, blank=True, null=True)
     muid = models.CharField(max_length=100, blank=True, null=True)
     mobile = models.BigIntegerField(blank=True, null=True)
-    college = models.ForeignKey(Colleges, models.DO_NOTHING, db_column='college', to_field='college_code', blank=True, null=True)
+    college = models.ForeignKey(Colleges, models.DO_NOTHING, db_column='college', to_field='college_code', blank=True,
+                                null=True)
     area_of_interest = models.TextField(blank=True, null=True)
     created_on = models.DateTimeField(blank=True, null=True)
     discord_id = models.BigIntegerField(unique=True, blank=True, null=True)
@@ -50,7 +51,6 @@ class Students(models.Model):
     class Meta:
         managed = False
         db_table = 'students'
-
 
 
 class StudentKarma(models.Model):
