@@ -3,8 +3,7 @@ from .serializers import PortalSerializer
 from utils.utils_views import CustomResponse
 from datetime import datetime, timedelta
 import pytz
-from user.models import Student, TotalKarma
-import decouple
+from user.models import Students, StudentKarma
 from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
 from decouple import config
 from django.core.mail import send_mail
@@ -25,30 +24,30 @@ from uuid import uuid4
 
 class MuidValidate(APIView):
     def post(self, request):
-        portal_token = request.headers.get('portalToken')
-        portal = Portal.objects.filter(portal_token=portal_token).first()
+        portal_key = request.headers.get('portalKey')
+        portal = Portal.objects.filter(portal_key=portal_key).first()
         if portal is None:
             return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid Portal","response":{}}).get_failure_response() 
         name = request.data.get('name')
-        mu_id = request.data.get('mu_id')
-        user = Student.objects.get(mu_id=mu_id)  
+        muid = request.data.get('muid')
+        user = Students.objects.get(muid=muid)  
         
         if user is None:
-            return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid mu-id","response":{}}).get_failure_response()  
+            return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid muid","response":{}}).get_failure_response()  
         if not name:
             return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid name","response":{}}).get_failure_response() 
         
         mail_token = uuid4()
         expiry_time = datetime.now() + timedelta(seconds=1800)
-        PortalUserMailValidate.objects.create(portal_id=portal,user_id=user,token=mail_token,expiry=expiry_time)
+        PortalUserMailValidate.objects.create(portal=portal,user=user,token=mail_token,expiry=expiry_time)
         DOMAIN_NAME = config('DOMAIN_NAME')
         portal_name = portal.name
         recipient_list = [user.email]
         subject = "Validate mu-id"
-        email_from = settings.EMAIL_HOST_USER
+        email_from = config('EMAIL_HOST_USER')
         mail_message = f"{user.fullname} have requested to approve muid for {portal_name}.If its you click the following link to authorize {DOMAIN_NAME}/portal/user/validate/{mail_token}"
         send_mail(subject,mail_message,email_from,recipient_list)
-        return CustomResponse({"hasError":False,"statusCode":200,"message":"Success","response":{"name":user.fullname,"muid":user.mu_id}}).get_success_response()
+        return CustomResponse({"hasError":False,"statusCode":200,"message":"Success","response":{"name":user.fullname,"muid":user.muid}}).get_success_response()
     
 
 class UserMailTokenValidation(APIView):
@@ -58,6 +57,7 @@ class UserMailTokenValidation(APIView):
         utc = pytz.timezone('Asia/Kolkata')
         today_now = datetime.now(utc)
         mail_validation = PortalUserMailValidate.objects.all().values()
+        print(mail_validation,'ejj')
         for data in mail_validation:
             token = data['token']
             if mail_validation_token == token:
@@ -83,15 +83,15 @@ class UserMailTokenValidation(APIView):
 
 class GetKarma(APIView):
     def get(self, request):
-        portal_token = request.headers.get("portalToken")
-        portal = Portal.objects.filter(portal_token=portal_token).first()
+        portal_key = request.headers.get("portalKey")
+        portal = Portal.objects.filter(portal_key=portal_key).first()
         if portal is None:
             return CustomResponse({"hasError": True, "statusCode": 400, "message": "Invalid Portal", "response": {}}).get_failure_response()
-        mu_id = request.data.get("mu_id")
-        student = Student.objects.filter(mu_id=mu_id).first()
-        authorized_user = PortalUserAuth.objects.filter(user_id=student.user_id).first()
+        muid = request.data.get("muid")
+        students = Students.objects.filter(muid=muid).first()
+        authorized_user = PortalUserAuth.objects.filter(user_id=students.user_id).first()
         if authorized_user and authorized_user.is_authenticated:
-            karma = TotalKarma.objects.get(user_id=student.user_id)
-            return CustomResponse(response={"muid": mu_id, "fullname": student.fullname, "email": student.email, "karma": karma.karma}).get_success_response()
+            karma = StudentKarma.objects.get(user_id=students.user_id)
+            return CustomResponse(response={"muid": muid, "name": students.fullname, "email": students.email, "karma": karma.score}).get_success_response()
         else:
             return CustomResponse(has_error=True, status_code=400, message="user not authorized to this portal").get_failure_response()

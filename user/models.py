@@ -19,29 +19,45 @@ from django.db import models
 #     class Meta:
 #         db_table = 'user'
 
-class Student(models.Model):
-    user_id = models.AutoField(primary_key=True,null=False)
-    fullname = models.CharField(max_length=150,null=False)
-    email = models.CharField(max_length=100,null=False)
-    mu_id =  models.CharField(max_length=100,null=True)
-    mobile = models.BigIntegerField(default=None,null=True)
-    college = models.CharField(max_length=100,null=False)
-    area_of_interest = models.TextField(null=True)
-    created_on = models.DateTimeField(auto_now=True,null=True)
-    discord_id = models.BigIntegerField(default=None,null=True)
-    git_id = models.CharField(max_length=255,null=True)
-    uuid = models.CharField(max_length=255,null=True)
+
+class Colleges(models.Model):
+    college_name = models.CharField(unique=True, max_length=255)
+    college_code = models.CharField(unique=True, max_length=10)
+    university = models.CharField(max_length=255)
+    zone_code = models.CharField(max_length=10)
+    district = models.CharField(max_length=50)
+    state = models.CharField(max_length=50)
 
     class Meta:
+        managed = False
+        db_table = 'colleges'
+
+
+class Students(models.Model):
+    user_id = models.AutoField(primary_key=True)
+    fullname = models.CharField(max_length=150, blank=True, null=True)
+    email = models.CharField(max_length=100, blank=True, null=True)
+    muid = models.CharField(max_length=100, blank=True, null=True)
+    mobile = models.BigIntegerField(blank=True, null=True)
+    college = models.ForeignKey(Colleges, models.DO_NOTHING, db_column='college', to_field='college_code', blank=True, null=True)
+    area_of_interest = models.TextField(blank=True, null=True)
+    created_on = models.DateTimeField(blank=True, null=True)
+    discord_id = models.BigIntegerField(unique=True, blank=True, null=True)
+    git_id = models.CharField(max_length=255, blank=True, null=True)
+    uuid = models.CharField(max_length=255, blank=True, null=True)
+
+    class Meta:
+        managed = False
         db_table = 'students'
 
 
 
-class TotalKarma(models.Model):
-    id = models.CharField(primary_key=True,max_length=36,null=False)
-    user_id = models.ForeignKey(Student, null=False,on_delete=models.CASCADE)
-    karma = models.BigIntegerField(null=False)
-    updated_date = models.DateField(null=False)
+class StudentKarma(models.Model):
+    user_id = models.IntegerField(primary_key=True)
+    score = models.BigIntegerField(blank=True, null=True)
+    updated_on = models.DateTimeField(blank=True, null=True)
+    daily_karma_limit = models.IntegerField()
 
     class Meta:
-        db_table = 'total_karma'
+        managed = False
+        db_table = 'student_karma'
