@@ -1,14 +1,13 @@
-from rest_framework.views import APIView
-from .serializers import PortalSerializer
-from utils.utils_views import CustomResponse
 from datetime import datetime, timedelta
+from uuid import uuid4
+
 import pytz
 from user.models import Students, StudentKarma
 from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
 from decouple import config
 from django.core.mail import send_mail
-from django.conf import settings
-from uuid import uuid4
+from rest_framework.views import APIView
+from utils.utils_views import CustomResponse
 
 
 # class AddPortal(APIView):
@@ -27,16 +26,18 @@ class MuidValidate(APIView):
         portal_key = request.headers.get('portalKey')
         portal = Portal.objects.filter(portal_key=portal_key).first()
         if portal is None:
-            return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid Portal","response":{}}).get_failure_response() 
+            return CustomResponse({"hasError": True, "statusCode": 400, "message": "Invalid Portal",
+                                   "response": {}}).get_failure_response()
         name = request.data.get('name')
         muid = request.data.get('muid')
-        user = Students.objects.get(muid=muid)  
+        user = Students.objects.filter(muid=muid).first()  
         
         if user is None:
             return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid muid","response":{}}).get_failure_response()  
         if not name:
-            return CustomResponse({"hasError":True,"statusCode":400,"message":"Invalid name","response":{}}).get_failure_response() 
-        
+            return CustomResponse(
+                {"hasError": True, "statusCode": 400, "message": "Invalid name", "response": {}}).get_failure_response()
+
         mail_token = uuid4()
         expiry_time = datetime.now() + timedelta(seconds=1800)
         PortalUserMailValidate.objects.create(portal=portal,user=user,token=mail_token,expiry=expiry_time)
@@ -73,15 +74,19 @@ class UserMailTokenValidation(APIView):
                                                           created_at=today_now)
                         portal_user_auth.save()
                         PortalUserMailValidate.objects.filter(token=mail_validation_token).delete()
-                        return CustomResponse(has_error=False, status_code=200, message='user data validated successfully').get_success_response()
+                        return CustomResponse(has_error=False, status_code=200,
+                                              message='user data validated successfully').get_success_response()
                     else:
-                        return CustomResponse(has_error=True, message='token is expired', status_code=498).get_failure_response()
+                        return CustomResponse(has_error=True, message='token is expired',
+                                              status_code=498).get_failure_response()
             else:
-                return CustomResponse(has_error=True, message='invalid user token', status_code=498).get_failure_response()
+                return CustomResponse(has_error=True, message='invalid user token',
+                                      status_code=498).get_failure_response()
         return CustomResponse(has_error=True, message='database is empty', status_code=204).get_failure_response()
 
 
 class GetKarma(APIView):
+
     def get(self, request):
         portal_key = request.headers.get("portalKey")
         portal = Portal.objects.filter(portal_key=portal_key).first()
@@ -94,4 +99,5 @@ class GetKarma(APIView):
             karma = StudentKarma.objects.get(user_id=students.user_id)
             return CustomResponse(response={"muid": muid, "name": students.fullname, "email": students.email, "karma": karma.score}).get_success_response()
         else:
-            return CustomResponse(has_error=True, status_code=400, message="user not authorized to this portal").get_failure_response()
+            return CustomResponse(has_error=True, status_code=400,
+                                  message="user not authorized to this portal").get_failure_response()
