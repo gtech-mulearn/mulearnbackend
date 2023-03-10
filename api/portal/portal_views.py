@@ -2,7 +2,8 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytz
-from user.models import Students, StudentKarma
+from user.models import User
+from task.models import TotalKarma
 from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
 from decouple import config
 from django.core.mail import send_mail
@@ -30,7 +31,7 @@ class MuidValidate(APIView):
                                    "response": {}}).get_failure_response()
         name = request.data.get('name')
         muid = request.data.get('muid')
-        user = Students.objects.filter(muid=muid).first()
+        user = User.objects.filter(muid=muid).first()
 
         if user is None:
             return CustomResponse(has_error=True, status_code=400, message="Invalid muid").get_failure_response()
@@ -89,11 +90,11 @@ class GetKarma(APIView):
 
         muid = request.data.get("muid")
 
-        students = Students.objects.filter(muid=muid).first()
+        students = User.objects.filter(muid=muid).first()
         authorized_user = PortalUserAuth.objects.filter(user_id=students.user_id).first()
 
         if authorized_user and authorized_user.is_authenticated:
-            karma = StudentKarma.objects.get(user_id=students.user_id)
+            karma = TotalKarma.objects.get(user_id=students.user_id)
             return CustomResponse(response={"muid": muid, "name": students.fullname, "email": students.email,
                                             "karma": karma.score}).get_success_response()
         else:
