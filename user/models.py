@@ -29,9 +29,9 @@ class Role(models.Model):
     discord_id = models.CharField(max_length=36)
     title = models.CharField(max_length=75)
     description = models.CharField(max_length=300, blank=True, null=True)
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='role_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='role_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -44,7 +44,7 @@ class UserRoleLink(models.Model):
     user = models.ForeignKey(User, models.DO_NOTHING)
     role = models.ForeignKey(Role, models.DO_NOTHING)
     verified = models.IntegerField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='Uuser_role_link_created_by')
     created_at = models.DateTimeField()
 
     class Meta:

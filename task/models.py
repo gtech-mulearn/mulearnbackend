@@ -7,9 +7,9 @@ class Channel(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
     discord_id = models.CharField(max_length=36)
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='channel_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='channel_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -20,9 +20,9 @@ class Channel(models.Model):
 class TaskType(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=75)
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='task_type_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='task_type_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -39,9 +39,9 @@ class TaskList(models.Model):
     channel = models.ForeignKey(Channel, models.DO_NOTHING)
     type = models.ForeignKey(TaskType, models.DO_NOTHING)
     active = models.IntegerField()
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='task_list_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='task_list_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -53,9 +53,9 @@ class TotalKarma(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.OneToOneField(User, models.DO_NOTHING)
     karma = models.BigIntegerField()
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='total_karma_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='total_karma_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -71,9 +71,9 @@ class KarmaActivityLog(models.Model):
     lobby_message_id = models.CharField(max_length=36, blank=True, null=True)
     peer_approved = models.IntegerField(blank=True, null=True)
     appraiser_approved = models.IntegerField(blank=True, null=True)
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='karma_activity_log_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='karma_activity_log_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -84,9 +84,9 @@ class KarmaActivityLog(models.Model):
 class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='interest_group_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='interest_group_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -98,7 +98,7 @@ class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, models.DO_NOTHING)
     ig = models.ForeignKey(InterestGroup, models.DO_NOTHING)
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='user_ig_link_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
