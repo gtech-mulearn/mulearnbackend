@@ -2,9 +2,12 @@ from datetime import datetime, timedelta
 from uuid import uuid4
 
 import pytz
-from user.models import User
-from task.models import TotalKarma
+
+from user.models import User, Role
+from task.models import TotalKarma, TaskList, InterestGroup
 from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
+from organization.models import Organization
+
 from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
@@ -100,3 +103,56 @@ class GetKarma(APIView):
         else:
             return CustomResponse(has_error=True, status_code=400,
                                   message="user not authorized to this portal").get_failure_response()
+
+
+class UserDetailsApi(APIView):
+
+    def post(self, request, muid):
+
+        user = User.objects.filter(mu_id=muid).first()
+        total_karma = TotalKarma.objects.filter(user_id=user).first()
+        user_role = Role.objects.filter(created_by=user).first()
+        task_list = TaskList.objects.filter(created_by=user).first()
+        interest_group = InterestGroup.objects.filter(created_by=user).first()
+        organization = Organization.objects.filter(created_by=user).first()
+
+        if user is None:
+            return CustomResponse(has_error=True, message='invalid muid', status_code=498).get_failure_response()
+        if total_karma is None:
+            return CustomResponse(has_error=True, message='karma related user data not available', status_code=498).get_failure_response()
+        if user_role is None:
+            return CustomResponse(has_error=True, message='Roles related data not available for user', status_code=498).get_failure_response()
+        if task_list is None:
+            return CustomResponse(has_error=True, message='Task related data not available for user', status_code=498).get_failure_response()
+        if interest_group is None:
+            return CustomResponse(has_error=True, message='Interest Group related data not available for user', status_code=498).get_failure_response()
+        if Organization is None:
+            return CustomResponse(has_error=True, message='Organization related data not available for user', status_code=498).get_failure_response()
+
+        return CustomResponse(response={
+            "first_name": user.first_name,
+            "last_name": user.last_name,
+            "karma": total_karma.karma,
+            "roles": {
+                "main_role": user_role.title,
+                "authority_roles": None,
+            },
+            "interest_groups": [interest_group.name.split(',')],
+            "tasks": [
+                {
+                    "task_title": task_list.title,
+                    "karma": task_list.karma,
+                    "date": task_list.created_at.strftime("%Y-%m-%d %H:%M:%S"),
+                },
+            ],
+            "github_link": None,
+            "twitter_link": None,
+            "linkedin_link": None,
+            "organization": [
+                {
+                    "name": organization.title,
+                    "department": None,
+                },
+            ],
+            "profile_pic_link": None
+        }).get_success_response()
