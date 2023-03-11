@@ -1,0 +1,15 @@
+version: '3'
+services:
+  yipdashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mulearnbackend
+    image: mulearnbackend
+    restart: always
+    ports:
+      - "8002:8000"
+    volumes:
+      - /var/log/mulearnbackend:/var/log/mulearnbackend
+    env_file:
+      - .env
