@@ -3,62 +3,65 @@ from django.db import models
 
 # Create your models here.
 
-# class User(models.Model):
-#     id = models.CharField(primary_key=True,max_length=36,null=False)
-#     discord_id = models.CharField(max_length=36,null=False)
-#     mu_id = models.CharField(max_length=25,null=False)
-#     first_name = models.CharField(max_length=75,null=False)
-#     last_name = models.CharField(max_length=75,null=True)
-#     email = models.CharField(max_length=200,null=False)
-#     mobile = models.CharField(max_length=15,null=False)
-#     admin = models.BooleanField(default=False,null=False)
-#     active = models.BooleanField(default=False,null=False)
-#     district_id = models.CharField(max_length=36,null=True)
-#     creator_id = models.CharField(max_length=36,null=False)
-#     created_date = models.DateTimeField(null=False)
 
-#     class Meta:
-#         db_table = 'user'
-
-
-class Colleges(models.Model):
-    college_name = models.CharField(unique=True, max_length=255)
-    college_code = models.CharField(unique=True, max_length=10)
-    university = models.CharField(max_length=255)
-    zone_code = models.CharField(max_length=10)
-    district = models.CharField(max_length=50)
-    state = models.CharField(max_length=50)
+class User(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    discord_id = models.CharField(unique=True, max_length=36)
+    mu_id = models.CharField(unique=True, max_length=25)
+    first_name = models.CharField(max_length=75)
+    last_name = models.CharField(max_length=75, blank=True, null=True)
+    email = models.CharField(unique=True, max_length=200)
+    password = models.CharField(max_length=200, blank=True, null=True)
+    mobile = models.CharField(max_length=15)
+    gender = models.CharField(max_length=10, blank=True, null=True)
+    dob = models.DateField(blank=True, null=True)
+    admin = models.BooleanField(default=False)
+    active = models.BooleanField(default=True)
+    exist_in_guild = models.BooleanField(default=True)
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = 'colleges'
+        db_table = 'user'
 
 
-class Students(models.Model):
-    user_id = models.AutoField(primary_key=True)
-    fullname = models.CharField(max_length=150, blank=True, null=True)
-    email = models.CharField(max_length=100, blank=True, null=True)
-    muid = models.CharField(max_length=100, blank=True, null=True)
-    mobile = models.BigIntegerField(blank=True, null=True)
-    college = models.ForeignKey(Colleges, models.DO_NOTHING, db_column='college', to_field='college_code', blank=True,
-                                null=True)
-    area_of_interest = models.TextField(blank=True, null=True)
-    created_on = models.DateTimeField(blank=True, null=True)
-    discord_id = models.BigIntegerField(unique=True, blank=True, null=True)
-    git_id = models.CharField(max_length=255, blank=True, null=True)
-    uuid = models.CharField(max_length=255, blank=True, null=True)
+class Role(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    discord_id = models.CharField(max_length=36)
+    title = models.CharField(max_length=75)
+    description = models.CharField(max_length=300, blank=True, null=True)
+    updated_by = models.ForeignKey(
+        User, models.DO_NOTHING, db_column='updated_by', related_name='role_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(
+        User, models.DO_NOTHING, db_column='created_by', related_name='role_created_by')
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = 'students'
+        db_table = 'role'
 
 
-class StudentKarma(models.Model):
-    user_id = models.IntegerField(primary_key=True)
-    score = models.BigIntegerField(blank=True, null=True)
-    updated_on = models.DateTimeField(blank=True, null=True)
-    daily_karma_limit = models.IntegerField()
+class UserRoleLink(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, models.DO_NOTHING)
+    role = models.ForeignKey(Role, models.DO_NOTHING)
+    verified = models.IntegerField()
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='user_role_link_created_by')
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = 'student_karma'
+        db_table = 'user_role_link'
+
+
+class Github(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, models.DO_NOTHING)
+    username = models.CharField(max_length=100)
+    updated_by = models.CharField(max_length=36)
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'github'
