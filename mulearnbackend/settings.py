@@ -12,6 +12,8 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 
+from corsheaders.defaults import default_headers
+
 import decouple
 from decouple import config
 
@@ -27,7 +29,8 @@ SECRET_KEY = config('SECRET_KEY')
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = config('DEBUG', default=False, cast=bool)
 
-ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=lambda v: [s.strip() for s in v.split(',')])
+ALLOWED_HOSTS = config('ALLOWED_HOSTS', cast=lambda v: [
+                       s.strip() for s in v.split(',')])
 
 # Application definition
 
@@ -45,17 +48,28 @@ INSTALLED_APPS = [
     'user.apps.UserConfig',
     'portal.apps.PortalConfig',
     'task.apps.TaskConfig',
-    'organization.apps.OrganizationConfig'
+    'organization.apps.OrganizationConfig',
+    'corsheaders'
 ]
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
+    "corsheaders.middleware.CorsMiddleware",
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+]
+
+CORS_ALLOWED_ORIGINS = [
+    "http://192.168.1.6:5173",
+    "http://localhost:5173"
+]
+
+CORS_ALLOW_HEADERS = list(default_headers) + [
+    "portalKey",
 ]
 
 ROOT_URLCONF = 'mulearnbackend.urls'
