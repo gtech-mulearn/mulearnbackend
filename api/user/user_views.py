@@ -32,7 +32,7 @@ class RegisterData(APIView):
             data=data, context={'request': request})
         if create_user.is_valid():
             user_obj = create_user.save()
-            data = {"content": "onboard " + user_obj.id}
+            data = {"content": "onboard " + str(user_obj.id)}
             requests.post(decouple.config('DISCORD_JOIN_WEBHOOK_URL'), data=data)
             return CustomResponse(
                 response={"data": UserDetailSerializer(user_obj, many=False).data}).get_success_response()
