@@ -63,15 +63,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-CORS_ALLOWED_ORIGINS = [
-    "http://192.168.1.6:5173",
-    "http://localhost:5173"
-]
-
-CORS_ALLOW_HEADERS = list(default_headers) + [
-    "portalKey",
-]
-
+CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = 'mulearnbackend.urls'
 
 TEMPLATES = [
