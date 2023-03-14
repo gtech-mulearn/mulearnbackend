@@ -47,8 +47,7 @@ class UserRoleLink(models.Model):
     user = models.ForeignKey(User, models.DO_NOTHING)
     role = models.ForeignKey(Role, models.DO_NOTHING)
     verified = models.IntegerField()
-    created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='Uuser_role_link_created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='user_role_link_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
