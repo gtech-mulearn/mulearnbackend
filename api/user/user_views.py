@@ -59,7 +59,7 @@ class CollegeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        org_queryset = Organization.objects.filter(org_type="college")
+        org_queryset = Organization.objects.filter(org_type="College")
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
         department_serializer_data = OrgSerializer(
@@ -71,7 +71,7 @@ class CompanyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        company_queryset = Organization.objects.filter(org_type="company")
+        company_queryset = Organization.objects.filter(org_type="Company")
         company_serializer_data = OrgSerializer(
             company_queryset, many=True).data
         return CustomResponse(response={"companies": company_serializer_data}).get_success_response()
@@ -81,7 +81,7 @@ class ComunityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        community_queryset = Organization.objects.filter(org_type="comunity")
+        community_queryset = Organization.objects.filter(org_type="Community")
         comunity_serializer_data = OrgSerializer(
             community_queryset, many=True).data
         return CustomResponse(response={"communities": comunity_serializer_data}).get_success_response()

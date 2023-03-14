@@ -27,4 +27,4 @@ jobs:
         REMOTE_IP: ${{ secrets.PROD_REMOTE_IP }}
         PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
       run: |
-        ssh -o StrictHostKeyChecking=no ubuntu@$REMOTE_IP "cd $PROJECT_PATH && docker-compose up --build -d"
+        ssh -o StrictHostKeyChecking=no ubuntu@$REMOTE_IP "cd $PROJECT_PATH && git pull && docker-compose up --build -d"
