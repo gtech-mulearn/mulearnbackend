@@ -60,7 +60,8 @@ class RegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         full_name = validated_data['first_name'] + \
             " " + validated_data['last_name']
-        mu_id = full_name.replace(" ", "").lower() + "@muearn"
+        full_name = full_name.replace(" ", "").lower()[:12]
+        mu_id = full_name + "@mulearn"
         counter = 0
         while User.objects.filter(mu_id=mu_id).exists():
             counter += 1

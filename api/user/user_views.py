@@ -48,7 +48,8 @@ class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        role_serializer = Role.objects.all()
+        roles = ['Student', 'Mentor', 'Enabler']
+        role_serializer = Role.objects.filter(title__in=roles)
         role_serializer_data = OrgSerializer(
             role_serializer, many=True).data
         return CustomResponse(response={"roles": role_serializer_data}).get_success_response()
