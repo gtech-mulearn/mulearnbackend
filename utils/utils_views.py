@@ -35,13 +35,18 @@ class CustomResponse:
 
 class CustomizePermission(BasePermission):
     def authenticate(self, request):
-        token = authentication.get_authorization_header(
-            request).decode("utf-8").split()
-        if token[0] != 'Bearer' and len(token) != 2:
+        try:
+            token = authentication.get_authorization_header(
+                request).decode("utf-8").split()
+            if token[0] != 'Bearer' and len(token) != 2:
+                exception_message = {'hasError': True,
+                                     'message': 'Invalid token', 'statusCode': 1000}
+                raise CustomException(exception_message)
+            return self._authenticate_credentials(request, token[1])
+        except Exception as e:
             exception_message = {'hasError': True,
                                  'message': 'Invalid token', 'statusCode': 1000}
             raise CustomException(exception_message)
-        return self._authenticate_credentials(request, token[1])
 
     def _authenticate_credentials(self, request, token):
         payload = jwt.decode(token, SECRET_KEY,
