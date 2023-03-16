@@ -44,14 +44,21 @@ class UserDetailSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=True)
     organization = serializers.CharField(required=True)
-    dept = serializers.CharField(required=False)
-    yearOfGraduation = serializers.CharField(required=False)
-    areaOfInterest = serializers.ListField(required=True)
-    firstName = serializers.CharField(required=True, source='first_name')
-    lastName = serializers.CharField(required=True, source='last_name')
+    dept = serializers.CharField(required=False, allow_null=True)
+    yearOfGraduation = serializers.CharField(
+        required=False, allow_null=True, max_length=4)
+    areaOfInterest = serializers.ListField(required=True, max_length=3)
+    firstName = serializers.CharField(
+        required=True, source='first_name', max_length=75)
+    lastName = serializers.CharField(
+        required=False, source='last_name', allow_null=True, max_length=75)
 
     def create(self, validated_data):
-        full_name = validated_data['first_name'] + " " + validated_data['last_name']
+        if validated_data['last_name'] is None:
+            full_name = validated_data['first_name']
+        else:
+            full_name = validated_data['first_name'] + \
+                validated_data['last_name']
         full_name = full_name.replace(" ", "").lower()[:12]
         mu_id = full_name + "@mulearn"
         counter = 0
@@ -73,7 +80,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             ), user=user, role_id=role, created_by=user, created_at=datetime.now(), verified=1)
             UserOrganizationLink.objects.create(id=uuid4(), user=user, org_id=organization, created_by=user,
                                                 created_at=datetime.now(), verified=1, department_id=dept,
-                                                graduation_yer=year_of_graduation)
+                                                graduation_year=year_of_graduation)
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
             ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interest])
         return user

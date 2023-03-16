@@ -125,7 +125,7 @@ class UserOrganizationLink(models.Model):
                             related_name='user_organization_link_org_id')
     department = models.ForeignKey(
         Department, models.DO_NOTHING, blank=True, null=True, related_name='user_organization_link_department_id')
-    graduation_yer = models.CharField(max_length=10, blank=True, null=True)
+    graduation_year = models.CharField(max_length=10, blank=True, null=True)
     verified = models.IntegerField()
     created_by = models.ForeignKey(
         User, models.DO_NOTHING, db_column='created_by', related_name='user_organization_link_created_by')

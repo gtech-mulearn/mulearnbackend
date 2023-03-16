@@ -10,12 +10,12 @@ import requests
 
 class RegisterJWTValidate(APIView):
     authentication_classes = [CustomizePermission]
+    print(authentication_classes)
 
     def get(self, request):
         discord_id = request.auth.get('id', None)
         if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(has_error=True, message='user already registered',
-                                  status_code=400).get_failure_response()
+            return CustomResponse(has_error=True, message='You are already registerd', status_code=400).get_failure_response()
         return CustomResponse(response={'token': True}).get_success_response()
 
 
@@ -33,7 +33,8 @@ class RegisterData(APIView):
         if create_user.is_valid():
             user_obj = create_user.save()
             data = {"content": "onboard " + str(user_obj.id)}
-            requests.post(decouple.config('DISCORD_JOIN_WEBHOOK_URL'), data=data)
+            requests.post(decouple.config(
+                'DISCORD_JOIN_WEBHOOK_URL'), data=data)
             return CustomResponse(
                 response={"data": UserDetailSerializer(user_obj, many=False).data}).get_success_response()
         else:
