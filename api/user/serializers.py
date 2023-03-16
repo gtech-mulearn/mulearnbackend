@@ -51,15 +51,19 @@ class UserDetailSerializer(serializers.ModelSerializer):
 class RegisterSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=True)
     organization = serializers.CharField(required=True)
-    dept = serializers.CharField(required=False)
-    yearOfGraduation = serializers.CharField(required=False)
+    dept = serializers.CharField(required=False, allow_null=True)
+    yearOfGraduation = serializers.CharField(required=False, allow_null=True)
     areaOfInterest = serializers.ListField(required=True)
     firstName = serializers.CharField(required=True, source='first_name')
-    lastName = serializers.CharField(required=True, source='last_name')
+    lastName = serializers.CharField(
+        required=False, source='last_name', allow_null=True)
 
     def create(self, validated_data):
-        full_name = validated_data['first_name'] + \
-            " " + validated_data['last_name']
+        if validated_data['last_name'] is None:
+            full_name = validated_data['first_name']
+        else:
+            full_name = validated_data['first_name'] + \
+                validated_data['last_name']
         full_name = full_name.replace(" ", "").lower()[:12]
         mu_id = full_name + "@mulearn"
         counter = 0

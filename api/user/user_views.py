@@ -10,6 +10,7 @@ from utils.utils_views import CustomResponse, CustomizePermission
 
 class RegisterJWTValidte(APIView):
     authentication_classes = [CustomizePermission]
+    print(authentication_classes)
 
     def get(self, request):
         discord_id = request.auth.get('id', None)
