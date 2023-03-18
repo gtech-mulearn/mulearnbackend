@@ -43,7 +43,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 class RegisterSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=True)
-    organization = serializers.CharField(required=True)
+    organization = serializers.CharField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
     yearOfGraduation = serializers.CharField(
         required=False, allow_null=True, max_length=4)
