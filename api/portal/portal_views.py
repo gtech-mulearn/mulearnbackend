@@ -171,8 +171,19 @@ class GetUnverifiedUsers(APIView):
         if non_verified_user is None:
             return CustomResponse(has_error=True, message='All Users are Verified', status_code=404).get_failure_response()
 
-        non_verified_users_list = UserRoleLink.objects.filter(verified=0).values()
-        non_verified_users_id = [non_verified_users['user_id'] for non_verified_users in non_verified_users_list]
+        user_data_dict = {}
+        user_data_list = []
 
-        users_details = User.objects.filter(id__in=non_verified_users_id).values()
-        return CustomResponse(response=users_details).get_success_response()
+        non_verified_users = UserRoleLink.objects.filter(verified=0)
+        for data in non_verified_users:
+            user_data_dict['id'] = data.user.id
+            user_data_dict['first_name'] = data.user.first_name
+            user_data_dict['last_name'] = data.user.last_name
+            user_data_dict['email'] = data.user.email
+            user_data_dict['phone'] = data.user.mobile
+            user_data_dict['role'] = data.role.title
+
+            user_data_list.append(user_data_dict)
+            user_data_dict = {}
+
+        return CustomResponse(response=user_data_list).get_success_response()
