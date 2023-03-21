@@ -165,16 +165,16 @@ class UserDetailsApi(APIView):
 
 class GetUnverifiedUsers(APIView):
 
-    def post(self, requests):
+    def post(self, request):
 
-        non_verified_user = UserRoleLink.objects.filter(verified=0).first()
+        non_verified_user = UserRoleLink.objects.filter(verified=False).first()
         if non_verified_user is None:
             return CustomResponse(has_error=True, message='All Users are Verified', status_code=404).get_failure_response()
 
         user_data_dict = {}
         user_data_list = []
 
-        non_verified_users = UserRoleLink.objects.filter(verified=0)
+        non_verified_users = UserRoleLink.objects.filter(verified=False)
         for data in non_verified_users:
             user_data_dict['id'] = data.user.id
             user_data_dict['first_name'] = data.user.first_name
