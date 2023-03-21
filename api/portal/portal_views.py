@@ -3,7 +3,7 @@ from uuid import uuid4
 
 import pytz
 
-from user.models import User, Role
+from user.models import User, Role, UserRoleLink
 from task.models import TotalKarma, TaskList, InterestGroup
 from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
 from organization.models import Organization
@@ -119,15 +119,20 @@ class UserDetailsApi(APIView):
         if user is None:
             return CustomResponse(has_error=True, message='invalid muid', status_code=498).get_failure_response()
         if total_karma is None:
-            return CustomResponse(has_error=True, message='karma related user data not available', status_code=498).get_failure_response()
+            return CustomResponse(has_error=True, message='karma related user data not available',
+                                  status_code=404).get_failure_response()
         if user_role is None:
-            return CustomResponse(has_error=True, message='Roles related data not available for user', status_code=498).get_failure_response()
+            return CustomResponse(has_error=True, message='Roles related data not available for user',
+                                  status_code=404).get_failure_response()
         if task_list is None:
-            return CustomResponse(has_error=True, message='Task related data not available for user', status_code=498).get_failure_response()
+            return CustomResponse(has_error=True, message='Task related data not available for user',
+                                  status_code=404).get_failure_response()
         if interest_group is None:
-            return CustomResponse(has_error=True, message='Interest Group related data not available for user', status_code=498).get_failure_response()
+            return CustomResponse(has_error=True, message='Interest Group related data not available for user',
+                                  status_code=404).get_failure_response()
         if Organization is None:
-            return CustomResponse(has_error=True, message='Organization related data not available for user', status_code=498).get_failure_response()
+            return CustomResponse(has_error=True, message='Organization related data not available for user',
+                                  status_code=404).get_failure_response()
 
         return CustomResponse(response={
             "first_name": user.first_name,
@@ -156,3 +161,29 @@ class UserDetailsApi(APIView):
             ],
             "profile_pic_link": None
         }).get_success_response()
+
+
+class GetUnverifiedUsers(APIView):
+
+    def post(self, requests):
+
+        non_verified_user = UserRoleLink.objects.filter(verified=0).first()
+        if non_verified_user is None:
+            return CustomResponse(has_error=True, message='All Users are Verified', status_code=404).get_failure_response()
+
+        user_data_dict = {}
+        user_data_list = []
+
+        non_verified_users = UserRoleLink.objects.filter(verified=0)
+        for data in non_verified_users:
+            user_data_dict['id'] = data.user.id
+            user_data_dict['first_name'] = data.user.first_name
+            user_data_dict['last_name'] = data.user.last_name
+            user_data_dict['email'] = data.user.email
+            user_data_dict['phone'] = data.user.mobile
+            user_data_dict['role'] = data.role.title
+
+            user_data_list.append(user_data_dict)
+            user_data_dict = {}
+
+        return CustomResponse(response=user_data_list).get_success_response()
