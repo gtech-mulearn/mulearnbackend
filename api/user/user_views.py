@@ -5,8 +5,9 @@ from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User
 from utils.utils_views import CustomResponse, CustomizePermission
+from django.core.mail import send_mail
+from django.contrib.auth.hashers import make_password
 import requests
-
 
 class RegisterJWTValidate(APIView):
     authentication_classes = [CustomizePermission]
@@ -93,3 +94,29 @@ class AreaOfInterestAPI(APIView):
         aoi_serializer_data = AreaOfInterestAPISerializer(
             aoi_queryset, many=True).data
         return CustomResponse(response={"aois": aoi_serializer_data}).get_success_response()
+
+
+class ForgotPassword(APIView):
+    def post(self,request):
+        email = request.data['email']
+        user = User.objects.filter(email=email).first()
+        if user:
+            email_host_user = decouple.config('EMAIL_HOST_USER')
+            subject = "Password Reset Requested"
+            to = [email]
+            domain = decouple.config('DOMAIN_NAME')
+            message = f"Reset your password with this link {domain}/api/v1/user/register/reset-password-confirm/{user.id}/"
+            send_mail(subject, message,email_host_user, to, fail_silently=False)
+            return CustomResponse(has_error=False,response={"Forgot Password Email Send Successfully"},status_code=200).get_success_response()
+        else:
+            return CustomResponse(has_error=True,response={"Forgot Password Email not Send Successfully"},status_code=424).get_failure_response()
+
+
+class ForgotPasswordConfirm(APIView):
+    def post(self,request,user_id):
+        user =  User.objects.get(id=user_id)
+        new_password = request.data['newpassword']
+        hashed_pwd = make_password(new_password)
+        user.password=hashed_pwd
+        user.save()
+        return CustomResponse(response={"New Password Saved Successfully"},status_code=200).get_success_response()
