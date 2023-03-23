@@ -15,7 +15,8 @@ class RegisterJWTValidate(APIView):
     def get(self, request):
         discord_id = request.auth.get('id', None)
         if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(has_error=True, message='You are already registerd', status_code=400).get_failure_response()
+            return CustomResponse(has_error=True, message='You are already registerd',
+                                  status_code=400).get_failure_response()
         return CustomResponse(response={'token': True}).get_success_response()
 
 
@@ -28,15 +29,17 @@ class RegisterData(APIView):
         if User.objects.filter(discord_id=discord_id).exists():
             return CustomResponse(has_error=True, message='user already registered',
                                   status_code=400).get_failure_response()
-        create_user = RegisterSerializer(
+        create_user, user_role_verified = RegisterSerializer(
             data=data, context={'request': request})
         if create_user.is_valid():
             user_obj = create_user.save()
-            data = {"content": "onboard " + str(user_obj.id)}
-            requests.post(decouple.config(
-                'DISCORD_JOIN_WEBHOOK_URL'), data=data)
+            if user_role_verified:
+                data = {"content": "onboard " + str(user_obj.id)}
+                requests.post(decouple.config(
+                    'DISCORD_JOIN_WEBHOOK_URL'), data=data)
             return CustomResponse(
-                response={"data": UserDetailSerializer(user_obj, many=False).data}).get_success_response()
+                response={"data": UserDetailSerializer(user_obj, many=False).data,
+                          "userRoleVerified": user_role_verified}).get_success_response()
         else:
             return CustomResponse(has_error=True, status_code=400, message=create_user.errors).get_failure_response()
 

@@ -65,11 +65,14 @@ class RegisterSerializer(serializers.ModelSerializer):
         while User.objects.filter(mu_id=mu_id).exists():
             counter += 1
             mu_id = full_name + "-" + str(counter) + "@mulearn"
-        role = validated_data.pop('role')
+        role_id = validated_data.pop('role')
         organization = validated_data.pop('organization')
         dept = validated_data.pop('dept')
         year_of_graduation = validated_data.pop('yearOfGraduation')
         area_of_interest = validated_data.pop('areaOfInterest')
+        role = Role.objects.get(id=role_id)
+        user_role_verified = role.title == 'Student'
+
         with transaction.atomic():
             user = User.objects.create(
                 **validated_data, id=uuid4(), mu_id=mu_id, discord_id=self.context['request'].auth.get('id', None),
@@ -77,13 +80,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
             ), updated_by=user, updated_at=datetime.now())
             UserRoleLink.objects.create(id=uuid4(
-            ), user=user, role_id=role, created_by=user, created_at=datetime.now(), verified=1)
+            ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
             UserOrganizationLink.objects.create(id=uuid4(), user=user, org_id=organization, created_by=user,
-                                                created_at=datetime.now(), verified=1, department_id=dept,
+                                                created_at=datetime.now(), verified=True, department_id=dept,
                                                 graduation_year=year_of_graduation)
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
             ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interest])
-        return user
+        return user, user_role_verified
 
     class Meta:
         model = User
