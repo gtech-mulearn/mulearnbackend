@@ -66,7 +66,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             counter += 1
             mu_id = full_name + "-" + str(counter) + "@mulearn"
         role_id = validated_data.pop('role')
-        organization = validated_data.pop('organization')
+        organization_id = validated_data.pop('organization')
         dept = validated_data.pop('dept')
         year_of_graduation = validated_data.pop('yearOfGraduation')
         area_of_interest = validated_data.pop('areaOfInterest')
@@ -81,9 +81,10 @@ class RegisterSerializer(serializers.ModelSerializer):
             ), updated_by=user, updated_at=datetime.now())
             UserRoleLink.objects.create(id=uuid4(
             ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
-            UserOrganizationLink.objects.create(id=uuid4(), user=user, org_id=organization, created_by=user,
-                                                created_at=datetime.now(), verified=True, department_id=dept,
-                                                graduation_year=year_of_graduation)
+            if organization_id is not None:
+                UserOrganizationLink.objects.create(id=uuid4(), user=user, org_id=organization_id, created_by=user,
+                                                    created_at=datetime.now(), verified=True, department_id=dept,
+                                                    graduation_year=year_of_graduation)
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
             ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interest])
         return user, user_role_verified
