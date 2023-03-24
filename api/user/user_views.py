@@ -29,10 +29,10 @@ class RegisterData(APIView):
         if User.objects.filter(discord_id=discord_id).exists():
             return CustomResponse(has_error=True, message='user already registered',
                                   status_code=400).get_failure_response()
-        create_user, user_role_verified = RegisterSerializer(
+        create_user = RegisterSerializer(
             data=data, context={'request': request})
         if create_user.is_valid():
-            user_obj = create_user.save()
+            user_obj, user_role_verified = create_user.save()
             if user_role_verified:
                 data = {"content": "onboard " + str(user_obj.id)}
                 requests.post(decouple.config(
