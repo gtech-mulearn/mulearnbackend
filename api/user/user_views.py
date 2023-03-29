@@ -6,11 +6,12 @@ from api.user.serializers import AreaOfInterestAPISerializer, OrgSerializer, Reg
 from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgetPassword
-from utils.utils_views import CustomResponse, CustomizePermission
+from utils.utils_views import CustomResponse, CustomizePermission,get_current_utc_time
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import make_password
 import requests
 from datetime import datetime, timedelta
+
 
 
 class RegisterJWTValidate(APIView):
@@ -110,7 +111,7 @@ class ForgotPasswordAPI(APIView):
         user = User.objects.filter(email=email).first()
 
         if user:
-            created_at = datetime.now()
+            created_at = get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
             forget_user = ForgetPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry,
                                                         created_at=created_at)
@@ -118,7 +119,7 @@ class ForgotPasswordAPI(APIView):
             subject = "Password Reset Requested"
             to = [email]
             domain = decouple.config('DOMAIN_NAME')
-            message = f"Reset your password with this link {domain}/api/v1/user/reset-password-confirm/{forget_user.id}/"
+            message = f"Reset your password with this link {domain}/api/v1/user/reset-password/{forget_user.id}/"
             send_mail(subject, message, email_host_user, to, fail_silently=False)
             return CustomResponse(has_error=False, response={"Forgot Password Email Send Successfully"},
                                   status_code=200).get_success_response()
@@ -127,20 +128,40 @@ class ForgotPasswordAPI(APIView):
                                   status_code=404).get_failure_response()
 
 
-class ForgotPasswordConfirmAPI(APIView):
+class ResetPasswordConfirmAPI(APIView):
 
-    def post(self, request, user_id):
-        forget_user = ForgetPassword.objects.filter(id=user_id).first()
+    def post(self, request, token):
+        forget_user = ForgetPassword.objects.filter(id=token).first()
 
         if forget_user:
-            current_time = datetime.now()
-            if forget_user.expiry < current_time:
+            current_time = get_current_utc_time()
+            if forget_user.expiry > current_time:
                 new_password = request.data.get('new_password')
                 hashed_pwd = make_password(new_password)
                 forget_user.user.password = hashed_pwd
                 forget_user.user.save()
                 forget_user.delete()
-                return CustomResponse(response={"New Password Saved Successfully"}, status_code=200).get_success_response()
+                return CustomResponse(response={"New Password Saved Successfully"},
+                                      status_code=200).get_success_response()
+            else:
+                forget_user.delete()
+                return CustomResponse(has_error=True, response={"Link is expired"},
+                                      status_code=400).get_failure_response()
+        else:
+            return CustomResponse(has_error=True, response={"User not exist"},
+                                  status_code=400).get_failure_response()
+
+
+class ResetPasswordVerifyTokenAPI(APIView):
+
+    def post(self, request, token):
+        forget_user = ForgetPassword.objects.filter(id=token).first()
+
+        if forget_user:
+            current_time = get_current_utc_time()
+            if forget_user.expiry > current_time:
+                muid = forget_user.user.mu_id
+                return CustomResponse(response={'muid': muid}, status_code=200).get_success_response()
             else:
                 forget_user.delete()
                 return CustomResponse(has_error=True, response={"Link is expired"},
