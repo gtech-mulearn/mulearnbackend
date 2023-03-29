@@ -65,3 +65,14 @@ class Github(models.Model):
     class Meta:
         managed = False
         db_table = 'github'
+
+
+class ForgetPassword(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.OneToOneField(User, models.DO_NOTHING)
+    expiry = models.DateTimeField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'forget_password'
