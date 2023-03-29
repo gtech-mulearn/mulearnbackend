@@ -133,12 +133,18 @@ class ForgotPasswordConfirmAPI(APIView):
         forget_user = ForgetPassword.objects.filter(id=user_id).first()
 
         if forget_user:
-            new_password = request.data.get('new_password')
-            hashed_pwd = make_password(new_password)
-            forget_user.user.password = hashed_pwd
-            forget_user.user.save()
-            forget_user.delete()
-            return CustomResponse(response={"New Password Saved Successfully"}, status_code=200).get_success_response()
+            current_time = datetime.now()
+            if forget_user.expiry < current_time:
+                new_password = request.data.get('new_password')
+                hashed_pwd = make_password(new_password)
+                forget_user.user.password = hashed_pwd
+                forget_user.user.save()
+                forget_user.delete()
+                return CustomResponse(response={"New Password Saved Successfully"}, status_code=200).get_success_response()
+            else:
+                forget_user.delete()
+                return CustomResponse(has_error=True, response={"Link is expired"},
+                                      status_code=400).get_failure_response()
         else:
             return CustomResponse(has_error=True, response={"User not exist"},
-                                  status_code=404).get_failure_response()
+                                  status_code=400).get_failure_response()
