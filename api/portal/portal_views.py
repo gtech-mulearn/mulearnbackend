@@ -11,7 +11,7 @@ from organization.models import Organization
 from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
-from utils.utils_views import CustomResponse
+from utils.utils_views import CustomResponse,get_current_utc_time
 
 
 # class AddPortal(APIView):
@@ -42,7 +42,7 @@ class MuidValidate(APIView):
             return CustomResponse(has_error=True, status_code=400, message="Invalid name").get_failure_response()
 
         mail_token = uuid4()
-        expiry_time = datetime.now() + timedelta(seconds=1800)
+        expiry_time = get_current_utc_time() + timedelta(seconds=1800)
         PortalUserMailValidate.objects.create(id=uuid4(), portal=portal, user=user, token=mail_token,
                                               expiry=expiry_time)
         DOMAIN_NAME = config('DOMAIN_NAME')
