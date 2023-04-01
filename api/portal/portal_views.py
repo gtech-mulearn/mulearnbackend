@@ -4,9 +4,9 @@ from uuid import uuid4
 import pytz
 
 from user.models import User, Role, UserRoleLink
-from task.models import TotalKarma, TaskList, InterestGroup
+from task.models import TotalKarma, TaskList, InterestGroup, UserIgLink
 from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
-from organization.models import Organization
+from organization.models import Organization, UserOrganizationLink
 
 from decouple import config
 from django.core.mail import send_mail
@@ -62,7 +62,8 @@ class UserMailTokenValidation(APIView):
         mail_validation_token = request.data['token']
         utc = pytz.timezone('Asia/Kolkata')
         today_now = datetime.now(utc)
-        mail_validation = PortalUserMailValidate.objects.filter(token=mail_validation_token).first()
+        mail_validation = PortalUserMailValidate.objects.filter(
+            token=mail_validation_token).first()
         if mail_validation is None:
             return CustomResponse(has_error=True, message='invalid user token',
                                   status_code=498).get_failure_response()
@@ -92,14 +93,18 @@ class GetKarma(APIView):
                                   status_code=400).get_failure_response()
 
         muid = request.data.get("muid")
+        if muid is None:
+            return CustomResponse(has_error=True, message='muid is None',
+                                  status_code=400).get_failure_response()
 
-        students = User.objects.filter(muid=muid).first()
-        authorized_user = PortalUserAuth.objects.filter(user_id=students.user_id).first()
+        students = User.objects.filter(mu_id=muid).first()
+        authorized_user = PortalUserAuth.objects.filter(
+            user_id=students.id).first()
 
         if authorized_user and authorized_user.is_authenticated:
-            karma = TotalKarma.objects.get(user_id=students.user_id)
-            return CustomResponse(response={"muid": muid, "name": students.fullname, "email": students.email,
-                                            "karma": karma.score}).get_success_response()
+            karma = TotalKarma.objects.get(user_id=students.id)
+            return CustomResponse(response={"muid": muid, "name": students.first_name + students.last_name, "email": students.email,
+                                            "karma": karma.karma}).get_success_response()
         else:
             return CustomResponse(has_error=True, status_code=400,
                                   message="user not authorized to this portal").get_failure_response()
@@ -110,12 +115,13 @@ class UserDetailsApi(APIView):
     def post(self, request, muid):
 
         user = User.objects.filter(mu_id=muid).first()
-        total_karma = TotalKarma.objects.filter(user_id=user).first()
-        user_role = Role.objects.filter(created_by=user).first()
+        total_karma = TotalKarma.objects.filter(user=user).first()
+        user_role = UserRoleLink.objects.filter(user=user).first()
         task_list = TaskList.objects.filter(created_by=user).first()
-        interest_group = InterestGroup.objects.filter(created_by=user).first()
-        organization = Organization.objects.filter(created_by=user).first()
-
+        interest_group = UserIgLink.objects.filter(created_by=user).first()
+        organization = UserOrganizationLink.objects.filter(
+            user=user).first()
+        # print(interest_group.ig.name)
         if user is None:
             return CustomResponse(has_error=True, message='invalid muid', status_code=498).get_failure_response()
         if total_karma is None:
@@ -133,16 +139,15 @@ class UserDetailsApi(APIView):
         if Organization is None:
             return CustomResponse(has_error=True, message='Organization related data not available for user',
                                   status_code=404).get_failure_response()
-
         return CustomResponse(response={
             "first_name": user.first_name,
             "last_name": user.last_name,
             "karma": total_karma.karma,
             "roles": {
-                "main_role": user_role.title,
+                "main_role": user_role.role.title,
                 "authority_roles": None,
             },
-            "interest_groups": [interest_group.name.split(',')],
+            "interest_groups": [interest_group.ig.name.split(',')],
             "tasks": [
                 {
                     "task_title": task_list.title,
@@ -155,7 +160,7 @@ class UserDetailsApi(APIView):
             "linkedin_link": None,
             "organization": [
                 {
-                    "name": organization.title,
+                    "name": organization.org.title,
                     "department": None,
                 },
             ],
