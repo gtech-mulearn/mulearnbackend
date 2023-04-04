@@ -11,7 +11,8 @@ from organization.models import Organization, UserOrganizationLink
 from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
-from utils.utils_views import CustomResponse,get_current_utc_time
+from utils.utils_views import CustomResponse, get_current_utc_time
+
 
 
 # class AddPortal(APIView):
@@ -103,8 +104,9 @@ class GetKarma(APIView):
 
         if authorized_user and authorized_user.is_authenticated:
             karma = TotalKarma.objects.get(user_id=students.id)
-            return CustomResponse(response={"muid": muid, "name": students.first_name + students.last_name, "email": students.email,
-                                            "karma": karma.karma}).get_success_response()
+            return CustomResponse(
+                response={"muid": muid, "name": students.first_name + students.last_name, "email": students.email,
+                          "karma": karma.karma}).get_success_response()
         else:
             return CustomResponse(has_error=True, status_code=400,
                                   message="user not authorized to this portal").get_failure_response()
@@ -174,7 +176,8 @@ class GetUnverifiedUsers(APIView):
 
         non_verified_user = UserRoleLink.objects.filter(verified=False).first()
         if non_verified_user is None:
-            return CustomResponse(has_error=True, message='All Users are Verified', status_code=404).get_failure_response()
+            return CustomResponse(has_error=True, message='All Users are Verified',
+                                  status_code=404).get_failure_response()
 
         user_data_dict = {}
         user_data_list = []
@@ -192,3 +195,29 @@ class GetUnverifiedUsers(APIView):
             user_data_dict = {}
 
         return CustomResponse(response=user_data_list).get_success_response()
+
+
+class StudentsLeaderboard(APIView):
+
+    def post(self, request):
+
+        students_leaderboard_dict = {}
+        students_leaderboard_list = []
+
+        user_karma = TotalKarma.objects.all()
+
+        if user_karma is None:
+            return CustomResponse(message='Karma Related Datas Not Available', status_code=404).get_failure_response()
+
+        for datas in user_karma:
+            students_leaderboard_dict['name'] = datas.user.first_name + " " + datas.user.last_name
+            students_leaderboard_dict['karma'] = user_karma.filter(user_id=datas.user.id).values('karma')[0]['karma']
+            students_leaderboard_dict['institution'] = Organization.objects.filter(created_by=datas.user.id).values('title')[0]['title']
+
+            students_leaderboard_list.append(students_leaderboard_dict)
+            students_leaderboard_dict = {}
+
+        sorted_leaderboard = sorted(students_leaderboard_list, key=lambda i: i['karma'], reverse=True)
+        sorted_leaderboard = sorted_leaderboard[:20]
+        return CustomResponse(response=sorted_leaderboard).get_success_response()
+
