@@ -14,5 +14,4 @@ urlpatterns = [
     path('forgot-password', ForgotPasswordAPI.as_view()),
     path('reset-password/<str:token>/', ResetPasswordConfirmAPI.as_view()),
     path('reset-password/verify-token/<str:token>/', ResetPasswordVerifyTokenAPI.as_view())
-
 ]

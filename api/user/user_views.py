@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 from api.user.serializers import AreaOfInterestAPISerializer, OrgSerializer, RegisterSerializer, UserDetailSerializer
 from organization.models import Department, Organization
 from task.models import InterestGroup
-from user.models import Role, User, ForgetPassword
+from user.models import Role, User, ForgotPassword
 from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import make_password
@@ -112,7 +112,7 @@ class ForgotPasswordAPI(APIView):
         if user:
             created_at = get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
-            forget_user = ForgetPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry,
+            forget_user = ForgotPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry,
                                                         created_at=created_at)
             email_host_user = decouple.config('EMAIL_HOST_USER')
             subject = "Password Reset Requested"
@@ -130,7 +130,7 @@ class ForgotPasswordAPI(APIView):
 class ResetPasswordConfirmAPI(APIView):
 
     def post(self, request, token):
-        forget_user = ForgetPassword.objects.filter(id=token).first()
+        forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
             current_time = get_current_utc_time()
@@ -154,7 +154,7 @@ class ResetPasswordConfirmAPI(APIView):
 class ResetPasswordVerifyTokenAPI(APIView):
 
     def post(self, request, token):
-        forget_user = ForgetPassword.objects.filter(id=token).first()
+        forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
             current_time = get_current_utc_time()
