@@ -6,12 +6,11 @@ from api.user.serializers import AreaOfInterestAPISerializer, OrgSerializer, Reg
 from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgetPassword
-from utils.utils_views import CustomResponse, CustomizePermission,get_current_utc_time
+from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
 from django.core.mail import send_mail
 from django.contrib.auth.hashers import make_password
 import requests
 from datetime import datetime, timedelta
-
 
 
 class RegisterJWTValidate(APIView):
@@ -107,8 +106,8 @@ class AreaOfInterestAPI(APIView):
 class ForgotPasswordAPI(APIView):
 
     def post(self, request):
-        email = request.data.get('email')
-        user = User.objects.filter(email=email).first()
+        muid = request.data.get('muid')
+        user = User.objects.filter(mu_id=muid).first()
 
         if user:
             created_at = get_current_utc_time()
@@ -117,7 +116,7 @@ class ForgotPasswordAPI(APIView):
                                                         created_at=created_at)
             email_host_user = decouple.config('EMAIL_HOST_USER')
             subject = "Password Reset Requested"
-            to = [email]
+            to = [user.email]
             domain = decouple.config('DOMAIN_NAME')
             message = f"Reset your password with this link {domain}/api/v1/user/reset-password/{forget_user.id}/"
             send_mail(subject, message, email_host_user, to, fail_silently=False)
