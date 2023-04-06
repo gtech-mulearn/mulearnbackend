@@ -120,11 +120,30 @@ class ForgotPasswordAPI(APIView):
             domain = decouple.config('FR_DOMAIN_NAME')
             message = f"Reset your password with this link {domain}/user/reset-password?token={forget_user.id}"
             send_mail(subject, message, email_host_user, to, fail_silently=False)
-            return CustomResponse(has_error=False, response={"Forgot Password Email Send Successfully"},
+            return CustomResponse(has_error=False, message="Forgot Password Email Send Successfully",
                                   status_code=200).get_success_response()
         else:
-            return CustomResponse(has_error=True, response={"User not exist"},
+            return CustomResponse(has_error=True, message="User not exist",
                                   status_code=404).get_failure_response()
+
+
+class ResetPasswordVerifyTokenAPI(APIView):
+
+    def post(self, request, token):
+        forget_user = ForgotPassword.objects.filter(id=token).first()
+
+        if forget_user:
+            current_time = get_current_utc_time()
+            if forget_user.expiry > current_time:
+                muid = forget_user.user.mu_id
+                return CustomResponse(response={'muid': muid}, status_code=200).get_success_response()
+            else:
+                forget_user.delete()
+                return CustomResponse(has_error=True, message="Link is expired",
+                                      status_code=400).get_failure_response()
+        else:
+            return CustomResponse(has_error=True, message="User not exist",
+                                  status_code=400).get_failure_response()
 
 
 class ResetPasswordConfirmAPI(APIView):
@@ -140,31 +159,12 @@ class ResetPasswordConfirmAPI(APIView):
                 forget_user.user.password = hashed_pwd
                 forget_user.user.save()
                 forget_user.delete()
-                return CustomResponse(response={"New Password Saved Successfully"},
+                return CustomResponse(message="New Password Saved Successfully",
                                       status_code=200).get_success_response()
             else:
                 forget_user.delete()
-                return CustomResponse(has_error=True, response={"Link is expired"},
+                return CustomResponse(has_error=True, message="Link is expired",
                                       status_code=400).get_failure_response()
         else:
-            return CustomResponse(has_error=True, response={"User not exist"},
-                                  status_code=400).get_failure_response()
-
-
-class ResetPasswordVerifyTokenAPI(APIView):
-
-    def post(self, request, token):
-        forget_user = ForgotPassword.objects.filter(id=token).first()
-
-        if forget_user:
-            current_time = get_current_utc_time()
-            if forget_user.expiry > current_time:
-                muid = forget_user.user.mu_id
-                return CustomResponse(response={'muid': muid}, status_code=200).get_success_response()
-            else:
-                forget_user.delete()
-                return CustomResponse(has_error=True, response={"Link is expired"},
-                                      status_code=400).get_failure_response()
-        else:
-            return CustomResponse(has_error=True, response={"User not exist"},
+            return CustomResponse(has_error=True, message="User not exist",
                                   status_code=400).get_failure_response()
