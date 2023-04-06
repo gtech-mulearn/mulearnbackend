@@ -45,7 +45,7 @@ class MuidValidate(APIView):
         expiry_time = get_current_utc_time() + timedelta(seconds=1800)
         PortalUserMailValidate.objects.create(id=uuid4(), portal=portal, user=user, token=mail_token,
                                               expiry=expiry_time)
-        DOMAIN_NAME = config('DOMAIN_NAME')
+        DOMAIN_NAME = config('FR_DOMAIN_NAME')
         portal_name = portal.name
         recipient_list = [user.email]
         subject = "Validate mu-id"
