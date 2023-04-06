@@ -8,5 +8,4 @@ urlpatterns = [
     path('profile/karma', portal_views.GetKarma.as_view()),
     path('profile/user/<str:muid>', portal_views.UserDetailsApi.as_view()),
     path('get-unverified-users', portal_views.GetUnverifiedUsers.as_view()),
-    path('leaderboard/students', portal_views.StudentsLeaderboard.as_view()),
 ]

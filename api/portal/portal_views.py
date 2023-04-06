@@ -14,7 +14,6 @@ from rest_framework.views import APIView
 from utils.utils_views import CustomResponse, get_current_utc_time
 
 
-
 # class AddPortal(APIView):
 #     def post(self, request):
 #         print(request)
@@ -195,29 +194,3 @@ class GetUnverifiedUsers(APIView):
             user_data_dict = {}
 
         return CustomResponse(response=user_data_list).get_success_response()
-
-
-class StudentsLeaderboard(APIView):
-
-    def post(self, request):
-
-        students_leaderboard_dict = {}
-        students_leaderboard_list = []
-
-        user_karma = TotalKarma.objects.all()
-
-        if user_karma is None:
-            return CustomResponse(message='Karma Related Datas Not Available', status_code=404).get_failure_response()
-
-        for datas in user_karma:
-            students_leaderboard_dict['name'] = datas.user.first_name + " " + datas.user.last_name
-            students_leaderboard_dict['karma'] = user_karma.filter(user_id=datas.user.id).values('karma')[0]['karma']
-            students_leaderboard_dict['institution'] = Organization.objects.filter(created_by=datas.user.id).values('title')[0]['title']
-
-            students_leaderboard_list.append(students_leaderboard_dict)
-            students_leaderboard_dict = {}
-
-        sorted_leaderboard = sorted(students_leaderboard_list, key=lambda i: i['karma'], reverse=True)
-        sorted_leaderboard = sorted_leaderboard[:20]
-        return CustomResponse(response=sorted_leaderboard).get_success_response()
-
