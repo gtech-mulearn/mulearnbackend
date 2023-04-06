@@ -47,7 +47,8 @@ class UserRoleLink(models.Model):
     user = models.ForeignKey(User, models.DO_NOTHING)
     role = models.ForeignKey(Role, models.DO_NOTHING)
     verified = models.IntegerField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='user_role_link_created_by')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
+                                   related_name='user_role_link_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -65,3 +66,14 @@ class Github(models.Model):
     class Meta:
         managed = False
         db_table = 'github'
+
+
+class ForgotPassword(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.OneToOneField(User, models.DO_NOTHING)
+    expiry = models.DateTimeField()
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'forgot_password'

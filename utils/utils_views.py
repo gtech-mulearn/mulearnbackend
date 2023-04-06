@@ -5,7 +5,7 @@ import jwt
 from user.models import User
 from mulearnbackend.settings import SECRET_KEY
 from .exception import CustomException
-
+from django.utils import timezone
 
 class CustomResponse:
     def __init__(self, has_error=False, status_code=200, message="", response={}):
@@ -67,3 +67,6 @@ class CustomizePermission(BasePermission):
         exception_message = {'hasError': True,
                              'message': 'User not found', 'statusCode': 1001}
         raise CustomException(exception_message)
+
+def get_current_utc_time():
+    return timezone.now()
