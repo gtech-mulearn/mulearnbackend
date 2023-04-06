@@ -11,7 +11,7 @@ from organization.models import Organization, UserOrganizationLink
 from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
-from utils.utils_views import CustomResponse,get_current_utc_time
+from utils.utils_views import CustomResponse, get_current_utc_time
 
 
 # class AddPortal(APIView):
@@ -103,8 +103,9 @@ class GetKarma(APIView):
 
         if authorized_user and authorized_user.is_authenticated:
             karma = TotalKarma.objects.get(user_id=students.id)
-            return CustomResponse(response={"muid": muid, "name": students.first_name + students.last_name, "email": students.email,
-                                            "karma": karma.karma}).get_success_response()
+            return CustomResponse(
+                response={"muid": muid, "name": students.first_name + students.last_name, "email": students.email,
+                          "karma": karma.karma}).get_success_response()
         else:
             return CustomResponse(has_error=True, status_code=400,
                                   message="user not authorized to this portal").get_failure_response()
@@ -174,7 +175,8 @@ class GetUnverifiedUsers(APIView):
 
         non_verified_user = UserRoleLink.objects.filter(verified=False).first()
         if non_verified_user is None:
-            return CustomResponse(has_error=True, message='All Users are Verified', status_code=404).get_failure_response()
+            return CustomResponse(has_error=True, message='All Users are Verified',
+                                  status_code=404).get_failure_response()
 
         user_data_dict = {}
         user_data_list = []
