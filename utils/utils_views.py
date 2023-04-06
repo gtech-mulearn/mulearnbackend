@@ -7,27 +7,30 @@ from mulearnbackend.settings import SECRET_KEY
 from .exception import CustomException
 from django.utils import timezone
 
+
 class CustomResponse:
-    def __init__(self, has_error=False, status_code=200, message="", response={}):
-        self.has_error = has_error
-        self.status_code = status_code
-        self.message = message
+    def __init__(self, message={}, general_message=[], response={}):
+        if not isinstance(general_message,list):
+            general_message = [general_message]
+
+        self.message = {'general': general_message}
+        self.message.update(message)
         self.response = response
 
-    def get_success_response(self, http_status_code=status.HTTP_200_OK):
+    def get_success_response(self):
         return Response(
             data={
-                "hasError": self.has_error,
-                "statusCode": self.status_code,
+                "hasError": False,
+                "statusCode": 200,
                 "message": self.message,
                 "response": self.response
-            }, status=http_status_code)
+            }, status=status.HTTP_200_OK)
 
-    def get_failure_response(self, http_status_code=status.HTTP_400_BAD_REQUEST):
+    def get_failure_response(self, status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST):
         return Response(
             data={
                 "hasError": self.has_error,
-                "statusCode": self.status_code,
+                "statusCode": status_code,
                 "message": self.message,
                 "response": self.response
             }, status=http_status_code)
@@ -67,6 +70,7 @@ class CustomizePermission(BasePermission):
         exception_message = {'hasError': True,
                              'message': 'User not found', 'statusCode': 1001}
         raise CustomException(exception_message)
+
 
 def get_current_utc_time():
     return timezone.now()
