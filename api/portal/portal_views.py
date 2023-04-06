@@ -30,8 +30,8 @@ class MuidValidate(APIView):
         portal_key = request.headers.get('portalKey')
         portal = Portal.objects.filter(portal_key=portal_key).first()
         if portal is None:
-            return CustomResponse({"hasError": True, "statusCode": 400, "message": "Invalid Portal",
-                                   "response": {}}).get_failure_response()
+            return CustomResponse(has_error=True, status_code=400, message="Invalid Portal").get_failure_response()
+
         name = request.data.get('name')
         muid = request.data.get('muid')
         user = User.objects.filter(muid=muid).first()
@@ -80,7 +80,7 @@ class UserMailTokenValidation(APIView):
                                       is_authenticated=True,
                                       created_at=today_now)
         mail_validation.delete()
-        return CustomResponse().get_success_response()
+        return CustomResponse(status_code=200,message="mail token verified").get_success_response()
 
 
 class GetKarma(APIView):
