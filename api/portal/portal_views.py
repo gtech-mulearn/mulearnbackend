@@ -30,16 +30,16 @@ class MuidValidate(APIView):
         portal_key = request.headers.get('portalKey')
         portal = Portal.objects.filter(portal_key=portal_key).first()
         if portal is None:
-            return CustomResponse(has_error=True, status_code=400, message="Invalid Portal").get_failure_response()
+            return CustomResponse(general_message="Invalid Portal").get_failure_response()
 
         name = request.data.get('name')
         muid = request.data.get('muid')
         user = User.objects.filter(muid=muid).first()
 
         if user is None:
-            return CustomResponse(has_error=True, status_code=400, message="Invalid muid").get_failure_response()
+            return CustomResponse(general_message="Invalid muid").get_failure_response()
         if not name:
-            return CustomResponse(has_error=True, status_code=400, message="Invalid name").get_failure_response()
+            return CustomResponse(general_message="Invalid name").get_failure_response()
 
         mail_token = uuid4()
         expiry_time = get_current_utc_time() + timedelta(seconds=1800)
@@ -65,22 +65,20 @@ class UserMailTokenValidation(APIView):
         mail_validation = PortalUserMailValidate.objects.filter(
             token=mail_validation_token).first()
         if mail_validation is None:
-            return CustomResponse(has_error=True, message='invalid user token',
-                                  status_code=498).get_failure_response()
+            return CustomResponse(general_message='invalid user token').get_failure_response(status_code=498)
 
         expiry_date = mail_validation.expiry
         today = today_now.strftime("%Y-%m-%d %H:%M:%S")
         expiry_date = expiry_date.strftime("%Y-%m-%d %H:%M:%S")
 
         if expiry_date < today:
-            return CustomResponse(has_error=True, message='token is expired',
-                                  status_code=498).get_failure_response()
+            return CustomResponse(general_message='token is expired').get_failure_response(status_code=498)
 
         PortalUserAuth.objects.create(id=uuid4(), portal=mail_validation.portal, user=mail_validation.user,
                                       is_authenticated=True,
                                       created_at=today_now)
         mail_validation.delete()
-        return CustomResponse(status_code=200,message="mail token verified").get_success_response()
+        return CustomResponse(general_message="mail token verified").get_success_response()
 
 
 class GetKarma(APIView):
@@ -89,13 +87,11 @@ class GetKarma(APIView):
         portal_key = request.headers.get("portalKey")
         portal = Portal.objects.filter(portal_key=portal_key).first()
         if portal is None:
-            return CustomResponse(has_error=True, message='Invalid Portal',
-                                  status_code=400).get_failure_response()
+            return CustomResponse(general_message='Invalid Portal').get_failure_response()
 
         muid = request.data.get("muid")
         if muid is None:
-            return CustomResponse(has_error=True, message='muid is None',
-                                  status_code=400).get_failure_response()
+            return CustomResponse(general_message='muid is None').get_failure_response()
 
         students = User.objects.filter(mu_id=muid).first()
         authorized_user = PortalUserAuth.objects.filter(
@@ -107,8 +103,7 @@ class GetKarma(APIView):
                 response={"muid": muid, "name": students.first_name + students.last_name, "email": students.email,
                           "karma": karma.karma}).get_success_response()
         else:
-            return CustomResponse(has_error=True, status_code=400,
-                                  message="user not authorized to this portal").get_failure_response()
+            return CustomResponse(general_message="user not authorized to this portal").get_failure_response()
 
 
 class UserDetailsApi(APIView):
@@ -120,26 +115,20 @@ class UserDetailsApi(APIView):
         user_role = UserRoleLink.objects.filter(user=user).first()
         task_list = TaskList.objects.filter(created_by=user).first()
         interest_group = UserIgLink.objects.filter(created_by=user).first()
-        organization = UserOrganizationLink.objects.filter(
-            user=user).first()
+        organization = UserOrganizationLink.objects.filter(user=user).first()
         # print(interest_group.ig.name)
         if user is None:
-            return CustomResponse(has_error=True, message='invalid muid', status_code=498).get_failure_response()
+            return CustomResponse(general_message='invalid muid').get_failure_response(status_code=498)
         if total_karma is None:
-            return CustomResponse(has_error=True, message='karma related user data not available',
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message='karma related user data not available').get_failure_response()
         if user_role is None:
-            return CustomResponse(has_error=True, message='Roles related data not available for user',
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message='Roles related data not available for user').get_failure_response()
         if task_list is None:
-            return CustomResponse(has_error=True, message='Task related data not available for user',
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message='Task related data not available for user').get_failure_response()
         if interest_group is None:
-            return CustomResponse(has_error=True, message='Interest Group related data not available for user',
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message='Interest Group related data not available for user').get_failure_response()
         if Organization is None:
-            return CustomResponse(has_error=True, message='Organization related data not available for user',
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message='Organization related data not available for user').get_failure_response()
         return CustomResponse(response={
             "first_name": user.first_name,
             "last_name": user.last_name,
@@ -175,8 +164,7 @@ class GetUnverifiedUsers(APIView):
 
         non_verified_user = UserRoleLink.objects.filter(verified=False).first()
         if non_verified_user is None:
-            return CustomResponse(has_error=True, message='All Users are Verified',
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message='All Users are Verified').get_failure_response()
 
         user_data_dict = {}
         user_data_list = []

@@ -22,10 +22,10 @@ class StudentsLeaderboard(APIView):
         student_role = Role.objects.filter(title='student').first()
 
         if user_karma is None:
-            return CustomResponse(message='Karma Related Datas Not Available', status_code=404).get_failure_response()
+            return CustomResponse(general_message='Karma Related Datas Not Available').get_failure_response()
 
         if student_role is None:
-            return CustomResponse(message='Student Related Datas Not Available', status_code=404).get_failure_response()
+            return CustomResponse(message='Student Related Datas Not Available').get_failure_response()
 
         user_karma_details = TotalKarma.objects.all()
 
@@ -65,7 +65,7 @@ class StudentsMonthlyLeaderboard(APIView):
         monthly_karma = KarmaActivityLog.objects.filter(created_at__range=(start_date, end_date))
 
         if monthly_karma.first() is None:
-            return CustomResponse(message='No leaderboard available for last month', status_code=404).get_failure_response()
+            return CustomResponse(general_message='No leaderboard available for last month').get_failure_response()
 
         user_karma = monthly_karma.values('created_by').annotate(total_karma=Sum('karma')).order_by()
 
