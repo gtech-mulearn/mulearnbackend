@@ -1,8 +1,7 @@
 from rest_framework import status, authentication
 from rest_framework.response import Response
-from rest_framework.permissions import BasePermission, SAFE_METHODS
+from rest_framework.permissions import BasePermission
 import jwt
-from user.models import User
 from mulearnbackend.settings import SECRET_KEY
 from .exception import CustomException
 from django.utils import timezone
@@ -10,7 +9,7 @@ from django.utils import timezone
 
 class CustomResponse:
     def __init__(self, message={}, general_message=[], response={}):
-        if not isinstance(general_message,list):
+        if not isinstance(general_message, list):
             general_message = [general_message]
 
         self.message = {'general': general_message}
@@ -29,7 +28,7 @@ class CustomResponse:
     def get_failure_response(self, status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST):
         return Response(
             data={
-                "hasError": self.has_error,
+                "hasError": True,
                 "statusCode": status_code,
                 "message": self.message,
                 "response": self.response
@@ -46,7 +45,7 @@ class CustomizePermission(BasePermission):
                                      'message': 'Invalid token', 'statusCode': 1000}
                 raise CustomException(exception_message)
             return self._authenticate_credentials(request, token[1])
-        except Exception as e:
+        except Exception:
             exception_message = {'hasError': True,
                                  'message': 'Invalid token', 'statusCode': 1000}
             raise CustomException(exception_message)
