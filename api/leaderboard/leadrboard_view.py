@@ -25,7 +25,7 @@ class StudentsLeaderboard(APIView):
             return CustomResponse(general_message='Karma Related Datas Not Available').get_failure_response()
 
         if student_role is None:
-            return CustomResponse(message='Student Related Datas Not Available').get_failure_response()
+            return CustomResponse(general_message='Student Related Datas Not Available').get_failure_response()
 
         user_karma_details = TotalKarma.objects.all()
 

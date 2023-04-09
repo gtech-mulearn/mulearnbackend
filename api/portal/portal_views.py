@@ -130,31 +130,31 @@ class UserDetailsApi(APIView):
         if Organization is None:
             return CustomResponse(general_message='Organization related data not available for user').get_failure_response()
         return CustomResponse(response={
-            "first_name": user.first_name,
-            "last_name": user.last_name,
+            "firstName": user.first_name,
+            "lastName": user.last_name,
             "karma": total_karma.karma,
             "roles": {
-                "main_role": user_role.role.title,
-                "authority_roles": None,
+                "mainRole": user_role.role.title,
+                "authorityRoles": None,
             },
-            "interest_groups": [interest_group.ig.name.split(',')],
+            "interestGroups": [interest_group.ig.name.split(',')],
             "tasks": [
                 {
-                    "task_title": task_list.title,
+                    "taskTitle": task_list.title,
                     "karma": task_list.karma,
                     "date": task_list.created_at.strftime("%Y-%m-%d %H:%M:%S"),
                 },
             ],
-            "github_link": None,
-            "twitter_link": None,
-            "linkedin_link": None,
+            "githubLink": None,
+            "twitterLink": None,
+            "linkedinLink": None,
             "organization": [
                 {
                     "name": organization.org.title,
                     "department": None,
                 },
             ],
-            "profile_pic_link": None
+            "profilePicLink": None
         }).get_success_response()
 
 
