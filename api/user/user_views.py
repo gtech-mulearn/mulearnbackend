@@ -158,4 +158,4 @@ class ResetPasswordConfirmAPI(APIView):
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
         else:
-            return CustomResponse(general_message="Invalid Expired").get_failure_response()
+            return CustomResponse(general_message="Invalid Token").get_failure_response()

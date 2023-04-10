@@ -25,7 +25,7 @@ from utils.utils_views import CustomResponse, get_current_utc_time
 #             return CustomResponse(has_error=True, status_code=400, message=serializer.errors).get_failure_response()
 
 
-class MuidValidate(APIView):
+class MuidValidateAPI(APIView):
     def post(self, request):
         portal_key = request.headers.get('portalKey')
         portal = Portal.objects.filter(portal_key=portal_key).first()
@@ -34,7 +34,7 @@ class MuidValidate(APIView):
 
         name = request.data.get('name')
         muid = request.data.get('muid')
-        user = User.objects.filter(muid=muid).first()
+        user = User.objects.filter(mu_id=muid).first()
 
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
@@ -44,19 +44,19 @@ class MuidValidate(APIView):
         mail_token = uuid4()
         expiry_time = get_current_utc_time() + timedelta(seconds=1800)
         PortalUserMailValidate.objects.create(id=uuid4(), portal=portal, user=user, token=mail_token,
-                                              expiry=expiry_time)
+                                              expiry=expiry_time, created_by=user, created_at=get_current_utc_time())
         DOMAIN_NAME = config('FR_DOMAIN_NAME')
         portal_name = portal.name
         recipient_list = [user.email]
         subject = "Validate mu-id"
         email_from = config('EMAIL_HOST_USER')
-        mail_message = f"{user.fullname} have requested to approve muid for {portal_name}.If its you click the following link to authorize {DOMAIN_NAME}/portal/user/authorize/{mail_token}"
+        mail_message = f"{user.first_name+user.last_name} have requested to approve muid for {portal_name}.If its you click the following link to authorize {DOMAIN_NAME}/portal/user/authorize/{mail_token}"
         send_mail(subject, mail_message, email_from, recipient_list)
 
-        return CustomResponse(response={"name": user.fullname, "muid": user.muid}).get_success_response()
+        return CustomResponse(response={"name": user.first_name+user.last_name, "muid": user.mu_id}).get_success_response()
 
 
-class UserMailTokenValidation(APIView):
+class UserMailTokenValidationAPI(APIView):
 
     def post(self, request):
         mail_validation_token = request.data['token']
@@ -68,20 +68,19 @@ class UserMailTokenValidation(APIView):
             return CustomResponse(general_message='invalid user token').get_failure_response(status_code=498)
 
         expiry_date = mail_validation.expiry
-        today = today_now.strftime("%Y-%m-%d %H:%M:%S")
-        expiry_date = expiry_date.strftime("%Y-%m-%d %H:%M:%S")
+        today = get_current_utc_time()
 
         if expiry_date < today:
             return CustomResponse(general_message='token is expired').get_failure_response(status_code=498)
 
         PortalUserAuth.objects.create(id=uuid4(), portal=mail_validation.portal, user=mail_validation.user,
-                                      is_authenticated=True,
-                                      created_at=today_now)
+                                      is_authenticated=True,created_by=mail_validation.user,
+                                      created_at=get_current_utc_time())
         mail_validation.delete()
         return CustomResponse(general_message="mail token verified").get_success_response()
 
 
-class GetKarma(APIView):
+class GetKarmaAPI(APIView):
 
     def get(self, request):
         portal_key = request.headers.get("portalKey")
@@ -126,9 +125,11 @@ class UserDetailsApi(APIView):
         if task_list is None:
             return CustomResponse(general_message='Task related data not available for user').get_failure_response()
         if interest_group is None:
-            return CustomResponse(general_message='Interest Group related data not available for user').get_failure_response()
+            return CustomResponse(
+                general_message='Interest Group related data not available for user').get_failure_response()
         if Organization is None:
-            return CustomResponse(general_message='Organization related data not available for user').get_failure_response()
+            return CustomResponse(
+                general_message='Organization related data not available for user').get_failure_response()
         return CustomResponse(response={
             "firstName": user.first_name,
             "lastName": user.last_name,
