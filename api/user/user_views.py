@@ -44,7 +44,7 @@ class RegisterData(APIView):
                 response={"data": UserDetailSerializer(user_obj, many=False).data,
                           "userRoleVerified": user_role_verified}).get_success_response()
         else:
-            return CustomResponse(message=create_user.errors).get_failure_response()
+            return CustomResponse(general_message=create_user.errors).get_failure_response()
 
 
 class RoleAPI(APIView):
