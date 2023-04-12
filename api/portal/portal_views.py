@@ -113,9 +113,13 @@ class UserDetailsApi(APIView):
         total_karma = TotalKarma.objects.filter(user=user).first()
         user_role = UserRoleLink.objects.filter(user=user).first()
         task_list = TaskList.objects.filter(created_by=user).first()
-        interest_group = UserIgLink.objects.filter(created_by=user).first()
-        organization = UserOrganizationLink.objects.filter(user=user).first()
-        # print(interest_group.ig.name)
+
+        interest_group = UserIgLink.objects.filter(created_by=user).all()
+        organization = UserOrganizationLink.objects.filter(
+            user=user).first()
+        igname = []
+        for i in interest_group:
+            igname = igname + [i.ig.name]
         if user is None:
             return CustomResponse(general_message='invalid muid').get_failure_response(status_code=498)
         if total_karma is None:
@@ -138,7 +142,7 @@ class UserDetailsApi(APIView):
                 "mainRole": user_role.role.title,
                 "authorityRoles": None,
             },
-            "interestGroups": [interest_group.ig.name.split(',')],
+            "interest_groups": igname,
             "tasks": [
                 {
                     "taskTitle": task_list.title,
