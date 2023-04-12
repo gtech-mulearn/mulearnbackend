@@ -20,8 +20,7 @@ class RegisterJWTValidate(APIView):
     def get(self, request):
         discord_id = request.auth.get('id', None)
         if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(has_error=True, message='You are already registered',
-                                  status_code=400).get_failure_response()
+            return CustomResponse(general_message='You are already registered').get_failure_response()
         return CustomResponse(response={'token': True}).get_success_response()
 
 
@@ -32,8 +31,7 @@ class RegisterData(APIView):
         data = request.data
         discord_id = request.auth.get('id', None)
         if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(has_error=True, message='user already registered',
-                                  status_code=400).get_failure_response()
+            return CustomResponse(general_message='user already registered').get_failure_response()
         create_user = RegisterSerializer(
             data=data, context={'request': request})
         if create_user.is_valid():
@@ -46,7 +44,7 @@ class RegisterData(APIView):
                 response={"data": UserDetailSerializer(user_obj, many=False).data,
                           "userRoleVerified": user_role_verified}).get_success_response()
         else:
-            return CustomResponse(has_error=True, status_code=400, message=create_user.errors).get_failure_response()
+            return CustomResponse(message=create_user.errors).get_failure_response()
 
 
 class RoleAPI(APIView):
@@ -117,14 +115,29 @@ class ForgotPasswordAPI(APIView):
             email_host_user = decouple.config('EMAIL_HOST_USER')
             subject = "Password Reset Requested"
             to = [user.email]
-            domain = decouple.config('DOMAIN_NAME')
-            message = f"Reset your password with this link {domain}/user/reset?token='{forget_user.id}'"
+            domain = decouple.config('FR_DOMAIN_NAME')
+            message = f"Reset your password with this link {domain}/user/reset-password?token={forget_user.id}"
             send_mail(subject, message, email_host_user, to, fail_silently=False)
-            return CustomResponse(has_error=False, response={"Forgot Password Email Send Successfully"},
-                                  status_code=200).get_success_response()
+            return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
         else:
-            return CustomResponse(has_error=True, response={"User not exist"},
-                                  status_code=404).get_failure_response()
+            return CustomResponse(general_message="User not exist").get_failure_response()
+
+
+class ResetPasswordVerifyTokenAPI(APIView):
+
+    def post(self, request, token):
+        forget_user = ForgotPassword.objects.filter(id=token).first()
+
+        if forget_user:
+            current_time = get_current_utc_time()
+            if forget_user.expiry > current_time:
+                muid = forget_user.user.mu_id
+                return CustomResponse(response={'muid': muid}).get_success_response()
+            else:
+                forget_user.delete()
+                return CustomResponse(general_message="Link is expired").get_failure_response()
+        else:
+            return CustomResponse(general_message="Invalid Token").get_failure_response()
 
 
 class ResetPasswordConfirmAPI(APIView):
@@ -140,31 +153,9 @@ class ResetPasswordConfirmAPI(APIView):
                 forget_user.user.password = hashed_pwd
                 forget_user.user.save()
                 forget_user.delete()
-                return CustomResponse(response={"New Password Saved Successfully"},
-                                      status_code=200).get_success_response()
+                return CustomResponse(general_message="New Password Saved Successfully").get_success_response()
             else:
                 forget_user.delete()
-                return CustomResponse(has_error=True, response={"Link is expired"},
-                                      status_code=400).get_failure_response()
+                return CustomResponse(general_message="Link is expired").get_failure_response()
         else:
-            return CustomResponse(has_error=True, response={"User not exist"},
-                                  status_code=400).get_failure_response()
-
-
-class ResetPasswordVerifyTokenAPI(APIView):
-
-    def post(self, request, token):
-        forget_user = ForgotPassword.objects.filter(id=token).first()
-
-        if forget_user:
-            current_time = get_current_utc_time()
-            if forget_user.expiry > current_time:
-                muid = forget_user.user.mu_id
-                return CustomResponse(response={'muid': muid}, status_code=200).get_success_response()
-            else:
-                forget_user.delete()
-                return CustomResponse(has_error=True, response={"Link is expired"},
-                                      status_code=400).get_failure_response()
-        else:
-            return CustomResponse(has_error=True, response={"User not exist"},
-                                  status_code=400).get_failure_response()
+            return CustomResponse(general_message="Invalid Token").get_failure_response()
