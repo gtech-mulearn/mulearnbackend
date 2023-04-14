@@ -5,5 +5,6 @@ urlpatterns = [
     path('portal/', include('api.portal.urls')),
     path('user/', include('api.user.urls')),
     path('organisation/', include('api.organisation.urls')),
-    path('leaderboard/', include('api.leaderboard.urls'))
+    path('leaderboard/', include('api.leaderboard.urls')),
+    path('dashboard/', include('api.dashboard.urls')),
 ]
