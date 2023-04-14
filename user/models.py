@@ -27,7 +27,6 @@ class User(models.Model):
 
 class Role(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    discord_id = models.CharField(max_length=36)
     title = models.CharField(max_length=75)
     description = models.CharField(max_length=300, blank=True, null=True)
     updated_by = models.ForeignKey(
