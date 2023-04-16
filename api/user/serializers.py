@@ -7,38 +7,44 @@ from user.models import Role, User, UserRoleLink
 from django.db import transaction
 
 
+class LearningCircleUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["id", "mu_id", "first_name", "last_name", "email", "mobile"]
+
+
 class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
-        fields = ['id', 'title']
+        fields = ["id", "title"]
 
 
 class OrgSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
-        fields = ['id', 'title']
+        fields = ["id", "title"]
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
     class Meta:
         model = Department
-        fields = ['id', 'title']
+        fields = ["id", "title"]
 
 
 class AreaOfInterestAPISerializer(serializers.ModelSerializer):
     class Meta:
         model = InterestGroup
-        fields = ['id', 'name']
+        fields = ["id", "name"]
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
-    firstName = serializers.CharField(required=True, source='first_name')
-    lastName = serializers.CharField(required=True, source='last_name')
-    muId = serializers.CharField(required=True, source='mu_id')
+    firstName = serializers.CharField(required=True, source="first_name")
+    lastName = serializers.CharField(required=True, source="last_name")
+    muId = serializers.CharField(required=True, source="mu_id")
 
     class Meta:
         model = User
-        fields = ['id', 'muId', 'firstName', 'lastName', 'email']
+        fields = ["id", "muId", "firstName", "lastName", "email"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -54,11 +60,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=False, source='last_name', allow_null=True, max_length=75)
 
     def create(self, validated_data):
-        if validated_data['last_name'] is None:
-            full_name = validated_data['first_name']
+        if validated_data["last_name"] is None:
+            full_name = validated_data["first_name"]
         else:
-            full_name = validated_data['first_name'] + \
-                validated_data['last_name']
+            full_name = validated_data["first_name"] + validated_data["last_name"]
         full_name = full_name.replace(" ", "").lower()[:85]
         mu_id = full_name + "@mulearn"
         counter = 0
@@ -71,7 +76,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         year_of_graduation = validated_data.pop('yearOfGraduation')
         area_of_interests = validated_data.pop('areaOfInterests')
         role = Role.objects.get(id=role_id)
-        user_role_verified = role.title == 'Student'
+        user_role_verified = role.title == "Student"
 
         with transaction.atomic():
             user = User.objects.create(
