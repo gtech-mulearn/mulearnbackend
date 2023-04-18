@@ -50,13 +50,16 @@ class UserDetailSerializer(serializers.ModelSerializer):
 
 
 class RegisterSerializer(serializers.ModelSerializer):
-    role = serializers.CharField(required=True)
-    organization = serializers.CharField(required=True, allow_null=True)
+    role = serializers.CharField(required=False, allow_null=True)
+    organizations = serializers.ListField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
-    yearOfGraduation = serializers.CharField(required=False, allow_null=True, max_length=4)
-    areaOfInterest = serializers.ListField(required=True, max_length=3)
-    firstName = serializers.CharField(required=True, source="first_name", max_length=75)
-    lastName = serializers.CharField(required=False, source="last_name", allow_null=True, max_length=75)
+    yearOfGraduation = serializers.CharField(
+        required=False, allow_null=True, max_length=4)
+    areaOfInterests = serializers.ListField(required=True, max_length=3)
+    firstName = serializers.CharField(
+        required=True, source='first_name', max_length=75)
+    lastName = serializers.CharField(
+        required=False, source='last_name', allow_null=True, max_length=75)
 
     def create(self, validated_data):
         if validated_data["last_name"] is None:
@@ -69,70 +72,31 @@ class RegisterSerializer(serializers.ModelSerializer):
         while User.objects.filter(mu_id=mu_id).exists():
             counter += 1
             mu_id = full_name + "-" + str(counter) + "@mulearn"
-        role_id = validated_data.pop("role")
-        organization_id = validated_data.pop("organization")
-        dept = validated_data.pop("dept")
-        year_of_graduation = validated_data.pop("yearOfGraduation")
-        area_of_interest = validated_data.pop("areaOfInterest")
+        role_id = validated_data.pop('role')
+        organization_ids = validated_data.pop('organizations')
+        dept = validated_data.pop('dept')
+        year_of_graduation = validated_data.pop('yearOfGraduation')
+        area_of_interests = validated_data.pop('areaOfInterests')
         role = Role.objects.get(id=role_id)
         user_role_verified = role.title == "Student"
 
         with transaction.atomic():
             user = User.objects.create(
-                **validated_data,
-                id=uuid4(),
-                mu_id=mu_id,
-                discord_id=self.context["request"].auth.get("id", None),
-                created_at=datetime.now()
-            )
-            TotalKarma.objects.create(
-                id=uuid4(),
-                user=user,
-                karma=0,
-                created_by=user,
-                created_at=datetime.now(),
-                updated_by=user,
-                updated_at=datetime.now(),
-            )
-            UserRoleLink.objects.create(
-                id=uuid4(),
-                user=user,
-                role_id=role_id,
-                created_by=user,
-                created_at=datetime.now(),
-                verified=user_role_verified,
-            )
-            if organization_id is not None:
-                UserOrganizationLink.objects.create(
-                    id=uuid4(),
-                    user=user,
-                    org_id=organization_id,
-                    created_by=user,
-                    created_at=datetime.now(),
-                    verified=True,
-                    department_id=dept,
-                    graduation_year=year_of_graduation,
-                )
-            UserIgLink.objects.bulk_create(
-                [
-                    UserIgLink(id=uuid4(), user=user, ig_id=ig, created_by=user, created_at=datetime.now())
-                    for ig in area_of_interest
-                ]
-            )
+                **validated_data, id=uuid4(), mu_id=mu_id, discord_id=self.context['request'].auth.get('id', None),
+                created_at=datetime.now())
+            TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
+            ), updated_by=user, updated_at=datetime.now())
+            UserRoleLink.objects.create(id=uuid4(
+            ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
+            if organization_ids is not None:
+                UserOrganizationLink.objects.bulk_create([UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
+                                                                               created_at=datetime.now(), verified=True, department_id=dept,
+                                                                               graduation_year=year_of_graduation) for org_id in organization_ids])
+            UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
+            ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interests])
         return user, user_role_verified
 
     class Meta:
         model = User
-        fields = [
-            "firstName",
-            "lastName",
-            "email",
-            "mobile",
-            "gender",
-            "dob",
-            "role",
-            "organization",
-            "dept",
-            "yearOfGraduation",
-            "areaOfInterest",
-        ]
+        fields = ['firstName', 'lastName', 'email', 'mobile', 'gender', 'dob',
+                  'role', 'organizations', 'dept', 'yearOfGraduation', 'areaOfInterests']

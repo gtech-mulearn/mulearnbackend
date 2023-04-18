@@ -141,7 +141,8 @@ class ForgotPasswordAPI(APIView):
             to = [user.email]
             domain = decouple.config("FR_DOMAIN_NAME")
             message = f"Reset your password with this link {domain}/user/reset-password?token={forget_user.id}"
-            send_mail(subject, message, email_host_user, to, fail_silently=False)
+            send_mail(subject, message, email_host_user,
+                      to, fail_silently=False)
             return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
         else:
             return CustomResponse(general_message="User not exist").get_failure_response()
