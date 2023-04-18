@@ -10,7 +10,7 @@ from user.models import User, Role, UserRoleLink
 
 class StudentsLeaderboard(APIView):
 
-    def post(self, request):
+    def get(self, request):
 
         students_leaderboard_dict = {}
         students_leaderboard_list = []
@@ -20,6 +20,7 @@ class StudentsLeaderboard(APIView):
             return CustomResponse(general_message='No Karma Related data avilable').get_failure_response()
 
         user_role = Role.objects.filter(title='student').first()
+
         user_role_link = UserRoleLink.objects.filter(role=user_role.id).first()
         if user_role_link is None:
             return CustomResponse(general_message='No Student related data avilable').get_success_response()
@@ -33,7 +34,7 @@ class StudentsLeaderboard(APIView):
             if user_role_link is None:
                 return CustomResponse(general_message='No User role data avilable').get_failure_response()
 
-            if user_role_link.role.title == 'student':
+            if user_role_link.role.title == 'Student':
 
                 user_karma = TotalKarma.objects.filter(user=user_role_link.user).first()
                 user_organization = UserOrganizationLink.objects.filter(user=user_role_link.user).first()
@@ -53,7 +54,7 @@ class StudentsLeaderboard(APIView):
 
 class StudentsMonthlyLeaderboard(APIView):
 
-    def post(self, request):
+    def get(self, request):
 
         today = datetime.datetime.now()
         first = today.replace(day=1)
@@ -69,11 +70,11 @@ class StudentsMonthlyLeaderboard(APIView):
         students_leaderboard_dict = {}
         students_leaderboard_list = []
 
-        user_role = Role.objects.filter(title='student').first()
+        user_role = Role.objects.filter(title='Student').first()
         user_role_link = UserRoleLink.objects.filter(role=user_role.id).first()
 
         if user_role_link is None:
-            return CustomResponse(general_message='No Student related data avilable').get_success_response()
+            return CustomResponse(general_message='No Student related data available').get_success_response()
 
         monthly_karma = KarmaActivityLog.objects.filter(created_at__range=(start_date, end_date))
 
@@ -86,7 +87,7 @@ class StudentsMonthlyLeaderboard(APIView):
             if user_role_link is None:
                 return CustomResponse(general_message='No User role data avilable').get_failure_response()
 
-            if user_role_link.role.title == 'student':
+            if user_role_link.role.title == 'Student':
 
                 user_organization = UserOrganizationLink.objects.filter(user=user.created_by).first()
 
@@ -112,12 +113,12 @@ class StudentsMonthlyLeaderboard(APIView):
 
 class CollegeLeaderboard(APIView):
 
-    def post(self, request):
+    def get(self, request):
 
         organization_leaderboard_list = []
         organization_leaderboard_dict = {}
 
-        user_role = Role.objects.filter(title='student').first()
+        user_role = Role.objects.filter(title='Student').first()
         user_role_link = UserRoleLink.objects.filter(role=user_role.id).first()
         if user_role_link is None:
             return CustomResponse(general_message='No Student related data avilable').get_success_response()
@@ -135,7 +136,7 @@ class CollegeLeaderboard(APIView):
             if user_role_link is None:
                 return CustomResponse(general_message='No User role data avilable').get_failure_response()
 
-            if user_role_link.role.title == 'student' and organization.org.org_type == 'college':
+            if user_role_link.role.title == 'Student' and organization.org.org_type == 'College':
 
                 users_karma = TotalKarma.objects.filter(user=organization.user).first()
 

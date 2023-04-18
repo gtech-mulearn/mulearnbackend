@@ -1,16 +1,15 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from uuid import uuid4
 
 import pytz
-
-from user.models import User, Role, UserRoleLink
-from task.models import TotalKarma, TaskList, InterestGroup, UserIgLink
-from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
-from organization.models import Organization, UserOrganizationLink
-
 from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
+
+from organization.models import Organization, UserOrganizationLink
+from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
+from task.models import TotalKarma, TaskList, UserIgLink
+from user.models import User, UserRoleLink
 from utils.utils_views import CustomResponse, get_current_utc_time
 
 
@@ -60,7 +59,6 @@ class MuidValidateAPI(APIView):
         name = user.first_name + (user.last_name if user.last_name else "")
         mail_message = f"{name} have requested to approve muid for {portal_name}.If its you click the following link to authorize {DOMAIN_NAME}/portal/user/authorize/{mail_token}"
         send_mail(subject, mail_message, email_from, recipient_list)
-
         return CustomResponse(response={"name": name, "muid": user.mu_id}).get_success_response()
 
 
