@@ -19,6 +19,8 @@ from task.models import InterestGroup
 from user.models import Role, User, ForgotPassword
 from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
 
+from utils.types import RoleType,OrganizationType
+
 
 class LearningCircleUserView(APIView):
     def post(self, request):
@@ -79,7 +81,7 @@ class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        roles = ["Student", "Mentor", "Enabler"]
+        roles = [RoleType.STUDENT.value, RoleType.MENTOR.value, RoleType.ENABLER.value]
         role_serializer = Role.objects.filter(title__in=roles)
         role_serializer_data = OrgSerializer(role_serializer, many=True).data
         return CustomResponse(response={"roles": role_serializer_data}).get_success_response()
@@ -89,7 +91,7 @@ class CollegeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        org_queryset = Organization.objects.filter(org_type="College")
+        org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
         department_serializer_data = OrgSerializer(department_queryset, many=True).data
@@ -102,7 +104,7 @@ class CompanyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        company_queryset = Organization.objects.filter(org_type="Company")
+        company_queryset = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
         company_serializer_data = OrgSerializer(company_queryset, many=True).data
         return CustomResponse(response={"companies": company_serializer_data}).get_success_response()
 
@@ -111,7 +113,7 @@ class CommunityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        community_queryset = Organization.objects.filter(org_type="Community")
+        community_queryset = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
         community_serializer_data = OrgSerializer(community_queryset, many=True).data
         return CustomResponse(response={"communities": community_serializer_data}).get_success_response()
 
