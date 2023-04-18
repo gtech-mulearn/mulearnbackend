@@ -1,7 +1,12 @@
 import uuid
+from datetime import timedelta
 
 import decouple
+import requests
+from django.contrib.auth.hashers import make_password
+from django.core.mail import send_mail
 from rest_framework.views import APIView
+
 from api.user.serializers import (
     AreaOfInterestAPISerializer,
     LearningCircleUserSerializer,
@@ -13,10 +18,6 @@ from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgotPassword
 from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
-from django.core.mail import send_mail
-from django.contrib.auth.hashers import make_password
-import requests
-from datetime import datetime, timedelta
 
 
 class LearningCircleUserView(APIView):
@@ -27,7 +28,7 @@ class LearningCircleUserView(APIView):
             return CustomResponse(general_message="Invalid muid").get_failure_response()
         serializer = LearningCircleUserSerializer(user)
         id, mu_id, first_name, last_name, email, phone = serializer.data.values()
-        name = f"{first_name}{ last_name if last_name else ''}"
+        name = f"{first_name}{last_name if last_name else ''}"
         return CustomResponse(
             response={
                 "id": id,

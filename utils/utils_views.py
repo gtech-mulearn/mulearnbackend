@@ -1,10 +1,12 @@
-from rest_framework import status, authentication
-from rest_framework.response import Response
-from rest_framework.permissions import BasePermission
+from datetime import datetime
+
 import jwt
+from rest_framework import status, authentication
+from rest_framework.permissions import BasePermission
+from rest_framework.response import Response
+
 from mulearnbackend.settings import SECRET_KEY
 from .exception import CustomException
-from django.utils import timezone
 
 
 class CustomResponse:
@@ -61,7 +63,9 @@ class CustomizePermission(BasePermission):
 
 
 def get_current_utc_time():
-    return timezone.now()
+    now = datetime.utcnow()
+    formated_time = now.strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
 
 
 class CustomHTTPHandler:

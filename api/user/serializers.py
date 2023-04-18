@@ -1,10 +1,12 @@
 from datetime import datetime
 from uuid import uuid4
+
+from django.db import transaction
 from rest_framework import serializers
+
 from organization.models import Department, Organization, UserOrganizationLink
 from task.models import InterestGroup, TotalKarma, UserIgLink
 from user.models import Role, User, UserRoleLink
-from django.db import transaction
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
