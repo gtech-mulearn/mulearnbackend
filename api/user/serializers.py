@@ -77,6 +77,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         dept = validated_data.pop('dept')
         year_of_graduation = validated_data.pop('yearOfGraduation')
         area_of_interests = validated_data.pop('areaOfInterests')
+        user_role_verified = True
         if role_id:
             role = Role.objects.get(id=role_id)
             user_role_verified = role.title == "Student"
