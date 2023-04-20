@@ -20,13 +20,15 @@ class CustomResponse:
 
     def get_success_response(self):
         return Response(
-            data={"hasError": False, "statusCode": 200, "message": self.message, "response": self.response},
+            data={"hasError": False, "statusCode": 200,
+                  "message": self.message, "response": self.response},
             status=status.HTTP_200_OK,
         )
 
     def get_failure_response(self, status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST):
         return Response(
-            data={"hasError": True, "statusCode": status_code, "message": self.message, "response": self.response},
+            data={"hasError": True, "statusCode": status_code,
+                  "message": self.message, "response": self.response},
             status=http_status_code,
         )
 
@@ -34,31 +36,31 @@ class CustomResponse:
 class CustomizePermission(BasePermission):
     def authenticate(self, request):
         try:
-            token = authentication.get_authorization_header(request).decode("utf-8").split()
+            token = authentication.get_authorization_header(
+                request).decode("utf-8").split()
             if token[0] != "Bearer" and len(token) != 2:
-                exception_message = {"hasError": True, "message": "Invalid token", "statusCode": 1000}
+                exception_message = {
+                    "hasError": True, "message": {"general":["Invalid Token"]}, "statusCode": 1000}
                 raise CustomException(exception_message)
             return self._authenticate_credentials(request, token[1])
+        except CustomException as ce:
+            raise CustomException(ce.detail)
         except Exception:
-            exception_message = {"hasError": True, "message": "Invalid token", "statusCode": 1000}
+            exception_message = {"hasError": True,
+                                 "message": {"general":["Invalid token"]}, "statusCode": 1000}
             raise CustomException(exception_message)
 
     def _authenticate_credentials(self, request, token):
-        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"], verify=True)
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[
+                             "HS256"], verify=True)
 
         id = payload.get("id", None)
-        expiry = payload.get("expiry", None)
-        if id and expiry:
+        expiry = datetime.strptime(payload.get("expiry", None),"%Y-%m-%d %H:%M:%S")
+        if id and expiry > get_current_utc_time():
             return None, payload
-        # discord_id = payload.get('id', None)
-        # if discord_id:
-        #     user = User.objects.filter(discord_id=discord_id)
-        #     if user.exists():
-        #         return user.first(), payload
-        #     else:
-        #         pass
-
-        exception_message = {"hasError": True, "message": "User not found", "statusCode": 1001}
+        
+        exception_message = {"hasError": True,
+                             "message": {"general":["Token expired"]}, "statusCode": 1001}
         raise CustomException(exception_message)
 
 
