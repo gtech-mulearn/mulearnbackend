@@ -1,7 +1,12 @@
 import uuid
+from datetime import timedelta
 
 import decouple
+import requests
+from django.contrib.auth.hashers import make_password
+from django.core.mail import send_mail
 from rest_framework.views import APIView
+
 from api.user.serializers import (
     AreaOfInterestAPISerializer,
     LearningCircleUserSerializer,
@@ -13,10 +18,8 @@ from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgotPassword
 from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
-from django.core.mail import send_mail
-from django.contrib.auth.hashers import make_password
-import requests
-from datetime import datetime, timedelta
+
+from utils.types import RoleType,OrganizationType
 
 
 class LearningCircleUserView(APIView):
@@ -27,7 +30,7 @@ class LearningCircleUserView(APIView):
             return CustomResponse(general_message="Invalid muid").get_failure_response()
         serializer = LearningCircleUserSerializer(user)
         id, mu_id, first_name, last_name, email, phone = serializer.data.values()
-        name = f"{first_name}{ last_name if last_name else ''}"
+        name = f"{first_name}{last_name if last_name else ''}"
         return CustomResponse(
             response={
                 "id": id,
@@ -78,7 +81,7 @@ class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        roles = ["Student", "Mentor", "Enabler"]
+        roles = [RoleType.STUDENT.value, RoleType.MENTOR.value, RoleType.ENABLER.value]
         role_serializer = Role.objects.filter(title__in=roles)
         role_serializer_data = OrgSerializer(role_serializer, many=True).data
         return CustomResponse(response={"roles": role_serializer_data}).get_success_response()
@@ -88,7 +91,7 @@ class CollegeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        org_queryset = Organization.objects.filter(org_type="College")
+        org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
         department_serializer_data = OrgSerializer(department_queryset, many=True).data
@@ -101,7 +104,7 @@ class CompanyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        company_queryset = Organization.objects.filter(org_type="Company")
+        company_queryset = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
         company_serializer_data = OrgSerializer(company_queryset, many=True).data
         return CustomResponse(response={"companies": company_serializer_data}).get_success_response()
 
@@ -110,7 +113,7 @@ class CommunityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        community_queryset = Organization.objects.filter(org_type="Community")
+        community_queryset = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
         community_serializer_data = OrgSerializer(community_queryset, many=True).data
         return CustomResponse(response={"communities": community_serializer_data}).get_success_response()
 
