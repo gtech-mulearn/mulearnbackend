@@ -40,34 +40,37 @@ class CustomizePermission(BasePermission):
                 request).decode("utf-8").split()
             if token[0] != "Bearer" and len(token) != 2:
                 exception_message = {
-                    "hasError": True, "message": {"general":["Invalid Token"]}, "statusCode": 1000}
+                    "hasError": True, "message": {"general": ["Invalid Token"]}, "statusCode": 1000}
                 raise CustomException(exception_message)
             return self._authenticate_credentials(request, token[1])
         except CustomException as ce:
             raise CustomException(ce.detail)
         except Exception:
             exception_message = {"hasError": True,
-                                 "message": {"general":["Invalid token"]}, "statusCode": 1000}
+                                 "message": {"general": ["Invalid token"]}, "statusCode": 1000}
             raise CustomException(exception_message)
 
     def _authenticate_credentials(self, request, token):
         payload = jwt.decode(token, SECRET_KEY, algorithms=[
-                             "HS256"], verify=True)
+            "HS256"], verify=True)
 
         id = payload.get("id", None)
-        expiry = datetime.strptime(payload.get("expiry", None),"%Y-%m-%d %H:%M:%S")
+        expiry = datetime.strptime(payload.get("expiry", None), "%Y-%m-%d %H:%M:%S")
         if id and expiry > get_current_utc_time():
             return None, payload
-        
+
         exception_message = {"hasError": True,
-                             "message": {"general":["Token expired"]}, "statusCode": 1001}
+                             "message": {"general": ["Token expired"]}, "statusCode": 1001}
         raise CustomException(exception_message)
 
 
 def get_current_utc_time():
-    now = datetime.utcnow()
-    formated_time = now.strftime("%Y-%m-%d %H:%M:%S")
-    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
+    return format_time(datetime.utcnow())
+
+
+def format_time(date_time):
+    formated_time = date_time.strftime("%d/%m/%Y %H:%M:%S")
+    return datetime.strptime(formated_time, "%d/%m/%Y %H:%M:%S")
 
 
 class CustomHTTPHandler:

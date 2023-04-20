@@ -17,9 +17,8 @@ from api.user.serializers import (
 from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgotPassword
+from utils.types import RoleType, OrganizationType
 from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
-
-from utils.types import RoleType,OrganizationType
 
 
 class LearningCircleUserView(APIView):
