@@ -70,7 +70,7 @@ def get_current_utc_time():
 
 def format_time(date_time):
     formated_time = date_time.strftime("%d/%m/%Y %H:%M:%S")
-    return datetime.strptime(formated_time, "%d/%m/%Y %H:%M:%S")
+    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
 
 
 class CustomHTTPHandler:
