@@ -153,6 +153,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
     def post(self, request, token):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
+
         if forget_user:
             current_time = get_current_utc_time()
             if forget_user.expiry > current_time:
