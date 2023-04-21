@@ -76,6 +76,18 @@ def format_time(date_time):
 def string_to_date_time(dt_str):
     return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
 
+# def role_required(roles,role_name):
+#     role_level = roles.get(role_name)
+#
+#     def decorator(func):
+#         def wrapper(*args, **kwargs):
+#             if current_user.get("role") == role_level:
+#                 return func(*args, **kwargs)
+#             else:
+#                 return "Access denied"
+#         return wrapper
+#     return decorator
+
 
 class CustomHTTPHandler:
     @staticmethod
