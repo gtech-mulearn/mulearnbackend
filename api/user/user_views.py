@@ -184,3 +184,16 @@ class ResetPasswordConfirmAPI(APIView):
                 return CustomResponse(general_message="Link is expired").get_failure_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
+
+
+class UserEmailVerification(APIView):
+
+    def post(self, request):
+
+        user_email = request.data.get('email')
+        user = User.objects.filter(email=user_email).first()
+
+        if user:
+            return CustomResponse(response={"key":"User Email Already Exist", "value":True}).get_success_response()
+        else:
+            return CustomResponse(response={"key": "User Email not Exist", "value": False}).get_success_response()
