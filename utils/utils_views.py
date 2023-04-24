@@ -76,17 +76,20 @@ def format_time(date_time):
 def string_to_date_time(dt_str):
     return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
 
-# def role_required(roles,role_name):
-#     role_level = roles.get(role_name)
-#
-#     def decorator(func):
-#         def wrapper(*args, **kwargs):
-#             if current_user.get("role") == role_level:
-#                 return func(*args, **kwargs)
-#             else:
-#                 return "Access denied"
-#         return wrapper
-#     return decorator
+
+def role_required(roles):
+    def decorator(view_func):
+        def wrapped_view_func(obj, request, *args, **kwargs):
+            if request.user.role in roles:
+                response = view_func(obj, request, *args, **kwargs)
+                return response
+            else:
+                return CustomResponse(
+                    general_message="You do not have the required role to access this page.").get_failure_response()
+
+        return wrapped_view_func
+
+    return decorator
 
 
 class CustomHTTPHandler:
