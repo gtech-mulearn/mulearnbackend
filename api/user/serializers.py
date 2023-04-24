@@ -77,8 +77,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         dept = validated_data.pop('dept')
         year_of_graduation = validated_data.pop('yearOfGraduation')
         area_of_interests = validated_data.pop('areaOfInterests')
-        role = Role.objects.get(id=role_id)
-        user_role_verified = role.title == "Student"
+        user_role_verified = True
+        if role_id:
+            role = Role.objects.get(id=role_id)
+            user_role_verified = role.title == "Student"
 
         with transaction.atomic():
             user = User.objects.create(
@@ -86,8 +88,10 @@ class RegisterSerializer(serializers.ModelSerializer):
                 created_at=datetime.now())
             TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
             ), updated_by=user, updated_at=datetime.now())
-            UserRoleLink.objects.create(id=uuid4(
-            ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
+            
+            if role_id:
+                UserRoleLink.objects.create(id=uuid4(
+                ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
             if organization_ids is not None:
                 UserOrganizationLink.objects.bulk_create([UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
                                                                                created_at=datetime.now(), verified=True, department_id=dept,
