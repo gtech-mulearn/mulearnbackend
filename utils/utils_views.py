@@ -74,15 +74,22 @@ def string_to_date_time(dt_str):
     return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
 
 
+def fetch_role(request):
+    token = authentication.get_authorization_header(request).decode("utf-8").split()
+    payload = jwt.decode(token[1], SECRET_KEY, algorithms=["HS256"], verify=True)
+    return payload.get("roles")
+
+
 def role_required(roles):
     def decorator(view_func):
         def wrapped_view_func(obj, request, *args, **kwargs):
-            print(request)
-            if "admin" in roles:
-                response = view_func(obj, request, *args, **kwargs)
-                return response
+            for role in fetch_role(request):
+                if role in roles:
+                    response = view_func(obj, request, *args, **kwargs)
+                    return response
             else:
-                return CustomResponse(general_message="You do not have the required role to access this page.").get_failure_response()
+                return CustomResponse(
+                    general_message="You do not have the required role to access this page.").get_failure_response()
 
         return wrapped_view_func
 

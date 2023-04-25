@@ -120,7 +120,6 @@ class CommunityAPI(APIView):
 class AreaOfInterestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required(roles=["Admin", "super admin"])
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
         aoi_serializer_data = AreaOfInterestAPISerializer(aoi_queryset, many=True).data
