@@ -1,3 +1,6 @@
+import uuid
+from datetime import datetime
+
 from rest_framework.views import APIView
 
 from organization.models import Organization, District
@@ -23,7 +26,26 @@ class GetInstitutions(APIView):
 class PostInstitution(APIView):
 
     def post(self, request):
-        organisation_serializer = OrganisationSerializer(data=request.data)
+        org_id = str(uuid.uuid4())
+        created_at = datetime.now()
+        updated_at = datetime.now()
+        district_name = request.data.get("district")
+        district = District.objects.filter(name=district_name).first().id
+
+        values = {
+            'id': org_id,
+            'title': request.data.get("title"),
+            'code': request.data.get("code"),
+            'org_type': request.data.get("org_type"),
+            'district': district,
+            'affiliation': request.data.get("affiliation"),
+            'updated_by': request.data.get("updated_by"),
+            'updated_at': updated_at,
+            'created_by': request.data.get("created_by"),
+            'created_at': created_at,
+        }
+
+        organisation_serializer = OrganisationSerializer(data=values)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
