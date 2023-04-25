@@ -17,9 +17,8 @@ from api.user.serializers import (
 from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgotPassword
+from utils.types import RoleType, OrganizationType
 from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
-
-from utils.types import RoleType,OrganizationType
 
 
 class LearningCircleUserView(APIView):
@@ -154,6 +153,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
     def post(self, request, token):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
+
         if forget_user:
             current_time = get_current_utc_time()
             if forget_user.expiry > current_time:
@@ -184,3 +184,16 @@ class ResetPasswordConfirmAPI(APIView):
                 return CustomResponse(general_message="Link is expired").get_failure_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
+
+
+class UserEmailVerification(APIView):
+
+    def post(self, request):
+
+        user_email = request.data.get('email')
+        user = User.objects.filter(email=user_email).first()
+
+        if user:
+            return CustomResponse(response={"key":"User Email Already Exist", "value":True}).get_success_response()
+        else:
+            return CustomResponse(response={"key": "User Email not Exist", "value": False}).get_success_response()
