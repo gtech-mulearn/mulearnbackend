@@ -39,6 +39,8 @@ class TaskList(models.Model):
     channel = models.ForeignKey(Channel, models.DO_NOTHING)
     type = models.ForeignKey(TaskType, models.DO_NOTHING)
     active = models.IntegerField()
+    variable_karma = models.IntegerField()
+    usage_count = models.IntegerField(blank=True, null=True)
     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='task_list_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='task_list_created_by')
