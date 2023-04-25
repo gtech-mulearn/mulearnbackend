@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import jwt
+import pytz
 from rest_framework import status, authentication
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
@@ -63,6 +64,23 @@ class CustomizePermission(BasePermission):
 
 def get_current_utc_time():
     return format_time(datetime.utcnow())
+
+
+def utc_to_local(utc_dt, local_tz):
+    utc_tz = pytz.timezone('UTC')
+
+    local_tz = pytz.timezone(local_tz)
+
+    utc_dt_naive = utc_dt.replace(tzinfo=None)
+
+    utc_dt_utc = utc_tz.localize(utc_dt_naive)
+
+    local_dt = utc_dt_utc.astimezone(local_tz)
+
+    date_obj = datetime.fromisoformat(str(local_dt))
+    formatted_date = date_obj.strftime("%Y-%m-%d %I:%M:%S")
+
+    return formatted_date
 
 
 def format_time(date_time):
