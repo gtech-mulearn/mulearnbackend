@@ -17,8 +17,10 @@ from api.user.serializers import (
 from organization.models import Department, Organization
 from task.models import InterestGroup
 from user.models import Role, User, ForgotPassword
+from utils.permission import CustomizePermission
+from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
-from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time, role_required
+from utils.utils import DateTimeUtils
 
 
 class LearningCircleUserView(APIView):
@@ -90,6 +92,7 @@ class CollegeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
+
         org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
@@ -132,7 +135,7 @@ class ForgotPasswordAPI(APIView):
         user = User.objects.filter(mu_id=muid).first()
 
         if user:
-            created_at = get_current_utc_time()
+            created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
             forget_user = ForgotPassword.objects.create(
                 id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
@@ -154,7 +157,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
-            current_time = get_current_utc_time()
+            current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
                 muid = forget_user.user.mu_id
                 return CustomResponse(response={"muid": muid}).get_success_response()
@@ -170,7 +173,7 @@ class ResetPasswordConfirmAPI(APIView):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
-            current_time = get_current_utc_time()
+            current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
                 new_password = request.data.get("new_password")
                 hashed_pwd = make_password(new_password)
