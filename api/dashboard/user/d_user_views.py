@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from utils.utils_views import CustomResponse
+from utils.response import CustomResponse
 
 
 class HelloWorld(APIView):
