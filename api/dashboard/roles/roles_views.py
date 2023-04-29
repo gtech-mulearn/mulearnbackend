@@ -14,3 +14,14 @@ class HelloWorld(APIView):
 # edit user role    
 # delete user role
 # get role of a specific user
+
+#! items
+# id
+# title
+# discord_id
+# description
+# updated_by
+# updated_at
+# no_of_people
+# verified
+# role_priority
