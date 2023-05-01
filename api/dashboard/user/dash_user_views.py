@@ -7,6 +7,8 @@ from rest_framework.views import APIView
 from rest_framework.response import Response
 from user.models import User
 
+from django.http import JsonResponse
+
 ALL_FIELDS = {
     "id": "id",
     "discord_id": "discord_id",
@@ -45,13 +47,15 @@ class UserAPI(APIView):
             any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
+            print(selected_columns)
 
         for field in selected_columns:
             try:
                 selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
             except KeyError:
                 pass
-
+        
+        print(selected_columns)
 
         users = users.values(*selected_columns)
 
@@ -64,8 +68,24 @@ class UserAPI(APIView):
             }
             for user in users
         ]
+        
+        user_dicts = normalize(user_dicts)
 
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
             response=user_dicts,
         ).get_success_response()
+        
+        
+        
+def normalize(api :list) -> list:
+    for item in api:
+        for key, value in item.items():
+            
+            if value == True:
+                item[key] = "Yes"
+            elif value == False:
+                item[key] = "No"
+            
+    return api
+    
