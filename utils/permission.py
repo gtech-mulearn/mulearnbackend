@@ -51,9 +51,8 @@ class CustomizePermission(BasePermission):
             if not token:
                 raise AuthenticationFailed("Empty token")
 
-            payload = jwt.decode(
-                token, self.secret_key, algorithms=["HS256"], verify=True
-            )
+
+            payload = jwt.decode(token, self.secret_key, algorithms=["HS256"], verify=True)
 
             user_id = payload.get("id")
             expiry = datetime.strptime(
@@ -64,7 +63,8 @@ class CustomizePermission(BasePermission):
                 raise AuthenticationFailed("Token expired or invalid")
 
             return None, payload
-
+        except jwt.exceptions.InvalidSignatureError:
+            raise AuthenticationFailed("Invalid token signature")
         except jwt.exceptions.DecodeError:
             raise AuthenticationFailed("Invalid token signature")
         except AuthenticationFailed as e:
@@ -79,6 +79,19 @@ class CustomizePermission(BasePermission):
                     "statusCode": 1000,
                 }
             )
+
+    def authenticate_header(self, request):
+        """
+        Returns a string value for the WWW-Authenticate header.
+
+        Args:
+            request (HttpRequest): The HTTP request object.
+
+        Returns:
+            str: The value for the WWW-Authenticate header.
+        """
+        return self.token_prefix + " realm=\"api\""
+
 
 
 class JWTUtils:

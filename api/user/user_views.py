@@ -75,7 +75,7 @@ class RegisterData(APIView):
                 }
             ).get_success_response()
         else:
-            return CustomResponse(general_message=create_user.errors).get_failure_response()
+            return CustomResponse(message=create_user.errors).get_failure_response()
 
 
 class RoleAPI(APIView):
