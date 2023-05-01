@@ -1,7 +1,7 @@
-from django.urls import path
-from . import d_user_views
+from django.urls import path, include
+from .dash_user_views import UserAPI
 
-# app_name will help us do a reverse look-up latter.
 urlpatterns = [
-    path('', d_user_views.HelloWorld.as_view()),
+    path('', UserAPI.as_view(), name='user-api'),
 ]
+
