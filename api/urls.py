@@ -7,5 +7,4 @@ urlpatterns = [
     path('organisation/', include('api.organisation.urls')),
     path('leaderboard/', include('api.leaderboard.urls')),
     path('dashboard/', include('api.dashboard.urls')),
-    path('ig/', include('api.ig.urls'))
 ]
