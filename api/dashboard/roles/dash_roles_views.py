@@ -57,8 +57,23 @@ class RolesAPI(APIView):
             }
             for role in roles
         ]
+        
+        user_dicts = normalize(user_dicts)
                       
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
             response=roles_dicts,
         ).get_success_response()
+        
+        
+        
+def normalize(api :list) -> list:
+    for item in api:
+        for key, value in item.items():
+            
+            if value == True:
+                item[key] = "Yes"
+            elif value == False:
+                item[key] = "No"
+            
+    return api
