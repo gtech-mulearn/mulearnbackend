@@ -41,13 +41,17 @@ class UserAPI(APIView):
 
         users = User.objects.select_related("github").prefetch_related("totalkarma")
 
-        if (len(selected_columns) == MAX_COLUMNS) and (
+        if (len(selected_columns) != MAX_COLUMNS) and (
             any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
 
         for field in selected_columns:
-            selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
+            try:
+                selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
+            except KeyError:
+                pass
+
 
         users = users.values(*selected_columns)
 
