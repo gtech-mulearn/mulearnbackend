@@ -47,15 +47,12 @@ class UserAPI(APIView):
             any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
-            print(selected_columns)
 
         for field in selected_columns:
             try:
                 selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
             except KeyError:
                 pass
-        
-        print(selected_columns)
 
         users = users.values(*selected_columns)
 
