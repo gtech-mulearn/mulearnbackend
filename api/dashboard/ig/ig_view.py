@@ -36,20 +36,17 @@ class InterestGroupAPI(APIView):
             any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
-            print(selected_columns)
+
         for field in selected_columns:
             try:
                 selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
             except KeyError:
                 pass
-        
-        print(selected_columns)
-
         igs = ig.values(*selected_columns)
-
         ig_dicts = [
             {
                 selected_columns[i]: ig[selected_columns[i]]
+
                 if selected_columns[i] in ig
                 else None
                 for i in range(MAX_COLUMNS)

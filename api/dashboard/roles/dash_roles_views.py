@@ -58,7 +58,7 @@ class RolesAPI(APIView):
             for role in roles
         ]
         
-        user_dicts = normalize(user_dicts)
+        roles_dicts = normalize(roles_dicts)
                       
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
