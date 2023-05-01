@@ -26,17 +26,7 @@ class Institutions(APIView):
 class GetInstitutions(APIView):
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
-        print(organisations)
-        print("###################")
         organisation_serializer = OrganisationSerializer(organisations, many=True)
-        print(organisation_serializer)
-        print(type(organisation_serializer))
-        print("###################")
-
-        print(organisation_serializer.data)
-        print(type(organisation_serializer.data))
-        print("###################")
-
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
 
