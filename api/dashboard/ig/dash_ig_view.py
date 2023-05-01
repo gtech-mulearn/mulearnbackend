@@ -5,7 +5,7 @@ from utils.utils_views import CustomResponse
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
-from task.models import InterestGroup
+from task.models import InterestGroup , UserIgLink
 
 from django.http import JsonResponse
 
@@ -15,7 +15,8 @@ ALL_FIELDS = {
     "updated_by": "updated_by",
     "updated_at": "updated_at",
     "created_by": "created_by",
-    "created_at": "created_at"
+    "created_at": "created_at",
+    "no_of_members" : ""
 }
 
 FIELD_NAMES, FIELD_VALUES = zip(*ALL_FIELDS.items())
@@ -42,36 +43,26 @@ class InterestGroupAPI(APIView):
                 selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
             except KeyError:
                 pass
-
         igs = ig.values(*selected_columns)
-
         ig_dicts = [
             {
                 selected_columns[i]: ig[selected_columns[i]]
+
                 if selected_columns[i] in ig
                 else None
                 for i in range(MAX_COLUMNS)
             }
             for ig in igs
         ]
-        
-        ig_dicts = normalize(ig_dicts)
 
+        for item in ig_dicts:
+            item["no_of_users"] = UserIgLink.objects.filter(ig_id=item['id']).count()
+    
+    
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
             response=ig_dicts,
         ).get_success_response()
         
-        
-        
-def normalize(api :list) -> list:
-    for item in api:
-        for key, value in item.items():
-            
-            if value == True:
-                item[key] = "Yes"
-            elif value == False:
-                item[key] = "No"
-            
-    return api
     
+  
