@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from user.models import User
+from db.user import User
 from utils.response import CustomResponse
 
 ALL_FIELDS = {

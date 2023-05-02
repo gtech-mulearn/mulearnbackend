@@ -1,5 +1,6 @@
 from rest_framework import serializers
-from organization.models import Organization
+
+from db.organization import Organization
 
 
 class OrganisationSerializer(serializers.ModelSerializer):

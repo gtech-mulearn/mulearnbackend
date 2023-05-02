@@ -1,8 +1,7 @@
 from rest_framework.views import APIView
 
-from user.models import Role
+from db.user import Role
 from utils.response import CustomResponse
-
 
 # all roles management or user role management?
 # list existing roles

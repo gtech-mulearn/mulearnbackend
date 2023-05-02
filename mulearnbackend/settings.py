@@ -12,8 +12,6 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 
 from pathlib import Path
 
-from corsheaders.defaults import default_headers
-
 import decouple
 from decouple import config
 
@@ -49,6 +47,7 @@ INSTALLED_APPS = [
     "task.apps.TaskConfig",
     "organization.apps.OrganizationConfig",
     "corsheaders",
+    'db',
 ]
 
 MIDDLEWARE = [

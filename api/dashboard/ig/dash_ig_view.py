@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from task.models import InterestGroup
+from db.task import InterestGroup
 from utils.response import CustomResponse
 
 ALL_FIELDS = {
