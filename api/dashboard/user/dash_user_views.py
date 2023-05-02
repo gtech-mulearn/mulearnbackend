@@ -1,13 +1,7 @@
 from rest_framework.views import APIView
 
-from utils.utils_views import CustomResponse
-
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from user.models import User
-
-from django.http import JsonResponse
+from utils.response import CustomResponse
 
 ALL_FIELDS = {
     "id": "id",
@@ -44,7 +38,7 @@ class UserAPI(APIView):
         users = User.objects.select_related("github").prefetch_related("totalkarma")
 
         if (len(selected_columns) != MAX_COLUMNS) and (
-            any(field not in ALL_FIELDS for field in selected_columns)
+                any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
 
@@ -65,24 +59,22 @@ class UserAPI(APIView):
             }
             for user in users
         ]
-        
+
         user_dicts = normalize(user_dicts)
+        print(user_dicts)
 
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
             response=user_dicts,
         ).get_success_response()
-        
-        
-        
-def normalize(api :list) -> list:
+
+
+def normalize(api: list) -> list:
     for item in api:
         for key, value in item.items():
-            
+
             if value == True:
                 item[key] = "Yes"
             elif value == False:
                 item[key] = "No"
-            
     return api
-    

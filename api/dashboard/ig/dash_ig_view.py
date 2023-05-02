@@ -1,13 +1,7 @@
 from rest_framework.views import APIView
 
-from utils.utils_views import CustomResponse
-
-
-from rest_framework.views import APIView
-from rest_framework.response import Response
 from task.models import InterestGroup
-
-from django.http import JsonResponse
+from utils.response import CustomResponse
 
 ALL_FIELDS = {
     "id": "id",
@@ -33,7 +27,7 @@ class InterestGroupAPI(APIView):
         selected_columns = request.GET.get("fields", "").split(",")
         ig = InterestGroup.objects.select_related('id')
         if (len(selected_columns) != MAX_COLUMNS) and (
-            any(field not in ALL_FIELDS for field in selected_columns)
+                any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
 
@@ -54,24 +48,22 @@ class InterestGroupAPI(APIView):
             }
             for ig in igs
         ]
-        
+
         ig_dicts = normalize(ig_dicts)
 
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
             response=ig_dicts,
         ).get_success_response()
-        
-        
-        
-def normalize(api :list) -> list:
+
+
+def normalize(api: list) -> list:
     for item in api:
         for key, value in item.items():
-            
+
             if value == True:
                 item[key] = "Yes"
             elif value == False:
                 item[key] = "No"
-            
+
     return api
-    
