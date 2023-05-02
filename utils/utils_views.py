@@ -56,7 +56,7 @@ class CustomizePermission(BasePermission):
 
         id = payload.get("id", None)
         expiry = datetime.strptime(payload.get("expiry", None), "%Y-%m-%d %H:%M:%S")
-        if id and expiry > get_current_utc_time():
+        if id and expiry < get_current_utc_time():
             return None, payload
 
         exception_message = {"hasError": True,

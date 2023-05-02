@@ -37,7 +37,8 @@ class StudentsLeaderboard(APIView):
                 user_karma = TotalKarma.objects.filter(user=user_role_link.user).first()
                 user_organization = UserOrganizationLink.objects.filter(user=user_role_link.user).first()
 
-                students_leaderboard_dict['name'] = user_role_link.user.first_name + ' ' + user_role_link.user.last_name
+                last_name = user_role_link.user.last_name if user_role_link.user.last_name else ""
+                students_leaderboard_dict['name'] = user_role_link.user.first_name + ' ' + last_name
                 students_leaderboard_dict['total_karma'] = user_karma.karma
                 students_leaderboard_dict['institution'] = user_organization.org.code
 
