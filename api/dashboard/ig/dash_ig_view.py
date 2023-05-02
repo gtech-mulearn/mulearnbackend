@@ -1,13 +1,13 @@
 from rest_framework.views import APIView
 
+from db.task import InterestGroup
+from utils.response import CustomResponse
 from utils.utils_views import CustomResponse
-
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from task.models import InterestGroup , UserIgLink
 
-from django.http import JsonResponse
 
 ALL_FIELDS = {
     "id": "id",

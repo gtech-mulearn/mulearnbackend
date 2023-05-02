@@ -4,9 +4,9 @@ from uuid import uuid4
 from django.db import transaction
 from rest_framework import serializers
 
-from organization.models import Department, Organization, UserOrganizationLink
-from task.models import InterestGroup, TotalKarma, UserIgLink
-from user.models import Role, User, UserRoleLink
+from db.organization import Department, Organization, UserOrganizationLink
+from db.task import InterestGroup, TotalKarma, UserIgLink
+from db.user import Role, User, UserRoleLink
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
@@ -88,14 +88,15 @@ class RegisterSerializer(serializers.ModelSerializer):
                 created_at=datetime.now())
             TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
             ), updated_by=user, updated_at=datetime.now())
-            
+
             if role_id:
                 UserRoleLink.objects.create(id=uuid4(
                 ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
             if organization_ids is not None:
-                UserOrganizationLink.objects.bulk_create([UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
-                                                                               created_at=datetime.now(), verified=True, department_id=dept,
-                                                                               graduation_year=year_of_graduation) for org_id in organization_ids])
+                UserOrganizationLink.objects.bulk_create(
+                    [UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
+                                          created_at=datetime.now(), verified=True, department_id=dept,
+                                          graduation_year=year_of_graduation) for org_id in organization_ids])
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
             ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interests])
         return user, user_role_verified
