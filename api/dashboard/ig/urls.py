@@ -1,6 +1,7 @@
 from django.urls import path
-from . import ig_view
+
+from . import dash_ig_view
 
 urlpatterns = [
-    path('', ig_view.InterestGroupAPI.as_view(),name="ig-api")
+    path('', dash_ig_view.InterestGroupAPI.as_view()),
 ]
