@@ -1,6 +1,7 @@
 from datetime import datetime
 
 import jwt
+import pytz
 from rest_framework import status, authentication
 from rest_framework.permissions import BasePermission
 from rest_framework.response import Response
@@ -36,18 +37,15 @@ class CustomResponse:
 class CustomizePermission(BasePermission):
     def authenticate(self, request):
         try:
-            token = authentication.get_authorization_header(
-                request).decode("utf-8").split()
+            token = authentication.get_authorization_header(request).decode("utf-8").split()
             if token[0] != "Bearer" and len(token) != 2:
-                exception_message = {
-                    "hasError": True, "message": {"general": ["Invalid Token"]}, "statusCode": 1000}
+                exception_message = {"hasError": True, "message": {"general": ["Invalid Token"]}, "statusCode": 1000}
                 raise CustomException(exception_message)
             return self._authenticate_credentials(request, token[1])
         except CustomException as ce:
             raise CustomException(ce.detail)
         except Exception:
-            exception_message = {"hasError": True,
-                                 "message": {"general": ["Invalid token"]}, "statusCode": 1000}
+            exception_message = {"hasError": True, "message": {"general": ["Invalid token"]}, "statusCode": 1000}
             raise CustomException(exception_message)
 
     def _authenticate_credentials(self, request, token):
@@ -68,6 +66,23 @@ def get_current_utc_time():
     return format_time(datetime.utcnow())
 
 
+def utc_to_local(utc_dt, local_tz):
+    utc_tz = pytz.timezone('UTC')
+
+    local_tz = pytz.timezone(local_tz)
+
+    utc_dt_naive = utc_dt.replace(tzinfo=None)
+
+    utc_dt_utc = utc_tz.localize(utc_dt_naive)
+
+    local_dt = utc_dt_utc.astimezone(local_tz)
+
+    date_obj = datetime.fromisoformat(str(local_dt))
+    formatted_date = date_obj.strftime("%Y-%m-%d %I:%M:%S")
+
+    return formatted_date
+
+
 def format_time(date_time):
     formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S")
     return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
@@ -76,17 +91,27 @@ def format_time(date_time):
 def string_to_date_time(dt_str):
     return datetime.strptime(dt_str, "%Y-%m-%d %H:%M:%S")
 
-# def role_required(roles,role_name):
-#     role_level = roles.get(role_name)
-#
-#     def decorator(func):
-#         def wrapper(*args, **kwargs):
-#             if current_user.get("role") == role_level:
-#                 return func(*args, **kwargs)
-#             else:
-#                 return "Access denied"
-#         return wrapper
-#     return decorator
+
+def fetch_role(request):
+    token = authentication.get_authorization_header(request).decode("utf-8").split()
+    payload = jwt.decode(token[1], SECRET_KEY, algorithms=["HS256"], verify=True)
+    return payload.get("roles")
+
+
+def role_required(roles):
+    def decorator(view_func):
+        def wrapped_view_func(obj, request, *args, **kwargs):
+            for role in fetch_role(request):
+                if role in roles:
+                    response = view_func(obj, request, *args, **kwargs)
+                    return response
+            else:
+                return CustomResponse(
+                    general_message="You do not have the required role to access this page.").get_failure_response()
+
+        return wrapped_view_func
+
+    return decorator
 
 
 class CustomHTTPHandler:

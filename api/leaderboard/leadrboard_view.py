@@ -5,10 +5,10 @@ from rest_framework.views import APIView
 from organization.models import UserOrganizationLink, Organization
 from task.models import TotalKarma, KarmaActivityLog
 from user.models import Role, UserRoleLink
-from utils.utils_views import CustomResponse
-from utils.utils_views import get_current_utc_time
-
+from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
+from utils.utils import DateTimeUtils
+
 
 class StudentsLeaderboard(APIView):
 
@@ -55,7 +55,7 @@ class StudentsMonthlyLeaderboard(APIView):
 
     def get(self, request):
 
-        today = get_current_utc_time()
+        today = DateTimeUtils.get_current_utc_time()
         first = today.replace(day=1)
         month = first - datetime.timedelta(days=1)
 
@@ -113,7 +113,6 @@ class StudentsMonthlyLeaderboard(APIView):
 class CollegeLeaderboard(APIView):
 
     def get(self, request):
-
         organization_leaderboard_list = []
         organization_leaderboard_dict = {}
 
@@ -170,7 +169,7 @@ class CollegeMonthlyLeaderboard(APIView):
 
     def get(self, request):
 
-        today = get_current_utc_time()
+        today = DateTimeUtils.get_current_utc_time()
         first = today.replace(day=1)
         month = first - datetime.timedelta(days=1)
 
@@ -234,4 +233,3 @@ class CollegeMonthlyLeaderboard(APIView):
         sorted_students_leaderboard = sorted_students_leaderboard[:20]
 
         return CustomResponse(response=sorted_students_leaderboard).get_success_response()
-
