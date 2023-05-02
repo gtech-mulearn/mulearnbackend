@@ -34,7 +34,7 @@ class InterestGroupAPI(APIView):
         selected_columns = request.GET.get("fields", "").split(",")
         ig = InterestGroup.objects.select_related('id')
         if (len(selected_columns) != MAX_COLUMNS) and (
-            any(field not in ALL_FIELDS for field in selected_columns)
+                any(field not in ALL_FIELDS for field in selected_columns)
         ):
             selected_columns = DEFAULT_FIELDS
 
@@ -63,6 +63,3 @@ class InterestGroupAPI(APIView):
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
             response=ig_dicts,
         ).get_success_response()
-        
-    
-  

@@ -45,11 +45,15 @@ class CustomizePermission(BasePermission):
         try:
             auth_header = get_authorization_header(request).decode("utf-8")
             if not auth_header or not auth_header.startswith(self.token_prefix):
-                raise AuthenticationFailed("Invalid token header")
+                raise CustomException(
+                    {"hasError": True, "message": {"general": ["Invalid token header"]}, "statusCode": 1000}
+                )
 
             token = auth_header[len(self.token_prefix):].strip()
             if not token:
-                raise AuthenticationFailed("Empty token")
+                raise CustomException(
+                    {"hasError": True, "message": {"general": ["Empty Token"]}, "statusCode": 1000}
+                )
 
 
             payload = jwt.decode(token, self.secret_key, algorithms=["HS256"], verify=True)
@@ -60,13 +64,19 @@ class CustomizePermission(BasePermission):
             )
 
             if not user_id or expiry < DateTimeUtils.get_current_utc_time():
-                raise AuthenticationFailed("Token expired or invalid")
+                raise CustomException(
+                    {"hasError": True, "message": {"general": ["Token Expired or Invalid"]}, "statusCode": 1000}
+                )
 
             return None, payload
         except jwt.exceptions.InvalidSignatureError:
-            raise AuthenticationFailed("Invalid token signature")
+            raise CustomException(
+                {"hasError": True, "message": {"general": ["Invalid token signature"]}, "statusCode": 1000}
+            )
         except jwt.exceptions.DecodeError:
-            raise AuthenticationFailed("Invalid token signature")
+            raise CustomException(
+                {"hasError": True, "message": {"general": ["Invalid token signature"]}, "statusCode": 1000}
+            )
         except AuthenticationFailed as e:
             raise CustomException(
                 {"hasError": True, "message": {"general": [str(e)]}, "statusCode": 1000}
