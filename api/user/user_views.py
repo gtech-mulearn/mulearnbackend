@@ -14,9 +14,9 @@ from api.user.serializers import (
     RegisterSerializer,
     UserDetailSerializer,
 )
-from organization.models import Department, Organization
-from task.models import InterestGroup
-from user.models import Role, User, ForgotPassword
+from db.organization import Organization, Department
+from db.task import InterestGroup
+from db.user import Role, User, ForgotPassword
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
@@ -99,8 +99,7 @@ class CollegeAPI(APIView):
     # authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        org_queryset = Organization.objects.filter(
-            org_type=OrganizationType.COLLEGE.value)
+        org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
         department_serializer_data = OrgSerializer(

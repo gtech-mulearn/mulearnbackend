@@ -2,53 +2,23 @@ import datetime
 
 from rest_framework.views import APIView
 
-from organization.models import UserOrganizationLink, Organization
-from task.models import TotalKarma, KarmaActivityLog
-from user.models import Role, UserRoleLink
+from db.organization import UserOrganizationLink, Organization
+from db.task import TotalKarma, KarmaActivityLog
+from db.user import Role, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
+from .serializers import StudentLeaderboardSerializer
 
 
 class StudentsLeaderboard(APIView):
 
     def get(self, request):
-
-        students_leaderboard_dict = {}
-        students_leaderboard_list = []
-
-        user_role = Role.objects.filter(title=RoleType.STUDENT.value).first()
-        user_role_link = UserRoleLink.objects.filter(role=user_role.id).first()
-        if user_role_link is None:
-            return CustomResponse(general_message='No Student related data available').get_failure_response()
-
-        users_total_karma = TotalKarma.objects.all()
-        if len(users_total_karma) == 0:
+        users_total_karma = TotalKarma.objects.all().order_by('-id')[:20]
+        if users_total_karma is None:
             return CustomResponse(general_message='No Karma Related data available').get_failure_response()
-
-        for user_karma in users_total_karma:
-
-            user_role_link = UserRoleLink.objects.filter(user=user_karma.user).first()
-
-            if user_role_link is None:
-                return CustomResponse(general_message='No User role data available').get_failure_response()
-
-            if user_role_link.role.title == RoleType.STUDENT.value:
-                user_karma = TotalKarma.objects.filter(user=user_role_link.user).first()
-                user_organization = UserOrganizationLink.objects.filter(user=user_role_link.user).first()
-
-                last_name = user_role_link.user.last_name if user_role_link.user.last_name else ""
-                students_leaderboard_dict['name'] = user_role_link.user.first_name + ' ' + last_name
-                students_leaderboard_dict['total_karma'] = user_karma.karma
-                students_leaderboard_dict['institution'] = user_organization.org.code
-
-                students_leaderboard_list.append(students_leaderboard_dict)
-                students_leaderboard_dict = {}
-
-        sorted_students_leaderboard = sorted(students_leaderboard_list, key=lambda i: i['total_karma'], reverse=True)
-        sorted_students_leaderboard = sorted_students_leaderboard[:20]
-
-        return CustomResponse(response=sorted_students_leaderboard).get_success_response()
+        data = StudentLeaderboardSerializer(users_total_karma, many=True).data
+        return CustomResponse(response=data).get_success_response()
 
 
 class StudentsMonthlyLeaderboard(APIView):
