@@ -9,14 +9,17 @@ class DateTimeUtils:
     """
 
     @staticmethod
-    def get_current_utc_time() -> datetime.datetime:
+    def get_current_utc_time(timezone: str = "Asia/Kolkata") -> datetime.datetime:
         """
         Returns the current time in UTC.
 
         Returns:
             datetime.datetime: The current time in UTC.
         """
-        return DateTimeUtils.format_time(datetime.datetime.utcnow())
+        utc_now = datetime.datetime.utcnow()
+        local_tz = pytz.timezone(timezone)
+        local_now = utc_now.replace(tzinfo=pytz.utc).astimezone(local_tz)
+        return DateTimeUtils.format_time(local_now)
 
     @staticmethod
     def utc_to_local(utc_dt: datetime.datetime, local_tz: str) -> str:
@@ -50,8 +53,9 @@ class DateTimeUtils:
         Returns:
             datetime.datetime: The formatted datetime object.
         """
-        formatted_time = date_time.strftime("%Y-%m-%d %H:%M:%S")
-        return datetime.datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S")
+
+        formatted_time = date_time.strftime("%Y-%m-%d %H:%M:%S %z")
+        return datetime.datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S %z")
 
     @staticmethod
     def string_to_date_time(dt_str: str) -> datetime.datetime:
