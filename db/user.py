@@ -3,7 +3,8 @@ from django.db import models
 
 class User(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    discord_id = models.CharField(unique=True, max_length=36)
+    discord_id = models.CharField(
+        unique=True, max_length=36, blank=True, null=True)
     mu_id = models.CharField(unique=True, max_length=100)
     first_name = models.CharField(max_length=75)
     last_name = models.CharField(max_length=75, blank=True, null=True)
