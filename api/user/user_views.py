@@ -17,7 +17,6 @@ from api.user.serializers import (
 from db.organization import Organization, Department
 from db.task import InterestGroup
 from db.user import Role, User, ForgotPassword
-from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
@@ -171,12 +170,14 @@ class ResetPasswordVerifyTokenAPI(APIView):
 
         if forget_user:
             current_time = DateTimeUtils.get_current_utc_time()
+
             if forget_user.expiry > current_time:
                 muid = forget_user.user.mu_id
                 return CustomResponse(response={"muid": muid}).get_success_response()
             else:
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
+            return CustomResponse(general_message="he Token").get_success_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
 
@@ -209,6 +210,8 @@ class UserEmailVerification(APIView):
         user = User.objects.filter(email=user_email).first()
 
         if user:
-            return CustomResponse(general_message="This email already exists", response={"value": True}).get_success_response()
+            return CustomResponse(general_message="This email already exists",
+                                  response={"value": True}).get_success_response()
         else:
-            return CustomResponse(general_message="User email not exist", response={"value": False}).get_success_response()
+            return CustomResponse(general_message="User email not exist",
+                                  response={"value": False}).get_success_response()
