@@ -42,10 +42,6 @@ INSTALLED_APPS = [
     # custom apps
     "utils.apps.UtilsConfig",
     "api.apps.ApiConfig",
-    "user.apps.UserConfig",
-    "portal.apps.PortalConfig",
-    "task.apps.TaskConfig",
-    "organization.apps.OrganizationConfig",
     "corsheaders",
     'db',
 ]
