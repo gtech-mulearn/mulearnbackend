@@ -24,6 +24,9 @@ class User(models.Model):
 
     @property
     def full_name(self):
+        if self.last_name is None:
+            return self.first_name
+
         return self.first_name + self.last_name
 
 
