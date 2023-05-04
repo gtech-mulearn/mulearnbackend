@@ -222,4 +222,5 @@ class TestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
+
         return CustomResponse(general_message='Hello World').get_success_response()
