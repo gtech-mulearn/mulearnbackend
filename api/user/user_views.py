@@ -17,6 +17,7 @@ from api.user.serializers import (
 from db.organization import Organization, Department
 from db.task import InterestGroup
 from db.user import Role, User, ForgotPassword
+from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
@@ -215,3 +216,11 @@ class UserEmailVerification(APIView):
         else:
             return CustomResponse(general_message="User email not exist",
                                   response={"value": False}).get_success_response()
+
+
+class TestAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+
+        return CustomResponse(general_message='Hello World').get_success_response()

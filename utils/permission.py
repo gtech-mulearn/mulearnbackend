@@ -14,7 +14,15 @@ from mulearnbackend.settings import SECRET_KEY
 from .exception import CustomException
 from .response import CustomResponse
 from .types import RoleType
-from .utils import DateTimeUtils
+
+
+def get_current_utc_time():
+    return format_time(datetime.utcnow())
+
+
+def format_time(date_time):
+    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
 
 
 class CustomizePermission(BasePermission):
@@ -55,7 +63,6 @@ class CustomizePermission(BasePermission):
                     {"hasError": True, "message": {"general": ["Empty Token"]}, "statusCode": 1000}
                 )
 
-
             payload = jwt.decode(token, self.secret_key, algorithms=["HS256"], verify=True)
 
             user_id = payload.get("id")
@@ -63,7 +70,7 @@ class CustomizePermission(BasePermission):
                 payload.get("expiry"), "%Y-%m-%d %H:%M:%S"
             )
 
-            if not user_id or expiry < DateTimeUtils.get_current_utc_time():
+            if not user_id or expiry < get_current_utc_time():
                 raise CustomException(
                     {"hasError": True, "message": {"general": ["Token Expired or Invalid"]}, "statusCode": 1000}
                 )
@@ -81,11 +88,11 @@ class CustomizePermission(BasePermission):
             raise CustomException(
                 {"hasError": True, "message": {"general": [str(e)]}, "statusCode": 1000}
             )
-        except Exception:
+        except Exception as e:
             raise CustomException(
                 {
                     "hasError": True,
-                    "message": {"general": ["Invalid token"]},
+                    "message": {"general": [str(e)]},
                     "statusCode": 1000,
                 }
             )
@@ -101,7 +108,6 @@ class CustomizePermission(BasePermission):
             str: The value for the WWW-Authenticate header.
         """
         return self.token_prefix + " realm=\"api\""
-
 
 
 class JWTUtils:
