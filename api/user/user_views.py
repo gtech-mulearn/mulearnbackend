@@ -20,7 +20,7 @@ from db.user import Role, User, ForgotPassword
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
-
+from utils.permission import CustomizePermission
 
 class LearningCircleUserView(APIView):
     def post(self, request):
@@ -84,7 +84,7 @@ class RegisterData(APIView):
 
 
 class RoleAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
         roles = [RoleType.STUDENT.value,
