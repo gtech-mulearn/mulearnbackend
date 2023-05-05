@@ -68,10 +68,18 @@ class CustomizePermission(BasePermission):
                 raise CustomException("Token Expired or Invalid")
 
             return None, payload
-        except jwt.exceptions.InvalidSignatureError:
-            raise CustomException("Invalid token signature")
-        except jwt.exceptions.DecodeError:
-            raise CustomException("Invalid token signature")
+        except jwt.exceptions.InvalidSignatureError as e:
+            raise CustomException({
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                })
+        except jwt.exceptions.DecodeError as e:
+            raise CustomException({
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                })
         except AuthenticationFailed as e:
             raise CustomException(str(e))
         except Exception as e:
@@ -105,6 +113,8 @@ class JWTUtils:
         if roles is None:
             raise Exception("The corresponding JWT token does not contain the 'roles' key")
         return roles
+
+
 
 
 class RoleRequired:
