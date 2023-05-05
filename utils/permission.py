@@ -98,7 +98,7 @@ class CustomizePermission(BasePermission):
 
 class JWTUtils:
     @staticmethod
-    def fetch_role_from_jwt(request):
+    def fetch_role(request):
         token = authentication.get_authorization_header(request).decode("utf-8").split()
         payload = jwt.decode(token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True)
         roles = payload.get("roles")
@@ -106,6 +106,23 @@ class JWTUtils:
             raise Exception("The corresponding JWT token does not contain the 'roles' key")
         return roles
 
+    @staticmethod
+    def fetch_user_id(request):
+        token = authentication.get_authorization_header(request).decode("utf-8").split()
+        payload = jwt.decode(token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True)
+        user_id = payload.get("id")
+        if user_id is None:
+            raise Exception("The corresponding JWT token does not contain the 'user_id' key")
+        return user_id
+
+    @staticmethod
+    def fetch_muid(request):
+        token = authentication.get_authorization_header(request).decode("utf-8").split()
+        payload = jwt.decode(token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True)
+        muid = payload.get("muid")
+        if muid is None:
+            raise Exception("The corresponding JWT token does not contain the 'muid' key")
+        return muid
 
 class RoleRequired:
     """
@@ -128,7 +145,7 @@ class RoleRequired:
                     self.roles[index] = role.value
 
             # Check if the user has one of the allowed roles
-            for jwt_role in JWTUtils.fetch_role_from_jwt(request):
+            for jwt_role in JWTUtils.fetch_role(request):
                 if jwt_role in self.roles:
                     response = view_func(obj, request, *args, **kwargs)
                     return response

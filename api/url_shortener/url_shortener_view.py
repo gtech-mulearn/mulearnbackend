@@ -1,17 +1,24 @@
-from rest_framework.views import APIView
-from utils.response import CustomResponse
-from db.url_shortener import UrlShortener
-from utils.utils_views import get_current_utc_time
-
 import re
 import uuid
 
+from rest_framework.views import APIView
+
+from db.url_shortener import UrlShortener
+from utils.permission import CustomizePermission, JWTUtils
+from utils.response import CustomResponse
+from utils.utils import DateTimeUtils
+from db.user import User
+
 
 class CreateShortenUrl(APIView):
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
 
-        special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,.?\\]'
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,?\\]'
 
         long_url = request.data.get('long_url')
         short_url = request.data.get('short_url')
@@ -33,7 +40,11 @@ class CreateShortenUrl(APIView):
                                   ).get_failure_response()
         else:
 
-            url_shortener_table = UrlShortener.objects.create(id=uuid.uuid4(), short_url=short_url, long_url=long_url)
+            url_shortener_table = UrlShortener.objects.create(id=uuid.uuid4(), short_url=short_url, long_url=long_url,
+                                                              updated_by=user,
+                                                              updated_at=DateTimeUtils.get_current_utc_time(),
+                                                              created_by=user,
+                                                              created_at=DateTimeUtils.get_current_utc_time())
             return CustomResponse(general_message=['Url created successfully.']).get_success_response()
 
 
@@ -48,7 +59,6 @@ class ShowShortenUrls(APIView):
             return CustomResponse(general_message=['No URL related data available']).get_failure_response()
 
         for url_shortener_object in url_shortener_objects:
-
             long_url = url_shortener_object.long_url
             short_url = url_shortener_object.short_url
 
@@ -61,7 +71,6 @@ class ShowShortenUrls(APIView):
 class DeleteShortenUrl(APIView):
 
     def get(self, request):
-
         url_id = request.data.get('url_id')
 
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
@@ -74,9 +83,14 @@ class DeleteShortenUrl(APIView):
 
 class EditShortenUrl(APIView):
 
+    authentication_classes = [CustomizePermission]
+
     def get(self, request):
 
-        special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,.?\\]'
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,?\\]'
 
         url_id = request.data.get('url_id')
         short_url_new = request.data.get('short_url_new')
@@ -95,13 +109,13 @@ class EditShortenUrl(APIView):
         special_character = re.search(special_characters_list, short_url_new)
 
         if special_character or len(short_url_new) > 300:
-
             return CustomResponse(general_message=['Your shortened URL should be less than 300 characters in length.',
                                                    'only include letters, numbers and following special characters (/_)']
                                   ).get_failure_response()
 
         url_shortener_object.short_url = short_url_new
-        url_shortener_object.updated_at = get_current_utc_time()
+        url_shortener_object.updated_by = user
+        url_shortener_object.updated_at = DateTimeUtils.get_current_utc_time()
 
         url_shortener_object.save()
 
