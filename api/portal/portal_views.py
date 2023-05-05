@@ -6,10 +6,10 @@ from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 
-from organization.models import Organization, UserOrganizationLink
-from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
-from task.models import TotalKarma, TaskList, UserIgLink
-from user.models import User, UserRoleLink
+from db.organization import Organization, UserOrganizationLink
+from db.portal import Portal, PortalUserAuth, PortalUserMailValidate
+from db.task import TotalKarma, TaskList, UserIgLink
+from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.utils import DateTimeUtils
 

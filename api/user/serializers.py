@@ -4,9 +4,11 @@ from uuid import uuid4
 from django.db import transaction
 from rest_framework import serializers
 
-from organization.models import Department, Organization, UserOrganizationLink
-from task.models import InterestGroup, TotalKarma, UserIgLink
-from user.models import Role, User, UserRoleLink
+from utils.types import RoleType
+from django.contrib.auth.hashers import make_password
+from db.organization import Department, Organization, UserOrganizationLink
+from db.task import InterestGroup, TotalKarma, UserIgLink
+from db.user import Role, User, UserRoleLink
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
@@ -60,6 +62,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=True, source='first_name', max_length=75)
     lastName = serializers.CharField(
         required=False, source='last_name', allow_null=True, max_length=75)
+    password = serializers.CharField(
+        required=True,max_length=200)
 
     def create(self, validated_data):
         if validated_data["last_name"] is None:
@@ -77,30 +81,33 @@ class RegisterSerializer(serializers.ModelSerializer):
         dept = validated_data.pop('dept')
         year_of_graduation = validated_data.pop('yearOfGraduation')
         area_of_interests = validated_data.pop('areaOfInterests')
+        password = validated_data.pop('password')
+        hashed_password = make_password(password)
         user_role_verified = True
         if role_id:
             role = Role.objects.get(id=role_id)
-            user_role_verified = role.title == "Student"
+            user_role_verified = role.title == RoleType.STUDENT.value
 
         with transaction.atomic():
             user = User.objects.create(
-                **validated_data, id=uuid4(), mu_id=mu_id, discord_id=self.context['request'].auth.get('id', None),
+                **validated_data, id=uuid4(), mu_id=mu_id,password=hashed_password,
                 created_at=datetime.now())
             TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
             ), updated_by=user, updated_at=datetime.now())
-            
+
             if role_id:
                 UserRoleLink.objects.create(id=uuid4(
                 ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
             if organization_ids is not None:
-                UserOrganizationLink.objects.bulk_create([UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
-                                                                               created_at=datetime.now(), verified=True, department_id=dept,
-                                                                               graduation_year=year_of_graduation) for org_id in organization_ids])
+                UserOrganizationLink.objects.bulk_create(
+                    [UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
+                                          created_at=datetime.now(), verified=True, department_id=dept,
+                                          graduation_year=year_of_graduation) for org_id in organization_ids])
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
             ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interests])
-        return user, user_role_verified
+        return user,password
 
     class Meta:
         model = User
         fields = ['firstName', 'lastName', 'email', 'mobile', 'gender', 'dob',
-                  'role', 'organizations', 'dept', 'yearOfGraduation', 'areaOfInterests']
+                  'role', 'organizations', 'dept', 'yearOfGraduation', 'areaOfInterests','password']

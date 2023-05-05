@@ -1,12 +1,10 @@
 from django.db import models
 
 
-# Create your models here.
-
-
 class User(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    discord_id = models.CharField(unique=True, max_length=36)
+    discord_id = models.CharField(
+        unique=True, max_length=36, blank=True, null=True)
     mu_id = models.CharField(unique=True, max_length=100)
     first_name = models.CharField(max_length=75)
     last_name = models.CharField(max_length=75, blank=True, null=True)
@@ -23,6 +21,13 @@ class User(models.Model):
     class Meta:
         managed = False
         db_table = 'user'
+
+    @property
+    def full_name(self):
+        if self.last_name is None:
+            return self.first_name
+
+        return self.first_name + self.last_name
 
 
 class Role(models.Model):
@@ -43,7 +48,7 @@ class Role(models.Model):
 
 class UserRoleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, models.DO_NOTHING)
+    user = models.ForeignKey(User, models.DO_NOTHING, related_name='user_role_link_user')
     role = models.ForeignKey(Role, models.DO_NOTHING)
     verified = models.IntegerField()
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',

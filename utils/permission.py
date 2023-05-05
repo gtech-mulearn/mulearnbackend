@@ -14,7 +14,15 @@ from mulearnbackend.settings import SECRET_KEY
 from .exception import CustomException
 from .response import CustomResponse
 from .types import RoleType
-from .utils import DateTimeUtils
+
+
+def get_current_utc_time():
+    return format_time(datetime.utcnow())
+
+
+def format_time(date_time):
+    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S")
+    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
 
 
 class CustomizePermission(BasePermission):
@@ -45,47 +53,40 @@ class CustomizePermission(BasePermission):
         try:
             auth_header = get_authorization_header(request).decode("utf-8")
             if not auth_header or not auth_header.startswith(self.token_prefix):
-                raise CustomException(
-                    {"hasError": True, "message": {"general": ["Invalid token header"]}, "statusCode": 1000}
-                )
+                raise CustomException("Invalid token header")
 
             token = auth_header[len(self.token_prefix):].strip()
             if not token:
-                raise CustomException(
-                    {"hasError": True, "message": {"general": ["Empty Token"]}, "statusCode": 1000}
-                )
-
+                raise CustomException("Empty Token")
 
             payload = jwt.decode(token, self.secret_key, algorithms=["HS256"], verify=True)
 
             user_id = payload.get("id")
-            expiry = datetime.strptime(
-                payload.get("expiry"), "%Y-%m-%d %H:%M:%S"
-            )
+            expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S")
 
-            if not user_id or expiry < DateTimeUtils.get_current_utc_time():
-                raise CustomException(
-                    {"hasError": True, "message": {"general": ["Token Expired or Invalid"]}, "statusCode": 1000}
-                )
+            if not user_id or expiry < get_current_utc_time():
+                raise CustomException("Token Expired or Invalid")
 
             return None, payload
-        except jwt.exceptions.InvalidSignatureError:
-            raise CustomException(
-                {"hasError": True, "message": {"general": ["Invalid token signature"]}, "statusCode": 1000}
-            )
-        except jwt.exceptions.DecodeError:
-            raise CustomException(
-                {"hasError": True, "message": {"general": ["Invalid token signature"]}, "statusCode": 1000}
-            )
+        except jwt.exceptions.InvalidSignatureError as e:
+            raise CustomException({
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                })
+        except jwt.exceptions.DecodeError as e:
+            raise CustomException({
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                })
         except AuthenticationFailed as e:
-            raise CustomException(
-                {"hasError": True, "message": {"general": [str(e)]}, "statusCode": 1000}
-            )
-        except Exception:
+            raise CustomException(str(e))
+        except Exception as e:
             raise CustomException(
                 {
                     "hasError": True,
-                    "message": {"general": ["Invalid token"]},
+                    "message": {"general": [str(e)]},
                     "statusCode": 1000,
                 }
             )
@@ -103,7 +104,6 @@ class CustomizePermission(BasePermission):
         return self.token_prefix + " realm=\"api\""
 
 
-
 class JWTUtils:
     @staticmethod
     def fetch_role_from_jwt(request):
@@ -113,6 +113,8 @@ class JWTUtils:
         if roles is None:
             raise Exception("The corresponding JWT token does not contain the 'roles' key")
         return roles
+
+
 
 
 class RoleRequired:

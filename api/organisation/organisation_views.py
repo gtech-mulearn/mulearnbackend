@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from organization.models import Organization, District
+from db.organization import Organization, District
 from utils.response import CustomResponse
 from .serializers import OrganisationSerializer
 
