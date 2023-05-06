@@ -5,7 +5,6 @@ from rest_framework.views import APIView
 from db.organization import UserOrganizationLink, Organization
 from db.task import TotalKarma, KarmaActivityLog
 from db.user import Role, UserRoleLink
-from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
@@ -13,7 +12,6 @@ from .serializers import StudentLeaderboardSerializer
 
 
 class StudentsLeaderboard(APIView):
-    authentication_classes = [CustomizePermission]
 
     def get(self, request):
         users_total_karma = TotalKarma.objects.all().order_by('-id')[:20]

@@ -62,7 +62,8 @@ CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = "mulearnbackend.urls"
 
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
-
+# paginator settings
+PAGE_SIZE = 10
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
