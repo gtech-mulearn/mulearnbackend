@@ -1,7 +1,13 @@
 from rest_framework.views import APIView
 
+from api.user.serializers import (
+    OrgSerializer,
+)
+from db.organization import Organization
 from db.user import User
 from utils.response import CustomResponse
+from utils.types import OrganizationType
+from utils.utils import CommonUtils
 
 ALL_FIELDS = {
     "id": "id",
@@ -28,6 +34,17 @@ FIELD_LENGTH = len(ALL_FIELDS)
 DEFAULT_FIELDS = ["discord_id", "first_name", "last_name", "active", "karma"]
 
 MAX_COLUMNS = 5
+
+
+class CollegePaginationTestAPI(APIView):
+    def get(self, request):
+        page = request.query_params.get("pageIndex", 1)
+        per_page = request.query_params.get("perPage", None)
+
+        org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
+        pagination =CommonUtils.pagination(org_queryset, page=page, per_page=per_page)
+        college_serializer_data = OrgSerializer(pagination.get('queryset'), many=True).data
+        return CustomResponse(response={"colleges": college_serializer_data}).get_success_response()
 
 
 class UserAPI(APIView):
