@@ -1,4 +1,6 @@
 from rest_framework import serializers
+
+from db.organization import Organization
 from organization.models import Organization, District, Zone, State, Country, OrgAffiliation
 
 

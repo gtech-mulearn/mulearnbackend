@@ -1,7 +1,7 @@
 from django.db import models
 
 # Create your models here.
-from user.models import User
+from .user import User
 
 
 class Country(models.Model):
@@ -134,5 +134,3 @@ class UserOrganizationLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_organization_link'
-
-#

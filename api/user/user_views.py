@@ -14,11 +14,13 @@ from api.user.serializers import (
     RegisterSerializer,
     UserDetailSerializer,
 )
-from organization.models import Department, Organization
-from task.models import InterestGroup
-from user.models import Role, User, ForgotPassword
+from db.organization import Organization, Department
+from db.task import InterestGroup
+from db.user import Role, User, ForgotPassword
+from utils.permission import CustomizePermission, JWTUtils
+from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
-from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
+from utils.utils import DateTimeUtils
 
 
 class LearningCircleUserView(APIView):
@@ -42,8 +44,8 @@ class LearningCircleUserView(APIView):
 
 
 class RegisterJWTValidate(APIView):
-    authentication_classes = [CustomizePermission]
-    print(authentication_classes)
+    # authentication_classes = [CustomizePermission]
+    # print(authentication_classes)
 
     def get(self, request):
         discord_id = request.auth.get("id", None)
@@ -53,76 +55,90 @@ class RegisterJWTValidate(APIView):
 
 
 class RegisterData(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def post(self, request):
         data = request.data
-        discord_id = request.auth.get("id", None)
-        if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(general_message="user already registered").get_failure_response()
-        create_user = RegisterSerializer(data=data, context={"request": request})
+        create_user = RegisterSerializer(
+            data=data, context={"request": request})
         if create_user.is_valid():
-            user_obj, user_role_verified = create_user.save()
-            if user_role_verified:
-                data = {"content": "onboard " + str(user_obj.id)}
-                requests.post(decouple.config("DISCORD_JOIN_WEBHOOK_URL"), data=data)
-            return CustomResponse(
-                response={
-                    "data": UserDetailSerializer(user_obj, many=False).data,
-                    "userRoleVerified": user_role_verified,
-                }
-            ).get_success_response()
+            user_obj, password = create_user.save()
+            auth_domain = decouple.config("AUTH_DOMAIN")
+            response = requests.post(
+                f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
+            response = response.json()
+            if response.get("statusCode") == 200:
+                res_data = response.get("response")
+                access_token = res_data.get("accessToken")
+                refresh_token = res_data.get("refreshToken")
+                return CustomResponse(
+                    response={
+                        "data": UserDetailSerializer(user_obj, many=False).data,
+                        "accessToken": access_token,
+                        "refreshToken": refresh_token,
+                    }
+                ).get_success_response()
+            else:
+                return CustomResponse(message=response.get("message")).get_failure_response()
         else:
-            return CustomResponse(general_message=create_user.errors).get_failure_response()
+            return CustomResponse(message=create_user.errors, general_message="Invalid fields").get_failure_response()
 
 
 class RoleAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        roles = [RoleType.STUDENT.value, RoleType.MENTOR.value, RoleType.ENABLER.value]
+        roles = [RoleType.STUDENT.value,
+                 RoleType.MENTOR.value, RoleType.ENABLER.value]
         role_serializer = Role.objects.filter(title__in=roles)
         role_serializer_data = OrgSerializer(role_serializer, many=True).data
         return CustomResponse(response={"roles": role_serializer_data}).get_success_response()
 
 
 class CollegeAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
-        department_serializer_data = OrgSerializer(department_queryset, many=True).data
+        department_serializer_data = OrgSerializer(
+            department_queryset, many=True).data
         return CustomResponse(
-            response={"colleges": college_serializer_data, "departments": department_serializer_data}
+            response={"colleges": college_serializer_data,
+                      "departments": department_serializer_data}
         ).get_success_response()
 
 
 class CompanyAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        company_queryset = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
-        company_serializer_data = OrgSerializer(company_queryset, many=True).data
+        company_queryset = Organization.objects.filter(
+            org_type=OrganizationType.COMPANY.value)
+        company_serializer_data = OrgSerializer(
+            company_queryset, many=True).data
         return CustomResponse(response={"companies": company_serializer_data}).get_success_response()
 
 
 class CommunityAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        community_queryset = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
-        community_serializer_data = OrgSerializer(community_queryset, many=True).data
+        community_queryset = Organization.objects.filter(
+            org_type=OrganizationType.COMMUNITY.value)
+        community_serializer_data = OrgSerializer(
+            community_queryset, many=True).data
         return CustomResponse(response={"communities": community_serializer_data}).get_success_response()
 
 
 class AreaOfInterestAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
-        aoi_serializer_data = AreaOfInterestAPISerializer(aoi_queryset, many=True).data
+        aoi_serializer_data = AreaOfInterestAPISerializer(
+            aoi_queryset, many=True).data
         return CustomResponse(response={"aois": aoi_serializer_data}).get_success_response()
 
 
@@ -132,7 +148,7 @@ class ForgotPasswordAPI(APIView):
         user = User.objects.filter(mu_id=muid).first()
 
         if user:
-            created_at = get_current_utc_time()
+            created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
             forget_user = ForgotPassword.objects.create(
                 id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
@@ -153,15 +169,16 @@ class ResetPasswordVerifyTokenAPI(APIView):
     def post(self, request, token):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
-
         if forget_user:
-            current_time = get_current_utc_time()
+            current_time = DateTimeUtils.get_current_utc_time()
+
             if forget_user.expiry > current_time:
                 muid = forget_user.user.mu_id
                 return CustomResponse(response={"muid": muid}).get_success_response()
             else:
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
+            return CustomResponse(general_message="he Token").get_success_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
 
@@ -171,7 +188,7 @@ class ResetPasswordConfirmAPI(APIView):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
-            current_time = get_current_utc_time()
+            current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
                 new_password = request.data.get("new_password")
                 hashed_pwd = make_password(new_password)
@@ -194,6 +211,27 @@ class UserEmailVerification(APIView):
         user = User.objects.filter(email=user_email).first()
 
         if user:
-            return CustomResponse(response={"key":"User Email Already Exist", "value":True}).get_success_response()
+            return CustomResponse(general_message="This email already exists",
+                                  response={"value": True}).get_success_response()
         else:
-            return CustomResponse(response={"key": "User Email not Exist", "value": False}).get_success_response()
+            return CustomResponse(general_message="User email not exist",
+                                  response={"value": False}).get_success_response()
+
+
+class TestAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        return CustomResponse(general_message='Hello World').get_success_response()
+
+
+class GetUserMuid(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_muid = JWTUtils.fetch_muid(request)
+
+        if user_muid is None:
+            return CustomResponse(general_message='no user data available').get_failure_response()
+
+        return CustomResponse(response=user_muid).get_success_response()
