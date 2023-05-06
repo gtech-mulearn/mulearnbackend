@@ -222,16 +222,13 @@ class TestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-
         return CustomResponse(general_message='Hello World').get_success_response()
 
 
 class GetUserMuid(APIView):
-
     authentication_classes = [CustomizePermission]
 
-    def post(self, request):
-
+    def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
 
         if user_muid is None:
