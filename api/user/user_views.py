@@ -232,6 +232,6 @@ class GetUserMuid(APIView):
         user_muid = JWTUtils.fetch_muid(request)
 
         if user_muid is None:
-            return CustomResponse(general_message=['no user data available']).get_failure_response()
+            return CustomResponse(general_message='no user data available').get_failure_response()
 
         return CustomResponse(response=user_muid).get_success_response()
