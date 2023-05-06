@@ -14,11 +14,13 @@ from api.user.serializers import (
     RegisterSerializer,
     UserDetailSerializer,
 )
-from organization.models import Department, Organization
-from task.models import InterestGroup
-from user.models import Role, User, ForgotPassword
+from db.organization import Organization, Department
+from db.task import InterestGroup
+from db.user import Role, User, ForgotPassword
+from utils.permission import CustomizePermission, JWTUtils
+from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
-from utils.utils_views import CustomResponse, CustomizePermission, get_current_utc_time
+from utils.utils import DateTimeUtils
 
 
 class LearningCircleUserView(APIView):
@@ -97,8 +99,7 @@ class CollegeAPI(APIView):
     # authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        org_queryset = Organization.objects.filter(
-            org_type=OrganizationType.COLLEGE.value)
+        org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
         department_serializer_data = OrgSerializer(
@@ -147,7 +148,7 @@ class ForgotPasswordAPI(APIView):
         user = User.objects.filter(mu_id=muid).first()
 
         if user:
-            created_at = get_current_utc_time()
+            created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
             forget_user = ForgotPassword.objects.create(
                 id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
@@ -169,13 +170,15 @@ class ResetPasswordVerifyTokenAPI(APIView):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
-            current_time = get_current_utc_time()
+            current_time = DateTimeUtils.get_current_utc_time()
+
             if forget_user.expiry > current_time:
                 muid = forget_user.user.mu_id
                 return CustomResponse(response={"muid": muid}).get_success_response()
             else:
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
+            return CustomResponse(general_message="he Token").get_success_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
 
@@ -185,7 +188,7 @@ class ResetPasswordConfirmAPI(APIView):
         forget_user = ForgotPassword.objects.filter(id=token).first()
 
         if forget_user:
-            current_time = get_current_utc_time()
+            current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
                 new_password = request.data.get("new_password")
                 hashed_pwd = make_password(new_password)
@@ -208,6 +211,30 @@ class UserEmailVerification(APIView):
         user = User.objects.filter(email=user_email).first()
 
         if user:
-            return CustomResponse(general_message="This email already exists", response={"value": True}).get_success_response()
+            return CustomResponse(general_message="This email already exists",
+                                  response={"value": True}).get_success_response()
         else:
-            return CustomResponse(general_message="User email not exist", response={"value": False}).get_success_response()
+            return CustomResponse(general_message="User email not exist",
+                                  response={"value": False}).get_success_response()
+
+
+class TestAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+
+        return CustomResponse(general_message='Hello World').get_success_response()
+
+
+class GetUserMuid(APIView):
+
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+
+        user_muid = JWTUtils.fetch_muid(request)
+
+        if user_muid is None:
+            return CustomResponse(general_message=['no user data available']).get_failure_response()
+
+        return CustomResponse(response=user_muid).get_success_response()

@@ -1,9 +1,11 @@
 import hmac
+import logging
+
+import decouple
 from django.http import JsonResponse
 from rest_framework import status
-from utils.utils_views import CustomHTTPHandler
-import decouple
-import logging
+
+from utils.utils import _CustomHTTPHandler
 
 logger = logging.getLogger(__name__)
 
@@ -15,7 +17,7 @@ class IpBindingMiddleware(object):
     def __call__(self, request):
         path = request.META.get("PATH_INFO").split("/")[-1]
         if path == "discord-id":
-            client_ip = CustomHTTPHandler().get_client_ip_address(request)
+            client_ip = _CustomHTTPHandler().get_client_ip_address(request)
             arron_ip = decouple.config("AARON_CHETTAN_IP")
 
             if client_ip != arron_ip:

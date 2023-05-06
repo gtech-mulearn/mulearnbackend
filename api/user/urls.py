@@ -13,6 +13,8 @@ from .user_views import (
     ResetPasswordConfirmAPI,
     ResetPasswordVerifyTokenAPI,
     UserEmailVerification,
+    TestAPI,
+    GetUserMuid,
 )
 
 urlpatterns = [
@@ -29,4 +31,6 @@ urlpatterns = [
     path("reset-password/<str:token>/", ResetPasswordConfirmAPI.as_view()),
     path("lc/user-validation/", LearningCircleUserView.as_view()),
     path('email-verification/', UserEmailVerification.as_view()),
+    path('test/', TestAPI.as_view()),
+    path('user-muid/', GetUserMuid.as_view()),
 ]
