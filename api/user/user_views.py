@@ -17,7 +17,7 @@ from api.user.serializers import (
 from db.organization import Organization, Department
 from db.task import InterestGroup
 from db.user import Role, User, ForgotPassword
-from utils.permission import CustomizePermission
+from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
@@ -224,3 +224,17 @@ class TestAPI(APIView):
     def get(self, request):
 
         return CustomResponse(general_message='Hello World').get_success_response()
+
+
+class GetUserMuid(APIView):
+
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+
+        user_muid = JWTUtils.fetch_muid(request)
+
+        if user_muid is None:
+            return CustomResponse(general_message=['no user data available']).get_failure_response()
+
+        return CustomResponse(response=user_muid).get_success_response()
