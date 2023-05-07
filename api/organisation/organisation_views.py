@@ -109,3 +109,20 @@ class PostInstitution(APIView):
             organisation_serializer.save()
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
         return CustomResponse(response={'institution': organisation_serializer.errors}).get_failure_response()
+
+    def put(self, request, org_title):
+        updated_at = datetime.now()
+        if request.data.get("district"):
+            district_name = request.data.get("district")
+            district = District.objects.filter(name=district_name).first().id
+            request.data["district"] = district
+
+        request.data["updated_at"] = updated_at
+
+        organisation = Organization.objects.get(title=org_title)
+        organisation_serializer = OrganisationSerializer(organisation, data=request.data,partial=True)
+        if organisation_serializer.is_valid():
+            organisation_serializer.save()
+            return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
+        return CustomResponse(response={'institution': organisation_serializer.errors}).get_failure_response()
+

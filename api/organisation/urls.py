@@ -7,4 +7,5 @@ urlpatterns = [
     path('institutes/info', organisation_views.Institutions.as_view()),
     path('institutes/<str:organisation_type>/', organisation_views.GetInstitutions.as_view()),
     path('institutes/add', organisation_views.PostInstitution.as_view()),
+    path('institutes/update/<str:org_title>', organisation_views.PostInstitution.as_view()),
 ]
