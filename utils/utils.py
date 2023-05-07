@@ -1,12 +1,15 @@
 import datetime
 
 import pytz
-from django.db.models.query import QuerySet
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.conf import settings
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models.query import QuerySet
+from django.db.models import Q
+
+
 class CommonUtils:
     @staticmethod
-    def pagination(queryset: QuerySet, page=1, per_page=None):
+    def pagination(queryset: QuerySet, page=1, per_page=None, search=None):
         return_data = {
             "queryset": queryset,
             "pagination": {}
@@ -35,6 +38,27 @@ class CommonUtils:
             }
 
         return return_data
+
+    @staticmethod
+    def get_paginated_queryset(queryset: QuerySet, request,fields) -> QuerySet:
+        page = int(request.query_params.get("pageIndex", 1))
+        per_page = int(request.query_params.get("perPage",10))
+        search_query = request.query_params.get('search')
+        sort_by = request.query_params.get('sortBy', 'title')
+
+        if search_query:
+            query = Q()
+            for field in fields:
+                query |= Q(**{f'{field}__icontains': search_query})
+
+        queryset = queryset.filter(query)
+        queryset = queryset.order_by(sort_by)
+        if per_page:
+            start_index = (page - 1) * per_page
+            end_index = start_index + per_page
+            queryset = queryset[start_index:end_index]
+
+        return queryset
 
 
 class DateTimeUtils:

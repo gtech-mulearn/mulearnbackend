@@ -37,19 +37,16 @@ MAX_COLUMNS = 5
 
 
 class CollegePaginationTestAPI(APIView):
-    def get(self, request):
-        page = request.query_params.get("pageIndex", 1)
-        per_page = request.query_params.get("perPage", None)
 
+    def get(self, request):
         org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
-        pagination =CommonUtils.pagination(org_queryset, page=page, per_page=per_page)
-        college_serializer_data = OrgSerializer(pagination.get('queryset'), many=True).data
+        paginated_queryset = CommonUtils.get_paginated_queryset(org_queryset, request, ['title', 'id'])
+        college_serializer_data = OrgSerializer(paginated_queryset, many=True).data
         return CustomResponse(response={"colleges": college_serializer_data}).get_success_response()
 
 
 class UserAPI(APIView):
     def get(self, request):
-        # Filter fields based on table name
         selected_columns = request.GET.get("fields", "").split(",")
 
         users = User.objects.select_related("github").prefetch_related("totalkarma")
