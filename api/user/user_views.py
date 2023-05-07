@@ -21,7 +21,7 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
-
+from .serializers import UserSerializer
 
 class LearningCircleUserView(APIView):
     def post(self, request):
@@ -71,6 +71,7 @@ class RegisterData(APIView):
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
                 refresh_token = res_data.get("refreshToken")
+
                 return CustomResponse(
                     response={
                         "data": UserDetailSerializer(user_obj, many=False).data,
@@ -225,13 +226,16 @@ class TestAPI(APIView):
         return CustomResponse(general_message='Hello World').get_success_response()
 
 
-class GetUserMuid(APIView):
+class UserInfo(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        user_muid = JWTUtils.fetch_muid(request)
 
-        if user_muid is None:
+        user_muid = JWTUtils.fetch_muid(request)
+        user = User.objects.filter(mu_id=user_muid).first()
+
+        if user is None:
             return CustomResponse(general_message='no user data available').get_failure_response()
 
-        return CustomResponse(response=user_muid).get_success_response()
+        response = UserSerializer(user, many=False).data
+        return CustomResponse(response=response).get_success_response()
