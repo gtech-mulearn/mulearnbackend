@@ -50,7 +50,7 @@ class CreateShortenUrl(APIView):
 
 class ShowShortenUrls(APIView):
 
-    def post(self, request):
+    def get(self, request):
 
         shorten_url_list = []
         url_shortener_objects = UrlShortener.objects.all()
@@ -70,8 +70,7 @@ class ShowShortenUrls(APIView):
 
 class DeleteShortenUrl(APIView):
 
-    def get(self, request):
-        url_id = request.data.get('url_id')
+    def delete(self, request, url_id):
 
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
         if url_shortener_object is None:
@@ -85,14 +84,13 @@ class EditShortenUrl(APIView):
 
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
-
+    def put(self, request, url_id):
+        print(url_id)
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
 
         special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,?\\]'
 
-        url_id = request.data.get('url_id')
         short_url_new = request.data.get('short_url_new')
 
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
