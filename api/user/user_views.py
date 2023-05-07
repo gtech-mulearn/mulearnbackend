@@ -241,7 +241,7 @@ class GetUserName(APIView):
 
     def get(self, request):
         user_name = User.objects.filter(mu_id=JWTUtils.fetch_muid(request)).first().first_name
-        print(user_name)
+
         if user_name is None:
             return CustomResponse(general_message='no user data available').get_failure_response()
 
