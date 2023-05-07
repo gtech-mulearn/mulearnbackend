@@ -15,6 +15,7 @@ from .user_views import (
     UserEmailVerification,
     TestAPI,
     GetUserMuid,
+    GetUserName,
 )
 
 urlpatterns = [
@@ -33,4 +34,5 @@ urlpatterns = [
     path('email-verification/', UserEmailVerification.as_view()),
     path('test/', TestAPI.as_view()),
     path('get-muid/', GetUserMuid.as_view()),
+    path('get-name/', GetUserName.as_view()),
 ]

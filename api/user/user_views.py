@@ -235,3 +235,14 @@ class GetUserMuid(APIView):
             return CustomResponse(general_message='no user data available').get_failure_response()
 
         return CustomResponse(response=user_muid).get_success_response()
+
+class GetUserName(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_name = User.objects.filter(mu_id=JWTUtils.fetch_muid(request)).first().first_name
+        print(user_name)
+        if user_name is None:
+            return CustomResponse(general_message='no user data available').get_failure_response()
+
+        return CustomResponse(response=user_name).get_success_response()
