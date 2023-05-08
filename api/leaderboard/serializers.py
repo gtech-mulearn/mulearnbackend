@@ -6,7 +6,7 @@ from db.task import TotalKarma
 
 class StudentLeaderboardSerializer(ModelSerializer):
     totalKarma = serializers.IntegerField(source="karma")
-    name = serializers.ReadOnlyField(source="user.full_name")
+    name = serializers.ReadOnlyField(source="user.fullname")
     institution = serializers.SerializerMethodField()
 
     class Meta:
