@@ -29,37 +29,29 @@ class Institutions(APIView):
     def post(self, request, org_code):
         org_type = request.data.get("org_type")
         org_id = Organization.objects.filter(code=org_code).first()
-        org_ser = OrganisationSerializer(org_id)
 
         if org_id is None:
             return CustomResponse(response={'message': 'Invalid organization code'}).get_failure_response()
 
         org_id_list = Organization.objects.filter(org_type=org_type).values_list('id', flat=True)
-        organisations = [org_id for org_id in org_id_list]
+        organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
 
         college_users = {}
-        for org in organisations:
-            users = UserOrganizationLink.objects.filter(org=org)
-            college_users[org] = [user.user for user in users]
+        total_karma_by_college = {}
 
-        college_karma = {}
-        for clg in college_users:
-            total_karma = TotalKarma.objects.filter(user__in=college_users[clg]).aggregate(total_karma=Sum('karma'))
-            if total_karma['total_karma'] is None:
-                total_karma['total_karma'] = 0
-            college_karma[clg] = total_karma
+        for user_link in organisations:
+            college_users.setdefault(user_link.org.id, []).append(user_link.user)
 
-        sorted_college_karma = sorted(college_karma.items(), key=lambda x: x[1]['total_karma'], reverse=True)
-        index = 0
-        for i in range(len(sorted_college_karma)):
-            if sorted_college_karma[i][0] == org_id.id:
-                index = i
-                break
+            total_karma = total_karma_by_college.get(user_link.org.id, 0)
+            total_karma += TotalKarma.objects.filter(user=user_link.user).aggregate(total_karma=Sum('karma')).get(
+                'total_karma', 0)
+            total_karma_by_college[user_link.org.id] = total_karma
 
-        rank = index + 1
-        score = sorted_college_karma[index][1]['total_karma']
+        sorted_college_karma = sorted(total_karma_by_college.items(), key=lambda x: x[1], reverse=True)
+        rank = next((i + 1 for i, (college_id, _) in enumerate(sorted_college_karma) if college_id == org_id.id), 0)
+        score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
 
-        return CustomResponse(response={'institution': org_ser.data,
+        return CustomResponse(response={'institution': OrganisationSerializer(org_id).data,
                                         'rank': str(rank),
                                         'score': str(score)}).get_success_response()
 
