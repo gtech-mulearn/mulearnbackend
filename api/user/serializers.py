@@ -117,4 +117,4 @@ class UserSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["mu_id", "discord_id", "first_name", "last_name", "email", "mobile", "gender", "dob", ]
+        fields = ["mu_id", "discord_id", "first_name", "last_name", "email", "mobile", "gender", "dob", "active", "exist_in_guild", "created_at"]
