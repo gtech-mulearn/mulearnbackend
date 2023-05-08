@@ -1,43 +1,15 @@
 import uuid
 from datetime import datetime
 
+from django.db.models import Sum
 from rest_framework.views import APIView
 
-from db.organization import Organization, District
+from db.organization import Organization, District, UserOrganizationLink
+from db.task import TotalKarma
+
 from utils.response import CustomResponse
 from .serializers import OrganisationSerializer
-from . import database
 
-
-db_name = "aaronchettan_new_db_2"
-db_host = "localhost"
-db_username = "root"
-db_password = "dbsqldb"
-
-
-db = database.Database(db_name, db_host, db_username, db_password)
-
-
-def get_college_rank_and_karma(college_name):
-    rank = []
-    clg_ranks = db.get_college_rank()
-    for i in clg_ranks:
-        c_score = i[1]
-        c_name = i[0]
-        rank.append([c_name, c_score])
-    rank.sort(reverse=True, key=lambda x: x[1])
-
-    # This part will assign the rank to all the colleges in 'rank'
-    c = 0
-    for lo in rank:
-        c += 1
-        lo.append(c)
-
-    for i in rank:
-        if college_name == i[0]:
-            clg_rank = i[2]  # m will receive the college rank
-            clg_score = i[1]
-            return clg_rank, clg_score
 
 
 class Institutions(APIView):
@@ -54,17 +26,42 @@ class Institutions(APIView):
                                         'companies': cmpny_orgs_serializer.data,
                                         'communities': cmuty_orgs_serializer.data}).get_success_response()
 
-    def post(self, request):
-        org_name = request.data.get("org_name")
-        org_obj = Organization.objects.filter(title=org_name)
+    def post(self, request, org_code):
+        org_type = request.data.get("org_type")
+        org_id = Organization.objects.filter(code=org_code).first()
+        org_ser = OrganisationSerializer(org_id)
 
-        org_ser = OrganisationSerializer(org_obj, many=True)
-        clg_rank, clg_score = get_college_rank_and_karma(college_name=org_name)
-        print(clg_rank, clg_score)
-        # print(org_loc)
+        if org_id is None:
+            return CustomResponse(response={'message': 'Invalid organization code'}).get_failure_response()
+
+        org_id_list = Organization.objects.filter(org_type=org_type).values_list('id', flat=True)
+        organisations = [org_id for org_id in org_id_list]
+
+        college_users = {}
+        for org in organisations:
+            users = UserOrganizationLink.objects.filter(org=org)
+            college_users[org] = [user.user for user in users]
+
+        college_karma = {}
+        for clg in college_users:
+            total_karma = TotalKarma.objects.filter(user__in=college_users[clg]).aggregate(total_karma=Sum('karma'))
+            if total_karma['total_karma'] is None:
+                total_karma['total_karma'] = 0
+            college_karma[clg] = total_karma
+
+        sorted_college_karma = sorted(college_karma.items(), key=lambda x: x[1]['total_karma'], reverse=True)
+        index = 0
+        for i in range(len(sorted_college_karma)):
+            if sorted_college_karma[i][0] == org_id.id:
+                index = i
+                break
+
+        rank = index + 1
+        score = sorted_college_karma[index][1]['total_karma']
+
         return CustomResponse(response={'institution': org_ser.data,
-                                        'rank': str(clg_rank),
-                                        'score': str(clg_score)}).get_success_response()
+                                        'rank': str(rank),
+                                        'score': str(score)}).get_success_response()
 
 
 class GetInstitutions(APIView):
