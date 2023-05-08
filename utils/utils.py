@@ -1,6 +1,64 @@
 import datetime
 
 import pytz
+from django.conf import settings
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.db.models.query import QuerySet
+from django.db.models import Q
+
+
+class CommonUtils:
+    @staticmethod
+    def pagination(queryset: QuerySet, page=1, per_page=None, search=None):
+        return_data = {
+            "queryset": queryset,
+            "pagination": {}
+        }
+        if not per_page:
+            pagination_per_page = 10
+            per_page = int(pagination_per_page) if pagination_per_page else settings.PAGE_SIZE
+        if queryset:
+            paginator = Paginator(queryset, per_page)
+            try:
+                queryset = paginator.page(page)
+            except PageNotAnInteger:
+                queryset = paginator.page(1)
+            except EmptyPage:
+                queryset = paginator.page(paginator.num_pages)
+
+            return_data = {
+                "queryset": queryset,
+                "pagination": {
+                    "count": paginator.count,
+                    "totalPages": paginator.num_pages,
+                    "isNext": queryset.has_next(),
+                    "isPrev": queryset.has_previous(),
+                    "nextPage": queryset.next_page_number() if queryset.has_next() else None
+                }
+            }
+
+        return return_data
+
+    @staticmethod
+    def get_paginated_queryset(queryset: QuerySet, request,fields) -> QuerySet:
+        page = int(request.query_params.get("pageIndex", 1))
+        per_page = int(request.query_params.get("perPage",10))
+        search_query = request.query_params.get('search')
+        sort_by = request.query_params.get('sortBy', 'title')
+
+        if search_query:
+            query = Q()
+            for field in fields:
+                query |= Q(**{f'{field}__icontains': search_query})
+
+        queryset = queryset.filter(query)
+        queryset = queryset.order_by(sort_by)
+        if per_page:
+            start_index = (page - 1) * per_page
+            end_index = start_index + per_page
+            queryset = queryset[start_index:end_index]
+
+        return queryset
 
 
 class DateTimeUtils:

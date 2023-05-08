@@ -17,11 +17,11 @@ from api.user.serializers import (
 from db.organization import Organization, Department
 from db.task import InterestGroup
 from db.user import Role, User, ForgotPassword
-from utils.permission import CustomizePermission
+from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
-
+from .serializers import UserSerializer
 
 class LearningCircleUserView(APIView):
     def post(self, request):
@@ -65,12 +65,13 @@ class RegisterData(APIView):
             user_obj, password = create_user.save()
             auth_domain = decouple.config("AUTH_DOMAIN")
             response = requests.post(
-                f"{auth_domain}api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
+                f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
             response = response.json()
             if response.get("statusCode") == 200:
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
                 refresh_token = res_data.get("refreshToken")
+
                 return CustomResponse(
                     response={
                         "data": UserDetailSerializer(user_obj, many=False).data,
@@ -222,5 +223,19 @@ class TestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-
         return CustomResponse(general_message='Hello World').get_success_response()
+
+
+class UserInfo(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+
+        user_muid = JWTUtils.fetch_muid(request)
+        user = User.objects.filter(mu_id=user_muid).first()
+
+        if user is None:
+            return CustomResponse(general_message='no user data available').get_failure_response()
+
+        response = UserSerializer(user, many=False).data
+        return CustomResponse(response=response).get_success_response()
