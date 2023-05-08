@@ -60,9 +60,9 @@ class RegisterData(APIView):
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
                 refresh_token = res_data.get("refreshToken")
-                send_mail("Congrats You have successfully registerd in Mulearn", f" Your Muid {user_obj.mu_id}",
+                send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
                           decouple.config("EMAIL_HOST_USER"),
-                          user_obj.email, fail_silently=False)
+                          [user_obj.email], fail_silently=False)
                 return CustomResponse(
                     response={
                         "data": UserDetailSerializer(user_obj, many=False).data,
@@ -203,13 +203,6 @@ class UserEmailVerification(APIView):
         else:
             return CustomResponse(general_message="User email not exist",
                                   response={"value": False}).get_success_response()
-
-
-class TestAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        return CustomResponse(general_message='Hello World').get_success_response()
 
 
 class UserInfo(APIView):
