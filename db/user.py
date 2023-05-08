@@ -15,7 +15,7 @@ class User(models.Model):
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
-    exist_in_guild = models.BooleanField(default=True)
+    exist_in_guild = models.BooleanField(default=False)
     created_at = models.DateTimeField()
 
     class Meta:
