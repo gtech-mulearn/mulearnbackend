@@ -23,7 +23,7 @@ class User(models.Model):
         db_table = 'user'
 
     @property
-    def full_name(self):
+    def fullname(self):
         if self.last_name is None:
             return self.first_name
 
