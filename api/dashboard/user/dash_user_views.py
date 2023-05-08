@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from api.user.serializers import (
+from api.register.serializers import (
     OrgSerializer,
 )
 from db.organization import Organization
@@ -75,7 +75,6 @@ class UserAPI(APIView):
         ]
 
         user_dicts = normalize(user_dicts)
-        print(user_dicts)
 
         return CustomResponse(
             general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
