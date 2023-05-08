@@ -1,7 +1,6 @@
 from django.urls import path
 
-from .user_views import (
-    RegisterJWTValidate,
+from .register_views import (
     LearningCircleUserView,
     RegisterData,
     CollegeAPI,
@@ -12,10 +11,11 @@ from .user_views import (
     ForgotPasswordAPI,
     ResetPasswordConfirmAPI,
     ResetPasswordVerifyTokenAPI,
+    UserEmailVerification,
+    UserInfo,
 )
 
 urlpatterns = [
-    path("register/jwt/validate/", RegisterJWTValidate.as_view()),
     path("register/", RegisterData.as_view()),
     # path('register/country/list', CountryAPI.as_view()),
     path("register/role/list/", RoleAPI.as_view()),
@@ -27,4 +27,6 @@ urlpatterns = [
     path("reset-password/verify-token/<str:token>/", ResetPasswordVerifyTokenAPI.as_view()),
     path("reset-password/<str:token>/", ResetPasswordConfirmAPI.as_view()),
     path("lc/user-validation/", LearningCircleUserView.as_view()),
+    path('email-verification/', UserEmailVerification.as_view()),
+    path('info/', UserInfo.as_view()),
 ]

@@ -6,11 +6,12 @@ from decouple import config
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 
-from organization.models import Organization, UserOrganizationLink
-from portal.models import Portal, PortalUserAuth, PortalUserMailValidate
-from task.models import TotalKarma, TaskList, UserIgLink
-from user.models import User, UserRoleLink
-from utils.utils_views import CustomResponse, get_current_utc_time
+from db.organization import Organization, UserOrganizationLink
+from db.portal import Portal, PortalUserAuth, PortalUserMailValidate
+from db.task import TotalKarma, TaskList, UserIgLink
+from db.user import User, UserRoleLink
+from utils.response import CustomResponse
+from utils.utils import DateTimeUtils
 
 
 # class AddPortal(APIView):
@@ -41,7 +42,7 @@ class MuidValidateAPI(APIView):
             return CustomResponse(general_message="Invalid name").get_failure_response()
 
         mail_token = uuid4()
-        expiry_time = get_current_utc_time() + timedelta(seconds=1800)
+        expiry_time = DateTimeUtils.get_current_utc_time() + timedelta(seconds=1800)
         PortalUserMailValidate.objects.create(
             id=uuid4(),
             portal=portal,
@@ -49,7 +50,7 @@ class MuidValidateAPI(APIView):
             token=mail_token,
             expiry=expiry_time,
             created_by=user,
-            created_at=get_current_utc_time(),
+            created_at=DateTimeUtils.get_current_utc_time(),
         )
         DOMAIN_NAME = config("FR_DOMAIN_NAME")
         portal_name = portal.name
@@ -66,13 +67,13 @@ class UserMailTokenValidationAPI(APIView):
     def post(self, request):
         mail_validation_token = request.data["token"]
         utc = pytz.timezone("Asia/Kolkata")
-        today_now = get_current_utc_time()
+        today_now = DateTimeUtils.get_current_utc_time()
         mail_validation = PortalUserMailValidate.objects.filter(token=mail_validation_token).first()
         if mail_validation is None:
             return CustomResponse(general_message="invalid user token").get_failure_response(status_code=498)
 
         expiry_date = mail_validation.expiry
-        today = get_current_utc_time()
+        today = DateTimeUtils.get_current_utc_time()
 
         if expiry_date < today:
             return CustomResponse(general_message="token is expired").get_failure_response(status_code=498)
@@ -83,7 +84,7 @@ class UserMailTokenValidationAPI(APIView):
             user=mail_validation.user,
             is_authenticated=True,
             created_by=mail_validation.user,
-            created_at=get_current_utc_time(),
+            created_at=DateTimeUtils.get_current_utc_time(),
         )
         mail_validation.delete()
         return CustomResponse(general_message="mail token verified").get_success_response()
@@ -119,7 +120,7 @@ class GetKarmaAPI(APIView):
 
 
 class UserDetailsApi(APIView):
-    def post(self, request, muid):
+    def get(self, request, muid):
         user = User.objects.filter(mu_id=muid).first()
         total_karma = TotalKarma.objects.filter(user=user).first()
         user_role = UserRoleLink.objects.filter(user=user).first()
@@ -178,7 +179,7 @@ class UserDetailsApi(APIView):
 
 
 class GetUnverifiedUsers(APIView):
-    def post(self, request):
+    def get(self, request):
         non_verified_user = UserRoleLink.objects.filter(verified=False).first()
         if non_verified_user is None:
             return CustomResponse(general_message="All Users are Verified").get_failure_response()
