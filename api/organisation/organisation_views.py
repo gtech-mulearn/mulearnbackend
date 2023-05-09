@@ -62,15 +62,14 @@ class Institutions(APIView):
 
 
 class GetInstitutions(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
         organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
         district = District.objects.filter(name=district_name).first()

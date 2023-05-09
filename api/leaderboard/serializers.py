@@ -15,6 +15,7 @@ class StudentLeaderboardSerializer(ModelSerializer):
 
     def get_institution(self, obj):
         try:
+            #no use .first()
             user_organization = obj.user.user_organization_link_user_id.first()
             return user_organization.org.code if user_organization.org else None
         except:
