@@ -15,6 +15,10 @@ Create a virtual environment in a venv folder and activate it:
 python -m venv venv
 source venv/bin/activate
 ```
+for windows:
+```bash
+venv\Scripts\activate.bat  
+```
 ### Install Dependencies
 Install the required dependencies using the following command:
 ```commandline
