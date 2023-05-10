@@ -4,15 +4,17 @@ import uuid
 from rest_framework.views import APIView
 
 from db.url_shortener import UrlShortener
-from utils.permission import CustomizePermission, JWTUtils
-from utils.response import CustomResponse
-from utils.utils import DateTimeUtils
 from db.user import User
-
+from utils.permission import CustomizePermission, JWTUtils
+from utils.permission import RoleRequired
+from utils.response import CustomResponse
+from utils.types import RoleType
+from utils.utils import DateTimeUtils
 
 class CreateShortenUrl(APIView):
     authentication_classes = [CustomizePermission]
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -40,17 +42,19 @@ class CreateShortenUrl(APIView):
                                   ).get_failure_response()
         else:
 
-            url_shortener_table = UrlShortener.objects.create(id=uuid.uuid4(), short_url=short_url, long_url=long_url,
-                                                              updated_by=user,
-                                                              updated_at=DateTimeUtils.get_current_utc_time(),
-                                                              created_by=user,
-                                                              created_at=DateTimeUtils.get_current_utc_time())
+            UrlShortener.objects.create(id=uuid.uuid4(), short_url=short_url, long_url=long_url,
+                                        updated_by=user,
+                                        updated_at=DateTimeUtils.get_current_utc_time(),
+                                        created_by=user,
+                                        created_at=DateTimeUtils.get_current_utc_time())
             return CustomResponse(general_message=['Url created successfully.']).get_success_response()
 
 
 class ShowShortenUrls(APIView):
+    authentication_classes = [CustomizePermission]
 
-    def post(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def get(self, request):
 
         shorten_url_list = []
         url_shortener_objects = UrlShortener.objects.all()
@@ -69,10 +73,10 @@ class ShowShortenUrls(APIView):
 
 
 class DeleteShortenUrl(APIView):
+    authentication_classes = [CustomizePermission]
 
-    def get(self, request):
-        url_id = request.data.get('url_id')
-
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, url_id):
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
         if url_shortener_object is None:
             return CustomResponse(general_message=['invalid URL id']).get_success_response()
@@ -82,17 +86,15 @@ class DeleteShortenUrl(APIView):
 
 
 class EditShortenUrl(APIView):
-
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
-
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def put(self, request, url_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
 
         special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,?\\]'
 
-        url_id = request.data.get('url_id')
         short_url_new = request.data.get('short_url_new')
 
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()

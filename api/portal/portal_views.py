@@ -120,7 +120,7 @@ class GetKarmaAPI(APIView):
 
 
 class UserDetailsApi(APIView):
-    def post(self, request, muid):
+    def get(self, request, muid):
         user = User.objects.filter(mu_id=muid).first()
         total_karma = TotalKarma.objects.filter(user=user).first()
         user_role = UserRoleLink.objects.filter(user=user).first()
@@ -179,7 +179,7 @@ class UserDetailsApi(APIView):
 
 
 class GetUnverifiedUsers(APIView):
-    def post(self, request):
+    def get(self, request):
         non_verified_user = UserRoleLink.objects.filter(verified=False).first()
         if non_verified_user is None:
             return CustomResponse(general_message="All Users are Verified").get_failure_response()

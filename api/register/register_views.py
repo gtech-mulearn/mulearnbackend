@@ -7,7 +7,7 @@ from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 
-from api.user.serializers import (
+from api.register.serializers import (
     AreaOfInterestAPISerializer,
     LearningCircleUserSerializer,
     OrgSerializer,
@@ -21,6 +21,7 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
+from .serializers import UserSerializer
 
 
 class LearningCircleUserView(APIView):
@@ -43,19 +44,7 @@ class LearningCircleUserView(APIView):
         ).get_success_response()
 
 
-class RegisterJWTValidate(APIView):
-    # authentication_classes = [CustomizePermission]
-    # print(authentication_classes)
-
-    def get(self, request):
-        discord_id = request.auth.get("id", None)
-        if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(general_message="You are already registered").get_failure_response()
-        return CustomResponse(response={"token": True}).get_success_response()
-
-
 class RegisterData(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def post(self, request):
         data = request.data
@@ -71,6 +60,9 @@ class RegisterData(APIView):
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
                 refresh_token = res_data.get("refreshToken")
+                send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
+                          decouple.config("EMAIL_HOST_USER"),
+                          [user_obj.email], fail_silently=False)
                 return CustomResponse(
                     response={
                         "data": UserDetailSerializer(user_obj, many=False).data,
@@ -85,7 +77,6 @@ class RegisterData(APIView):
 
 
 class RoleAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         roles = [RoleType.STUDENT.value,
@@ -96,7 +87,6 @@ class RoleAPI(APIView):
 
 
 class CollegeAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
@@ -111,7 +101,6 @@ class CollegeAPI(APIView):
 
 
 class CompanyAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         company_queryset = Organization.objects.filter(
@@ -122,7 +111,6 @@ class CompanyAPI(APIView):
 
 
 class CommunityAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         community_queryset = Organization.objects.filter(
@@ -133,7 +121,6 @@ class CommunityAPI(APIView):
 
 
 class AreaOfInterestAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
@@ -218,31 +205,15 @@ class UserEmailVerification(APIView):
                                   response={"value": False}).get_success_response()
 
 
-class TestAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        return CustomResponse(general_message='Hello World').get_success_response()
-
-
-class GetUserMuid(APIView):
+class UserInfo(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
+        user = User.objects.filter(mu_id=user_muid).first()
 
-        if user_muid is None:
+        if user is None:
             return CustomResponse(general_message='no user data available').get_failure_response()
 
-        return CustomResponse(response=user_muid).get_success_response()
-
-class GetUserName(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        user_name = User.objects.filter(mu_id=JWTUtils.fetch_muid(request)).first().first_name
-
-        if user_name is None:
-            return CustomResponse(general_message='no user data available').get_failure_response()
-
-        return CustomResponse(response=user_name).get_success_response()
+        response = UserSerializer(user, many=False).data
+        return CustomResponse(response=response).get_success_response()
