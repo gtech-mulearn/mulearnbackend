@@ -56,6 +56,7 @@ class RegisterData(APIView):
             response = requests.post(
                 f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
             response = response.json()
+
             if response.get("statusCode") == 200:
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
