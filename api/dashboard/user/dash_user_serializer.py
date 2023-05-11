@@ -1,4 +1,5 @@
 from rest_framework import serializers
+from rest_framework.fields import empty
 from db.user import User
 
 
@@ -6,8 +7,10 @@ class UserDashboardSerializer(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
 
     def get_total_karma(self, obj):
-        user_karma = obj.total_karma_user
-        return user_karma.karma if user_karma.karma else 0
+        karma = 0
+        if hasattr(obj, "total_karma_user"):
+            karma = obj.total_karma_user.karma
+        return karma
 
     class Meta:
         model = User
