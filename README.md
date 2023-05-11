@@ -17,6 +17,7 @@ source venv/bin/activate
 ```
 for windows:
 ```bash
+python -m venv venv
 venv\Scripts\activate.bat  
 ```
 ### Install Dependencies
@@ -27,13 +28,6 @@ pip install -r requirements.txt
 
 ### Set environment variables
 Create a .env file in the project root directory by copying .env.sample and replace with your values.
-
-### Migrate the database
-Run the following commands to create and apply migrations:
-```commandline
-python manage.py makemigrations
-python manage.py migrate
-```
 
 ### Run the Project
 ```commandline
