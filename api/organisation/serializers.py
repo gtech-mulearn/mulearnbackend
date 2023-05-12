@@ -1,7 +1,14 @@
 from rest_framework import serializers
 
 from db.organization import Organization, District, Zone, State, Country, OrgAffiliation
+
+
 # from organization.models import Organization, District, Zone, State, Country, OrgAffiliation
+
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ["name", "updated_at", "created_at", "updated_by", "created_by"]
 
 
 class StateSerializer(serializers.ModelSerializer):
@@ -33,13 +40,12 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
-
     # Slug method works fine....but this cannot satisfy nested requirements
     affiliation = serializers.SlugRelatedField(
         many=False,
         read_only=True,
         slug_field='title'
-     )
+    )
 
     district = DistrictSerializer(many=False, read_only=True)
 
