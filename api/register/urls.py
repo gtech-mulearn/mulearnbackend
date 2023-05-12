@@ -1,6 +1,6 @@
 from django.urls import path
 
-from .user_views import (
+from .register_views import (
     RegisterJWTValidate,
     LearningCircleUserView,
     RegisterData,

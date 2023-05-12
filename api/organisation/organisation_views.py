@@ -70,9 +70,10 @@ class GetInstitutions(APIView):
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
 
-
 class PostInstitution(APIView):
+    authentication_classes = [CustomizePermission]
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
         org_id = str(uuid.uuid4())
         created_at = datetime.now()
@@ -99,6 +100,7 @@ class PostInstitution(APIView):
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
         return CustomResponse(response={'institution': organisation_serializer.errors}).get_failure_response()
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, org_code):
         updated_at = datetime.now()
         if request.data.get("district"):
@@ -115,8 +117,8 @@ class PostInstitution(APIView):
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
         return CustomResponse(response={'institution': organisation_serializer.errors}).get_failure_response()
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, org_code):
         organisation = Organization.objects.get(code=org_code)
         organisation.delete()
         return CustomResponse(response={'message': 'Deleted Successfully'}).get_success_response()
-

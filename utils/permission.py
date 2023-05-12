@@ -133,7 +133,6 @@ class JWTUtils:
         return muid
 
 
-
 class RoleRequired:
     """
     Class-based view that restricts access to views based on user roles.
