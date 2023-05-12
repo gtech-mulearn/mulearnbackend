@@ -10,10 +10,10 @@ from .dash_ig_serializer import InterestGroupSerializer
 
 
 class InterestGroupAPI(APIView):
+    authentication_classes = [CustomizePermission] #for logged in users
     
     #GET Request to show all interest groups
-    authentication_classes = [CustomizePermission] #for logged in users
-    @RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
+    #@RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
         ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
@@ -22,14 +22,14 @@ class InterestGroupAPI(APIView):
         ).get_success_response()
 
 	#POST Request to create a new interest group
-    authentication_classes = [CustomizePermission]
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    #body should contain 'name': '<new name of interst group>'
+    #@RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
         ig_data = InterestGroup.objects.create(
             id = uuid.uuid4(),
-			name = request.POST["name"],
+			name = request.data.get('name'),
 			updated_by=user,
 			updated_at=DateTimeUtils.get_current_utc_time(),
 			created_by=user,
@@ -37,28 +37,34 @@ class InterestGroupAPI(APIView):
 		)
         serializer = InterestGroupSerializer(ig_data)
         return CustomResponse(
-            response={"interestGroup": serializer}
+            response={"interestGroup": serializer.data}
         ).get_success_response()
     
-    #POST Request to edit/delete an InterestGroup. Use endpoint + /<id>/
-    authentication_classes = [CustomizePermission]
-    @RoleRequired(roles=[RoleType.ADMIN, ])
-    def post(self, request, pk):
+    #PUT Request to edit an InterestGroup. Use endpoint + /<id>/
+    #body should contain 'name': '<new name of interst group>' for edit
+    #@RoleRequired(roles=[RoleType.ADMIN, ])
+    def put(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id)
+        igData = InterestGroup.objects.get(id=pk)
+        igData.name	= request.data.get('name'),
+        igData.updated_by = user.id,
+        igData.updated_at = DateTimeUtils.get_current_utc_time(),
+        igData.save()
+        serializer = InterestGroupSerializer(igData)
+        return CustomResponse(
+            response={"interestGroup": serializer.data}
+        ).get_success_response()
+        
+    #DELETE Request to delete an InterestGroup. Use endpoint + /<id>/
+    #@RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
         igData = InterestGroup.objects.get(id=pk)
-        
-        #body should contain 'delete': '1' for delete
-        if (request.POST["delete"] == '1') :
-            igData.delete()
-            
-        #body should contain 'name': '<new name of interst group>' for edit
-        else :
-            igData.name	= request.POST["name"],
-            igData.updated_by = user,
-            igData.updated_at = DateTimeUtils.get_current_utc_time(),
-            igData.save()
+        igData.delete()
         serializer = InterestGroupSerializer(igData)
         return CustomResponse(
-            response={"interestGroup": serializer}
+            response={"interestGroup": serializer.data}
         ).get_success_response()
+        
