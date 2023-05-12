@@ -70,16 +70,16 @@ class CustomizePermission(BasePermission):
             return None, payload
         except jwt.exceptions.InvalidSignatureError as e:
             raise CustomException({
-                    "hasError": True,
-                    "message": {"general": [str(e)]},
-                    "statusCode": 1000,
-                })
+                "hasError": True,
+                "message": {"general": [str(e)]},
+                "statusCode": 1000,
+            })
         except jwt.exceptions.DecodeError as e:
             raise CustomException({
-                    "hasError": True,
-                    "message": {"general": [str(e)]},
-                    "statusCode": 1000,
-                })
+                "hasError": True,
+                "message": {"general": [str(e)]},
+                "statusCode": 1000,
+            })
         except AuthenticationFailed as e:
             raise CustomException(str(e))
         except Exception as e:

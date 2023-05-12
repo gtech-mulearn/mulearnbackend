@@ -1,14 +1,14 @@
 from datetime import datetime
 from uuid import uuid4
 
+from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
 
-from utils.types import RoleType
-from django.contrib.auth.hashers import make_password
 from db.organization import Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink
 from db.user import Role, User, UserRoleLink
+from utils.types import RoleType
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
@@ -114,7 +114,8 @@ class RegisterSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = User
-        fields = ["mu_id", "discord_id", "first_name", "last_name", "email", "mobile", "gender", "dob", "active", "exist_in_guild", "created_at"]
+        fields = ["mu_id", "discord_id", "first_name", "last_name", "fullname", "email", "mobile", "gender", "dob",
+                  "active",
+                  "exist_in_guild", "created_at"]
