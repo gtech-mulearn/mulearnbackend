@@ -22,6 +22,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 from .serializers import UserSerializer
+from django.db.models import Q
 
 class LearningCircleUserView(APIView):
     def post(self, request):
@@ -145,9 +146,8 @@ class AreaOfInterestAPI(APIView):
 
 class ForgotPasswordAPI(APIView):
     def post(self, request):
-        muid = request.data.get("muid")
-        user = User.objects.filter(mu_id=muid).first()
-
+        email_muid = request.data.get('emailOrMuid')
+        user = User.objects.filter(Q(mu_id=email_muid) | Q(email=email_muid)).first()
         if user:
             created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
@@ -179,7 +179,6 @@ class ResetPasswordVerifyTokenAPI(APIView):
             else:
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
-            return CustomResponse(general_message="he Token").get_success_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
 
@@ -191,7 +190,7 @@ class ResetPasswordConfirmAPI(APIView):
         if forget_user:
             current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
-                new_password = request.data.get("new_password")
+                new_password = request.data.get("password")
                 hashed_pwd = make_password(new_password)
                 forget_user.user.password = hashed_pwd
                 forget_user.user.save()
