@@ -8,5 +8,5 @@ urlpatterns = [
     path('leaderboard/', include('api.leaderboard.urls')),
     path('dashboard/', include('api.dashboard.urls')),
     path('url-shortener/', include('api.url_shortener.urls')),
-    path('campus/', include('api.campus.urls')),
+    path('location/', include('api.location.urls')),
 ]
