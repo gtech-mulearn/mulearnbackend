@@ -1,6 +1,7 @@
 import uuid
 from rest_framework.views import APIView
 from db.task import InterestGroup
+
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired, format_time
 from utils.response import CustomResponse
@@ -16,6 +17,7 @@ class InterestGroupAPI(APIView):
     #@RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
+
         paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['id', 'name'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset, many=True).data
         return CustomResponse(
@@ -55,6 +57,7 @@ class InterestGroupAPI(APIView):
             response={"interestGroup": serializer.data}
         ).get_success_response()
 
+
     #DELETE Request to delete an InterestGroup. Use endpoint + /<id>/
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, pk):
@@ -64,4 +67,3 @@ class InterestGroupAPI(APIView):
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
-
