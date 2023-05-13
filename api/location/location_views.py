@@ -13,13 +13,13 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 class CountryData(APIView):
     permission_classes = [CustomizePermission]
 
-    @RoleRequired(role=RoleType.ADMIN)
+    @RoleRequired(roles=[RoleType.ADMIN, ] )
     def get(self, request):
         countries = Country.objects.all()
         serializer = CountrySerializer(countries, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @RoleRequired(role=RoleType.ADMIN)
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -43,7 +43,7 @@ class CountryData(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @RoleRequired(role=RoleType.ADMIN)
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -64,7 +64,7 @@ class CountryData(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @RoleRequired(role=RoleType.ADMIN)
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request):
         country = Country.objects.filter(name=request.data.get('name')).first()
         if not country:
