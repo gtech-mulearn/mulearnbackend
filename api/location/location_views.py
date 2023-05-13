@@ -3,20 +3,25 @@ import uuid
 from rest_framework.views import APIView
 from db.organization import Country, State, District, Zone
 from utils.response import CustomResponse
+from utils.types import RoleType
 from ..organisation.serializers import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
 from db.user import User
 from datetime import datetime
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 
 
 class CountryData(APIView):
+    permission_classes = [CustomizePermission]
+
+    @RoleRequired(role=RoleType.ADMIN)
     def get(self, request):
         countries = Country.objects.all()
         serializer = CountrySerializer(countries, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @RoleRequired(role=RoleType.ADMIN)
     def post(self, request):
-        mu_id = request.data.get('mu_id')
-        user_id = User.objects.filter(mu_id=mu_id).first().id
+        user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
@@ -38,26 +43,28 @@ class CountryData(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
+    @RoleRequired(role=RoleType.ADMIN)
     def put(self, request):
-        mu_id = request.data.get('mu_id')
-        user_id = User.objects.filter(mu_id=mu_id).first().id
+        user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
         updated_at = datetime.now()
 
         data = {
-            'name': request.data.get('name'),
+            'name': request.data.get('new_name'),
             'updated_by': user_id,
             'updated_at': updated_at,
         }
 
-        serializer = CountrySerializer(data=data, partial=True)
+        country = Country.objects.get(name=request.data.get('old_name'))
+        serializer = CountrySerializer(country, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
+    @RoleRequired(role=RoleType.ADMIN)
     def delete(self, request):
         country = Country.objects.filter(name=request.data.get('name')).first()
         if not country:

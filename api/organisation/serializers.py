@@ -8,7 +8,7 @@ from db.organization import Organization, District, Zone, State, Country, OrgAff
 class CountrySerializer(serializers.ModelSerializer):
     class Meta:
         model = Country
-        fields = ["name", "updated_at", "created_at", "updated_by", "created_by"]
+        fields = ["id", "name", "updated_at", "created_at", "updated_by", "created_by"]
 
 
 class StateSerializer(serializers.ModelSerializer):
