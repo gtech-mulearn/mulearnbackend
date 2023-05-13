@@ -4,5 +4,5 @@ from django.urls import path, include
 urlpatterns = [
     path('user/', include('api.dashboard.user.urls')),
     path('roles/', include('api.dashboard.roles.urls')),
-    path('ig/', include('api.dashboard.ig.urls'))
+    path('ig/', include('api.dashboard.ig.urls')),
 ]

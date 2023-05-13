@@ -1,58 +1,70 @@
+import uuid
 from rest_framework.views import APIView
+from db.task import InterestGroup
 
-from db.task import InterestGroup, UserIgLink
+from db.user import User
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired, format_time
 from utils.response import CustomResponse
-
-ALL_FIELDS = {
-    "id": "id",
-    "name": "name",
-    "updated_by": "updated_by",
-    "updated_at": "updated_at",
-    "created_by": "created_by",
-    "created_at": "created_at",
-    "no_of_members": ""
-}
-
-FIELD_NAMES, FIELD_VALUES = zip(*ALL_FIELDS.items())
-
-FIELD_LENGTH = len(ALL_FIELDS)
-
-DEFAULT_FIELDS = ["id", "name", "created_by"]
-
-MAX_COLUMNS = 3
+from utils.types import RoleType
+from utils.utils import CommonUtils, DateTimeUtils
+from .dash_ig_serializer import InterestGroupSerializer
 
 
 class InterestGroupAPI(APIView):
+    authentication_classes = [CustomizePermission] #for logged in users
+    
+    #GET Request to show all interest groups. Params availiable:[sortBy, search, perPage]
+    #@RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
-        # Filter fields based on table name
-        selected_columns = request.GET.get("fields", "").split(",")
-        ig = InterestGroup.objects.select_related('id')
-        if (len(selected_columns) != MAX_COLUMNS) and (
-                any(field not in ALL_FIELDS for field in selected_columns)
-        ):
-            selected_columns = DEFAULT_FIELDS
+        ig_serializer = InterestGroup.objects.all()
 
-        for field in selected_columns:
-            try:
-                selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
-            except KeyError:
-                pass
-        igs = ig.values(*selected_columns)
-        ig_dicts = [
-            {
-                selected_columns[i]: ig[selected_columns[i]]
-
-                if selected_columns[i] in ig
-                else None
-                for i in range(MAX_COLUMNS)
-            }
-            for ig in igs
-        ]
-
-        for item in ig_dicts:
-            item["no_of_users"] = UserIgLink.objects.filter(ig_id=item['id']).count()
-
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['id', 'name'])
+        ig_serializer_data = InterestGroupSerializer(paginated_queryset, many=True).data
         return CustomResponse(
-            general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
-            response=ig_dicts,
+            response={"interestGroups": ig_serializer_data}
+        ).get_success_response()
+
+	  #POST Request to create a new interest group
+    #body should contain 'name': '<new name of interst group>'
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        ig_data = InterestGroup.objects.create(id = uuid.uuid4(),
+			name = request.data.get('name'),
+			updated_by_id=user_id,
+			updated_at=DateTimeUtils.get_current_utc_time(),
+			created_by_id=user_id,
+			created_at=DateTimeUtils.get_current_utc_time()
+		)
+        serializer = InterestGroupSerializer(ig_data)
+        return CustomResponse(
+            response={"interestGroup": serializer.data}
+        ).get_success_response()
+
+    #PUT Request to edit an InterestGroup. Use endpoint + /<id>/
+    #body should contain 'name': '<new name of interst group>' for edit
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def put(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        igData = InterestGroup.objects.get(id=pk)
+        igData.name	= request.data.get('name')
+        igData.updated_by_id = user_id
+        igData.updated_at = DateTimeUtils.get_current_utc_time()
+        igData.save()
+        serializer = InterestGroupSerializer(igData)
+        return CustomResponse(
+            response={"interestGroup": serializer.data}
+        ).get_success_response()
+      
+        ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
+
+
+    #DELETE Request to delete an InterestGroup. Use endpoint + /<id>/
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, pk):
+        igData = InterestGroup.objects.get(id=pk)
+        igData.delete()
+        serializer = InterestGroupSerializer(igData)
+        return CustomResponse(
+            response={"interestGroup": serializer.data}
         ).get_success_response()
