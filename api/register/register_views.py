@@ -55,7 +55,7 @@ class RegisterData(APIView):
             user_obj, password = create_user.save()
             auth_domain = decouple.config("AUTH_DOMAIN")
             response = requests.post(
-                f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
+                f"{auth_domain}/api/v1/auth/user-authentication/", data={"emailOrMuid": user_obj.mu_id, "password": password})
             response = response.json()
 
             if response.get("statusCode") == 200:
