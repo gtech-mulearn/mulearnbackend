@@ -44,15 +44,16 @@ class CommonUtils:
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage",10))
         search_query = request.query_params.get('search')
-        sort_by = request.query_params.get('sortBy', 'title')
+        sort_by = request.query_params.get('sortBy')
 
         if search_query:
             query = Q()
             for field in fields:
                 query |= Q(**{f'{field}__icontains': search_query})
-
-        queryset = queryset.filter(query)
-        queryset = queryset.order_by(sort_by)
+                
+            queryset = queryset.filter(query)
+        if sort_by:
+            queryset = queryset.order_by(sort_by)
         if per_page:
             start_index = (page - 1) * per_page
             end_index = start_index + per_page
