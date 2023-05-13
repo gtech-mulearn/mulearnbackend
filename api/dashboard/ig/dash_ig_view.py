@@ -2,69 +2,66 @@ import uuid
 from rest_framework.views import APIView
 from db.task import InterestGroup
 from db.user import User
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired, format_time
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import CommonUtils, DateTimeUtils
 from .dash_ig_serializer import InterestGroupSerializer
 
 
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission] #for logged in users
     
-    #GET Request to show all interest groups
+    #GET Request to show all interest groups. Params availiable:[sortBy, search, perPage]
     #@RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['id', 'name'])
+        ig_serializer_data = InterestGroupSerializer(paginated_queryset, many=True).data
         return CustomResponse(
             response={"interestGroups": ig_serializer_data}
         ).get_success_response()
 
 	#POST Request to create a new interest group
     #body should contain 'name': '<new name of interst group>'
-    #@RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.filter(id=user_id).first()
         ig_data = InterestGroup.objects.create(
             id = uuid.uuid4(),
 			name = request.data.get('name'),
-			updated_by=user,
+			updated_by_id=user_id,
 			updated_at=DateTimeUtils.get_current_utc_time(),
-			created_by=user,
+			created_by_id=user_id,
 			created_at=DateTimeUtils.get_current_utc_time()
 		)
         serializer = InterestGroupSerializer(ig_data)
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
-    
+
     #PUT Request to edit an InterestGroup. Use endpoint + /<id>/
     #body should contain 'name': '<new name of interst group>' for edit
-    #@RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.get(id=user_id)
         igData = InterestGroup.objects.get(id=pk)
-        igData.name	= request.data.get('name'),
-        igData.updated_by = user.id,
-        igData.updated_at = DateTimeUtils.get_current_utc_time(),
+        igData.name	= request.data.get('name')
+        igData.updated_by_id = user_id
+        igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
         serializer = InterestGroupSerializer(igData)
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
-        
+
     #DELETE Request to delete an InterestGroup. Use endpoint + /<id>/
-    #@RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, pk):
-        user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.filter(id=user_id).first()
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
         serializer = InterestGroupSerializer(igData)
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
-        
+
