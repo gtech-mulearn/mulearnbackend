@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from db.organization import Country, State, District, Zone
 from utils.response import CustomResponse
 from utils.types import RoleType
-from ..organisation.serializers import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
+from .serializer import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
 from db.user import User
 from datetime import datetime
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
@@ -13,7 +13,6 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 class CountryData(APIView):
     permission_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN, ] )
     def get(self, request):
         countries = Country.objects.all()
         serializer = CountrySerializer(countries, many=True)
@@ -75,16 +74,21 @@ class CountryData(APIView):
 
 
 class StateData(APIView):
+    permission_classes = [CustomizePermission]
+
     def get(self, request, country):
         country_id = Country.objects.filter(name=country).first().id
         states = State.objects.filter(country=country_id)
         serializer = StateSerializer(states, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    def post(self, request):
-        mu_id = request.data.get('mu_id')
-        user_id = User.objects.filter(mu_id=mu_id).first().id
-        country_id = Country.objects.filter(name=request.data.get('country')).first().id
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def post(self, request, country):
+        user_id = JWTUtils.fetch_user_id(request)
+        country_id = Country.objects.filter(name=country).first().id
+
+        print(country_id)
+
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
@@ -105,34 +109,41 @@ class StateData(APIView):
         }
 
         serializer = StateSerializer(data=data)
+
         if serializer.is_valid():
+            print(serializer.validated_data)
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def put(self, request):
-        mu_id = request.data.get('mu_id')
-        user_id = User.objects.filter(mu_id=mu_id).first().id
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def put(self, request, country):
+        user_id = JWTUtils.fetch_user_id(request)
 
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
         if request.data.get('country'):
-            country_id = Country.objects.filter(name=request.data.get('country')).first().id
+            country_id = Country.objects.filter(name=country).first().id
             if not country_id:
                 return CustomResponse(response={"response": "Country not found"}).get_failure_response()
             request.data['country'] = country_id
 
+        if request.data.get('new_name'):
+            request.data['name'] = request.data.get('new_name')
+
         request.data['updated_by'] = user_id
         request.data['updated_at'] = datetime.now()
 
-        serializer = StateSerializer(data=request.data, partial=True)
+        state = State.objects.filter(name=request.data.get('old_name')).first()
+        serializer = StateSerializer(state, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def delete(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, country):
         state = State.objects.filter(name=request.data.get('name')).first()
         if not state:
             return CustomResponse(response={"response": "State not found"}).get_failure_response()
@@ -142,16 +153,19 @@ class StateData(APIView):
 
 
 class ZoneData(APIView):
+    permission_classes = [CustomizePermission]
+
     def get(self, request, state):
         state_id = State.objects.filter(name=state).first().id
         zones = Zone.objects.filter(state=state_id)
         serializer = ZoneSerializer(zones, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    def post(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def post(self, request, state):
         mu_id = request.data.get('mu_id')
         user_id = User.objects.filter(mu_id=mu_id).first().id
-        state_id = State.objects.filter(name=request.data.get('state')).first().id
+        state_id = State.objects.filter(name=state).first().id
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
@@ -177,29 +191,30 @@ class ZoneData(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def put(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def put(self, request, state):
         mu_id = request.data.get('mu_id')
         user_id = User.objects.filter(mu_id=mu_id).first().id
 
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
-        if request.data.get('state'):
-            state_id = State.objects.filter(name=request.data.get('state')).first().id
-            if not state_id:
-                return CustomResponse(response={"response": "State not found"}).get_failure_response()
-            request.data['state'] = state_id
+        zone = Zone.objects.filter(name=request.data.get('old_name')).first()
+        if not zone:
+            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
 
+        request.data['name'] = request.data.get('new_name')
         request.data['updated_by'] = user_id
         request.data['updated_at'] = datetime.now()
 
-        serializer = ZoneSerializer(data=request.data, partial=True)
+        serializer = ZoneSerializer(zone, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def delete(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, state):
         zone = Zone.objects.filter(name=request.data.get('name')).first()
         if not zone:
             return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
@@ -209,16 +224,19 @@ class ZoneData(APIView):
 
 
 class DistrictData(APIView):
+    permission_classes = [CustomizePermission]
+
     def get(self, request, zone):
         zone_id = Zone.objects.filter(name=zone).first().id
         districts = District.objects.filter(zone=zone_id)
         serializer = DistrictSerializer(districts, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    def post(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def post(self, request, zone):
         mu_id = request.data.get('mu_id')
         user_id = User.objects.filter(mu_id=mu_id).first().id
-        zone_id = Zone.objects.filter(name=request.data.get('zone')).first().id
+        zone_id = Zone.objects.filter(name=zone).first().id
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
@@ -244,29 +262,30 @@ class DistrictData(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def put(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def put(self, request, zone):
         mu_id = request.data.get('mu_id')
         user_id = User.objects.filter(mu_id=mu_id).first().id
 
         if not user_id:
             return CustomResponse(response={"response": "User not found"}).get_failure_response()
 
-        if request.data.get('zone'):
-            zone_id = Zone.objects.filter(name=request.data.get('zone')).first().id
-            if not zone_id:
-                return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
-            request.data['zone'] = zone_id
+        district = District.objects.filter(name=request.data.get('old_name')).first()
+        if not district:
+            return CustomResponse(response={"response": "District not found"}).get_failure_response()
 
+        request.data['name'] = request.data.get('new_name')
         request.data['updated_by'] = user_id
         request.data['updated_at'] = datetime.now()
 
-        serializer = DistrictSerializer(data=request.data, partial=True)
+        serializer = DistrictSerializer(district, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def delete(self, request):
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, zone):
         district = District.objects.filter(name=request.data.get('name')).first()
         if not district:
             return CustomResponse(response={"response": "District not found"}).get_failure_response()

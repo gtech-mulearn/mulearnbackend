@@ -20,7 +20,7 @@ class StateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = State
-        fields = ["name", "country"]
+        fields = ["id", "name", "country", "updated_at", "created_at", "updated_by", "created_by"]
 
 
 class ZoneSerializer(serializers.ModelSerializer):
@@ -28,7 +28,7 @@ class ZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Zone
-        fields = ["name", "state"]
+        fields = ["id", "name", "state", "updated_at", "created_at", "updated_by", "created_by"]
 
 
 class DistrictSerializer(serializers.ModelSerializer):
@@ -36,7 +36,7 @@ class DistrictSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["name", "zone"]
+        fields = ["id", "name", "zone", "updated_at", "created_at", "updated_by", "created_by"]
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
