@@ -22,6 +22,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 from .serializers import UserSerializer
+from django.db.models import Q
 
 
 class LearningCircleUserView(APIView):
@@ -54,8 +55,9 @@ class RegisterData(APIView):
             user_obj, password = create_user.save()
             auth_domain = decouple.config("AUTH_DOMAIN")
             response = requests.post(
-                f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
+                f"{auth_domain}/api/v1/auth/user-authentication/", data={"emailOrMuid": user_obj.mu_id, "password": password})
             response = response.json()
+
             if response.get("statusCode") == 200:
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
@@ -131,9 +133,8 @@ class AreaOfInterestAPI(APIView):
 
 class ForgotPasswordAPI(APIView):
     def post(self, request):
-        muid = request.data.get("muid")
-        user = User.objects.filter(mu_id=muid).first()
-
+        email_muid = request.data.get('emailOrMuid')
+        user = User.objects.filter(Q(mu_id=email_muid) | Q(email=email_muid)).first()
         if user:
             created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
@@ -165,7 +166,6 @@ class ResetPasswordVerifyTokenAPI(APIView):
             else:
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
-            return CustomResponse(general_message="he Token").get_success_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
 
@@ -177,7 +177,7 @@ class ResetPasswordConfirmAPI(APIView):
         if forget_user:
             current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
-                new_password = request.data.get("new_password")
+                new_password = request.data.get("password")
                 hashed_pwd = make_password(new_password)
                 forget_user.user.password = hashed_pwd
                 forget_user.user.save()

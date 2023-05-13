@@ -90,8 +90,7 @@ class KarmaActivityLog(models.Model):
 class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by',
-                                   related_name='interest_group_updated_by')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='interest_group_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
                                    related_name='interest_group_created_by')
