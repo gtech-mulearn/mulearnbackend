@@ -7,7 +7,7 @@ from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 
-from api.user.serializers import (
+from api.register.serializers import (
     AreaOfInterestAPISerializer,
     LearningCircleUserSerializer,
     OrgSerializer,
@@ -22,6 +22,8 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 from .serializers import UserSerializer
+from django.db.models import Q
+
 
 class LearningCircleUserView(APIView):
     def post(self, request):
@@ -43,19 +45,7 @@ class LearningCircleUserView(APIView):
         ).get_success_response()
 
 
-class RegisterJWTValidate(APIView):
-    # authentication_classes = [CustomizePermission]
-    # print(authentication_classes)
-
-    def get(self, request):
-        discord_id = request.auth.get("id", None)
-        if User.objects.filter(discord_id=discord_id).exists():
-            return CustomResponse(general_message="You are already registered").get_failure_response()
-        return CustomResponse(response={"token": True}).get_success_response()
-
-
 class RegisterData(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def post(self, request):
         data = request.data
@@ -67,11 +57,14 @@ class RegisterData(APIView):
             response = requests.post(
                 f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
             response = response.json()
+
             if response.get("statusCode") == 200:
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
                 refresh_token = res_data.get("refreshToken")
-
+                send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
+                          decouple.config("EMAIL_HOST_USER"),
+                          [user_obj.email], fail_silently=False)
                 return CustomResponse(
                     response={
                         "data": UserDetailSerializer(user_obj, many=False).data,
@@ -86,7 +79,6 @@ class RegisterData(APIView):
 
 
 class RoleAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         roles = [RoleType.STUDENT.value,
@@ -97,7 +89,6 @@ class RoleAPI(APIView):
 
 
 class CollegeAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
@@ -112,7 +103,6 @@ class CollegeAPI(APIView):
 
 
 class CompanyAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         company_queryset = Organization.objects.filter(
@@ -123,7 +113,6 @@ class CompanyAPI(APIView):
 
 
 class CommunityAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         community_queryset = Organization.objects.filter(
@@ -134,7 +123,6 @@ class CommunityAPI(APIView):
 
 
 class AreaOfInterestAPI(APIView):
-    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
@@ -145,9 +133,8 @@ class AreaOfInterestAPI(APIView):
 
 class ForgotPasswordAPI(APIView):
     def post(self, request):
-        muid = request.data.get("muid")
-        user = User.objects.filter(mu_id=muid).first()
-
+        email_muid = request.data.get('emailOrMuid')
+        user = User.objects.filter(Q(mu_id=email_muid) | Q(email=email_muid)).first()
         if user:
             created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
@@ -179,7 +166,6 @@ class ResetPasswordVerifyTokenAPI(APIView):
             else:
                 forget_user.delete()
                 return CustomResponse(general_message="Link is expired").get_failure_response()
-            return CustomResponse(general_message="he Token").get_success_response()
         else:
             return CustomResponse(general_message="Invalid Token").get_failure_response()
 
@@ -191,7 +177,7 @@ class ResetPasswordConfirmAPI(APIView):
         if forget_user:
             current_time = DateTimeUtils.get_current_utc_time()
             if forget_user.expiry > current_time:
-                new_password = request.data.get("new_password")
+                new_password = request.data.get("password")
                 hashed_pwd = make_password(new_password)
                 forget_user.user.password = hashed_pwd
                 forget_user.user.save()
@@ -219,18 +205,10 @@ class UserEmailVerification(APIView):
                                   response={"value": False}).get_success_response()
 
 
-class TestAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        return CustomResponse(general_message='Hello World').get_success_response()
-
-
 class UserInfo(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-
         user_muid = JWTUtils.fetch_muid(request)
         user = User.objects.filter(mu_id=user_muid).first()
 

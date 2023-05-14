@@ -15,7 +15,7 @@ class User(models.Model):
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
-    exist_in_guild = models.BooleanField(default=True)
+    exist_in_guild = models.BooleanField(default=False)
     created_at = models.DateTimeField()
 
     class Meta:
@@ -23,7 +23,7 @@ class User(models.Model):
         db_table = 'user'
 
     @property
-    def full_name(self):
+    def fullname(self):
         if self.last_name is None:
             return self.first_name
 

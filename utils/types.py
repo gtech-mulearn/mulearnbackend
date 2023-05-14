@@ -7,7 +7,7 @@ class RoleType(Enum):
     DISCORD_MANAGER = "Discord Manager"
     DISTRICT_INTEREST_GROUP_LEAD = "District Interest Group Lead"
     EX_OFFICIAL = "Ex Official"
-    Fellow = "Fellow"
+    FELLOW = "Fellow"
     ZONAL_CAMPUS_LEAD = "Zonal Campus Lead"
     STATE_CAMPUS_LEAD = "State Campus Lead"
     STATE_INTEREST_GROUP_LEAD = "State Interest Group Lead"
@@ -28,6 +28,6 @@ class RoleType(Enum):
 
 
 class OrganizationType(Enum):
-    COLLEGE = 'College'
-    COMPANY = 'Company'
-    COMMUNITY = 'Community'
+		COLLEGE = 'College'
+		COMPANY = 'Company'
+		COMMUNITY = 'Community'
