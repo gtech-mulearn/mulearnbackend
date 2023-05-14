@@ -14,7 +14,7 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 class CountryData(APIView):
     permission_classes = [CustomizePermission]
 
-    # Params available:[sortBy, search, perPage]
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request):
         countries = Country.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(countries, request,
@@ -80,7 +80,7 @@ class CountryData(APIView):
 class StateData(APIView):
     permission_classes = [CustomizePermission]
 
-    # Params available:[sortBy, search, perPage]
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request, country):
         country_id = Country.objects.filter(name=country).first().id
         states = State.objects.filter(country=country_id)
@@ -162,7 +162,7 @@ class StateData(APIView):
 class ZoneData(APIView):
     permission_classes = [CustomizePermission]
 
-    # Params available:[sortBy, search, perPage]
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request, state):
         state_id = State.objects.filter(name=state).first().id
         zones = Zone.objects.filter(state=state_id)
@@ -236,7 +236,7 @@ class ZoneData(APIView):
 class DistrictData(APIView):
     permission_classes = [CustomizePermission]
 
-    # Params available:[sortBy, search, perPage]
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request, zone):
         zone_id = Zone.objects.filter(name=zone).first().id
         districts = District.objects.filter(zone=zone_id)
