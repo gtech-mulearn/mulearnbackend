@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 from db.organization import Country, State, District, Zone
 from utils.response import CustomResponse
 from utils.types import RoleType
+from utils.utils import CommonUtils
 from .serializer import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
 from db.user import User
 from datetime import datetime
@@ -13,9 +14,12 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 class CountryData(APIView):
     permission_classes = [CustomizePermission]
 
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request):
         countries = Country.objects.all()
-        serializer = CountrySerializer(countries, many=True)
+        paginated_queryset = CommonUtils.get_paginated_queryset(countries, request,
+                                                                ['id', 'name'])
+        serializer = CountrySerializer(paginated_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -76,10 +80,13 @@ class CountryData(APIView):
 class StateData(APIView):
     permission_classes = [CustomizePermission]
 
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request, country):
         country_id = Country.objects.filter(name=country).first().id
         states = State.objects.filter(country=country_id)
-        serializer = StateSerializer(states, many=True)
+        paginated_queryset = CommonUtils.get_paginated_queryset(states, request,
+                                                                ['id', 'name'])
+        serializer = StateSerializer(paginated_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -155,10 +162,13 @@ class StateData(APIView):
 class ZoneData(APIView):
     permission_classes = [CustomizePermission]
 
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request, state):
         state_id = State.objects.filter(name=state).first().id
         zones = Zone.objects.filter(state=state_id)
-        serializer = ZoneSerializer(zones, many=True)
+        paginated_queryset = CommonUtils.get_paginated_queryset(zones, request,
+                                                                ['id', 'name'])
+        serializer = ZoneSerializer(paginated_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -226,10 +236,13 @@ class ZoneData(APIView):
 class DistrictData(APIView):
     permission_classes = [CustomizePermission]
 
+    # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request, zone):
         zone_id = Zone.objects.filter(name=zone).first().id
         districts = District.objects.filter(zone=zone_id)
-        serializer = DistrictSerializer(districts, many=True)
+        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,
+                                                                ['id', 'name'])
+        serializer = DistrictSerializer(paginated_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
