@@ -61,6 +61,10 @@ class CommonUtils:
 
         return queryset
 
+    @classmethod
+    def paginate_queryset(cls, clg_orgs, request, param):
+        pass
+
 
 class DateTimeUtils:
     """
