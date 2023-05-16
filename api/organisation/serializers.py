@@ -1,14 +1,7 @@
 from rest_framework import serializers
 
 from db.organization import Organization, District, Zone, State, Country, OrgAffiliation
-
-
 # from organization.models import Organization, District, Zone, State, Country, OrgAffiliation
-
-class CountrySerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Country
-        fields = ["id", "name", "updated_at", "created_at", "updated_by", "created_by"]
 
 
 class StateSerializer(serializers.ModelSerializer):
@@ -20,7 +13,7 @@ class StateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = State
-        fields = ["id", "name", "country", "updated_at", "created_at", "updated_by", "created_by"]
+        fields = ["name", "country"]
 
 
 class ZoneSerializer(serializers.ModelSerializer):
@@ -28,7 +21,7 @@ class ZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Zone
-        fields = ["id", "name", "state", "updated_at", "created_at", "updated_by", "created_by"]
+        fields = ["name", "state"]
 
 
 class DistrictSerializer(serializers.ModelSerializer):
@@ -36,7 +29,7 @@ class DistrictSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["id", "name", "zone", "updated_at", "created_at", "updated_by", "created_by"]
+        fields = ["name", "zone"]
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
@@ -45,10 +38,16 @@ class OrganisationSerializer(serializers.ModelSerializer):
         many=False,
         read_only=True,
         slug_field='title'
-    )
+     )
 
     district = DistrictSerializer(many=False, read_only=True)
 
     class Meta:
         model = Organization
         fields = ["title", "code", "affiliation", "district"]
+
+
+class PostOrganizationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = "__all__"
