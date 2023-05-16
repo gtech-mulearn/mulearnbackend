@@ -73,6 +73,7 @@ class KarmaActivityLog(models.Model):
     task = models.ForeignKey(TaskList, models.DO_NOTHING)
     task_message_id = models.CharField(max_length=36)
     lobby_message_id = models.CharField(max_length=36, blank=True, null=True)
+    dm_message_id = models.CharField(max_length=36, blank=True, null=True)
     peer_approved = models.IntegerField(blank=True, null=True)
     appraiser_approved = models.IntegerField(blank=True, null=True)
     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by',
