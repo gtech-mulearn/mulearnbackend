@@ -11,6 +11,7 @@ from utils.permission import RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from .serializers import OrganisationSerializer, PostOrganizationSerializer
+from utils.utils import CommonUtils
 
 
 class Institutions(APIView):
@@ -21,9 +22,17 @@ class Institutions(APIView):
         cmpny_orgs = Organization.objects.filter(org_type="Company")
         cmuty_orgs = Organization.objects.filter(org_type="Community")
 
-        clg_orgs_serializer = OrganisationSerializer(clg_orgs, many=True)
-        cmpny_orgs_serializer = OrganisationSerializer(cmpny_orgs, many=True)
-        cmuty_orgs_serializer = OrganisationSerializer(cmuty_orgs, many=True)
+        paginated_clg_orgs = CommonUtils.paginate_queryset(clg_orgs, request,
+                                                                ['id', 'name'])
+        clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs, many=True)
+
+        paginated_cmpny_orgs = CommonUtils.paginate_queryset(cmpny_orgs, request,
+                                                                ['id', 'name'])
+        cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs, many=True)
+
+        paginated_cmuty_orgs = CommonUtils.paginate_queryset(cmuty_orgs, request,
+                                                                ['id', 'name'])
+        cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs, many=True)
 
         return CustomResponse(response={'colleges': clg_orgs_serializer.data,
                                         'companies': cmpny_orgs_serializer.data,
@@ -62,14 +71,18 @@ class GetInstitutions(APIView):
 
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
-        organisation_serializer = OrganisationSerializer(organisations, many=True)
+        paginated_organisations = CommonUtils.paginate_queryset(organisations, request,
+                                                                ['id', 'name'])
+        organisation_serializer = OrganisationSerializer(paginated_organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
     def post(self, request, organisation_type):
         district_name = request.data.get("district_name")
         district = District.objects.filter(name=district_name).first()
         organisations = Organization.objects.filter(org_type=organisation_type, district=district)
-        organisation_serializer = OrganisationSerializer(organisations, many=True)
+        paginated_organisations = CommonUtils.paginate_queryset(organisations, request,
+                                                                ['id', 'name'])
+        organisation_serializer = OrganisationSerializer(paginated_organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
 
