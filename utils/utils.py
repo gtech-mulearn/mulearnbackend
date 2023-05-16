@@ -40,7 +40,7 @@ class CommonUtils:
         return return_data
 
     @staticmethod
-    def get_paginated_queryset(queryset: QuerySet, request,fields) -> QuerySet:
+    def get_paginated_queryset(queryset: QuerySet, request, fields) -> QuerySet:
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage",10))
         search_query = request.query_params.get('search')
