@@ -1,7 +1,3 @@
-# This is a Django REST API view that retrieves a paginated list of users and returns it as a
-# serialized response.
-from django.core.paginator import Paginator, PageNotAnInteger, EmptyPage
-from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.user import User
