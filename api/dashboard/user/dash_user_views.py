@@ -1,37 +1,32 @@
+import uuid
+from django.shortcuts import get_object_or_404
+
 from rest_framework.views import APIView
 
 from db.user import User
+from utils.permission import CustomizePermission, RoleRequired
 from utils.response import CustomResponse
-from utils.utils import CommonUtils
+from utils.types import RoleType
+from utils.utils import CommonUtils, DateTimeUtils
 
 from .dash_user_serializer import UserDashboardSerializer
 
 
 class UserAPI(APIView):
-    FIELDS = [
-        "id",
-        "discord_id",
-        "mu_id",
-        "first_name",
-        "last_name",
-        "email",
-        "mobile",
-        "gender",
-        "dob",
-        "admin",
-        "active",
-        "exist_in_guild",
-        "created_at",
-        "total_karma",
-    ]
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        
-        queryset = User.objects.all()
-        # queryset = CommonUtils.get_paginated_queryset(queryset, request, self.FIELDS)
+        user_queryset = User.objects.all()
+
+        queryset = CommonUtils.get_paginated_queryset(
+            user_queryset, request, ["id", "first_name"]
+        )
+
         serializer = UserDashboardSerializer(queryset, many=True)
-        serialized_data = serializer.data
 
         return CustomResponse(
-            response={"users": serialized_data}
+            response={"users": serializer.data}
         ).get_success_response()
+
+
+
