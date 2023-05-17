@@ -3,5 +3,5 @@ from .dash_user_views import UserAPI
 
 
 urlpatterns = [
-    path('', UserAPI.as_view(), name='user-api'),
+    path('', UserAPI.as_view(), name='list-user')
 ]
