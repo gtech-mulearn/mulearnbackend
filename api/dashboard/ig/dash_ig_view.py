@@ -13,14 +13,18 @@ from .dash_ig_serializer import InterestGroupSerializer
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission] #for logged in users
     
-    #GET Request to show all interest groups. Params availiable:[sortBy, search, perPage, page]
+    #GET Request to show all interest groups. Params availiable:[sortBy, search, perPage, pageIndex]
     #@RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name','id'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset, many=True).data
-        count = len(ig_serializer)
-        
+        search = request.query_params.get('search')
+        print(search)
+        if(search == None or search == ''):
+          count = len(ig_serializer)
+        else:
+          count = len(ig_serializer_data)
         return CustomResponse(
             response={"interestGroups": ig_serializer_data, "dataCount": count}
         ).get_success_response()
