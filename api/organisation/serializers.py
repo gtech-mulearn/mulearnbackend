@@ -33,7 +33,6 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
-
     # Slug method works fine....but this cannot satisfy nested requirements
     affiliation = serializers.SlugRelatedField(
         many=False,
@@ -46,3 +45,9 @@ class OrganisationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = ["title", "code", "affiliation", "district"]
+
+
+class PostOrganizationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = "__all__"
