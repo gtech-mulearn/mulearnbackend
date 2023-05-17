@@ -48,6 +48,7 @@ class LearningCircleUserView(APIView):
 class RegisterData(APIView):
 
     def post(self, request):
+        print(f"{auth_domain}/api/v1/auth/user-authentication/")
         data = request.data
         create_user = RegisterSerializer(
             data=data, context={"request": request})
