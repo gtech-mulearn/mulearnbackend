@@ -1,5 +1,3 @@
-from functools import partial
-import uuid
 from django.shortcuts import get_object_or_404
 
 from rest_framework.views import APIView
@@ -8,7 +6,7 @@ from db.user import User
 from utils.permission import CustomizePermission, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import CommonUtils
 
 from .dash_user_serializer import UserDashboardSerializer
 
