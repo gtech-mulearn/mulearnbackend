@@ -27,7 +27,7 @@ class User(models.Model):
         if self.last_name is None:
             return self.first_name
 
-        return self.first_name + self.last_name
+        return f"{self.first_name} {self.last_name}"
 
 
 class Role(models.Model):
