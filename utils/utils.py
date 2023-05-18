@@ -54,14 +54,34 @@ class CommonUtils:
                 query |= Q(**{f'{field}__icontains': search_query})
 
             queryset = queryset.filter(query)
+
         if sort_by:
             queryset = queryset.order_by(sort_by)
-        if per_page:
-            start_index = (page - 1) * per_page
-            end_index = start_index + per_page
-            queryset = queryset[start_index:end_index]
 
-        return queryset
+        paginator = Paginator(queryset, per_page)
+        try:
+            queryset = paginator.page(page)
+        except PageNotAnInteger:
+            queryset = paginator.page(1)
+        except EmptyPage:
+            queryset = paginator.page(paginator.num_pages)
+
+        return_data = {
+            "queryset": queryset,
+            "pagination": {
+                "count": paginator.count,
+                "totalPages": paginator.num_pages,
+                "isNext": queryset.has_next(),
+                "isPrev": queryset.has_previous(),
+                "nextPage": queryset.next_page_number() if queryset.has_next() else None
+            }
+        }
+
+        # if per_page:
+        #     start_index = (page - 1) * per_page
+        #     end_index = start_index + per_page
+        #     queryset = queryset[start_index:end_index]
+        return return_data
 
     def generate_csv(self, queryset: QuerySet):
         response = HttpResponse(content_type='text/csv')
@@ -75,7 +95,7 @@ class CommonUtils:
         #
         #     row = ','.join([student.full_name, assigned_courses.count(), completed_courses.count()])
 
-            # writer.writerow(row)
+        # writer.writerow(row)
 
         return response
 
