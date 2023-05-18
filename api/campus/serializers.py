@@ -7,10 +7,11 @@ class UserOrgSerializer(serializers.ModelSerializer):
     name = serializers.ReadOnlyField(source="user.fullname")
     email = serializers.ReadOnlyField(source="user.email")
     phone = serializers.ReadOnlyField(source="user.mobile")
-    # totalKarma = serializers.SerializerMethodField()
+    karma = serializers.SerializerMethodField()
+    # rank = serializers.SerializerMethodField()
     class Meta:
         model = TotalKarma
-        fields = ["name", "email", "phone", "karma", "rank"]
+        fields = ["name", "email", "phone", "karma"]
 
     def get_karma(self, obj):
         try:
@@ -19,11 +20,11 @@ class UserOrgSerializer(serializers.ModelSerializer):
             karma = 0
         return karma
 
-    def get_rank(self, obj):
-        queryset = UserOrganizationLink.objects.order_by(
-            "-user__total_karma_user__karma")
-        rank = list(queryset).index(obj)
-        return rank
+    # def get_rank(self, obj):
+    #     queryset = UserOrganizationLink.objects.order_by(
+    #         "-user__total_karma_user__karma")
+    #     rank = list(queryset).index(obj)
+    #     return rank
 
 
 class CollegeSerializer(serializers.ModelSerializer):

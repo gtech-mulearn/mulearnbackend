@@ -2,13 +2,13 @@ from rest_framework.views import APIView
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
-from utils.types import OrganizationType
+from utils.types import OrganizationType, RoleType
 from .serializers import CollegeSerializer, UserOrgSerializer
 
 
 class StudentDetails(APIView):
     authentication_classes = [CustomizePermission]
-    # @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(
@@ -22,7 +22,7 @@ class StudentDetails(APIView):
 
 class CampusDetails(APIView):
     authentication_classes = [CustomizePermission]
-    # @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(
