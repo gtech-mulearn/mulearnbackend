@@ -1,5 +1,5 @@
+from django.db import IntegrityError
 from django.shortcuts import get_object_or_404
-
 from rest_framework.views import APIView
 
 from db.user import User
@@ -7,10 +7,7 @@ from utils.permission import CustomizePermission, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-
 from .dash_user_serializer import UserDashboardSerializer
-
-from django.db import IntegrityError
 
 
 class UserAPI(APIView):
@@ -19,27 +16,10 @@ class UserAPI(APIView):
     @RoleRequired(roles=[RoleType.ADMIN])
     def get(self, request):
         user_queryset = User.objects.all()
-        queryset = CommonUtils.get_paginated_queryset(
-            user_queryset,
-            request,
-            [
-                "discord_id",
-                "mu_id",
-                "first_name",
-                "last_name",
-                "email",
-                "mobile",
-                "gender",
-                "admin",
-                "active",
-                "exist_in_guild",
-            ],
-        )
-
-        serializer = UserDashboardSerializer(queryset, many=True)
-        return CustomResponse(
-            response={"users": serializer.data}
-        ).get_success_response()
+        queryset = CommonUtils.get_paginated_queryset(user_queryset, request,
+                                                      ["mu_id", "first_name", "last_name", "email", "mobile"])
+        serializer = UserDashboardSerializer(queryset.get('queryset'), many=True)
+        return CustomResponse(response={"users": serializer.data, "pagination": queryset.get("pagination")}).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN])
     def patch(self, request, user_id):

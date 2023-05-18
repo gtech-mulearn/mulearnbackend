@@ -1,10 +1,12 @@
+import csv
 import datetime
 
 import pytz
 from django.conf import settings
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
-from django.db.models.query import QuerySet
 from django.db.models import Q
+from django.db.models.query import QuerySet
+from django.http import HttpResponse
 
 
 class CommonUtils:
@@ -40,9 +42,9 @@ class CommonUtils:
         return return_data
 
     @staticmethod
-    def get_paginated_queryset(queryset: QuerySet, request,fields) -> QuerySet:
+    def get_paginated_queryset(queryset: QuerySet, request, fields) -> QuerySet:
         page = int(request.query_params.get("pageIndex", 1))
-        per_page = int(request.query_params.get("perPage",10))
+        per_page = int(request.query_params.get("perPage", 10))
         search_query = request.query_params.get('search')
         sort_by = request.query_params.get('sortBy')
 
@@ -50,20 +52,52 @@ class CommonUtils:
             query = Q()
             for field in fields:
                 query |= Q(**{f'{field}__icontains': search_query})
-                
+
             queryset = queryset.filter(query)
+
         if sort_by:
             queryset = queryset.order_by(sort_by)
-        if per_page:
-            start_index = (page - 1) * per_page
-            end_index = start_index + per_page
-            queryset = queryset[start_index:end_index]
 
-        return queryset
+        paginator = Paginator(queryset, per_page)
+        try:
+            queryset = paginator.page(page)
+        except PageNotAnInteger:
+            queryset = paginator.page(1)
+        except EmptyPage:
+            queryset = paginator.page(paginator.num_pages)
 
-    @classmethod
-    def paginate_queryset(cls, clg_orgs, request, param):
-        pass
+        return_data = {
+            "queryset": queryset,
+            "pagination": {
+                "count": paginator.count,
+                "totalPages": paginator.num_pages,
+                "isNext": queryset.has_next(),
+                "isPrev": queryset.has_previous(),
+                "nextPage": queryset.next_page_number() if queryset.has_next() else None
+            }
+        }
+
+        # if per_page:
+        #     start_index = (page - 1) * per_page
+        #     end_index = start_index + per_page
+        #     queryset = queryset[start_index:end_index]
+        return return_data
+
+    def generate_csv(self, queryset: QuerySet):
+        response = HttpResponse(content_type='text/csv')
+        response['Content-Disposition'] = 'attachment; filename="export.csv"'
+
+        writer = csv.writer(response)
+        #
+        # for student in Student.objects.all():
+        #     assigned_courses = CourseParticipant.objects.filter(student=student)
+        #     completed_courses = assigned_courses.filter(completed=True)
+        #
+        #     row = ','.join([student.full_name, assigned_courses.count(), completed_courses.count()])
+
+        # writer.writerow(row)
+
+        return response
 
 
 class DateTimeUtils:
