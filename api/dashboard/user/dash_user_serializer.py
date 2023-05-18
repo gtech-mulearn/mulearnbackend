@@ -12,3 +12,4 @@ class UserDashboardSerializer(serializers.ModelSerializer):
         model = User
         exclude = ('password',)
         extra_fields = ['total_karma']
+        read_only_fields = ["id", "created_at", 'total_karma']
