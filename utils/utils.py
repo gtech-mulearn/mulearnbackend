@@ -77,10 +77,6 @@ class CommonUtils:
             }
         }
 
-        # if per_page:
-        #     start_index = (page - 1) * per_page
-        #     end_index = start_index + per_page
-        #     queryset = queryset[start_index:end_index]
         return return_data
 
     def generate_csv(self, queryset: QuerySet):
@@ -93,7 +89,7 @@ class CommonUtils:
         #     assigned_courses = CourseParticipant.objects.filter(student=student)
         #     completed_courses = assigned_courses.filter(completed=True)
         #
-        #     row = ','.join([student.full_name, assigned_courses.count(), completed_courses.count()])
+            # row = ','.join([student.full_name, assigned_courses.count(), completed_courses.count()])
 
         # writer.writerow(row)
 

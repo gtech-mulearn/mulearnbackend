@@ -40,7 +40,9 @@ class StudentMonthlySerializer(ModelSerializer):
         end_date = self.context.get('end_date')
 
         try:
-            monthly_karma = obj.user.karma_activity_log_created_by.filter(
+            monthly_karma = 0 if obj.user.karma_activity_log_created_by.filter(
+                created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get(
+                'karma__sum') == None else obj.user.karma_activity_log_created_by.filter(
                 created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum')
         except:
             monthly_karma = 0
