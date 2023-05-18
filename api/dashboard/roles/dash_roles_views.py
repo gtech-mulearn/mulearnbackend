@@ -1,87 +1,74 @@
 from rest_framework.views import APIView
+from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
+
+import uuid
 
 from db.user import Role
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
-
-# all roles management or user role management?
-# list existing roles
-# create new role
-# edit user role    
-# delete user role
-# get role of a specific user
-
-ALL_FIELDS = {
-    "id",
-    "title",
-    "description",
-    "updated_by",
-    "updated_at",
-    "created_by",
-    "verified",
-    "created_at",
-}
 
 from django.shortcuts import get_object_or_404
 
 from rest_framework.views import APIView
 
-from db.user import User
-from utils.permission import CustomizePermission, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import CommonUtils
+from utils.utils import CommonUtils, DateTimeUtils
 
-from .dash_user_serializer import UserDashboardSerializer
+from .dash_roles_serializer import RoleDashboardSerializer
 
 from django.db import IntegrityError
 
 
-class RolesAPI(APIView):
+class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        roles_queryset = Roles.objects.all()
-        queryset = CommonUtils.get_paginated_queryset(
-            roles_queryset,
-            request,
-            [
-                "id",
-                "title",
-                "description",
-                "updated_by",
-                "updated_at",
-                "created_by",
-                "verified",
-                "created_at",
-            ],
-        )
+        roles_queryset = Role.objects.all()
+        queryset = CommonUtils.get_paginated_queryset(roles_queryset,request,["id","title"])
 
-        serializer = RolesDashboardSerializer(queryset, many=True)
+        serializer = RoleDashboardSerializer(queryset, many=True)
         return CustomResponse(
             response={"roles": serializer.data}
         ).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN,])
-    def patch(self, request, user_id):
-        roles = get_object_or_404(Roles, id=roles_id)
-        serializer = RolesDashboardSerializer(roles, data=request.data, partial=True)
-
-        if not serializer.is_valid():
-            return CustomResponse(
-                response={"roles": serializer.errors}
-            ).get_failure_response()
-        try:
-            serializer.save()
-            return CustomResponse(
-                response={"roles": serializer.data}
-            ).get_success_response()
-
-        except IntegrityError as e:
-            return CustomResponse(response={"roles": str(e)}).get_failure_response()
-
+    def patch(self, request, roles_id):
+        
+        user_id = JWTUtils.fetch_user_id(request)
+        role = Role.objects.filter(id=roles_id).first()
+        print(role.id,role.title,role.description)
+        
+        role.title = request.data.get('title')
+        role.description = request.data.get('description')
+        role.updated_by_id = user_id
+        role.updated_at = DateTimeUtils.get_current_utc_time()
+        role.save()
+        
+        return CustomResponse(
+            general_message=f"{role.title} updated successfully"
+        ).get_success_response()
+        
     @RoleRequired(roles=[RoleType.ADMIN,])
     def delete(self, request, roles_id):
-        roles = get_object_or_404(Roles, id=roles_id)
-        roles.delete()
-        return CustomResponse().get_success_response()
+        role = get_object_or_404(Role, id=roles_id)
+        role.delete()
+        return CustomResponse(general_message="Role deleted successfully").get_success_response()
+
+    @RoleRequired(roles=[RoleType.ADMIN,])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        role_data = Role.objects.create(
+            id = uuid.uuid4(),
+			title = request.data.get('title'),
+            description = request.data.get('description'),
+			updated_by_id=user_id,
+			updated_at=DateTimeUtils.get_current_utc_time(),    
+			created_by_id=user_id,
+			created_at=DateTimeUtils.get_current_utc_time()
+		)
+        serializer = RoleDashboardSerializer(role_data)
+        return CustomResponse(
+                response={"roles": serializer.data}
+            ).get_success_response()
 
