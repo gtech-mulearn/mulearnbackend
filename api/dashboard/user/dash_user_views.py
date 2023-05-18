@@ -16,13 +16,13 @@ from django.db import IntegrityError
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @RoleRequired(roles=[RoleType.ADMIN])
     def get(self, request):
         user_queryset = User.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
             [
-                "id",
                 "discord_id",
                 "mu_id",
                 "first_name",
@@ -30,12 +30,9 @@ class UserAPI(APIView):
                 "email",
                 "mobile",
                 "gender",
-                "dob",
                 "admin",
                 "active",
                 "exist_in_guild",
-                "created_at",
-                "total_karma",
             ],
         )
 
@@ -44,11 +41,7 @@ class UserAPI(APIView):
             response={"users": serializer.data}
         ).get_success_response()
 
-    @RoleRequired(
-        roles=[
-            RoleType.ADMIN,
-        ]
-    )
+    @RoleRequired(roles=[RoleType.ADMIN])
     def patch(self, request, user_id):
         user = get_object_or_404(User, id=user_id)
         serializer = UserDashboardSerializer(user, data=request.data, partial=True)
@@ -66,11 +59,7 @@ class UserAPI(APIView):
         except IntegrityError as e:
             return CustomResponse(response={"users": str(e)}).get_failure_response()
 
-    @RoleRequired(
-        roles=[
-            RoleType.ADMIN,
-        ]
-    )
+    @RoleRequired(roles=[RoleType.ADMIN])
     def delete(self, request, user_id):
         user = get_object_or_404(User, id=user_id)
         user.delete()
