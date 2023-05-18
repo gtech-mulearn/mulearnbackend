@@ -46,9 +46,9 @@ class StudentsMonthlyLeaderboard(APIView):
                                                                context={'start_date': start_date,
                                                                         'end_date': end_date}).data
 
+
         student_monthly_leaderboard.sort(key=itemgetter('totalKarma'), reverse=True)
         student_monthly_leaderboard = student_monthly_leaderboard[:20]
-
         return CustomResponse(response=student_monthly_leaderboard).get_success_response()
 
 

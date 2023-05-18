@@ -7,9 +7,7 @@ class UserOrgSerializer(serializers.ModelSerializer):
     name = serializers.ReadOnlyField(source="user.fullname")
     email = serializers.ReadOnlyField(source="user.email")
     phone = serializers.ReadOnlyField(source="user.mobile")
-    karma = serializers.SerializerMethodField()
-    rank = serializers.SerializerMethodField()
-
+    # totalKarma = serializers.SerializerMethodField()
     class Meta:
         model = TotalKarma
         fields = ["name", "email", "phone", "karma", "rank"]
