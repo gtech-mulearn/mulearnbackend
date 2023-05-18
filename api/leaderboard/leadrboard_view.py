@@ -5,7 +5,7 @@ from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink, Organization
 from db.task import TotalKarma, KarmaActivityLog
-from db.user import Role, UserRoleLink, User
+from db.user import Role, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
@@ -25,7 +25,6 @@ class StudentsLeaderboard(APIView):
 class StudentsMonthlyLeaderboard(APIView):
 
     def get(self, request):
-
         today = DateTimeUtils.get_current_utc_time()
         first = today.replace(day=1)
         month = first - datetime.timedelta(days=1)
@@ -46,7 +45,6 @@ class StudentsMonthlyLeaderboard(APIView):
                                                                context={'start_date': start_date,
                                                                         'end_date': end_date}).data
 
-
         student_monthly_leaderboard.sort(key=itemgetter('totalKarma'), reverse=True)
         student_monthly_leaderboard = student_monthly_leaderboard[:20]
         return CustomResponse(response=student_monthly_leaderboard).get_success_response()
@@ -55,7 +53,6 @@ class StudentsMonthlyLeaderboard(APIView):
 class CollegeLeaderboard(APIView):
 
     def get(self, request):
-
         organization_type = UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
 
         if organization_type is None:
