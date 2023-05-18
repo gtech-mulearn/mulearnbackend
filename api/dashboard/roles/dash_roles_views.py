@@ -11,66 +11,77 @@ from utils.response import CustomResponse
 # get role of a specific user
 
 ALL_FIELDS = {
-    "id": "id",
-    "title": "title",
-    "description": "description",
-    "updated_by": "updated_by",
-    "updated_at": "updated_at",
-    "created_by": "created_by",
-    "verified": "verified",
-    "created_at": "created_at"
+    "id",
+    "title",
+    "description",
+    "updated_by",
+    "updated_at",
+    "created_by",
+    "verified",
+    "created_at",
 }
 
-FIELD_NAMES, FIELD_VALUES = zip(*ALL_FIELDS.items())
+from django.shortcuts import get_object_or_404
 
-FIELD_LENGTH = len(ALL_FIELDS)
+from rest_framework.views import APIView
 
-# discord_id is not in models
-DEFAULT_FIELDS = ["id", "title", "updated_at", "description", "updated_by"]
+from db.user import User
+from utils.permission import CustomizePermission, RoleRequired
+from utils.response import CustomResponse
+from utils.types import RoleType
+from utils.utils import CommonUtils
 
-MAX_COLUMNS = 5
+from .dash_user_serializer import UserDashboardSerializer
+
+from django.db import IntegrityError
 
 
 class RolesAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
     def get(self, request):
-        # filter fields based on table name
-        selected_columns = request.GET.get("fields", "").split(",")
+        roles_queryset = Roles.objects.all()
+        queryset = CommonUtils.get_paginated_queryset(
+            roles_queryset,
+            request,
+            [
+                "id",
+                "title",
+                "description",
+                "updated_by",
+                "updated_at",
+                "created_by",
+                "verified",
+                "created_at",
+            ],
+        )
 
-        roles = Role.objects.select_related("user")
-
-        if (len(selected_columns) != MAX_COLUMNS and any(field not in ALL_FIELDS for field in selected_columns)):
-            selected_columns = DEFAULT_FIELDS
-
-        for field in selected_columns:
-            selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
-
-        roles = roles.values(*selected_columns)
-
-        roles_dicts = [
-            {
-                selected_columns[i]: role[selected_columns[i]]
-                if selected_columns[i] in role
-                else None
-                for i in range(MAX_COLUMNS)
-            }
-            for role in roles
-        ]
-
-        roles_dicts = normalize(roles_dicts)
-
+        serializer = RolesDashboardSerializer(queryset, many=True)
         return CustomResponse(
-            general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
-            response=roles_dicts,
+            response={"roles": serializer.data}
         ).get_success_response()
 
+    @RoleRequired(roles=[RoleType.ADMIN,])
+    def patch(self, request, user_id):
+        roles = get_object_or_404(Roles, id=roles_id)
+        serializer = RolesDashboardSerializer(roles, data=request.data, partial=True)
 
-def normalize(api: list) -> list:
-    for item in api:
-        for key, value in item.items():
+        if not serializer.is_valid():
+            return CustomResponse(
+                response={"roles": serializer.errors}
+            ).get_failure_response()
+        try:
+            serializer.save()
+            return CustomResponse(
+                response={"roles": serializer.data}
+            ).get_success_response()
 
-            if value == True:
-                item[key] = "Yes"
-            elif value == False:
-                item[key] = "No"
+        except IntegrityError as e:
+            return CustomResponse(response={"roles": str(e)}).get_failure_response()
 
-    return api
+    @RoleRequired(roles=[RoleType.ADMIN,])
+    def delete(self, request, roles_id):
+        roles = get_object_or_404(Roles, id=roles_id)
+        roles.delete()
+        return CustomResponse().get_success_response()
+
