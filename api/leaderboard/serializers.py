@@ -19,6 +19,8 @@ class StudentLeaderboardSerializer(ModelSerializer):
     def get_institution(self, obj):
         try:
             # no use .first()
+            user_organizations = obj.user.user_organization_link_user_id.filter(org__org_type="College").first()
+            print(user_organizations.org.code)
             user_organization = obj.user.user_organization_link_user_id.first()
             return user_organization.org.code if user_organization.org else None
         except:
@@ -40,10 +42,10 @@ class StudentMonthlySerializer(ModelSerializer):
         end_date = self.context.get('end_date')
 
         try:
-            monthly_karma = 0 if obj.user.karma_activity_log_created_by.filter(
+            monthly_karma = obj.user.karma_activity_log_created_by.filter(
                 created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get(
-                'karma__sum') == None else obj.user.karma_activity_log_created_by.filter(
-                created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum')
+                'karma__sum') if obj.user.karma_activity_log_created_by.filter(
+                created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum') else 0
         except:
             monthly_karma = 0
         return monthly_karma
