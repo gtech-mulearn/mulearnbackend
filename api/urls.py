@@ -9,4 +9,5 @@ urlpatterns = [
     path('dashboard/', include('api.dashboard.urls')),
     path('url-shortener/', include('api.url_shortener.urls')),
     path('location/', include('api.location.urls')),
+    path('yip/',include('api.yip.urls'))
 ]
