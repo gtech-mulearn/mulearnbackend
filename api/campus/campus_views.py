@@ -16,7 +16,7 @@ class StudentDetails(APIView):
             user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
         user_org_links = UserOrganizationLink.objects.filter(
             org_id=user_org_link.org_id)
-        paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'])
         serializer = UserOrgSerializer(paginated_queryset.get('queryset'), many=True)
         serialized_data = serializer.data
         return CustomResponse(response={"data":serialized_data,"pagination":paginated_queryset.get('pagination')}).get_success_response()
