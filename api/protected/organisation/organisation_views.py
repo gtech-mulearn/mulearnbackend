@@ -8,6 +8,7 @@ from .serializer import OrganisationSerializer
 class GetInstitutions(APIView):
 
     def get(self, request, organisation_type):
+        print(request,organisation_type)
         organisations = Organization.objects.filter(org_type=organisation_type)
         organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
