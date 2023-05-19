@@ -105,7 +105,7 @@ class InterestGroup(models.Model):
 class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, models.DO_NOTHING)
-    ig = models.ForeignKey(InterestGroup, models.DO_NOTHING)
+    ig = models.ForeignKey(InterestGroup, models.DO_NOTHING, related_name='user_ig_link_ig')
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
                                    related_name='user_ig_link_created_by')
     created_at = models.DateTimeField()
