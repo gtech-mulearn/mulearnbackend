@@ -4,6 +4,7 @@ from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
+from utils.utils import CommonUtils
 from .serializers import CollegeSerializer, UserOrgSerializer
 
 
@@ -17,9 +18,10 @@ class StudentDetails(APIView):
             user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
         user_org_links = UserOrganizationLink.objects.filter(
             org_id=user_org_link.org_id)
-        serializer = UserOrgSerializer(user_org_links, many=True)
+        paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['name'])
+        serializer = UserOrgSerializer(paginated_queryset.get('queryset'), many=True)
         serialized_data = serializer.data
-        return CustomResponse(response=serialized_data).get_success_response()
+        return CustomResponse(response={"data":serialized_data,"pagination":paginated_queryset.get('pagination')}).get_success_response()
 
 
 class CampusDetails(APIView):
