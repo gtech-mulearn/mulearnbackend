@@ -7,11 +7,12 @@ class UserOrgSerializer(serializers.ModelSerializer):
     name = serializers.ReadOnlyField(source="user.fullname")
     email = serializers.ReadOnlyField(source="user.email")
     phone = serializers.ReadOnlyField(source="user.mobile")
+    mu_id = serializers.ReadOnlyField(source="user.mu_id")
     karma = serializers.SerializerMethodField()
     # rank = serializers.SerializerMethodField()
     class Meta:
         model = TotalKarma
-        fields = ["name", "email", "phone", "karma"]
+        fields = ["name", "email", "phone", "karma","mu_id"]
 
     def get_karma(self, obj):
         try:
