@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
@@ -8,6 +9,7 @@ from .serializers import CollegeSerializer, UserOrgSerializer
 
 class StudentDetails(APIView):
     authentication_classes = [CustomizePermission]
+
     @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -22,6 +24,7 @@ class StudentDetails(APIView):
 
 class CampusDetails(APIView):
     authentication_classes = [CustomizePermission]
+
     @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -29,5 +32,3 @@ class CampusDetails(APIView):
             user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
         serializer = CollegeSerializer(user_org_link, many=False).data
         return CustomResponse(response=serializer).get_success_response()
-
-
