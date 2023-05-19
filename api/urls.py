@@ -10,4 +10,5 @@ urlpatterns = [
     path('url-shortener/', include('api.url_shortener.urls')),
     path('campus/', include('api.campus.urls')),
     path('location/', include('api.location.urls')),
+    path('yip/',include('api.yip.urls'))
 ]
