@@ -59,7 +59,6 @@ class CollegeLeaderboard(APIView):
             return CustomResponse("No college data available").get_failure_response()
 
         college_monthly_leaderboard = CollegeLeaderboardSerializer(organization_type, many=True).data
-        print(college_monthly_leaderboard)
 
         return CustomResponse(response=college_monthly_leaderboard).get_success_response()
 

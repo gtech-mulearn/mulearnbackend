@@ -21,8 +21,8 @@ class InterestGroupAPI(APIView):
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse(response={
-			"interestGroups": ig_serializer_data, 
-			'pagination': paginated_queryset.get('pagination')
+            "interestGroups": ig_serializer_data,
+            'pagination': paginated_queryset.get('pagination')
         }).get_success_response()
 
     # POST Request to create a new interest group
@@ -31,12 +31,12 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_data = InterestGroup.objects.create(
-            id=uuid.uuid4(), 
-            name=request.data.get('name'), 
+            id=uuid.uuid4(),
+            name=request.data.get('name'),
             updated_by_id=user_id,
-			updated_at=DateTimeUtils.get_current_utc_time(), 
-			created_by_id=user_id,
-			created_at=DateTimeUtils.get_current_utc_time())
+            updated_at=DateTimeUtils.get_current_utc_time(),
+            created_by_id=user_id,
+            created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 

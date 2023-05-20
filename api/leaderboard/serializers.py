@@ -18,7 +18,6 @@ class StudentLeaderboardSerializer(ModelSerializer):
 
     def get_institution(self, obj):
         try:
-            # no use .first()
             user_organization = obj.user.user_organization_link_user_id.filter(org__org_type__in=["College", "School"]).first()
             # user_organization = obj.user.user_organization_link_user_id.first()
             return user_organization.org.code if user_organization.org else None
@@ -60,21 +59,14 @@ class StudentMonthlySerializer(ModelSerializer):
 
 class CollegeLeaderboardSerializer(ModelSerializer):
     code = serializers.ReadOnlyField(source='org.code')
-    totalKarma = serializers.SerializerMethodField()
     institution = serializers.ReadOnlyField(source='org.title')
+    totalKarma = serializers.SerializerMethodField()
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["code", "totalKarma", "institution"]
+        fields = ["code", "institution","totalKarma"]
 
     def get_totalKarma(self, obj):
-
-        print(obj.org.updated_by)
-        # try:
-        #     user_organization_link = obj.user.user_organization_link_user_id.all().first()
-        # except:
-        #     user_organization_link = None
-        # return user_organization_link.org.code if user_organization_link else None
         try:
             monthly_karma = obj.user.karma_activity_log_created_by.aggregate(Sum('karma')).get('karma__sum')
         except:
