@@ -1,4 +1,4 @@
-from django.db.models import Sum, Prefetch
+from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -46,7 +46,7 @@ class StudentMonthlySerializer(ModelSerializer):
                 created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get(
                 'karma__sum') if obj.user.karma_activity_log_created_by.filter(
                 created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum') else 0
-        except:
+        except Exception as e:
             monthly_karma = 0
         return monthly_karma
 
@@ -60,28 +60,44 @@ class StudentMonthlySerializer(ModelSerializer):
 
 
 class CollegeLeaderboardSerializer(ModelSerializer):
-    code = serializers.ReadOnlyField(source='org.code')
     totalKarma = serializers.SerializerMethodField()
-    institution = serializers.ReadOnlyField(source='org.title')
+    institution = serializers.CharField(source='title')
 
     class Meta:
         model = Organization
-        fields = ["code", "institution","totalKarma"]
+        fields = ["code", "institution", "totalKarma"]
 
     def get_totalKarma(self, obj):
-
-        print(obj.org.updated_by)
-        # try:
-        #     user_organization_link = obj.user.user_organization_link_user_id.all().first()
-        # except:
-        #     user_organization_link = None
-        # return user_organization_link.org.code if user_organization_link else None
         try:
-            monthly_karma = UserOrganizationLink.objects.filter(org=obj).prefetch_related(
-                Prefetch("total_karma_user", queryset=TotalKarma.objects.all())).order_by(
-                '-id').aggregate(Sum('user__karma')).get('user__karma__sum')
-        except Exception as e:
-            print(e)
             monthly_karma = 0
+            for user_org_link in UserOrganizationLink.objects.filter(org=obj):
+                monthly_karma += user_org_link.total_karma
+        except Exception as e:
+            monthly_karma = 0
+        return monthly_karma
+
+
+class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
+    institution = serializers.CharField(source="title")
+    totalKarma = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = ["code", "institution", "totalKarma"]
+
+    def get_totalKarma(self, obj):
+        start_date = self.context.get('start_date')
+        end_date = self.context.get('end_date')
+
+        monthly_karma = 0
+        for user_org_link in UserOrganizationLink.objects.filter(org=obj):
+
+            try:
+                monthly_karma += user_org_link.user.karma_activity_log_created_by.filter(
+                    created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get(
+                    'karma__sum') if user_org_link.user.karma_activity_log_created_by.filter(
+                    created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum') else 0
+            except Exception as e:
+                monthly_karma += 0
 
         return monthly_karma
