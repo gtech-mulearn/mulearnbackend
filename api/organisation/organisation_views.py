@@ -4,7 +4,7 @@ from datetime import datetime
 from django.db.models import Sum
 from rest_framework.views import APIView
 
-from db.organization import Organization, District, UserOrganizationLink, OrgAffiliation
+from db.organization import Organization, UserOrganizationLink, OrgAffiliation, Country, State, District, Zone
 from db.task import TotalKarma
 from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import RoleRequired
@@ -16,74 +16,76 @@ from utils.utils import CommonUtils
 
 class Institutions(APIView):
     authentication_classes = [CustomizePermission]
-    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type="College")
         cmpny_orgs = Organization.objects.filter(org_type="Company")
         cmuty_orgs = Organization.objects.filter(org_type="Community")
 
-        paginated_clg_orgs = CommonUtils.paginate_queryset(clg_orgs, request,
-                                                                ['id', 'name'])
-        clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs, many=True)
+        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['name', 'code'])
+        clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
 
-        paginated_cmpny_orgs = CommonUtils.paginate_queryset(cmpny_orgs, request,
-                                                                ['id', 'name'])
-        cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs, many=True)
+        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['name', 'code'])
+        cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs.get("queryset"), many=True)
 
-        paginated_cmuty_orgs = CommonUtils.paginate_queryset(cmuty_orgs, request,
-                                                                ['id', 'name'])
-        cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs, many=True)
+        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['name', 'code'])
+        cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs.get("queryset"), many=True)
 
-        return CustomResponse(response={'colleges': clg_orgs_serializer.data,
-                                        'companies': cmpny_orgs_serializer.data,
-                                        'communities': cmuty_orgs_serializer.data}).get_success_response()
+        return CustomResponse(response={'colleges': {'data': clg_orgs_serializer.data,
+                                                     'pagination': paginated_clg_orgs.get("pagination")},
+                                        'companies': {'data': cmpny_orgs_serializer.data,
+                                                      'pagination': paginated_cmpny_orgs.get("pagination")},
+                                        'communities': {'data': cmuty_orgs_serializer.data,
+                                                        'pagination': paginated_cmuty_orgs.get("pagination")}
+                                        }).get_success_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, org_code):
-        org_type = request.data.get("org_type")
-        org_id = Organization.objects.filter(code=org_code).first()
-        if org_id is None:
+        org_obj = Organization.objects.filter(code=org_code).first()
+        if org_obj is None:
             return CustomResponse(response={'message': 'Invalid organization code'}).get_failure_response()
+        org_type = org_obj.org_type
 
-        org_id_list = Organization.objects.filter(org_type=org_type).values_list('id', flat=True)
-        organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
-        college_users = {}
-        total_karma_by_college = {}
-        for user_link in organisations:
-            college_users.setdefault(user_link.org.id, []).append(user_link.user)
+        if org_type == "College":
+            org_id_list = Organization.objects.filter(org_type=org_type).values_list('id', flat=True)
+            organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
+            college_users = {}
+            total_karma_by_college = {}
+            for user_link in organisations:
+                college_users.setdefault(user_link.org.id, []).append(user_link.user)
 
-            total_karma = total_karma_by_college.get(user_link.org.id, 0)
-            total_karma += TotalKarma.objects.filter(user=user_link.user).aggregate(total_karma=Sum('karma')).get(
-                'total_karma', 0)
-            total_karma_by_college[user_link.org.id] = total_karma
+                total_karma = total_karma_by_college.get(user_link.org.id, 0)
+                total_karma += TotalKarma.objects.filter(user=user_link.user).aggregate(total_karma=Sum('karma')).get(
+                    'total_karma', 0)
+                total_karma_by_college[user_link.org.id] = total_karma
 
-        sorted_college_karma = sorted(total_karma_by_college.items(), key=lambda x: x[1], reverse=True)
-        rank = next((i + 1 for i, (college_id, _) in enumerate(sorted_college_karma) if college_id == org_id.id), 0)
-        score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
+            sorted_college_karma = sorted(total_karma_by_college.items(), key=lambda x: x[1], reverse=True)
+            rank = next((i + 1 for i, (college_id, _) in enumerate(sorted_college_karma) if college_id == org_obj.id), 0)
+            score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
 
-        return CustomResponse(response={'institution': OrganisationSerializer(org_id).data,
-                                        'rank': str(rank),
-                                        'score': str(score)}).get_success_response()
+            return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data,
+                                            'rank': str(rank),
+                                            'score': str(score)}).get_success_response()
+        else:
+            return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data}).get_success_response()
 
 
 class GetInstitutions(APIView):
-    authentication_classes = [CustomizePermission]
-    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
-        paginated_organisations = CommonUtils.paginate_queryset(organisations, request,
-                                                                ['id', 'name'])
-        organisation_serializer = OrganisationSerializer(paginated_organisations, many=True)
-        return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+        paginated_organisations = CommonUtils.get_paginated_queryset(organisations, request, ['title', 'code'])
+
+        organisation_serializer = OrganisationSerializer(paginated_organisations.get('queryset'), many=True)
+        # organisation_serializer = OrganisationSerializer(organisations, many=True)
+        return CustomResponse(response={'institutions': organisation_serializer.data,
+                                        "pagination": paginated_organisations.get("pagination")}).get_success_response()
+        # return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
     def post(self, request, organisation_type):
-        district_name = request.data.get("district_name")
+        district_name = request.data.get("district")
         district = District.objects.filter(name=district_name).first()
         organisations = Organization.objects.filter(org_type=organisation_type, district=district)
-        paginated_organisations = CommonUtils.paginate_queryset(organisations, request,
-                                                                ['id', 'name'])
-        organisation_serializer = OrganisationSerializer(paginated_organisations, many=True)
-        return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
+        paginated_organisations = CommonUtils.get_paginated_queryset(organisations, request, ['title', 'code'])
+        organisation_serializer = OrganisationSerializer(paginated_organisations.get('queryset'), many=True)
+        return CustomResponse(response={'institutions': organisation_serializer.data,
+                                        "pagination": paginated_organisations.get("pagination")}).get_success_response()
 
 
 class PostInstitution(APIView):
@@ -91,24 +93,59 @@ class PostInstitution(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
+        user_id = request.data.get("user_id")
+        # user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+
+        country = request.data.get("country")
+        state = request.data.get("state")
+        zone = request.data.get("zone")
+        district = request.data.get("district")
+
+        country_obj = Country.objects.filter(name=country).first()
+        if not country_obj:
+            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+        country_id = country_obj.id
+        state_obj = State.objects.filter(name=state, country=country_id).first()
+        if not state_obj:
+            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+        state_id = state_obj.id
+        zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
+        if not zone_obj:
+            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+        zone_id = zone_obj.id
+        if not zone_id:
+            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+
+        district = District.objects.filter(name=district, zone=zone_id).first()
+        if not district:
+            return CustomResponse(response={"response": "District not found"}).get_failure_response()
+        district_id = district.id
+
+        if request.data.get("affiliation"):
+            affiliation = OrgAffiliation.objects.filter(title=request.data.get("affiliation")).first()
+            if not affiliation:
+                return CustomResponse(response={"response": "Affiliation not found"}).get_failure_response()
+            affiliation_id = affiliation.id
+        else:
+            affiliation_id = None
+
         org_id = str(uuid.uuid4())
         created_at = datetime.now()
         updated_at = datetime.now()
-        district_name = request.data.get("district")
-        affiliation_name = request.data.get("affiliation")
-        district = District.objects.filter(name=district_name).first().id
-        affiliation = OrgAffiliation.objects.filter(title=affiliation_name).first().id
+
 
         values = {
             'id': org_id,
             'title': request.data.get("title"),
             'code': request.data.get("code"),
             'org_type': request.data.get("org_type"),
-            'affiliation': affiliation,
-            'district': district,
-            'updated_by': JWTUtils.fetch_user_id(request),
+            'affiliation': affiliation_id,
+            'district': district_id,
+            'updated_by': user_id,
             'updated_at': updated_at,
-            'created_by': JWTUtils.fetch_user_id(request),
+            'created_by': user_id,
             'created_at': created_at,
         }
 
@@ -120,24 +157,79 @@ class PostInstitution(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, org_code):
-        updated_at = datetime.now()
+        user_id = request.data.get("user_id")
+
+        # user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+
+        organisation_obj = Organization.objects.filter(code=org_code).first()
+        if not organisation_obj:
+            return CustomResponse(response={"response": "Organization not found"}).get_failure_response()
+
+        if request.data.get('code'):
+            org_code_exist = Organization.objects.filter(code=request.data.get("code"))
+            if org_code_exist:
+                return CustomResponse(response={
+                    "response": "Organization with this code already exist"
+                }).get_failure_response()
+            else:
+                request.data['code'] = request.data.get('code')
+
         if request.data.get("district"):
-            district_name = request.data.get("district")
-            district = District.objects.filter(name=district_name).first().id
-            request.data["district"] = district
+            country = request.data.get("country")
+            state = request.data.get("state")
+            zone = request.data.get("zone")
+            district = request.data.get("district")
 
-        request.data["updated_at"] = updated_at
-        request.data["updated_by"] = JWTUtils.fetch_user_id(request)
+            country_obj = Country.objects.filter(name=country).first()
+            if not country_obj:
+                return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            country_id = country_obj.id
+            state_obj = State.objects.filter(name=state, country=country_id).first()
+            if not state_obj:
+                return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            state_id = state_obj.id
+            zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
+            if not zone_obj:
+                return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            zone_id = zone_obj.id
+            if not zone_id:
+                return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
 
-        # The org type is checked because if it is not college -> affiliation will not be passed in request.data,
-        # then checking for affiliation in db will return None -> results in error
-        if request.data.get("org_type") == "College":
-            org_affiliation_name = request.data.get("affiliation")
-            org_affiliation = OrgAffiliation.objects.filter(title=org_affiliation_name).first().id
-            request.data["affiliation"] = org_affiliation
+            district = District.objects.filter(name=district, zone=zone_id).first()
+            if not district:
+                return CustomResponse(response={"response": "District not found"}).get_failure_response()
+            district_id = district.id
 
-        organisation = Organization.objects.get(code=org_code)
-        organisation_serializer = PostOrganizationSerializer(organisation, data=request.data, partial=True)
+            request.data["district"] = district_id
+
+        if request.data.get("org_type"):
+            if request.data.get("org_type") == "College":
+                request.data["org_type"] = "College"
+
+            else:
+                request.data["org_type"] = request.data.get("org_type")
+                request.data["affiliation"] = None
+
+        if request.data.get("affiliation"):
+            affiliation_name = request.data.get("affiliation")
+            affiliation = OrgAffiliation.objects.filter(title=affiliation_name).first()
+            if not affiliation:
+                return CustomResponse(response={"response": "Affiliation not found"}).get_failure_response()
+            affiliation_id = affiliation.id
+
+            request.data["affiliation"] = affiliation_id
+
+        if request.data.get("new_name"):
+            request.data["title"] = request.data.get("new_name")
+
+        request.data["updated_at"] = datetime.now()
+        request.data["updated_by"] = user_id
+
+
+
+        organisation_serializer = PostOrganizationSerializer(organisation_obj, data=request.data, partial=True)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
@@ -145,6 +237,9 @@ class PostInstitution(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, org_code):
-        organisation = Organization.objects.get(code=org_code)
-        organisation.delete()
-        return CustomResponse(response={'message': 'Deleted Successfully'}).get_success_response()
+        organisation = Organization.objects.filter(code=org_code).first()
+        if organisation:
+            organisation.delete()
+            return CustomResponse(response={'Response': 'Deleted Successfully'}).get_success_response()
+        else:
+            return CustomResponse(response={'Response': f"Org with code '{org_code}', does not exist"}).get_failure_response()
