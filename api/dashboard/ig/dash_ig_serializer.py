@@ -4,18 +4,18 @@ from db.task import InterestGroup
 class InterestGroupSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source='updated_by.fullname')
     created_by = serializers.CharField(source='created_by.fullname')
-    count = serializers.SerializerMethodField()
+    user_ig_link_ig = serializers.SerializerMethodField()
     class Meta:
         model = InterestGroup
         fields = [
             "id",
             "name",
-            "count",
+            "user_ig_link_ig",
             "updated_by",
             "updated_at",
             "created_by",
             "created_at",
         ]
     
-    def get_count(self, obj):
+    def get_user_ig_link_ig(self, obj):
         return len(obj.user_ig_link_ig.all())
