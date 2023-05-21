@@ -123,8 +123,8 @@ class UserOrganizationLink(models.Model):
                              related_name='user_organization_link_user_id')
     org = models.ForeignKey(Organization, models.DO_NOTHING,
                             related_name='user_organization_link_org_id')
-    department = models.ForeignKey(
-        Department, models.DO_NOTHING, blank=True, null=True, related_name='user_organization_link_department_id')
+    department = models.ForeignKey(Department, models.DO_NOTHING, blank=True, null=True,
+                                   related_name='user_organization_link_department_id')
     graduation_year = models.CharField(max_length=10, blank=True, null=True)
     verified = models.IntegerField()
     created_by = models.ForeignKey(
@@ -134,3 +134,10 @@ class UserOrganizationLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_organization_link'
+
+    @property
+    def total_karma(self):
+        try:
+            return self.user.total_karma_user.karma
+        except Exception as e:
+            return 0
