@@ -1,6 +1,7 @@
 import datetime
 from operator import itemgetter
 
+from django.db.models import Sum
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink, Organization
@@ -53,12 +54,14 @@ class StudentsMonthlyLeaderboard(APIView):
 class CollegeLeaderboard(APIView):
 
     def get(self, request):
-        organization_type = UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+        organization = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
 
-        if organization_type is None:
-            return CustomResponse("No college data available").get_failure_response()
 
-        college_monthly_leaderboard = CollegeLeaderboardSerializer(organization_type, many=True).data
+        # if organization_type is None:
+        #     return CustomResponse("No college data available").get_failure_response()
+        #
+        college_monthly_leaderboard = CollegeLeaderboardSerializer(organization, many=True).data
+        # print(college_monthly_leaderboard)
 
         return CustomResponse(response=college_monthly_leaderboard).get_success_response()
 

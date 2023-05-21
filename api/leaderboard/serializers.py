@@ -1,8 +1,8 @@
-from django.db.models import Sum
+from django.db.models import Sum, Prefetch
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Organization
 from db.task import TotalKarma
 from db.user import UserRoleLink
 
@@ -18,7 +18,9 @@ class StudentLeaderboardSerializer(ModelSerializer):
 
     def get_institution(self, obj):
         try:
-            user_organization = obj.user.user_organization_link_user_id.filter(org__org_type__in=["College", "School"]).first()
+            # no use .first()
+            user_organization = obj.user.user_organization_link_user_id.filter(
+                org__org_type__in=["College", "School"]).first()
             # user_organization = obj.user.user_organization_link_user_id.first()
             return user_organization.org.code if user_organization.org else None
         except:
@@ -59,16 +61,27 @@ class StudentMonthlySerializer(ModelSerializer):
 
 class CollegeLeaderboardSerializer(ModelSerializer):
     code = serializers.ReadOnlyField(source='org.code')
-    institution = serializers.ReadOnlyField(source='org.title')
     totalKarma = serializers.SerializerMethodField()
+    institution = serializers.ReadOnlyField(source='org.title')
 
     class Meta:
-        model = UserOrganizationLink
+        model = Organization
         fields = ["code", "institution","totalKarma"]
 
     def get_totalKarma(self, obj):
+
+        print(obj.org.updated_by)
+        # try:
+        #     user_organization_link = obj.user.user_organization_link_user_id.all().first()
+        # except:
+        #     user_organization_link = None
+        # return user_organization_link.org.code if user_organization_link else None
         try:
-            monthly_karma = obj.user.karma_activity_log_created_by.aggregate(Sum('karma')).get('karma__sum')
-        except:
+            monthly_karma = UserOrganizationLink.objects.filter(org=obj).prefetch_related(
+                Prefetch("total_karma_user", queryset=TotalKarma.objects.all())).order_by(
+                '-id').aggregate(Sum('user__karma')).get('user__karma__sum')
+        except Exception as e:
+            print(e)
             monthly_karma = 0
+
         return monthly_karma
