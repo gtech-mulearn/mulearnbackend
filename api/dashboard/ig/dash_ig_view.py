@@ -3,7 +3,8 @@ import uuid
 from rest_framework.views import APIView
 
 from db.task import InterestGroup
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission
+from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
@@ -19,7 +20,6 @@ class InterestGroupAPI(APIView):
         ig_serializer = InterestGroup.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name', 'id'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
-
         return CustomResponse(response={
             "interestGroups": ig_serializer_data,
             'pagination': paginated_queryset.get('pagination')
