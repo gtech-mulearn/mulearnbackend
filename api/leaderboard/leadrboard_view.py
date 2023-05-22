@@ -26,16 +26,10 @@ class StudentsLeaderboard(APIView):
 class StudentsMonthlyLeaderboard(APIView):
 
     def get(self, request):
+
         today = DateTimeUtils.get_current_utc_time()
-        first = today.replace(day=1)
-        month = first - datetime.timedelta(days=1)
-
-        year = int(month.strftime('%Y'))
-        last_month = int(month.strftime("%m"))
-        last_day = int(month.strftime("%d"))
-
-        start_date = str(datetime.date(year, last_month, 1))
-        end_date = str(datetime.date(year, last_month, last_day))
+        start_date = today.replace(day=1)
+        end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - datetime.timedelta(days=1)
 
         user_roles = UserRoleLink.objects.filter(role__title=RoleType.STUDENT.value)
 
@@ -65,15 +59,8 @@ class CollegeMonthlyLeaderboard(APIView):
 
     def get(self, request):
         today = DateTimeUtils.get_current_utc_time()
-        first = today.replace(day=1)
-        month = first - datetime.timedelta(days=1)
-
-        year = int(month.strftime('%Y'))
-        last_month = int(month.strftime("%m"))
-        last_day = int(month.strftime("%d"))
-
-        start_date = str(datetime.date(year, last_month, 1))
-        end_date = str(datetime.date(year, last_month, last_day))
+        start_date = today.replace(day=1)
+        end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - datetime.timedelta(days=1)
 
         organisation = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         college_monthly_leaderboard = CollegeMonthlyLeaderboardSerializer(organisation, many=True,
