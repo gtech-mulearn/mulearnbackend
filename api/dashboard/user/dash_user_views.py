@@ -19,6 +19,7 @@ class UserAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(user_queryset, request,
                                                       ["mu_id", "first_name", "last_name", "email", "mobile"])
         serializer = UserDashboardSerializer(queryset.get('queryset'), many=True)
+
         return CustomResponse(response={"users": serializer.data, "pagination": queryset.get("pagination")}).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN])
