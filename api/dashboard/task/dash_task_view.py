@@ -9,7 +9,7 @@ from .dash_task_serializer import TaskListSerializer
 
 
 class TaskApi(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
     def get(self, request):
         task_serializer = TaskList.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(task_serializer, request, ["id",
