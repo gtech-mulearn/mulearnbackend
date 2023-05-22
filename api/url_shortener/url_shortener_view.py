@@ -11,6 +11,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
 
+
 class CreateShortenUrl(APIView):
     authentication_classes = [CustomizePermission]
 

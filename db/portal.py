@@ -3,9 +3,6 @@ from django.db import models
 from .user import User
 
 
-# Create your models here.
-
-
 class Portal(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     portal_key = models.CharField(max_length=36)
