@@ -46,7 +46,6 @@ INSTALLED_APPS = [
     'db',
 ]
 
-
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     # "django.contrib.sessions.middleware.SessionMiddleware",
@@ -56,11 +55,11 @@ MIDDLEWARE = [
     # "django.contrib.auth.middleware.AuthenticationMiddleware",
     # "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
-    "mulearnbackend.middlewares.ApiSignatureMiddleware",
+    # "mulearnbackend.middlewares.ApiSignatureMiddleware",
 ]
 
-CORS_ALLOW_ALL_ORIGINS = True
 ROOT_URLCONF = "mulearnbackend.urls"
+CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
 # paginator settings
@@ -83,31 +82,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "mulearnbackend.wsgi.application"
 
-LOGGING = {
-    "version": 1,
-    "formatters": {
-        "timestamp": {
-            "format": "{asctime} {levelname} {message}",
-            "style": "{",
-        },
-    },
-    "disable_existing_loggers": False,
-    "handlers": {
-        "file": {
-            "level": "DEBUG",
-            "class": "logging.FileHandler",
-            "filename": decouple.config("LOGGER_PATH"),
-            "formatter": "timestamp",
-        },
-    },
-    "loggers": {
-        "django": {
-            "handlers": ["file"],
-            "level": "DEBUG",
-            "propagate": True,
-        },
-    },
-}
 
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
@@ -141,6 +115,34 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+#logging
+
+LOGGING = {
+    "version": 1,
+    "formatters": {
+        "timestamp": {
+            "format": "{asctime} {levelname} {message}",
+            "style": "{",
+        },
+    },
+    "disable_existing_loggers": False,
+    "handlers": {
+        "file": {
+            "level": "DEBUG",
+            "class": "logging.FileHandler",
+            "filename": decouple.config("LOGGER_PATH"),
+            "formatter": "timestamp",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["file"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+    },
+}
+
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
 
@@ -169,4 +171,4 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 EMAIL_PORT = config("EMAIL_PORT")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS")
-# EMAIL_USE_SSL = config('EMAIL_USE_SSL')
+

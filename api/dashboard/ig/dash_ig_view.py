@@ -3,7 +3,8 @@ import uuid
 from rest_framework.views import APIView
 
 from db.task import InterestGroup
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission
+from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
@@ -19,10 +20,10 @@ class InterestGroupAPI(APIView):
         ig_serializer = InterestGroup.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
-
+        # return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
         return CustomResponse(response={
-			"interestGroups": ig_serializer_data, 
-			'pagination': paginated_queryset.get('pagination')
+            "interestGroups": ig_serializer_data,
+            'pagination': paginated_queryset.get('pagination')
         }).get_success_response()
 
     # POST Request to create a new interest group
@@ -31,12 +32,12 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_data = InterestGroup.objects.create(
-            id=uuid.uuid4(), 
-            name=request.data.get('name'), 
+            id=uuid.uuid4(),
+            name=request.data.get('name'),
             updated_by_id=user_id,
-			updated_at=DateTimeUtils.get_current_utc_time(), 
-			created_by_id=user_id,
-			created_at=DateTimeUtils.get_current_utc_time())
+            updated_at=DateTimeUtils.get_current_utc_time(),
+            created_by_id=user_id,
+            created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
@@ -64,3 +65,11 @@ class InterestGroupAPI(APIView):
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
+
+class InterestGroupCSV(APIView):
+    
+    def get(self, request):
+        ig_serializer = InterestGroup.objects.all()
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count'])
+        ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
+        return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')

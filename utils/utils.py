@@ -79,19 +79,14 @@ class CommonUtils:
 
         return return_data
 
-    def generate_csv(self, queryset: QuerySet):
+    @staticmethod
+    def generate_csv(datas, csv_name):
         response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = 'attachment; filename="export.csv"'
-
-        writer = csv.writer(response)
-        #
-        # for student in Student.objects.all():
-        #     assigned_courses = CourseParticipant.objects.filter(student=student)
-        #     completed_courses = assigned_courses.filter(completed=True)
-        #
-            # row = ','.join([student.full_name, assigned_courses.count(), completed_courses.count()])
-
-        # writer.writerow(row)
+        response['Content-Disposition'] = f'attachment; filename="{csv_name}.csv"'
+        fieldnames = list(datas[0].keys())
+        writer = csv.DictWriter(response, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(datas)
 
         return response
 
