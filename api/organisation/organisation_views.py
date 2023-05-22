@@ -15,7 +15,6 @@ from utils.utils import CommonUtils
 
 
 class Institutions(APIView):
-    authentication_classes = [CustomizePermission]
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type="College")
         cmpny_orgs = Organization.objects.filter(org_type="Company")
@@ -41,7 +40,7 @@ class Institutions(APIView):
     def post(self, request, org_code):
         org_obj = Organization.objects.filter(code=org_code).first()
         if org_obj is None:
-            return CustomResponse(response={'error': 'Invalid organization code'}).get_failure_response()
+            return CustomResponse(general_message=["Invalid Org Code"]).get_failure_response()
         org_type = org_obj.org_type
 
         if org_type == "College":
@@ -77,7 +76,7 @@ class GetInstitutions(APIView):
         # organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data,
                                         "pagination": paginated_organisations.get("pagination")}).get_success_response()
-        # return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
+
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
         district = District.objects.filter(name=district_name).first()
@@ -93,10 +92,9 @@ class PostInstitution(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
-        user_id = request.data.get("user_id")
-        # user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
-            return CustomResponse(response={"error": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         country = request.data.get("country")
         state = request.data.get("state")
@@ -105,28 +103,28 @@ class PostInstitution(APIView):
 
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"error": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"error": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(response={"error": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         zone_id = zone_obj.id
         if not zone_id:
-            return CustomResponse(response={"error": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
 
         district = District.objects.filter(name=district, zone=zone_id).first()
         if not district:
-            return CustomResponse(response={"error": "District not found"}).get_failure_response()
+            return CustomResponse(general_message=["District not found"]).get_failure_response()
         district_id = district.id
 
         if request.data.get("affiliation"):
             affiliation = OrgAffiliation.objects.filter(title=request.data.get("affiliation")).first()
             if not affiliation:
-                return CustomResponse(response={"error": "Affiliation not found"}).get_failure_response()
+                return CustomResponse(general_message=["Affiliation not found"]).get_failure_response()
             affiliation_id = affiliation.id
         else:
             affiliation_id = None
@@ -152,27 +150,24 @@ class PostInstitution(APIView):
         organisation_serializer = PostOrganizationSerializer(data=values)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
-            return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
-        return CustomResponse(response={'institution': organisation_serializer.errors}).get_failure_response()
+            org_obj = Organization.objects.filter(code=values["code"]).first()
+            return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data}).get_success_response()
+        return CustomResponse(general_message=[organisation_serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, org_code):
-        user_id = request.data.get("user_id")
-
-        # user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
-            return CustomResponse(response={"error": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         organisation_obj = Organization.objects.filter(code=org_code).first()
         if not organisation_obj:
-            return CustomResponse(response={"error": "Organization not found"}).get_failure_response()
+            return CustomResponse(general_message=["Organisation not found"]).get_failure_response()
 
         if request.data.get('code'):
             org_code_exist = Organization.objects.filter(code=request.data.get("code"))
             if org_code_exist:
-                return CustomResponse(response={
-                    "response": "Organization with this code already exist"
-                }).get_failure_response()
+                return CustomResponse(general_message=["Organisation with this code already exist"]).get_failure_response()
             else:
                 request.data['code'] = request.data.get('code')
 
@@ -184,22 +179,22 @@ class PostInstitution(APIView):
 
             country_obj = Country.objects.filter(name=country).first()
             if not country_obj:
-                return CustomResponse(response={"error": "Country not found"}).get_failure_response()
+                return CustomResponse(general_message=["Country not found"]).get_failure_response()
             country_id = country_obj.id
             state_obj = State.objects.filter(name=state, country=country_id).first()
             if not state_obj:
-                return CustomResponse(response={"error": "State not found"}).get_failure_response()
+                return CustomResponse(general_message=["State not found"]).get_failure_response()
             state_id = state_obj.id
             zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
             if not zone_obj:
-                return CustomResponse(response={"error": "Zone not found"}).get_failure_response()
+                return CustomResponse(general_message=["State not found"]).get_failure_response()
             zone_id = zone_obj.id
             if not zone_id:
-                return CustomResponse(response={"error": "Zone not found"}).get_failure_response()
+                return CustomResponse(general_message=["Zone not found"]).get_failure_response()
 
             district = District.objects.filter(name=district, zone=zone_id).first()
             if not district:
-                return CustomResponse(response={"error": "District not found"}).get_failure_response()
+                return CustomResponse(general_message=["District not found"]).get_failure_response()
             district_id = district.id
 
             request.data["district"] = district_id
@@ -216,13 +211,13 @@ class PostInstitution(APIView):
             affiliation_name = request.data.get("affiliation")
             affiliation = OrgAffiliation.objects.filter(title=affiliation_name).first()
             if not affiliation:
-                return CustomResponse(response={"error": "Affiliation not found"}).get_failure_response()
+                return CustomResponse(general_message=["Affiliation not found"]).get_failure_response()
             affiliation_id = affiliation.id
 
             request.data["affiliation"] = affiliation_id
 
-        if request.data.get("new_name"):
-            request.data["title"] = request.data.get("new_name")
+        if request.data.get("title"):
+            request.data["title"] = request.data.get("title")
 
         request.data["updated_at"] = datetime.now()
         request.data["updated_by"] = user_id
@@ -232,8 +227,8 @@ class PostInstitution(APIView):
         organisation_serializer = PostOrganizationSerializer(organisation_obj, data=request.data, partial=True)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
-            return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
-        return CustomResponse(response={'institution': organisation_serializer.errors}).get_failure_response()
+            return CustomResponse(response={'institution': OrganisationSerializer(organisation_obj).data}).get_success_response()
+        return CustomResponse(general_message=[organisation_serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, org_code):
@@ -242,4 +237,4 @@ class PostInstitution(APIView):
             organisation.delete()
             return CustomResponse(response={'Success': 'Deleted Successfully'}).get_success_response()
         else:
-            return CustomResponse(response={'error': f"Org with code '{org_code}', does not exist"}).get_failure_response()
+            return CustomResponse(general_message=[f"Org with code '{org_code}', does not exist"]).get_failure_response()
