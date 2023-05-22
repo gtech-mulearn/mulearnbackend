@@ -14,14 +14,30 @@ class StudentDetails(APIView):
     @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
-        user_org_links = UserOrganizationLink.objects.filter(
-            org_id=user_org_link.org_id)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                            org__org_type=OrganizationType.COLLEGE.value).first()
+
+        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'])
         serializer = UserOrgSerializer(paginated_queryset.get('queryset'), many=True)
-        serialized_data = serializer.data
-        return CustomResponse(response={"data":serialized_data,"pagination":paginated_queryset.get('pagination')}).get_success_response()
+
+        return CustomResponse(response={"data": serializer.data,
+                                        "pagination": paginated_queryset.get('pagination')}).get_success_response()
+
+
+class StudentDetailsCSV(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                            org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id)
+
+        serializer = UserOrgSerializer(user_org_links, many=True)
+        return CommonUtils.generate_csv(serializer.data, 'Campus Details')
 
 
 class CampusDetails(APIView):
@@ -32,5 +48,5 @@ class CampusDetails(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(
             user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
-        serializer = CollegeSerializer(user_org_link, many=False).data
-        return CustomResponse(response=serializer).get_success_response()
+        serializer = CollegeSerializer(user_org_link, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()

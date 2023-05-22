@@ -6,14 +6,11 @@ from utils.response import CustomResponse
 from .serializer import OrganisationSerializer
 
 
-class GetInstitutions(APIView):
+class GetInstitutionsAPI(APIView):
 
     def get(self, request, organisation_type):
         protection_key = request.headers.get("protectionKey")
-        if protection_key is None:
-            return CustomResponse(general_message="Invalid Key").get_failure_response()
-
-        if not protection_key == config('PROTECTED_API_KEY'):
+        if not protection_key or not protection_key == config('PROTECTED_API_KEY'):
             return CustomResponse(general_message="Invalid Key").get_failure_response()
 
         organisations = Organization.objects.filter(org_type=organisation_type)
