@@ -18,7 +18,9 @@ class InterestGroupAPI(APIView):
     # @RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
+                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
+                                                                 'created_at', 'count'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
         # return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
         return CustomResponse(response={
@@ -66,10 +68,13 @@ class InterestGroupAPI(APIView):
             response={"interestGroup": serializer.data}
         ).get_success_response()
 
+
 class InterestGroupCSV(APIView):
-    
+
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
+                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
+                                                                 'created_at', 'count'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
         return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
