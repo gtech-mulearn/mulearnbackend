@@ -28,6 +28,6 @@ class RoleType(Enum):
 
 
 class OrganizationType(Enum):
-		COLLEGE = 'College'
-		COMPANY = 'Company'
-		COMMUNITY = 'Community'
+    COLLEGE = 'College'
+    COMPANY = 'Company'
+    COMMUNITY = 'Community'
