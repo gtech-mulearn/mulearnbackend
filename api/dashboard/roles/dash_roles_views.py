@@ -1,76 +1,63 @@
+import uuid
+
+from django.shortcuts import get_object_or_404
 from rest_framework.views import APIView
 
 from db.user import Role
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
-
-# all roles management or user role management?
-# list existing roles
-# create new role
-# edit user role    
-# delete user role
-# get role of a specific user
-
-ALL_FIELDS = {
-    "id": "id",
-    "title": "title",
-    "description": "description",
-    "updated_by": "updated_by",
-    "updated_at": "updated_at",
-    "created_by": "created_by",
-    "verified": "verified",
-    "created_at": "created_at"
-}
-
-FIELD_NAMES, FIELD_VALUES = zip(*ALL_FIELDS.items())
-
-FIELD_LENGTH = len(ALL_FIELDS)
-
-# discord_id is not in models
-DEFAULT_FIELDS = ["id", "title", "updated_at", "description", "updated_by"]
-
-MAX_COLUMNS = 5
+from utils.types import RoleType
+from utils.utils import CommonUtils, DateTimeUtils
+from .dash_roles_serializer import RoleDashboardSerializer
 
 
-class RolesAPI(APIView):
+class RoleAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
     def get(self, request):
-        # filter fields based on table name
-        selected_columns = request.GET.get("fields", "").split(",")
+        roles_queryset = Role.objects.all()
+        queryset = CommonUtils.get_paginated_queryset(roles_queryset, request, ["id", "title"])
 
-        roles = Role.objects.select_related("user")
-
-        if (len(selected_columns) != MAX_COLUMNS and any(field not in ALL_FIELDS for field in selected_columns)):
-            selected_columns = DEFAULT_FIELDS
-
-        for field in selected_columns:
-            selected_columns[selected_columns.index(field)] = ALL_FIELDS[field]
-
-        roles = roles.values(*selected_columns)
-
-        roles_dicts = [
-            {
-                selected_columns[i]: role[selected_columns[i]]
-                if selected_columns[i] in role
-                else None
-                for i in range(MAX_COLUMNS)
-            }
-            for role in roles
-        ]
-
-        roles_dicts = normalize(roles_dicts)
-
+        serializer = RoleDashboardSerializer(queryset, many=True)
         return CustomResponse(
-            general_message={"columns": FIELD_NAMES, "len_columns": FIELD_LENGTH},
-            response=roles_dicts,
+            response={"roles": serializer.data}
         ).get_success_response()
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def patch(self, request, roles_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        role = Role.objects.filter(id=roles_id).first()
+        print(role.id, role.title, role.description)
 
-def normalize(api: list) -> list:
-    for item in api:
-        for key, value in item.items():
+        role.title = request.data.get('title')
+        role.description = request.data.get('description')
+        role.updated_by_id = user_id
+        role.updated_at = DateTimeUtils.get_current_utc_time()
+        role.save()
 
-            if value == True:
-                item[key] = "Yes"
-            elif value == False:
-                item[key] = "No"
+        return CustomResponse(
+            general_message=f"{role.title} updated successfully"
+        ).get_success_response()
 
-    return api
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def delete(self, request, roles_id):
+        role = get_object_or_404(Role, id=roles_id)
+        role.delete()
+        return CustomResponse(general_message="Role deleted successfully").get_success_response()
+
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        role_data = Role.objects.create(
+            id=uuid.uuid4(),
+            title=request.data.get('title'),
+            description=request.data.get('description'),
+            updated_by_id=user_id,
+            updated_at=DateTimeUtils.get_current_utc_time(),
+            created_by_id=user_id,
+            created_at=DateTimeUtils.get_current_utc_time()
+        )
+        serializer = RoleDashboardSerializer(role_data)
+        return CustomResponse(
+            response={"roles": serializer.data}
+        ).get_success_response()

@@ -55,9 +55,8 @@ class RegisterData(APIView):
             user_obj, password = create_user.save()
             auth_domain = decouple.config("AUTH_DOMAIN")
             response = requests.post(
-                f"{auth_domain}/api/v1/auth/user-authentication/", data={"muid": user_obj.mu_id, "password": password})
+                f"{auth_domain}/api/v1/auth/user-authentication/", data={"emailOrMuid": user_obj.mu_id, "password": password})
             response = response.json()
-
             if response.get("statusCode") == 200:
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
@@ -145,7 +144,7 @@ class ForgotPasswordAPI(APIView):
             subject = "Password Reset Requested"
             to = [user.email]
             domain = decouple.config("FR_DOMAIN_NAME")
-            message = f"Reset your password with this link {domain}/user/reset-password?token={forget_user.id}"
+            message = f"Reset your password with this link {domain}/reset-password?token={forget_user.id}"
             send_mail(subject, message, email_host_user,
                       to, fail_silently=False)
             return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()

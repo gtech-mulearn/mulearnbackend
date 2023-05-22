@@ -4,27 +4,35 @@ from datetime import datetime
 from django.db.models import Sum
 from rest_framework.views import APIView
 
-from db.organization import Organization, District, UserOrganizationLink
+from db.organization import Organization, District, UserOrganizationLink, OrgAffiliation
 from db.task import TotalKarma
-from utils.permission import CustomizePermission
+from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
-from .serializers import OrganisationSerializer
+from .serializers import OrganisationSerializer, PostOrganizationSerializer
+from utils.utils import CommonUtils
 
 
 class Institutions(APIView):
     authentication_classes = [CustomizePermission]
-
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type="College")
         cmpny_orgs = Organization.objects.filter(org_type="Company")
         cmuty_orgs = Organization.objects.filter(org_type="Community")
 
-        clg_orgs_serializer = OrganisationSerializer(clg_orgs, many=True)
-        cmpny_orgs_serializer = OrganisationSerializer(cmpny_orgs, many=True)
-        cmuty_orgs_serializer = OrganisationSerializer(cmuty_orgs, many=True)
+        paginated_clg_orgs = CommonUtils.paginate_queryset(clg_orgs, request,
+                                                                ['id', 'name'])
+        clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs, many=True)
+
+        paginated_cmpny_orgs = CommonUtils.paginate_queryset(cmpny_orgs, request,
+                                                                ['id', 'name'])
+        cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs, many=True)
+
+        paginated_cmuty_orgs = CommonUtils.paginate_queryset(cmuty_orgs, request,
+                                                                ['id', 'name'])
+        cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs, many=True)
 
         return CustomResponse(response={'colleges': clg_orgs_serializer.data,
                                         'companies': cmpny_orgs_serializer.data,
@@ -34,16 +42,13 @@ class Institutions(APIView):
     def post(self, request, org_code):
         org_type = request.data.get("org_type")
         org_id = Organization.objects.filter(code=org_code).first()
-
         if org_id is None:
             return CustomResponse(response={'message': 'Invalid organization code'}).get_failure_response()
 
         org_id_list = Organization.objects.filter(org_type=org_type).values_list('id', flat=True)
         organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
-
         college_users = {}
         total_karma_by_college = {}
-
         for user_link in organisations:
             college_users.setdefault(user_link.org.id, []).append(user_link.user)
 
@@ -62,18 +67,22 @@ class Institutions(APIView):
 
 
 class GetInstitutions(APIView):
-    # authentication_classes = [CustomizePermission]
-
+    authentication_classes = [CustomizePermission]
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
-        organisation_serializer = OrganisationSerializer(organisations, many=True)
+        paginated_organisations = CommonUtils.paginate_queryset(organisations, request,
+                                                                ['id', 'name'])
+        organisation_serializer = OrganisationSerializer(paginated_organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
-
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, organisation_type):
-        district_name = request.data.get("district")
+        district_name = request.data.get("district_name")
         district = District.objects.filter(name=district_name).first()
         organisations = Organization.objects.filter(org_type=organisation_type, district=district)
-        organisation_serializer = OrganisationSerializer(organisations, many=True)
+        paginated_organisations = CommonUtils.paginate_queryset(organisations, request,
+                                                                ['id', 'name'])
+        organisation_serializer = OrganisationSerializer(paginated_organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
 
 
@@ -86,22 +95,24 @@ class PostInstitution(APIView):
         created_at = datetime.now()
         updated_at = datetime.now()
         district_name = request.data.get("district")
+        affiliation_name = request.data.get("affiliation")
         district = District.objects.filter(name=district_name).first().id
+        affiliation = OrgAffiliation.objects.filter(title=affiliation_name).first().id
 
         values = {
             'id': org_id,
             'title': request.data.get("title"),
             'code': request.data.get("code"),
             'org_type': request.data.get("org_type"),
+            'affiliation': affiliation,
             'district': district,
-            'affiliation': request.data.get("affiliation"),
-            'updated_by': request.data.get("updated_by"),
+            'updated_by': JWTUtils.fetch_user_id(request),
             'updated_at': updated_at,
-            'created_by': request.data.get("created_by"),
+            'created_by': JWTUtils.fetch_user_id(request),
             'created_at': created_at,
         }
 
-        organisation_serializer = OrganisationSerializer(data=values)
+        organisation_serializer = PostOrganizationSerializer(data=values)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()
@@ -116,9 +127,17 @@ class PostInstitution(APIView):
             request.data["district"] = district
 
         request.data["updated_at"] = updated_at
+        request.data["updated_by"] = JWTUtils.fetch_user_id(request)
+
+        # The org type is checked because if it is not college -> affiliation will not be passed in request.data,
+        # then checking for affiliation in db will return None -> results in error
+        if request.data.get("org_type") == "College":
+            org_affiliation_name = request.data.get("affiliation")
+            org_affiliation = OrgAffiliation.objects.filter(title=org_affiliation_name).first().id
+            request.data["affiliation"] = org_affiliation
 
         organisation = Organization.objects.get(code=org_code)
-        organisation_serializer = OrganisationSerializer(organisation, data=request.data, partial=True)
+        organisation_serializer = PostOrganizationSerializer(organisation, data=request.data, partial=True)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
             return CustomResponse(response={'institution': organisation_serializer.data}).get_success_response()

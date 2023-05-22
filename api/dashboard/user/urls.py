@@ -1,8 +1,9 @@
 from django.urls import path
+from .dash_user_views import UserAPI
 
-from .dash_user_views import UserAPI, CollegePaginationTestAPI
 
 urlpatterns = [
-    path('', UserAPI.as_view(), name='user-api'),
-    path('get-college-test-pagination/', CollegePaginationTestAPI.as_view(),name='get_college_test_pagination'),
+    path('', UserAPI.as_view(), name='list-user'),
+    path('<str:user_id>/', UserAPI.as_view(), name="edit-user"),
+    path('<str:user_id>/', UserAPI.as_view(), name="delete-user")
 ]

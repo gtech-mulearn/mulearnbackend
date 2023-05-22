@@ -73,6 +73,7 @@ class KarmaActivityLog(models.Model):
     task = models.ForeignKey(TaskList, models.DO_NOTHING)
     task_message_id = models.CharField(max_length=36)
     lobby_message_id = models.CharField(max_length=36, blank=True, null=True)
+    dm_message_id = models.CharField(max_length=36, blank=True, null=True)
     peer_approved = models.IntegerField(blank=True, null=True)
     appraiser_approved = models.IntegerField(blank=True, null=True)
     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by',
@@ -104,7 +105,7 @@ class InterestGroup(models.Model):
 class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, models.DO_NOTHING)
-    ig = models.ForeignKey(InterestGroup, models.DO_NOTHING)
+    ig = models.ForeignKey(InterestGroup, models.DO_NOTHING, related_name='user_ig_link_ig')
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
                                    related_name='user_ig_link_created_by')
     created_at = models.DateTimeField()
