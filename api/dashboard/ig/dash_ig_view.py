@@ -40,7 +40,7 @@ class InterestGroupAPI(APIView):
             created_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
-        DiscordWebhooks.discordWebhook(request.data.get('name'), 'create', 'ig')
+        DiscordWebhooks.discordWebhook(request.data.get('name'), 'create', 'ig', "DISCORD_WEBHOOK_LINK")
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
     # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
@@ -55,7 +55,7 @@ class InterestGroupAPI(APIView):
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
         serializer = InterestGroupSerializer(igData)
-        DiscordWebhooks.discordWebhook(igData.name, 'edit', 'ig', oldName)
+        DiscordWebhooks.discordWebhook(igData.name, 'edit', 'ig', "DISCORD_WEBHOOK_LINK", oldName)
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
@@ -66,7 +66,7 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
         serializer = InterestGroupSerializer(igData)
-        DiscordWebhooks.discordWebhook(igData.name, 'delete', 'ig')
+        DiscordWebhooks.discordWebhook(igData.name, 'delete', 'ig', "DISCORD_WEBHOOK_LINK")
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()

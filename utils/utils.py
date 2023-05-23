@@ -143,9 +143,9 @@ class DiscordWebhooks:
     @staticmethod
     def discordWebhook(*args):
         content = f"{args[2]}<|=|>{args[1]}<|=|>{args[0]}"
-        for arg in args[3:]:
+        for arg in args[4:]:
             content = content + f"<|=|>{arg}"
-        url = config("DISCORD_WEBHOOK_LINK")
+        url = config(args[3])
         data = {
 			# "username": f"{args[3]}",
 			"content": content
