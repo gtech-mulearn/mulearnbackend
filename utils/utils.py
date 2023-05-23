@@ -1,6 +1,7 @@
 import csv
 import datetime
-
+from decouple import config
+import requests
 import pytz
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q
@@ -137,3 +138,16 @@ class _CustomHTTPHandler:
         else:
             ip_addr = req_headers.get("REMOTE_ADDR")
         return ip_addr
+
+class DiscordWebhooks:
+    @staticmethod
+    def discordWebhook(*args):
+        content = f"{args[2]}<|=|>{args[1]}<|=|>{args[0]}"
+        for arg in args[4:]:
+            content = content + f"<|=|>{arg}"
+        url = config(args[3])
+        data = {
+			# "username": f"{args[3]}",
+			"content": content
+		}
+        requests.post(url, json=data)

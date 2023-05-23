@@ -7,9 +7,8 @@ from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
 from .dash_ig_serializer import InterestGroupSerializer
-
 
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]  # for logged in users
@@ -18,9 +17,9 @@ class InterestGroupAPI(APIView):
     # @RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
-                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
-                                                                 'created_at', 'count'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, 
+            ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count']
+        )
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
         # return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
         return CustomResponse(response={
@@ -41,6 +40,7 @@ class InterestGroupAPI(APIView):
             created_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
+        DiscordWebhooks.discordWebhook(request.data.get('name'), 'create', 'ig', "DISCORD_WEBHOOK_LINK")
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
     # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
@@ -49,11 +49,13 @@ class InterestGroupAPI(APIView):
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         igData = InterestGroup.objects.get(id=pk)
+        oldName = igData.name
         igData.name = request.data.get('name')
         igData.updated_by_id = user_id
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
         serializer = InterestGroupSerializer(igData)
+        DiscordWebhooks.discordWebhook(igData.name, 'edit', 'ig', "DISCORD_WEBHOOK_LINK", oldName)
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
@@ -64,6 +66,7 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
         serializer = InterestGroupSerializer(igData)
+        DiscordWebhooks.discordWebhook(igData.name, 'delete', 'ig', "DISCORD_WEBHOOK_LINK")
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
