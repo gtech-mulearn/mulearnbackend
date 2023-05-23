@@ -3,6 +3,7 @@ import uuid
 
 from rest_framework.views import APIView
 
+from api.url_shortener.serializers import ShowShortenUrlsSerializer
 from db.url_shortener import UrlShortener
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
@@ -56,21 +57,13 @@ class ShowShortenUrls(APIView):
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
-
-        shorten_url_list = []
         url_shortener_objects = UrlShortener.objects.all()
 
         if len(url_shortener_objects) == 0:
             return CustomResponse(general_message=['No URL related data available']).get_failure_response()
 
-        for url_shortener_object in url_shortener_objects:
-            long_url = url_shortener_object.long_url
-            short_url = url_shortener_object.short_url
-
-            shorten_url_dict = {'long_url': long_url, 'short_url': short_url}
-            shorten_url_list.append(shorten_url_dict)
-
-        return CustomResponse(response=shorten_url_list).get_success_response()
+        url_shortener_list = ShowShortenUrlsSerializer(url_shortener_objects, many=True).data
+        return CustomResponse(response=url_shortener_list).get_success_response()
 
 
 class DeleteShortenUrl(APIView):

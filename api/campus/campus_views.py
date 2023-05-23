@@ -16,11 +16,12 @@ class StudentDetails(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                             org__org_type=OrganizationType.COLLEGE.value).first()
-
-        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id)
-
-        paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'])
-        serializer = UserOrgSerializer(paginated_queryset.get('queryset'), many=True)
+        user_org_links = UserOrganizationLink.objects.filter(
+            org_id=user_org_link.org_id)
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            user_org_links, request, ['user__first_name'])
+        serializer = UserOrgSerializer(
+            paginated_queryset.get('queryset'), many=True)
 
         return CustomResponse(response={"data": serializer.data,
                                         "pagination": paginated_queryset.get('pagination')}).get_success_response()
@@ -34,7 +35,8 @@ class StudentDetailsCSV(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                             org__org_type=OrganizationType.COLLEGE.value).first()
-        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id)
+        user_org_links = UserOrganizationLink.objects.filter(
+            org_id=user_org_link.org_id)
 
         serializer = UserOrgSerializer(user_org_links, many=True)
         return CommonUtils.generate_csv(serializer.data, 'Campus Details')
