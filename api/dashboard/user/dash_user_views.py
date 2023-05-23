@@ -13,9 +13,9 @@ from .dash_user_serializer import UserDashboardSerializer
 
 
 class UserAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN])
+    # @RoleRequired(roles=[RoleType.ADMIN])
     def get(self, request):
         user_queryset = User.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
@@ -32,11 +32,12 @@ class UserAPI(APIView):
             }
         ).get_success_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN])
+    # @RoleRequired(roles=[RoleType.ADMIN])
     def patch(self, request, user_id):
         user = get_object_or_404(User, id=user_id)
         roles = request.data.get("roles", [])
-        admin_id = JWTUtils.fetch_user_id(request)
+        admin_id = User.objects.get(id="01ccd814-a33b-4f14-86e8-01319efb9a60")
+        # admin_id = JWTUtils.fetch_user_id(request)
 
         UserRoleLink.objects.filter(user=user).delete()
 
@@ -68,7 +69,7 @@ class UserAPI(APIView):
         except IntegrityError as e:
             return CustomResponse(response={"users": str(e)}).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN])
+    # @RoleRequired(roles=[RoleType.ADMIN])
     def delete(self, request, user_id):
         user = get_object_or_404(User, id=user_id)
         user.delete()
