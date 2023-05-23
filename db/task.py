@@ -19,6 +19,30 @@ class Channel(models.Model):
         db_table = 'channel'
 
 
+class InterestGroup(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    name = models.CharField(max_length=75)
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by')
+    created_at = models.DateTimeField()
+
+
+class Level(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    level_order = models.IntegerField()
+    name = models.CharField(max_length=36)
+    karma = models.IntegerField()
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by')
+    created_at = models.DateTimeField()
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by')
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'level'
+
+
 class TaskType(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=75)
@@ -40,11 +64,13 @@ class TaskList(models.Model):
     title = models.CharField(max_length=75)
     description = models.CharField(max_length=200, blank=True, null=True)
     karma = models.IntegerField(blank=True, null=True)
+    usage_count = models.IntegerField(blank=True, null=True)
+    active = models.IntegerField()
+    variable_karma = models.IntegerField(blank=True, null=True)
+    level = models.ForeignKey(Level, on_delete=models.CASCADE, blank=True, null=True)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
     type = models.ForeignKey(TaskType, on_delete=models.CASCADE)
-    active = models.BooleanField()
-    variable_karma = models.BooleanField()
-    usage_count = models.IntegerField(blank=True, null=True)
+    ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='task_list_updated_by')
     updated_at = models.DateTimeField()
