@@ -7,10 +7,10 @@ class Country(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='country_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='country_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='country_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='country_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -21,12 +21,12 @@ class Country(models.Model):
 class State(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    country = models.ForeignKey(Country, models.DO_NOTHING)
+    country = models.ForeignKey(Country, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='state_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='state_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='state_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='state_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -37,12 +37,12 @@ class State(models.Model):
 class Zone(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    state = models.ForeignKey(State, models.DO_NOTHING)
+    state = models.ForeignKey(State, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='zone_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='zone_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='zone_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='zone_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -53,12 +53,12 @@ class Zone(models.Model):
 class District(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    zone = models.ForeignKey(Zone, models.DO_NOTHING)
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='district_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='district_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='district_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='district_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -70,10 +70,10 @@ class OrgAffiliation(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=75)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='org_affiliation_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='org_affiliation_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='org_affiliation_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='org_affiliation_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -87,13 +87,13 @@ class Organization(models.Model):
     code = models.CharField(unique=True, max_length=12)
     org_type = models.CharField(max_length=25)
     affiliation = models.ForeignKey(
-        OrgAffiliation, models.DO_NOTHING, blank=True, null=True)
-    district = models.ForeignKey(District, models.DO_NOTHING)
+        OrgAffiliation, on_delete=models.CASCADE, blank=True, null=True)
+    district = models.ForeignKey(District, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='organization_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='organization_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='organization_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='organization_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -105,10 +105,10 @@ class Department(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=100)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='department_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='department_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='department_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='department_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -118,16 +118,16 @@ class Department(models.Model):
 
 class UserOrganizationLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, models.DO_NOTHING,
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
                              related_name='user_organization_link_user_id')
-    org = models.ForeignKey(Organization, models.DO_NOTHING,
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE,
                             related_name='user_organization_link_org_id')
-    department = models.ForeignKey(Department, models.DO_NOTHING, blank=True, null=True,
+    department = models.ForeignKey(Department, on_delete=models.CASCADE, blank=True, null=True,
                                    related_name='user_organization_link_department_id')
     graduation_year = models.CharField(max_length=10, blank=True, null=True)
     verified = models.IntegerField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='user_organization_link_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='user_organization_link_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
