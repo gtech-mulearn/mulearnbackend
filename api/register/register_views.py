@@ -104,7 +104,8 @@ class CountryAPI(APIView):
 
 class StateAPI(APIView):
 
-    def get(self, request):
+    def post(self, request):
+        print(request.data.get("country"))
         state = State.objects.filter(country_id=request.data.get("country"))
         serializer = StateSerializer(state, many=True)
         return CustomResponse(response={"states": serializer.data,
@@ -113,7 +114,7 @@ class StateAPI(APIView):
 
 class DistrictAPI(APIView):
 
-    def get(self, request):
+    def post(self, request):
         district = District.objects.filter(
             zone__state_id=request.data.get("state"))
         serializer = DistrictSerializer(district, many=True)
@@ -123,8 +124,7 @@ class DistrictAPI(APIView):
 
 class CollegeAPI(APIView):
 
-    def get(self, request):
-        print(request.data.get("district"))
+    def post(self, request):
         org_queryset = Organization.objects.filter(
             Q(org_type=OrganizationType.COLLEGE.value), Q(district_id=request.data.get("district")))
         department_queryset = Department.objects.all()
