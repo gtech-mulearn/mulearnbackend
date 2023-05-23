@@ -31,3 +31,10 @@ class OrganizationType(Enum):
     COLLEGE = 'College'
     COMPANY = 'Company'
     COMMUNITY = 'Community'
+    
+
+class DiscordWebHooks(Enum):
+    INTEREST_GROUP = 'ig'
+    CREATE = 'create'
+    EDIT = 'edit'
+    DELETE = 'delete'
