@@ -14,8 +14,11 @@ from api.register.serializers import (
     OrgSerializer,
     RegisterSerializer,
     UserDetailSerializer,
+    CountrySerializer,
+    DistrictSerializer,
+    StateSerializer,
 )
-from db.organization import Organization, Department
+from db.organization import Country, District, Organization, Department, State
 from db.task import InterestGroup
 from db.user import Role, User, ForgotPassword
 from utils.permission import CustomizePermission, JWTUtils
@@ -85,19 +88,51 @@ class RegisterData(APIView):
 class RoleAPI(APIView):
 
     def get(self, request):
-        roles = [RoleType.STUDENT.value, RoleType.MENTOR.value, RoleType.ENABLER.value]
+        roles = [RoleType.STUDENT.value,
+                 RoleType.MENTOR.value, RoleType.ENABLER.value]
         role_serializer = Role.objects.filter(title__in=roles)
         role_serializer_data = OrgSerializer(role_serializer, many=True).data
         return CustomResponse(response={"roles": role_serializer_data}).get_success_response()
 
 
-class CollegeAPI(APIView):
+class CountryAPI(APIView):
 
     def get(self, request):
-        org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
+        countries = Country.objects.all()
+        serializer = CountrySerializer(countries, many=True)
+        return CustomResponse(response={"countries": serializer.data,
+                                        }).get_success_response()
+
+
+class StateAPI(APIView):
+
+    def post(self, request):
+        print(request.data.get("country"))
+        state = State.objects.filter(country_id=request.data.get("country"))
+        serializer = StateSerializer(state, many=True)
+        return CustomResponse(response={"states": serializer.data,
+                                        }).get_success_response()
+
+
+class DistrictAPI(APIView):
+
+    def post(self, request):
+        district = District.objects.filter(
+            zone__state_id=request.data.get("state"))
+        serializer = DistrictSerializer(district, many=True)
+        return CustomResponse(response={"districts": serializer.data,
+                                        }).get_success_response()
+
+
+class CollegeAPI(APIView):
+
+    def post(self, request):
+        org_queryset = Organization.objects.filter(
+            Q(org_type=OrganizationType.COLLEGE.value), Q(district_id=request.data.get("district")))
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
-        department_serializer_data = OrgSerializer(department_queryset, many=True).data
+        department_serializer_data = OrgSerializer(
+            department_queryset, many=True).data
         return CustomResponse(response={"colleges": college_serializer_data,
                                         "departments": department_serializer_data}).get_success_response()
 
@@ -105,16 +140,20 @@ class CollegeAPI(APIView):
 class CompanyAPI(APIView):
 
     def get(self, request):
-        company_queryset = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
-        company_serializer_data = OrgSerializer(company_queryset, many=True).data
+        company_queryset = Organization.objects.filter(
+            org_type=OrganizationType.COMPANY.value)
+        company_serializer_data = OrgSerializer(
+            company_queryset, many=True).data
         return CustomResponse(response={"companies": company_serializer_data}).get_success_response()
 
 
 class CommunityAPI(APIView):
 
     def get(self, request):
-        community_queryset = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
-        community_serializer_data = OrgSerializer(community_queryset, many=True).data
+        community_queryset = Organization.objects.filter(
+            org_type=OrganizationType.COMMUNITY.value)
+        community_serializer_data = OrgSerializer(
+            community_queryset, many=True).data
         return CustomResponse(response={"communities": community_serializer_data}).get_success_response()
 
 
@@ -122,14 +161,16 @@ class AreaOfInterestAPI(APIView):
 
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
-        aoi_serializer_data = AreaOfInterestAPISerializer(aoi_queryset, many=True).data
+        aoi_serializer_data = AreaOfInterestAPISerializer(
+            aoi_queryset, many=True).data
         return CustomResponse(response={"aois": aoi_serializer_data}).get_success_response()
 
 
 class ForgotPasswordAPI(APIView):
     def post(self, request):
         email_muid = request.data.get('emailOrMuid')
-        user = User.objects.filter(Q(mu_id=email_muid) | Q(email=email_muid)).first()
+        user = User.objects.filter(
+            Q(mu_id=email_muid) | Q(email=email_muid)).first()
         if user:
             created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
@@ -140,7 +181,8 @@ class ForgotPasswordAPI(APIView):
             to = [user.email]
             domain = decouple.config("FR_DOMAIN_NAME")
             message = f"Reset your password with this link {domain}/reset-password?token={forget_user.id}"
-            send_mail(subject, message, email_host_user, to, fail_silently=False)
+            send_mail(subject, message, email_host_user,
+                      to, fail_silently=False)
             return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
         else:
             return CustomResponse(general_message="User not exist").get_failure_response()
