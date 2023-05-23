@@ -27,11 +27,11 @@ class CountryData(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         country = Country.objects.filter(name=request.data.get('name')).first()
         if country:
-            return CustomResponse(response={"response": "Country already exists"}).get_failure_response()
+            return CustomResponse(general_message=["Country already exists"]).get_failure_response()
 
         created_at = datetime.now()
         updated_at = datetime.now()
@@ -49,13 +49,13 @@ class CountryData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         updated_at = datetime.now()
 
@@ -70,13 +70,13 @@ class CountryData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request):
         country = Country.objects.filter(name=request.data.get('name')).first()
         if not country:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
 
         country.delete()
         return CustomResponse(response={"response": "Country deleted successfully"}).get_success_response()
@@ -89,7 +89,7 @@ class StateData(APIView):
     def get(self, request, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         states = State.objects.filter(country=country_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(states, request, ['id', 'name'])
@@ -104,16 +104,16 @@ class StateData(APIView):
         country_obj = Country.objects.filter(name=country).first()
 
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
 
         country_id = country_obj.id
 
         state = State.objects.filter(name=request.data.get('name'), country=country_id).first()
         if state:
-            return CustomResponse(response={"response": "State already exists"}).get_failure_response()
+            return CustomResponse(general_message=["State already exists"]).get_failure_response()
 
         created_at = datetime.now()
         updated_at = datetime.now()
@@ -134,7 +134,7 @@ class StateData(APIView):
             print(serializer.validated_data)
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, country):
@@ -142,39 +142,36 @@ class StateData(APIView):
 
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
 
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         state = State.objects.filter(name=request.data.get('old_name'), country=country_id).first()
 
         if request.data.get('country'):
             country_obj = Country.objects.filter(name=request.data.get("country")).first()
             if not country_obj:
-                return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+                return CustomResponse(general_message=["Country not found"]).get_failure_response()
             if request.data.get('new_name'):
                 state_exist = State.objects.filter(name=request.data.get('new_name'), country=country_obj.id).first()
                 if state_exist:
-                    return CustomResponse(response=
-                    {
-                        "response": f"State already exists for {request.data.get('country')}"}).get_failure_response()
+                    return CustomResponse(general_message=
+                        [f"State already exists for {request.data.get('country')}"]).get_failure_response()
                 request.data['name'] = request.data.get('new_name')
             else:
                 state_exist = State.objects.filter(name=request.data.get('old_name'), country=country_obj.id).first()
                 if state_exist:
-                    return CustomResponse(response=
-                    {
-                        "response": f"State already exists for {request.data.get('country')}"}).get_failure_response()
+                    return CustomResponse(general_message=
+                        [f"State already exists for {request.data.get('country')}"]).get_failure_response()
             country_id = country_obj.id
             request.data['country'] = country_id
 
         if request.data.get('new_name') and not request.data.get('country'):
             state_exist = State.objects.filter(name=request.data.get('new_name'), country=country_id).first()
             if state_exist:
-                return CustomResponse(response=
-                                      {"response": f"State already exists for {country}"}).get_failure_response()
+                return CustomResponse(general_message=[f"State already exists for {country}"]).get_failure_response()
             request.data['name'] = request.data.get('new_name')
 
         request.data['updated_by'] = user_id
@@ -184,17 +181,17 @@ class StateData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state = State.objects.filter(name=request.data.get('name'), country=country_id).first()
         if not state:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
 
         state.delete()
         return CustomResponse(response={"response": "State deleted successfully"}).get_success_response()
@@ -207,11 +204,11 @@ class ZoneData(APIView):
     def get(self, request, country, state):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
 
         state_id = state_obj.id
         zones = Zone.objects.filter(state=state_id)
@@ -226,19 +223,19 @@ class ZoneData(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
 
         state_id = state_obj.id
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         zone = Zone.objects.filter(name=request.data.get('name'), state=state_id).first()
         if zone:
-            return CustomResponse(response={"response": "Zone already exists"}).get_failure_response()
+            return CustomResponse(general_message=["Zone already exists"]).get_failure_response()
 
         created_at = datetime.now()
         updated_at = datetime.now()
@@ -257,51 +254,49 @@ class ZoneData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, state, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
 
         state_id = state_obj.id
 
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         zone = Zone.objects.filter(name=request.data.get('old_name'), state=state_id).first()
         if not zone:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
 
         if request.data.get('state'):
             state_obj = State.objects.filter(name=request.data.get("state"), country=country_id).first()
             if not state_obj:
-                return CustomResponse(response={"response": "State not found"}).get_failure_response()
+                return CustomResponse(general_message=["State not found"]).get_failure_response()
             if request.data.get('new_name'):
                 zone_exists = Zone.objects.filter(name=request.data.get('new_name'), state=state_obj.id).first()
                 if zone_exists:
-                    return CustomResponse(response=
-                    {
-                        "response": f"Zone already exist for {request.data.get('state')}"}).get_failure_response()
+                    return CustomResponse(general_message=
+                    [f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
                 request.data['name'] = request.data.get('new_name')
             else:
                 zone_exists = Zone.objects.filter(name=request.data.get('old_name'), state=state_obj.id).first()
                 if zone_exists:
-                    return CustomResponse(response=
-                    {
-                        "response": f"Zone already exist for {request.data.get('state')}"}).get_failure_response()
+                    return CustomResponse(general_message=
+                            [f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
             request.data['state'] = state_obj.id
 
         if request.data.get('new_name') and not request.data.get('state'):
             zone_exists = Zone.objects.filter(name=request.data.get('new_name'), state=state_id).first()
             if zone_exists:
-                return CustomResponse(response={"response": f"Zone already exists for {state}"}).get_failure_response()
+                return CustomResponse(general_message=[f"Zone already exists for {state}"]).get_failure_response()
             request.data['name'] = request.data.get('new_name')
 
         request.data['updated_by'] = user_id
@@ -311,21 +306,21 @@ class ZoneData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, state, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         state_id = state_obj.id
         zone = Zone.objects.filter(name=request.data.get('name'), state=state_id).first()
         if not zone:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
 
         zone.delete()
         return CustomResponse(response={"response": "Zone deleted successfully"}).get_success_response()
@@ -338,15 +333,15 @@ class DistrictData(APIView):
     def get(self, request, country, state, zone):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
         zone_id = zone_obj.id
 
         districts = District.objects.filter(zone=zone_id)
@@ -358,26 +353,26 @@ class DistrictData(APIView):
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
         zone_id = zone_obj.id
         if not zone_id:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
 
         district = District.objects.filter(name=request.data.get('name'), zone=zone_id).first()
         if district:
-            return CustomResponse(response={"response": "District already exists"}).get_failure_response()
+            return CustomResponse(general_message=["District already exists"]).get_failure_response()
 
         created_at = datetime.now()
         updated_at = datetime.now()
@@ -396,58 +391,54 @@ class DistrictData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
 
         if not user_id:
-            return CustomResponse(response={"response": "User not found"}).get_failure_response()
+            return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
         zone_id = zone_obj.id
 
         district = District.objects.filter(name=request.data.get('old_name'), zone=zone_id).first()
         if not district:
-            return CustomResponse(response={"response": "District not found"}).get_failure_response()
+            return CustomResponse(general_message=["District not found"]).get_failure_response()
 
         if request.data.get('zone'):
             zone_obj = Zone.objects.filter(name=request.data.get("zone"), state=state_id).first()
             if not zone_obj:
-                return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+                return CustomResponse(general_message=["Zone not found"]).get_failure_response()
             if request.data.get('new_name'):
                 district_exist = District.objects.filter(name=request.data.get('new_name'), zone=zone_obj.id).first()
                 if district_exist:
-                    return CustomResponse(response=
-                    {
-                        "response": f"District already exists for {request.data.get('zone')}"}).get_failure_response()
+                    return CustomResponse(general_message=
+                            [f"District already exists for {request.data.get('zone')}"]).get_failure_response()
                 request.data['name'] = request.data.get('new_name')
             else:
                 district_exist = District.objects.filter(name=request.data.get('old_name'), zone=zone_obj.id).first()
                 if district_exist:
-                    return CustomResponse(response=
-                    {
-                        "response": f"District already exists for {request.data.get('zone')}"}).get_failure_response()
+                    return CustomResponse(general_message=
+                    [f"District already exists for {request.data.get('zone')}"]).get_failure_response()
 
             request.data['zone'] = zone_obj.id
 
         if request.data.get('new_name') and not request.data.get('zone'):
             district_exist = District.objects.filter(name=request.data.get('new_name'), zone=zone_id).first()
             if district_exist:
-                return CustomResponse(response=
-                {
-                    "response": f"District already exists for {zone}"}).get_failure_response()
+                return CustomResponse(general_message=[f"District already exists for {zone}"]).get_failure_response()
             request.data['name'] = request.data.get('new_name')
 
         request.data['updated_by'] = user_id
@@ -457,25 +448,25 @@ class DistrictData(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, country, state, zone):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
-            return CustomResponse(response={"response": "Country not found"}).get_failure_response()
+            return CustomResponse(general_message=["Country not found"]).get_failure_response()
         country_id = country_obj.id
         state_obj = State.objects.filter(name=state, country=country_id).first()
         if not state_obj:
-            return CustomResponse(response={"response": "State not found"}).get_failure_response()
+            return CustomResponse(general_message=["State not found"]).get_failure_response()
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(response={"response": "Zone not found"}).get_failure_response()
+            return CustomResponse(general_message=["Zone not found"]).get_failure_response()
         zone_id = zone_obj.id
         district = District.objects.filter(name=request.data.get('name'), zone=zone_id).first()
         if not district:
-            return CustomResponse(response={"response": "District not found"}).get_failure_response()
+            return CustomResponse(general_message=["District not found"]).get_failure_response()
 
         district.delete()
         return CustomResponse(response={"response": "District deleted successfully"}).get_success_response()

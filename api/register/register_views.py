@@ -5,6 +5,7 @@ import decouple
 import requests
 from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
+from django.db.models import Q
 from rest_framework.views import APIView
 
 from api.register.serializers import (
@@ -22,7 +23,6 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 from .serializers import UserSerializer
-from django.db.models import Q
 
 
 class LearningCircleUserView(APIView):
@@ -55,15 +55,18 @@ class RegisterData(APIView):
             user_obj, password = create_user.save()
             auth_domain = decouple.config("AUTH_DOMAIN")
             response = requests.post(
-                f"{auth_domain}/api/v1/auth/user-authentication/", data={"emailOrMuid": user_obj.mu_id, "password": password})
+                f"{auth_domain}/api/v1/auth/user-authentication/",
+                data={"emailOrMuid": user_obj.mu_id, "password": password})
             response = response.json()
             if response.get("statusCode") == 200:
                 res_data = response.get("response")
                 access_token = res_data.get("accessToken")
                 refresh_token = res_data.get("refreshToken")
+
                 send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
                           decouple.config("EMAIL_HOST_USER"),
                           [user_obj.email], fail_silently=False)
+
                 return CustomResponse(
                     response={
                         "data": UserDetailSerializer(user_obj, many=False).data,
@@ -80,8 +83,7 @@ class RegisterData(APIView):
 class RoleAPI(APIView):
 
     def get(self, request):
-        roles = [RoleType.STUDENT.value,
-                 RoleType.MENTOR.value, RoleType.ENABLER.value]
+        roles = [RoleType.STUDENT.value, RoleType.MENTOR.value, RoleType.ENABLER.value]
         role_serializer = Role.objects.filter(title__in=roles)
         role_serializer_data = OrgSerializer(role_serializer, many=True).data
         return CustomResponse(response={"roles": role_serializer_data}).get_success_response()
@@ -93,31 +95,24 @@ class CollegeAPI(APIView):
         org_queryset = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         department_queryset = Department.objects.all()
         college_serializer_data = OrgSerializer(org_queryset, many=True).data
-        department_serializer_data = OrgSerializer(
-            department_queryset, many=True).data
-        return CustomResponse(
-            response={"colleges": college_serializer_data,
-                      "departments": department_serializer_data}
-        ).get_success_response()
+        department_serializer_data = OrgSerializer(department_queryset, many=True).data
+        return CustomResponse(response={"colleges": college_serializer_data,
+                                        "departments": department_serializer_data}).get_success_response()
 
 
 class CompanyAPI(APIView):
 
     def get(self, request):
-        company_queryset = Organization.objects.filter(
-            org_type=OrganizationType.COMPANY.value)
-        company_serializer_data = OrgSerializer(
-            company_queryset, many=True).data
+        company_queryset = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
+        company_serializer_data = OrgSerializer(company_queryset, many=True).data
         return CustomResponse(response={"companies": company_serializer_data}).get_success_response()
 
 
 class CommunityAPI(APIView):
 
     def get(self, request):
-        community_queryset = Organization.objects.filter(
-            org_type=OrganizationType.COMMUNITY.value)
-        community_serializer_data = OrgSerializer(
-            community_queryset, many=True).data
+        community_queryset = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
+        community_serializer_data = OrgSerializer(community_queryset, many=True).data
         return CustomResponse(response={"communities": community_serializer_data}).get_success_response()
 
 
@@ -125,8 +120,7 @@ class AreaOfInterestAPI(APIView):
 
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
-        aoi_serializer_data = AreaOfInterestAPISerializer(
-            aoi_queryset, many=True).data
+        aoi_serializer_data = AreaOfInterestAPISerializer(aoi_queryset, many=True).data
         return CustomResponse(response={"aois": aoi_serializer_data}).get_success_response()
 
 
@@ -137,16 +131,14 @@ class ForgotPasswordAPI(APIView):
         if user:
             created_at = DateTimeUtils.get_current_utc_time()
             expiry = created_at + timedelta(seconds=900)  # 15 minutes
-            forget_user = ForgotPassword.objects.create(
-                id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
-            )
+            forget_user = ForgotPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry,
+                                                        created_at=created_at)
             email_host_user = decouple.config("EMAIL_HOST_USER")
             subject = "Password Reset Requested"
             to = [user.email]
             domain = decouple.config("FR_DOMAIN_NAME")
             message = f"Reset your password with this link {domain}/reset-password?token={forget_user.id}"
-            send_mail(subject, message, email_host_user,
-                      to, fail_silently=False)
+            send_mail(subject, message, email_host_user, to, fail_silently=False)
             return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
         else:
             return CustomResponse(general_message="User not exist").get_failure_response()
@@ -192,10 +184,8 @@ class ResetPasswordConfirmAPI(APIView):
 class UserEmailVerification(APIView):
 
     def post(self, request):
-
         user_email = request.data.get('email')
         user = User.objects.filter(email=user_email).first()
-
         if user:
             return CustomResponse(general_message="This email already exists",
                                   response={"value": True}).get_success_response()
@@ -212,7 +202,7 @@ class UserInfo(APIView):
         user = User.objects.filter(mu_id=user_muid).first()
 
         if user is None:
-            return CustomResponse(general_message='no user data available').get_failure_response()
+            return CustomResponse(general_message='No user data available').get_failure_response()
 
         response = UserSerializer(user, many=False).data
         return CustomResponse(response=response).get_success_response()

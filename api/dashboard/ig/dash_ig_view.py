@@ -70,11 +70,10 @@ class InterestGroupAPI(APIView):
 
 
 class InterestGroupCSV(APIView):
+    authentication_classes = [CustomizePermission]
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
-                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
-                                                                 'created_at', 'count'])
-        ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
+        ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
         return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
