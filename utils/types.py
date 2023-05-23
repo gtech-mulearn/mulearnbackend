@@ -33,8 +33,12 @@ class OrganizationType(Enum):
     COMMUNITY = 'Community'
     
 
-class DiscordWebHooks(Enum):
-    INTEREST_GROUP = 'ig'
+class WebHookActions(Enum):
+    SEPERATOR = '<|=|>'
     CREATE = 'create'
     EDIT = 'edit'
     DELETE = 'delete'
+
+class WebHookCategory(Enum):
+    INTEREST_GROUP = 'ig'
+    
