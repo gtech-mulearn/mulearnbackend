@@ -5,7 +5,7 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import Department, Organization, UserOrganizationLink
+from db.organization import Country, State, District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink
 from db.user import Role, User, UserRoleLink
 from utils.types import RoleType
@@ -22,6 +22,24 @@ class RoleSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
         fields = ["id", "title"]
+
+
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ["id", "name"]
+
+
+class StateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = State
+        fields = ["id", "name"]
+
+
+class DistrictSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = District
+        fields = ["id", "name"]
 
 
 class OrgSerializer(serializers.ModelSerializer):
@@ -70,7 +88,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         if validated_data["last_name"] is None:
             full_name = validated_data["first_name"]
         else:
-            full_name = validated_data["first_name"] + validated_data["last_name"]
+            full_name = validated_data["first_name"] + \
+                validated_data["last_name"]
         full_name = full_name.replace(" ", "").lower()[:85]
         mu_id = full_name + "@mulearn"
         counter = 0

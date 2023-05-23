@@ -1,6 +1,9 @@
 from django.urls import path
 
 from .register_views import (
+    CountryAPI,
+    StateAPI,
+    DistrictAPI,
     LearningCircleUserView,
     RegisterData,
     CollegeAPI,
@@ -19,8 +22,10 @@ from . import register_views
 
 urlpatterns = [
     path("", RegisterData.as_view()),
-    # path('register/country/list', CountryAPI.as_view()),
     path("role/list/", RoleAPI.as_view()),
+    path("country/list/", CountryAPI.as_view()),
+    path("state/list/", StateAPI.as_view()),
+    path("district/list/", DistrictAPI.as_view()),
     path("college/list/", CollegeAPI.as_view()),
     path("company/list/", CompanyAPI.as_view()),
     path("community/list/", CommunityAPI.as_view()),

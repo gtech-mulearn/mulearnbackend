@@ -141,13 +141,20 @@ class _CustomHTTPHandler:
 
 class DiscordWebhooks:
     @staticmethod
-    def discordWebhook(*args):
-        content = f"{args[2]}<|=|>{args[1]}<|=|>{args[0]}"
-        for arg in args[4:]:
-            content = content + f"<|=|>{arg}"
-        url = config(args[3])
+    # for example refer api/dashboard/ig/dash_ig_view.py
+    def channelsAndCategory(category, action, *values) -> str:
+        """
+        Modify channels and category in Discord
+		Args:
+        category(str): Category of webhook
+        action(str): action of webhook
+        values(str): values of webhook
+		"""
+        content = f"{category}<|=|>{action}"
+        for value in values:
+            content = content + f"<|=|>{value}"
+        url = config("DISCORD_WEBHOOK_LINK")
         data = {
-			# "username": f"{args[3]}",
 			"content": content
 		}
         requests.post(url, json=data)

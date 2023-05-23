@@ -31,3 +31,14 @@ class OrganizationType(Enum):
     COLLEGE = 'College'
     COMPANY = 'Company'
     COMMUNITY = 'Community'
+    
+
+class WebHookActions(Enum):
+    SEPERATOR = '<|=|>'
+    CREATE = 'create'
+    EDIT = 'edit'
+    DELETE = 'delete'
+
+class WebHookCategory(Enum):
+    INTEREST_GROUP = 'ig'
+    
