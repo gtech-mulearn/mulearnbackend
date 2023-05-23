@@ -51,9 +51,7 @@ class CustomResponse:
             status=status.HTTP_200_OK,
         )
 
-    def get_failure_response(
-            self, status_code: int = 400,
-            http_status_code: int = status.HTTP_400_BAD_REQUEST) -> Response:
+    def get_failure_response(self, status_code: int = 400,http_status_code: int = status.HTTP_400_BAD_REQUEST) -> Response:
         """Returns a failure response.
 
         Args:
@@ -74,3 +72,16 @@ class CustomResponse:
             },
             status=http_status_code,
         )
+
+    def paginated_response(self):
+        return Response(
+            data={
+                "hasError": False,
+                "statusCode": status.HTTP_200_OK,
+                "message": self.message,
+                "response": self.response,
+            },
+            status=status.HTTP_200_OK,
+        )
+        pass
+
