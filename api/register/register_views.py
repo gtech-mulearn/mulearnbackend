@@ -49,11 +49,13 @@ class RegisterData(APIView):
 
     def post(self, request):
         data = request.data
-        create_user = RegisterSerializer(
-            data=data, context={"request": request})
+        create_user = RegisterSerializer(data=data, context={"request": request})
+
         if create_user.is_valid():
             user_obj, password = create_user.save()
+
             auth_domain = decouple.config("AUTH_DOMAIN")
+
             response = requests.post(
                 f"{auth_domain}/api/v1/auth/user-authentication/",
                 data={"emailOrMuid": user_obj.mu_id, "password": password})
