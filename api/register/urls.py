@@ -18,6 +18,8 @@ from .register_views import (
     UserInfo,
 )
 
+from . import register_views
+
 urlpatterns = [
     path("", RegisterData.as_view()),
     path("role/list/", RoleAPI.as_view()),
@@ -34,4 +36,7 @@ urlpatterns = [
     path("lc/user-validation/", LearningCircleUserView.as_view()),
     path('email-verification/', UserEmailVerification.as_view()),
     path('info/', UserInfo.as_view()),
+    path('user-country/', register_views.UserCountryAPI.as_view()),
+    path('user-state/', register_views.UserStateAPI.as_view()),
+    path('user-zone/', register_views.UserZoneAPI.as_view())
 ]

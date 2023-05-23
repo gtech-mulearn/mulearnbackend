@@ -9,6 +9,7 @@ from db.organization import Country, State, District, Department, Organization, 
 from db.task import InterestGroup, TotalKarma, UserIgLink
 from db.user import Role, User, UserRoleLink
 from utils.types import RoleType
+from db.organization import Country, State, Zone
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
@@ -153,3 +154,24 @@ class UserSerializer(serializers.ModelSerializer):
             roles.append(user_role_link.role.title)
 
         return roles
+
+
+class UserCountrySerializer(serializers.ModelSerializer):
+    countryName = serializers.CharField(source='name')
+    class Meta:
+        model = Country
+        fields = ["countryName"]
+
+
+class UserStateSerializer(serializers.ModelSerializer):
+    zoneName = serializers.CharField(source='name')
+    class Meta:
+        model = State
+        fields = ["zoneName"]
+
+
+class UserZoneSerializer(serializers.ModelSerializer):
+    zoneName = serializers.CharField(source='name')
+    class Meta:
+        model = Zone
+        fields = ["zoneName"]
