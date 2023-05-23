@@ -12,12 +12,8 @@ class CustomResponse:
         response (Dict[str, Any]): A dictionary of response data.
     """
 
-    def __init__(
-            self,
-            message: Dict[str, Any] = {},
-            general_message: List[str] = [],
-            response: Dict[str, Any] = {},
-    ) -> None:
+    def __init__(self, message: Dict[str, Any] = {}, general_message: List[str] = [],
+                 response: Dict[str, Any] = {}) -> None:
         """Initializes the CustomResponse object.
 
         Args:
@@ -51,7 +47,8 @@ class CustomResponse:
             status=status.HTTP_200_OK,
         )
 
-    def get_failure_response(self, status_code: int = 400,http_status_code: int = status.HTTP_400_BAD_REQUEST) -> Response:
+    def get_failure_response(self, status_code: int = 400,
+                             http_status_code: int = status.HTTP_400_BAD_REQUEST) -> Response:
         """Returns a failure response.
 
         Args:
@@ -73,7 +70,20 @@ class CustomResponse:
             status=http_status_code,
         )
 
-    def paginated_response(self):
+
+    def paginated_response(self, data: dict, pagination: dict) -> Response:
+        """
+        Generates a paginated response.
+
+        Args:
+            data (dict): The data to be included in the response.
+            pagination (dict): The pagination details.
+
+        Returns:
+            Response: The generated paginated response.
+
+        """
+        self.response.update({'data': data, 'pagination': pagination})
         return Response(
             data={
                 "hasError": False,
@@ -83,5 +93,3 @@ class CustomResponse:
             },
             status=status.HTTP_200_OK,
         )
-        pass
-
