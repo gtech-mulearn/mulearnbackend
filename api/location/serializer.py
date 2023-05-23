@@ -24,3 +24,24 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ["id", "name", "zone", "updated_at", "created_at", "updated_by", "created_by"]
+
+
+class UserCountrySerializer(serializers.ModelSerializer):
+    countryName = serializers.CharField(source='name')
+    class Meta:
+        model = Country
+        fields = ["countryName"]
+
+
+class UserStateSerializer(serializers.ModelSerializer):
+    zoneName = serializers.CharField(source='name')
+    class Meta:
+        model = State
+        fields = ["zoneName"]
+
+
+class UserZoneSerializer(serializers.ModelSerializer):
+    zoneName = serializers.CharField(source='name')
+    class Meta:
+        model = Zone
+        fields = ["zoneName"]

@@ -7,4 +7,7 @@ urlpatterns = [
     path('<str:country>/states', location_views.StateData.as_view()),
     path('<str:country>/<str:state>/zone', location_views.ZoneData.as_view()),
     path('<str:country>/<str:state>/<str:zone>/district', location_views.DistrictData.as_view()),
+    path('user-country/', location_views.UserCountryAPI.as_view()),
+    path('user-state/', location_views.UserStateAPI.as_view()),
+    path('user-zone/', location_views.UserZoneAPI.as_view())
 ]

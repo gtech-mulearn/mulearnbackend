@@ -8,7 +8,8 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from .serializer import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
+from .serializer import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer, UserCountrySerializer, \
+    UserStateSerializer
 
 
 class CountryData(APIView):
@@ -470,3 +471,51 @@ class DistrictData(APIView):
 
         district.delete()
         return CustomResponse(response={"response": "District deleted successfully"}).get_success_response()
+
+
+class UserCountryAPI(APIView):
+
+    def get(self, request):
+
+        country = Country.objects.all()
+        if country is None:
+            return CustomResponse(general_message="No data available").get_success_response()
+        country_serializer = UserCountrySerializer(country, many=True).data
+        return CustomResponse(response=country_serializer).get_success_response()
+
+
+class UserStateAPI(APIView):
+
+    def get(self, request):
+
+        country_name = request.data.get('country')
+
+        country_object = Country.objects.filter(name=country_name).first()
+        if country_object is None:
+            return CustomResponse(general_message='No country data available').get_success_response()
+
+        state_object = State.objects.filter(country_id=country_object).all()
+        if len(state_object) == 0:
+            return CustomResponse(general_message='No state data available for given country').get_success_response()
+
+        state_serializer = UserStateSerializer(state_object, many=True).data
+        return CustomResponse(response=state_serializer).get_success_response()
+
+
+class UserZoneAPI(APIView):
+
+    def get(self, request):
+
+        state_name = request.data.get('state')
+
+        state_object = State.objects.filter(name=state_name).first()
+        if state_object is None:
+            return CustomResponse(general_message='No state data available').get_success_response()
+
+        zone_object = Zone.objects.filter(state_id=state_object).all()
+        if len(zone_object) == 0:
+            return CustomResponse(general_message='No zone data available for given country').get_success_response()
+
+        zone_serializer = UserStateSerializer(zone_object, many=True).data
+        return CustomResponse(response=zone_serializer).get_success_response()
+
