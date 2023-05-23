@@ -1,7 +1,4 @@
 import uuid
-import requests
-import decouple
-from decouple import config
 
 from rest_framework.views import APIView
 
@@ -10,16 +7,8 @@ from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
 from .dash_ig_serializer import InterestGroupSerializer
-
-def discordWebhook(action, name):
-	url = config("DISCORD_WEBHOOK_LINK")
-	data = {
-		"username": "InterestGroup",
-		"content": f"ig<|=|>{action}<|=|>{name}"
-	}
-	requests.post(url, json=data)
 
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]  # for logged in users
@@ -51,7 +40,7 @@ class InterestGroupAPI(APIView):
             created_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
-        discordWebhook('create', request.data.get('name'))
+        DiscordWebhooks.discordWebhook(request.data.get('name'), 'create', 'ig')
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
     # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
@@ -66,7 +55,7 @@ class InterestGroupAPI(APIView):
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
         serializer = InterestGroupSerializer(igData)
-        discordWebhook('edit', f"{igData.name}<|=|>{oldName}")
+        DiscordWebhooks.discordWebhook(igData.name, 'edit', 'ig', oldName)
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
@@ -77,7 +66,7 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
         serializer = InterestGroupSerializer(igData)
-        discordWebhook('delete', igData.name)
+        DiscordWebhooks.discordWebhook(igData.name, 'delete', 'ig')
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
