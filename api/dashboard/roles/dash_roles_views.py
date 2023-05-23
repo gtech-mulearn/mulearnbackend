@@ -14,6 +14,7 @@ from .dash_roles_serializer import RoleDashboardSerializer
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         roles_queryset = Role.objects.all()
         queryset = CommonUtils.get_paginated_queryset(roles_queryset, request, ["id", "title"])
