@@ -6,7 +6,7 @@ from db.task import InterestGroup
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import RoleType, DiscordWebHooks
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
 from .dash_ig_serializer import InterestGroupSerializer
 
@@ -39,7 +39,12 @@ class InterestGroupAPI(APIView):
             created_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
-        DiscordWebhooks.discordWebhook(request.data.get('name'), 'create', 'ig', "DISCORD_WEBHOOK_LINK")
+        DiscordWebhooks.channelsAndCategory(
+            request.data.get('name'),
+            DiscordWebHooks.CREATE.value,
+            DiscordWebHooks.INTEREST_GROUP.value,
+            "DISCORD_WEBHOOK_LINK"
+        )
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
     # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
@@ -54,7 +59,13 @@ class InterestGroupAPI(APIView):
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
         serializer = InterestGroupSerializer(igData)
-        DiscordWebhooks.discordWebhook(igData.name, 'edit', 'ig', "DISCORD_WEBHOOK_LINK", oldName)
+        DiscordWebhooks.channelsAndCategory(
+            igData.name,
+            DiscordWebHooks.EDIT.value, 
+            DiscordWebHooks.INTEREST_GROUP.value, 
+            "DISCORD_WEBHOOK_LINK", 
+            oldName
+        )
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
@@ -65,7 +76,12 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
         serializer = InterestGroupSerializer(igData)
-        DiscordWebhooks.discordWebhook(igData.name, 'delete', 'ig', "DISCORD_WEBHOOK_LINK")
+        DiscordWebhooks.channelsAndCategory(
+            igData.name,
+            DiscordWebHooks.DELETE.value,
+            DiscordWebHooks.INTEREST_GROUP.value,
+            "DISCORD_WEBHOOK_LINK"
+        )
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
