@@ -22,9 +22,9 @@ class Channel(models.Model):
 class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    updated_by = models.ForeignKey('User', models.DO_NOTHING, db_column='updated_by')
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey('User', models.DO_NOTHING, db_column='created_by')
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by')
     created_at = models.DateTimeField()
 
 
@@ -33,9 +33,9 @@ class Level(models.Model):
     level_order = models.IntegerField()
     name = models.CharField(max_length=36)
     karma = models.IntegerField()
-    created_by = models.ForeignKey('User', models.DO_NOTHING, db_column='created_by')
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by')
     created_at = models.DateTimeField()
-    updated_by = models.ForeignKey('User', models.DO_NOTHING, db_column='updated_by')
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by')
     updated_at = models.DateTimeField()
 
     class Meta:
@@ -67,10 +67,10 @@ class TaskList(models.Model):
     usage_count = models.IntegerField(blank=True, null=True)
     active = models.IntegerField()
     variable_karma = models.IntegerField(blank=True, null=True)
-    level = models.ForeignKey(Level, models.DO_NOTHING, blank=True, null=True)
+    level = models.ForeignKey(Level, on_delete=models.CASCADE, blank=True, null=True)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
     type = models.ForeignKey(TaskType, on_delete=models.CASCADE)
-    ig = models.ForeignKey(InterestGroup, models.DO_NOTHING, blank=True, null=True)
+    ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='task_list_updated_by')
     updated_at = models.DateTimeField()
