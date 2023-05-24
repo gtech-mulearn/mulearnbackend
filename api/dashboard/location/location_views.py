@@ -94,7 +94,8 @@ class StateData(APIView):
         states = State.objects.filter(country=country_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(states, request, ['id', 'name'])
 
-        serializer = StateSerializer(paginated_queryset, many=True)
+        serializer = StateSerializer(paginated_queryset.get('queryset'), many=True)
+        print(serializer.data)
         return CustomResponse(response={'states': serializer.data,
                                         'pagination': paginated_queryset.get("pagination")}).get_success_response()
 
@@ -214,7 +215,7 @@ class ZoneData(APIView):
         zones = Zone.objects.filter(state=state_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(zones, request, ['id', 'name'])
 
-        serializer = ZoneSerializer(paginated_queryset, many=True)
+        serializer = ZoneSerializer(paginated_queryset.get('queryset'), many=True)
         return CustomResponse(response={"zones": serializer.data,
                                         "pagination": paginated_queryset.get("pagination")}).get_success_response()
 
@@ -346,7 +347,7 @@ class DistrictData(APIView):
 
         districts = District.objects.filter(zone=zone_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,['id', 'name'])
-        serializer = DistrictSerializer(paginated_queryset, many=True)
+        serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
         return CustomResponse(response={"districts": serializer.data,"pagination": paginated_queryset.get("pagination")}).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
