@@ -11,7 +11,7 @@ from utils.utils import CommonUtils
 from .serializer import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
 
 
-class CountryData(APIView):
+class CountryDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -82,7 +82,7 @@ class CountryData(APIView):
         return CustomResponse(response={"response": "Country deleted successfully"}).get_success_response()
 
 
-class StateData(APIView):
+class StateDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -198,7 +198,7 @@ class StateData(APIView):
         return CustomResponse(response={"response": "State deleted successfully"}).get_success_response()
 
 
-class ZoneData(APIView):
+class ZoneDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -327,7 +327,7 @@ class ZoneData(APIView):
         return CustomResponse(response={"response": "Zone deleted successfully"}).get_success_response()
 
 
-class DistrictData(APIView):
+class DistrictDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
