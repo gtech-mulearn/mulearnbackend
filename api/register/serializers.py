@@ -157,21 +157,40 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class UserCountrySerializer(serializers.ModelSerializer):
+    countryId = serializers.CharField(source='id')
     countryName = serializers.CharField(source='name')
     class Meta:
         model = Country
-        fields = ["countryName"]
+        fields = ["countryId", "countryName"]
 
 
 class UserStateSerializer(serializers.ModelSerializer):
-    zoneName = serializers.CharField(source='name')
+    stateId = serializers.CharField(source='id')
+    stateName = serializers.CharField(source='name')
     class Meta:
         model = State
-        fields = ["zoneName"]
+        fields = ["stateId", "stateName"]
 
 
 class UserZoneSerializer(serializers.ModelSerializer):
+    zoneId = serializers.CharField(source='id')
     zoneName = serializers.CharField(source='name')
     class Meta:
         model = Zone
-        fields = ["zoneName"]
+        fields = ["zoneId", "zoneName"]
+
+
+class UserDistrictSerializer(serializers.ModelSerializer):
+    districtId = serializers.CharField(source='id')
+    districtName = serializers.CharField(source='name')
+    class Meta:
+        model = District
+        fields = ["districtId", "districtName"]
+
+
+class UserOrganizationSerializer(serializers.ModelSerializer):
+    organizationId = serializers.CharField(source='id')
+    organizationName = serializers.CharField(source='title')
+    class Meta:
+        model = Organization
+        fields = ["organizationId", "organizationName"]

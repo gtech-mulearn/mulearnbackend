@@ -38,5 +38,7 @@ urlpatterns = [
     path('info/', UserInfo.as_view()),
     path('user-country/', register_views.UserCountryAPI.as_view()),
     path('user-state/', register_views.UserStateAPI.as_view()),
-    path('user-zone/', register_views.UserZoneAPI.as_view())
+    path('user-zone/', register_views.UserZoneAPI.as_view()),
+    path('user-district/', register_views.UserDistrictAPI.as_view()),
+    path('user-organization/', register_views.UserOrganizationAPI.as_view()),
 ]
