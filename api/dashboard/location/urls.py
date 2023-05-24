@@ -1,4 +1,4 @@
-from django.urls import path, include
+from django.urls import path
 from . import location_views
 
 # app_name will help us do a reverse look-up latter.
