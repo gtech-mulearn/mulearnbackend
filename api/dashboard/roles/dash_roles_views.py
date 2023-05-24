@@ -18,8 +18,7 @@ class RoleAPI(APIView):
     def get(self, request):
         roles_queryset = Role.objects.all()
         queryset = CommonUtils.get_paginated_queryset(roles_queryset, request, ["id", "title"])
-
-        serializer = RoleDashboardSerializer(queryset, many=True)
+        serializer = RoleDashboardSerializer(queryset.get("queryset"), many=True)
         return CustomResponse(
             response={"roles": serializer.data}
         ).get_success_response()
