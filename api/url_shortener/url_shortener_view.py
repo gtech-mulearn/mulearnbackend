@@ -13,11 +13,11 @@ from utils.types import RoleType
 from utils.utils import DateTimeUtils
 
 
-class CreateShortenUrl(APIView):
+class UrlShortenerAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
-    def get(self, request):
+    def post(self, request):
 
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -39,21 +39,16 @@ class CreateShortenUrl(APIView):
 
         if special_character or len(short_url) > 300:
 
-            return CustomResponse(general_message=['Your shortened URL should be less than 300 characters in length.',
-                                                   'only include letters, numbers and following special characters (/_)']
-                                  ).get_failure_response()
+            return CustomResponse(
+                general_message=['Your shortened URL should be less than 300 characters in length.',
+                                 'only include letters, numbers and following special characters (/_)']
+                ).get_failure_response()
         else:
 
             UrlShortener.objects.create(id=uuid.uuid4(), short_url=short_url, long_url=long_url,
-                                        updated_by=user,
-                                        updated_at=DateTimeUtils.get_current_utc_time(),
-                                        created_by=user,
-                                        created_at=DateTimeUtils.get_current_utc_time())
+                                        updated_by=user, updated_at=DateTimeUtils.get_current_utc_time(),
+                                        created_by=user, created_at=DateTimeUtils.get_current_utc_time())
             return CustomResponse(general_message=['Url created successfully.']).get_success_response()
-
-
-class ShowShortenUrls(APIView):
-    authentication_classes = [CustomizePermission]
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
@@ -65,22 +60,15 @@ class ShowShortenUrls(APIView):
         url_shortener_list = ShowShortenUrlsSerializer(url_shortener_objects, many=True).data
         return CustomResponse(response=url_shortener_list).get_success_response()
 
-
-class DeleteShortenUrl(APIView):
-    authentication_classes = [CustomizePermission]
-
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, url_id):
+        print(url_id)
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
         if url_shortener_object is None:
             return CustomResponse(general_message=['invalid URL id']).get_success_response()
 
         url_shortener_object.delete()
         return CustomResponse(general_message=['Url deleted successfully..']).get_success_response()
-
-
-class EditShortenUrl(APIView):
-    authentication_classes = [CustomizePermission]
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, url_id):
@@ -105,9 +93,10 @@ class EditShortenUrl(APIView):
         special_character = re.search(special_characters_list, short_url_new)
 
         if special_character or len(short_url_new) > 300:
-            return CustomResponse(general_message=['Your shortened URL should be less than 300 characters in length.',
-                                                   'only include letters, numbers and following special characters (/_)']
-                                  ).get_failure_response()
+            return CustomResponse(
+                general_message=['Your shortened URL should be less than 300 characters in length.',
+                                 'only include letters, numbers and following special characters (/_)']
+                ).get_failure_response()
 
         url_shortener_object.short_url = short_url_new
         url_shortener_object.updated_by = user
@@ -116,3 +105,4 @@ class EditShortenUrl(APIView):
         url_shortener_object.save()
 
         return CustomResponse(general_message=['Url changed successfully']).get_success_response()
+
