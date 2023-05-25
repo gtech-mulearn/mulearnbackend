@@ -6,23 +6,21 @@ from db.task import InterestGroup
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
-from utils.types import RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.types import RoleType, WebHookActions, WebHookCategory
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks 
 from .dash_ig_serializer import InterestGroupSerializer
-
 
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]  # for logged in users
 
     # GET Request to show all interest groups. Params availiable:[sortBy, search, perPage, pageIndex]
-    # @RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
+    @RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
-                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
-                                                                 'created_at', 'count'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, 
+            ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count']
+        )
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
-        # return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
         return CustomResponse(response={
             "interestGroups": ig_serializer_data,
             'pagination': paginated_queryset.get('pagination')
@@ -41,6 +39,11 @@ class InterestGroupAPI(APIView):
             created_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time())
         serializer = InterestGroupSerializer(ig_data)
+        DiscordWebhooks.channelsAndCategory(
+            WebHookCategory.INTEREST_GROUP.value,
+            WebHookActions.CREATE.value,
+            request.data.get('name')
+        )
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
     # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
@@ -49,11 +52,18 @@ class InterestGroupAPI(APIView):
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         igData = InterestGroup.objects.get(id=pk)
+        oldName = igData.name
         igData.name = request.data.get('name')
         igData.updated_by_id = user_id
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
         serializer = InterestGroupSerializer(igData)
+        DiscordWebhooks.channelsAndCategory(
+            WebHookCategory.INTEREST_GROUP.value, 
+            WebHookActions.EDIT.value, 
+            igData.name,
+            oldName
+        )
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
@@ -64,6 +74,11 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
         serializer = InterestGroupSerializer(igData)
+        DiscordWebhooks.channelsAndCategory(
+            WebHookCategory.INTEREST_GROUP.value,
+            WebHookActions.DELETE.value,
+            igData.name
+        )
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
