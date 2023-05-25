@@ -9,16 +9,16 @@ from db.task import TotalKarma
 from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import RoleRequired
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import RoleType, OrganizationType
 from .serializers import OrganisationSerializer, PostOrganizationSerializer
 from utils.utils import CommonUtils
 
 
 class InstitutionsAPI(APIView):
     def get(self, request):
-        clg_orgs = Organization.objects.filter(org_type="College")
-        cmpny_orgs = Organization.objects.filter(org_type="Company")
-        cmuty_orgs = Organization.objects.filter(org_type="Community")
+        clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
+        cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
+        cmuty_orgs = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
 
         paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['name', 'code'])
         clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
@@ -49,7 +49,7 @@ class InstitutionsAPI(APIView):
             return CustomResponse(general_message=["Invalid Org Code"]).get_failure_response()
         org_type = org_obj.org_type
 
-        if org_type == "College":
+        if org_type == OrganizationType.COLLEGE.value:
             org_id_list = Organization.objects.filter(org_type=org_type).values_list('id', flat=True)
             organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
             college_users = {}
@@ -204,8 +204,8 @@ class PostInstitutionAPI(APIView):
             request.data["district"] = district_id
 
         if request.data.get("org_type"):
-            if request.data.get("org_type") == "College":
-                request.data["org_type"] = "College"
+            if request.data.get("org_type") == OrganizationType.COLLEGE.value:
+                request.data["org_type"] = OrganizationType.COLLEGE.value
 
             else:
                 request.data["org_type"] = request.data.get("org_type")
