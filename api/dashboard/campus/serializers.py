@@ -4,15 +4,15 @@ from db.task import TotalKarma
 
 
 class UserOrgSerializer(serializers.ModelSerializer):
-    name = serializers.ReadOnlyField(source="user.fullname")
+    fullname = serializers.ReadOnlyField(source="user.fullname")
     email = serializers.ReadOnlyField(source="user.email")
     phone = serializers.ReadOnlyField(source="user.mobile")
-    mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.ReadOnlyField(source="user.mu_id")
     karma = serializers.SerializerMethodField()
     # rank = serializers.SerializerMethodField()
     class Meta:
         model = TotalKarma
-        fields = ["name", "email", "phone", "karma","mu_id"]
+        fields = ["fullname", "email", "phone", "karma","muid"]
 
     def get_karma(self, obj):
         try:

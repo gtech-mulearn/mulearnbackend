@@ -133,31 +133,9 @@ class RegisterSerializer(serializers.ModelSerializer):
                   'role', 'organizations', 'dept', 'yearOfGraduation', 'areaOfInterests', 'password']
 
 
-class UserSerializer(serializers.ModelSerializer):
-    muid = serializers.CharField(source="mu_id")
-    firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
-    existInGuild = serializers.CharField(source="exist_in_guild")
-    joined = serializers.CharField(source="created_at")
-    roles = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = ["muid", "firstName", "lastName", "fullname", "fullname", "email", "mobile", "gender", "dob",
-                  "active",
-                  "existInGuild", "joined", "roles"]
-
-    def get_roles(self, obj):
-        roles = []
-
-        for user_role_link in obj.user_role_link_user.all():
-            roles.append(user_role_link.role.title)
-
-        return roles
-
-
 class UserCountrySerializer(serializers.ModelSerializer):
     countryName = serializers.CharField(source='name')
+
     class Meta:
         model = Country
         fields = ["countryName"]
@@ -165,6 +143,7 @@ class UserCountrySerializer(serializers.ModelSerializer):
 
 class UserStateSerializer(serializers.ModelSerializer):
     zoneName = serializers.CharField(source='name')
+
     class Meta:
         model = State
         fields = ["zoneName"]
@@ -172,6 +151,7 @@ class UserStateSerializer(serializers.ModelSerializer):
 
 class UserZoneSerializer(serializers.ModelSerializer):
     zoneName = serializers.CharField(source='name')
+
     class Meta:
         model = Zone
         fields = ["zoneName"]
