@@ -14,7 +14,7 @@ from .serializers import OrganisationSerializer, PostOrganizationSerializer
 from utils.utils import CommonUtils
 
 
-class Institutions(APIView):
+class InstitutionsAPI(APIView):
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
@@ -29,13 +29,19 @@ class Institutions(APIView):
         paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['name', 'code'])
         cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs.get("queryset"), many=True)
 
-        return CustomResponse(response={'colleges': {'data': clg_orgs_serializer.data,
-                                                     'pagination': paginated_clg_orgs.get("pagination")},
-                                        'companies': {'data': cmpny_orgs_serializer.data,
-                                                      'pagination': paginated_cmpny_orgs.get("pagination")},
-                                        'communities': {'data': cmuty_orgs_serializer.data,
-                                                        'pagination': paginated_cmuty_orgs.get("pagination")}
-                                        }).get_success_response()
+        data = {
+            'colleges': clg_orgs_serializer.data,
+            'companies': cmpny_orgs_serializer.data,
+            'communities': cmuty_orgs_serializer.data
+        }
+
+        pagination = {
+            'colleges': paginated_clg_orgs.get("pagination"),
+            'companies': paginated_cmpny_orgs.get("pagination"),
+            'communities': paginated_cmuty_orgs.get("pagination")
+        }
+
+        return CustomResponse().paginated_response(data=data, pagination=pagination)
 
     def post(self, request, org_code):
         org_obj = Organization.objects.filter(code=org_code).first()
@@ -67,15 +73,14 @@ class Institutions(APIView):
             return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data}).get_success_response()
 
 
-class GetInstitutions(APIView):
+class GetInstitutionsAPI(APIView):
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
         paginated_organisations = CommonUtils.get_paginated_queryset(organisations, request, ['title', 'code'])
 
         organisation_serializer = OrganisationSerializer(paginated_organisations.get('queryset'), many=True)
         # organisation_serializer = OrganisationSerializer(organisations, many=True)
-        return CustomResponse(response={'institutions': organisation_serializer.data,
-                                        "pagination": paginated_organisations.get("pagination")}).get_success_response()
+        return CustomResponse().paginated_response(data=organisation_serializer.data, pagination=paginated_organisations.get('pagination'))
 
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
@@ -83,11 +88,10 @@ class GetInstitutions(APIView):
         organisations = Organization.objects.filter(org_type=organisation_type, district=district)
         paginated_organisations = CommonUtils.get_paginated_queryset(organisations, request, ['title', 'code'])
         organisation_serializer = OrganisationSerializer(paginated_organisations.get('queryset'), many=True)
-        return CustomResponse(response={'institutions': organisation_serializer.data,
-                                        "pagination": paginated_organisations.get("pagination")}).get_success_response()
+        return CustomResponse().paginated_response(data=organisation_serializer.data, pagination=paginated_organisations.get('pagination'))
 
 
-class PostInstitution(APIView):
+class PostInstitutionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -138,7 +142,7 @@ class PostInstitution(APIView):
             'id': org_id,
             'title': request.data.get("title"),
             'code': request.data.get("code"),
-            'org_type': request.data.get("org_type"),
+            'org_type': request.data.get("orgType"),
             'affiliation': affiliation_id,
             'district': district_id,
             'updated_by': user_id,
@@ -199,12 +203,12 @@ class PostInstitution(APIView):
 
             request.data["district"] = district_id
 
-        if request.data.get("org_type"):
-            if request.data.get("org_type") == OrganizationType.COLLEGE.value:
+        if request.data.get("orgType"):
+            if request.data.get("orgType") == OrganizationType.COLLEGE.value:
                 request.data["org_type"] = OrganizationType.COLLEGE.value
 
             else:
-                request.data["org_type"] = request.data.get("org_type")
+                request.data["org_type"] = request.data.get("orgType")
                 request.data["affiliation"] = None
 
         if request.data.get("affiliation"):
