@@ -20,6 +20,7 @@ class CountryDataAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(countries, request, ['id', 'name'])
 
         serializer = CountrySerializer(paginated_queryset.get('queryset'), many=True)
+        print(serializer.data)
         return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
