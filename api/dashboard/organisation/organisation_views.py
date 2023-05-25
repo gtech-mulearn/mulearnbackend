@@ -142,7 +142,7 @@ class PostInstitutionAPI(APIView):
             'id': org_id,
             'title': request.data.get("title"),
             'code': request.data.get("code"),
-            'org_type': request.data.get("org_type"),
+            'org_type': request.data.get("orgType"),
             'affiliation': affiliation_id,
             'district': district_id,
             'updated_by': user_id,
@@ -203,12 +203,12 @@ class PostInstitutionAPI(APIView):
 
             request.data["district"] = district_id
 
-        if request.data.get("org_type"):
-            if request.data.get("org_type") == OrganizationType.COLLEGE.value:
+        if request.data.get("orgType"):
+            if request.data.get("orgType") == OrganizationType.COLLEGE.value:
                 request.data["org_type"] = OrganizationType.COLLEGE.value
 
             else:
-                request.data["org_type"] = request.data.get("org_type")
+                request.data["org_type"] = request.data.get("orgType")
                 request.data["affiliation"] = None
 
         if request.data.get("affiliation"):
