@@ -24,3 +24,4 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ["id", "name", "zone", "updated_at", "created_at", "updated_by", "created_by"]
+

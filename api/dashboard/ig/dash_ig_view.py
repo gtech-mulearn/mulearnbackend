@@ -7,24 +7,25 @@ from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
-from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks 
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
 from .dash_ig_serializer import InterestGroupSerializer
+
 
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]  # for logged in users
 
     # GET Request to show all interest groups. Params availiable:[sortBy, search, perPage, pageIndex]
-    @RoleRequired(roles=[RoleType.ADMIN, ]) #for admin
+    @RoleRequired(roles=[RoleType.ADMIN, ])  # for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, 
-            ['name', 'id', 'updated_by', 'created_by', 'updated_at', 'created_at', 'count']
-        )
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
+                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
+                                                                 'created_at', 'count']
+                                                                )
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
-        return CustomResponse(response={
-            "interestGroups": ig_serializer_data,
-            'pagination': paginated_queryset.get('pagination')
-        }).get_success_response()
+
+        return CustomResponse().paginated_response(data=ig_serializer_data,
+                                                   pagination=paginated_queryset.get('pagination'))
 
     # POST Request to create a new interest group
     # body should contain 'name': '<new name of interest group>'
@@ -59,8 +60,8 @@ class InterestGroupAPI(APIView):
         igData.save()
         serializer = InterestGroupSerializer(igData)
         DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.INTEREST_GROUP.value, 
-            WebHookActions.EDIT.value, 
+            WebHookCategory.INTEREST_GROUP.value,
+            WebHookActions.EDIT.value,
             igData.name,
             oldName
         )
@@ -91,4 +92,5 @@ class InterestGroupCSV(APIView):
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
         ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
+
         return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')

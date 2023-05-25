@@ -9,6 +9,7 @@ from db.organization import Country, State, District, Department, Organization, 
 from db.task import InterestGroup, TotalKarma, UserIgLink
 from db.user import Role, User, UserRoleLink
 from utils.types import RoleType
+from db.organization import Country, State, Zone
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
@@ -132,24 +133,25 @@ class RegisterSerializer(serializers.ModelSerializer):
                   'role', 'organizations', 'dept', 'yearOfGraduation', 'areaOfInterests', 'password']
 
 
-class UserSerializer(serializers.ModelSerializer):
-    muid = serializers.CharField(source="mu_id")
-    firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
-    existInGuild = serializers.CharField(source="exist_in_guild")
-    joined = serializers.CharField(source="created_at")
-    roles = serializers.SerializerMethodField()
+class UserCountrySerializer(serializers.ModelSerializer):
+    countryName = serializers.CharField(source='name')
 
     class Meta:
-        model = User
-        fields = ["muid", "firstName", "lastName", "fullname", "fullname", "email", "mobile", "gender", "dob",
-                  "active",
-                  "existInGuild", "joined", "roles"]
+        model = Country
+        fields = ["countryName"]
 
-    def get_roles(self, obj):
-        roles = []
 
-        for user_role_link in obj.user_role_link_user.all():
-            roles.append(user_role_link.role.title)
+class UserStateSerializer(serializers.ModelSerializer):
+    zoneName = serializers.CharField(source='name')
 
-        return roles
+    class Meta:
+        model = State
+        fields = ["zoneName"]
+
+
+class UserZoneSerializer(serializers.ModelSerializer):
+    zoneName = serializers.CharField(source='name')
+
+    class Meta:
+        model = Zone
+        fields = ["zoneName"]

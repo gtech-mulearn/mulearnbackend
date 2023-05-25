@@ -18,24 +18,28 @@ class Channel(models.Model):
         managed = False
         db_table = 'channel'
 
-
 class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
-    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='interest_group_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='interest_group_created_by')
     created_at = models.DateTimeField()
 
+    class Meta:
+        managed = False
+        db_table = 'interest_group'
 
 class Level(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     level_order = models.IntegerField()
     name = models.CharField(max_length=36)
     karma = models.IntegerField()
-    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by')
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by', related_name='level_created_by')
     created_at = models.DateTimeField()
-    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by')
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by', related_name='level_updated_by')
     updated_at = models.DateTimeField()
 
     class Meta:
@@ -120,19 +124,6 @@ class KarmaActivityLog(models.Model):
         db_table = 'karma_activity_log'
 
 
-class InterestGroup(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
-    name = models.CharField(max_length=75)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
-                                   related_name='interest_group_updated_by')
-    updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
-                                   related_name='interest_group_created_by')
-    created_at = models.DateTimeField()
-
-    class Meta:
-        managed = False
-        db_table = 'interest_group'
 
 
 class UserIgLink(models.Model):
