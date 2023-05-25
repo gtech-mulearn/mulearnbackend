@@ -22,13 +22,11 @@ class UserAPI(APIView):
             ["mu_id", "first_name", "last_name", "email", "mobile"],
         )
         serializer = UserDashboardSerializer(queryset.get("queryset"), many=True)
+        
+        return CustomResponse().paginated_response(data=serializer.data,
+                                                   pagination=queryset.get('pagination'))
 
-        return CustomResponse(
-            response={
-                "users": serializer.data,
-                "pagination": queryset.get("pagination"),
-            }
-        ).get_success_response()
+
 
     @RoleRequired(roles=[RoleType.ADMIN])
     def patch(self, request, user_id):
@@ -89,12 +87,8 @@ class UserVerificationAPI(APIView):
         )
         serializer = UserVerificationSerializer(queryset.get("queryset"), many=True)
 
-        return CustomResponse(
-            response={
-                "user_role_link": serializer.data,
-                "pagination": queryset.get("pagination"),
-            }
-        ).get_success_response()
+        return CustomResponse().paginated_response(data=serializer.data,
+                                                   pagination=queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN])
     def patch(self, request, link_id):

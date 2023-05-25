@@ -17,16 +17,13 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 
 
 class UserVerificationSerializer(serializers.ModelSerializer):
+    
     first_name = serializers.ReadOnlyField(source="user.first_name")
     last_name = serializers.ReadOnlyField(source="user.last_name")
     user_id = serializers.ReadOnlyField(source="user.id")
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
     mu_id = serializers.ReadOnlyField(source="user.mu_id")
-    role_title = serializers.SerializerMethodField()
-
-    def get_role_title(self, obj):
-        roles = Role.objects.filter(id=obj.role_id)
-        return [role.title for role in roles]
+    role_title = serializers.ReadOnlyField(source="role.title")
 
     class Meta:
         model = UserRoleLink
