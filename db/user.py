@@ -35,10 +35,10 @@ class Role(models.Model):
     title = models.CharField(max_length=75)
     description = models.CharField(max_length=300, blank=True, null=True)
     updated_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='updated_by', related_name='role_updated_by')
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='role_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, models.DO_NOTHING, db_column='created_by', related_name='role_created_by')
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='role_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -48,10 +48,10 @@ class Role(models.Model):
 
 class UserRoleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, models.DO_NOTHING, related_name='user_role_link_user')
-    role = models.ForeignKey(Role, models.DO_NOTHING)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_role_link_user')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE)
     verified = models.IntegerField()
-    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='user_role_link_created_by')
     created_at = models.DateTimeField()
 
@@ -62,7 +62,7 @@ class UserRoleLink(models.Model):
 
 class Github(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, models.DO_NOTHING)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     username = models.CharField(max_length=100)
     updated_by = models.CharField(max_length=36)
     created_at = models.DateTimeField()
@@ -74,7 +74,7 @@ class Github(models.Model):
 
 class ForgotPassword(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.OneToOneField(User, models.DO_NOTHING)
+    user = models.OneToOneField(User, on_delete=models.CASCADE)
     expiry = models.DateTimeField()
     created_at = models.DateTimeField()
 

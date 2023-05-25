@@ -4,23 +4,40 @@ from db.user import User, UserRoleLink, Role
 
 class UserDashboardSerializer(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
-    roles = serializers.SerializerMethodField()
 
     def get_total_karma(self, obj):
         karma = obj.total_karma_user.karma if hasattr(obj, "total_karma_user") else 0
         return karma
 
-    def get_roles(self, user):
-        if role_ids := UserRoleLink.objects.filter(user=user).values_list(
-            'role_id', flat=True
-        ):
-            roles = Role.objects.filter(id__in=role_ids)
-            return [role.title for role in roles]
-        else:
-            return []
-
     class Meta:
         model = User
         exclude = ("password",)
-        extra_fields = ["total_karma", "roles"]
+        extra_fields = ["total_karma"]
         read_only_fields = ["id", "created_at", "total_karma"]
+
+
+class UserVerificationSerializer(serializers.ModelSerializer):
+    first_name = serializers.ReadOnlyField(source="user.first_name")
+    last_name = serializers.ReadOnlyField(source="user.last_name")
+    user_id = serializers.ReadOnlyField(source="user.id")
+    discord_id = serializers.ReadOnlyField(source="user.discord_id")
+    mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    role_title = serializers.SerializerMethodField()
+
+    def get_role_title(self, obj):
+        roles = Role.objects.filter(id=obj.role_id)
+        return [role.title for role in roles]
+
+    class Meta:
+        model = UserRoleLink
+        fields = [
+            "id",
+            "user_id",
+            "discord_id",
+            "mu_id",
+            "first_name",
+            "last_name",
+            "verified",
+            "role_id",
+            "role_title",
+        ]

@@ -470,3 +470,6 @@ class DistrictData(APIView):
 
         district.delete()
         return CustomResponse(response={"response": "District deleted successfully"}).get_success_response()
+
+
+
