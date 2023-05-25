@@ -20,7 +20,9 @@ class RoleAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(roles_queryset, request, ["id", "title"])
         serializer = RoleDashboardSerializer(queryset.get("queryset"), many=True)
         return CustomResponse(
-            response={"roles": serializer.data}
+            response={"roles": serializer.data,
+                      "pagination": queryset.get("pagination"),
+                      }
         ).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
