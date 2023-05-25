@@ -14,7 +14,7 @@ from .serializers import OrganisationSerializer, PostOrganizationSerializer
 from utils.utils import CommonUtils
 
 
-class Institutions(APIView):
+class InstitutionsAPI(APIView):
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type="College")
         cmpny_orgs = Organization.objects.filter(org_type="Company")
@@ -73,7 +73,7 @@ class Institutions(APIView):
             return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data}).get_success_response()
 
 
-class GetInstitutions(APIView):
+class GetInstitutionsAPI(APIView):
     def get(self, request, organisation_type):
         organisations = Organization.objects.filter(org_type=organisation_type)
         paginated_organisations = CommonUtils.get_paginated_queryset(organisations, request, ['title', 'code'])
@@ -91,7 +91,7 @@ class GetInstitutions(APIView):
         return CustomResponse().paginated_response(data=organisation_serializer.data, pagination=paginated_organisations.get('pagination'))
 
 
-class PostInstitution(APIView):
+class PostInstitutionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
