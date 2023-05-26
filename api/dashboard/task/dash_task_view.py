@@ -25,10 +25,8 @@ class TaskApi(APIView):
                                                                                            "created_at"])
         task_serializer_data = TaskListSerializer(paginated_queryset.get('queryset'), many=True).data
 
-        return CustomResponse(response={
-            "taskLists": task_serializer_data,
-            'pagination': paginated_queryset.get('pagination')
-        }).get_success_response()
+        return CustomResponse().paginated_response(data=task_serializer_data,
+                                                   pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
@@ -53,7 +51,7 @@ class TaskApi(APIView):
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
-        taskData = TaskList.objects.get(id=pk)
+        taskData = TaskList.objects.filter(id=pk).first()
         fields_to_update = ["hashtag",
                             "title",
                             "karma",
@@ -69,7 +67,6 @@ class TaskApi(APIView):
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
-        print(serializer.data)
         return CustomResponse(
             response={"taskList": serializer.data}
         ).get_success_response()
@@ -86,3 +83,12 @@ class TaskApi(APIView):
         return CustomResponse(
             response={"taskList": serializer.data}
         ).get_success_response()
+class TaskListCSV(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def get(self, request):
+        task_serializer = TaskList.objects.all()
+        task_serializer_data = TaskListSerializer(task_serializer, many=True).data
+
+        return CommonUtils.generate_csv(task_serializer_data, 'Task List')
