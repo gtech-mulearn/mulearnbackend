@@ -10,11 +10,12 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, CommonUtils
 
 
 class UrlShortenerAPI(APIView):
     authentication_classes = [CustomizePermission]
+
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
 
@@ -54,12 +55,14 @@ class UrlShortenerAPI(APIView):
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all()
-
+        paginated_queryset = CommonUtils.get_paginated_queryset(url_shortener_objects, request, ['title'])
         if len(url_shortener_objects) == 0:
             return CustomResponse(general_message=['No URL related data available']).get_failure_response()
 
-        url_shortener_list = ShowShortenUrlsSerializer(url_shortener_objects, many=True).data
-        return CustomResponse(response=url_shortener_list).get_success_response()
+        url_shortener_list = ShowShortenUrlsSerializer(paginated_queryset.get('queryset'), many=True).data
+
+        return CustomResponse().paginated_response(data=url_shortener_list,
+                                                   pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def put(self, request, url_id):
