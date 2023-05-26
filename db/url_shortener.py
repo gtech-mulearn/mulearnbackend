@@ -5,6 +5,7 @@ from db.user import User
 
 class UrlShortener(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
+    title = models.CharField(max_length=255, blank=True, null=True)
     long_url = models.CharField(max_length=2000, null=False)
     short_url = models.CharField(max_length=300, null=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
