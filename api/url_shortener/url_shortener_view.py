@@ -16,7 +16,7 @@ from utils.utils import DateTimeUtils
 class CreateShortenUrl(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -55,7 +55,7 @@ class CreateShortenUrl(APIView):
 class ShowShortenUrls(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all()
 
@@ -69,7 +69,7 @@ class ShowShortenUrls(APIView):
 class DeleteShortenUrl(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, url_id):
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
         if url_shortener_object is None:
@@ -82,7 +82,7 @@ class DeleteShortenUrl(APIView):
 class EditShortenUrl(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @RoleRequired(roles=[RoleType.ADMIN, ])
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, url_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
