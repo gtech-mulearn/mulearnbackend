@@ -38,13 +38,16 @@ class OrganisationSerializer(serializers.ModelSerializer):
         many=False,
         read_only=True,
         slug_field='title'
-     )
+    )
+    district = serializers.ReadOnlyField(source="district.name")
+    zone = serializers.ReadOnlyField(source="district.zone.name")
+    state = serializers.ReadOnlyField(source="district.zone.state.name")
+    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
 
-    district = DistrictSerializer(many=False, read_only=True)
 
     class Meta:
         model = Organization
-        fields = ["title", "code", "affiliation", "district"]
+        fields = ["title", "code", "affiliation", "district", "zone", "state", "country"]
 
 
 class PostOrganizationSerializer(serializers.ModelSerializer):
