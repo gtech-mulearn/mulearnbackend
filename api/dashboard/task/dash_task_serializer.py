@@ -19,6 +19,8 @@ class TaskListSerializer(serializers.ModelSerializer):
             "active",
             "variable_karma",
             "usage_count",
+            "level",
+            "ig",
             "updated_at",
             "updated_by",
             "created_by",
