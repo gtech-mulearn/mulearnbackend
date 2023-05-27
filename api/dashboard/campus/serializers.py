@@ -1,18 +1,20 @@
 from rest_framework import serializers
-from db.organization import UserOrganizationLink
+
+from db.organization import UserOrganizationLink, Organization
 from db.task import TotalKarma
 
 
 class UserOrgSerializer(serializers.ModelSerializer):
-    name = serializers.ReadOnlyField(source="user.fullname")
+    fullname = serializers.ReadOnlyField(source="user.fullname")
     email = serializers.ReadOnlyField(source="user.email")
     phone = serializers.ReadOnlyField(source="user.mobile")
-    mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.ReadOnlyField(source="user.mu_id")
     karma = serializers.SerializerMethodField()
-    # rank = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+
     class Meta:
         model = TotalKarma
-        fields = ["name", "email", "phone", "karma","mu_id"]
+        fields = ["fullname", "email", "phone", "karma", "muid", "rank"]
 
     def get_karma(self, obj):
         try:
@@ -21,11 +23,8 @@ class UserOrgSerializer(serializers.ModelSerializer):
             karma = 0
         return karma
 
-    # def get_rank(self, obj):
-    #     queryset = UserOrganizationLink.objects.order_by(
-    #         "-user__total_karma_user__karma")
-    #     rank = list(queryset).index(obj)
-    #     return rank
+    def get_rank(self, obj):
+        return 0
 
 
 class CollegeSerializer(serializers.ModelSerializer):
@@ -56,4 +55,32 @@ class CollegeSerializer(serializers.ModelSerializer):
         return obj.org.user_organization_link_org_id.filter(verified=True, user__active=True).count()
 
     def get_rank(self, obj):
-        return 1
+        orgs = Organization.objects.filter(org_type="College")
+
+        results = []
+        for org in orgs:
+            for user_org_link in org.user_organization_link_org_id.filter(verified=True):
+                results.append(user_org_link.user.total_karma_user.karma)
+
+        results.sort(reverse=True)
+
+        colleges = {}
+        for i, karma in enumerate(results):
+            colleges[karma] = i + 1
+
+        rank = colleges.get(obj.user.total_karma_user.karma, None)
+
+        return rank
+
+    # def get_rank(self, obj):
+    #     orgs = Organization.objects.filter(org_type="College")
+    #     results = []
+    #
+    #     for org in orgs:
+    #         for user_org_link in org.user_organization_link_org_id.filter(verified=True):
+    #             results.append({'rank': 0, 'college': org.title, 'totalKarma': user_org_link.user.total_karma_user.karma})
+    #     results.sort(key=lambda x: x['totalKarma'], reverse=True)
+    #     colleges = {}
+    #     for i, college in enumerate(results):
+    #         colleges[college.get('college')] = i+1
+    #     return colleges[obj.org.title]

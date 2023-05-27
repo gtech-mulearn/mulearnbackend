@@ -11,7 +11,7 @@ from utils.utils import CommonUtils
 from .serializer import CountrySerializer, StateSerializer, DistrictSerializer, ZoneSerializer
 
 
-class CountryData(APIView):
+class CountryDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -20,8 +20,8 @@ class CountryData(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(countries, request, ['id', 'name'])
 
         serializer = CountrySerializer(paginated_queryset.get('queryset'), many=True)
-        return CustomResponse(response={"countries": serializer.data,
-                                        "pagination": paginated_queryset.get("pagination")}).get_success_response()
+        print(serializer.data)
+        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
@@ -60,12 +60,12 @@ class CountryData(APIView):
         updated_at = datetime.now()
 
         data = {
-            'name': request.data.get('new_name'),
+            'name': request.data.get('newName'),
             'updated_by': user_id,
             'updated_at': updated_at,
         }
 
-        country = Country.objects.get(name=request.data.get('old_name'))
+        country = Country.objects.get(name=request.data.get('oldName'))
         serializer = CountrySerializer(country, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
@@ -82,7 +82,7 @@ class CountryData(APIView):
         return CustomResponse(response={"response": "Country deleted successfully"}).get_success_response()
 
 
-class StateData(APIView):
+class StateDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -94,9 +94,8 @@ class StateData(APIView):
         states = State.objects.filter(country=country_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(states, request, ['id', 'name'])
 
-        serializer = StateSerializer(paginated_queryset, many=True)
-        return CustomResponse(response={'states': serializer.data,
-                                        'pagination': paginated_queryset.get("pagination")}).get_success_response()
+        serializer = StateSerializer(paginated_queryset.get('queryset'), many=True)
+        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, country):
@@ -148,31 +147,31 @@ class StateData(APIView):
         if not user_id:
             return CustomResponse(general_message=["User not found"]).get_failure_response()
 
-        state = State.objects.filter(name=request.data.get('old_name'), country=country_id).first()
+        state = State.objects.filter(name=request.data.get('oldName'), country=country_id).first()
 
         if request.data.get('country'):
             country_obj = Country.objects.filter(name=request.data.get("country")).first()
             if not country_obj:
                 return CustomResponse(general_message=["Country not found"]).get_failure_response()
-            if request.data.get('new_name'):
-                state_exist = State.objects.filter(name=request.data.get('new_name'), country=country_obj.id).first()
+            if request.data.get('newName'):
+                state_exist = State.objects.filter(name=request.data.get('newName'), country=country_obj.id).first()
                 if state_exist:
                     return CustomResponse(general_message=
                         [f"State already exists for {request.data.get('country')}"]).get_failure_response()
-                request.data['name'] = request.data.get('new_name')
+                request.data['name'] = request.data.get('newName')
             else:
-                state_exist = State.objects.filter(name=request.data.get('old_name'), country=country_obj.id).first()
+                state_exist = State.objects.filter(name=request.data.get('oldName'), country=country_obj.id).first()
                 if state_exist:
                     return CustomResponse(general_message=
                         [f"State already exists for {request.data.get('country')}"]).get_failure_response()
             country_id = country_obj.id
             request.data['country'] = country_id
 
-        if request.data.get('new_name') and not request.data.get('country'):
-            state_exist = State.objects.filter(name=request.data.get('new_name'), country=country_id).first()
+        if request.data.get('newName') and not request.data.get('country'):
+            state_exist = State.objects.filter(name=request.data.get('newName'), country=country_id).first()
             if state_exist:
                 return CustomResponse(general_message=[f"State already exists for {country}"]).get_failure_response()
-            request.data['name'] = request.data.get('new_name')
+            request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
         request.data['updated_at'] = datetime.now()
@@ -197,7 +196,7 @@ class StateData(APIView):
         return CustomResponse(response={"response": "State deleted successfully"}).get_success_response()
 
 
-class ZoneData(APIView):
+class ZoneDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -214,9 +213,8 @@ class ZoneData(APIView):
         zones = Zone.objects.filter(state=state_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(zones, request, ['id', 'name'])
 
-        serializer = ZoneSerializer(paginated_queryset, many=True)
-        return CustomResponse(response={"zones": serializer.data,
-                                        "pagination": paginated_queryset.get("pagination")}).get_success_response()
+        serializer = ZoneSerializer(paginated_queryset.get('queryset'), many=True)
+        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, state, country):
@@ -272,7 +270,7 @@ class ZoneData(APIView):
         if not user_id:
             return CustomResponse(general_message=["User not found"]).get_failure_response()
 
-        zone = Zone.objects.filter(name=request.data.get('old_name'), state=state_id).first()
+        zone = Zone.objects.filter(name=request.data.get('oldName'), state=state_id).first()
         if not zone:
             return CustomResponse(general_message=["Zone not found"]).get_failure_response()
 
@@ -280,24 +278,24 @@ class ZoneData(APIView):
             state_obj = State.objects.filter(name=request.data.get("state"), country=country_id).first()
             if not state_obj:
                 return CustomResponse(general_message=["State not found"]).get_failure_response()
-            if request.data.get('new_name'):
-                zone_exists = Zone.objects.filter(name=request.data.get('new_name'), state=state_obj.id).first()
+            if request.data.get('newName'):
+                zone_exists = Zone.objects.filter(name=request.data.get('newName'), state=state_obj.id).first()
                 if zone_exists:
                     return CustomResponse(general_message=
                     [f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
-                request.data['name'] = request.data.get('new_name')
+                request.data['name'] = request.data.get('newName')
             else:
-                zone_exists = Zone.objects.filter(name=request.data.get('old_name'), state=state_obj.id).first()
+                zone_exists = Zone.objects.filter(name=request.data.get('oldName'), state=state_obj.id).first()
                 if zone_exists:
                     return CustomResponse(general_message=
                             [f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
             request.data['state'] = state_obj.id
 
-        if request.data.get('new_name') and not request.data.get('state'):
-            zone_exists = Zone.objects.filter(name=request.data.get('new_name'), state=state_id).first()
+        if request.data.get('newName') and not request.data.get('state'):
+            zone_exists = Zone.objects.filter(name=request.data.get('newName'), state=state_id).first()
             if zone_exists:
                 return CustomResponse(general_message=[f"Zone already exists for {state}"]).get_failure_response()
-            request.data['name'] = request.data.get('new_name')
+            request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
         request.data['updated_at'] = datetime.now()
@@ -326,7 +324,7 @@ class ZoneData(APIView):
         return CustomResponse(response={"response": "Zone deleted successfully"}).get_success_response()
 
 
-class DistrictData(APIView):
+class DistrictDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     # Params available:[sortBy, search, perPage, pageIndex]
@@ -346,9 +344,8 @@ class DistrictData(APIView):
 
         districts = District.objects.filter(zone=zone_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,['id', 'name'])
-        serializer = DistrictSerializer(paginated_queryset, many=True)
-        return CustomResponse(response={"districts": serializer.data,"pagination": paginated_queryset.get("pagination")}).get_success_response()
-
+        serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
+        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
@@ -413,7 +410,7 @@ class DistrictData(APIView):
             return CustomResponse(general_message=["Zone not found"]).get_failure_response()
         zone_id = zone_obj.id
 
-        district = District.objects.filter(name=request.data.get('old_name'), zone=zone_id).first()
+        district = District.objects.filter(name=request.data.get('oldName'), zone=zone_id).first()
         if not district:
             return CustomResponse(general_message=["District not found"]).get_failure_response()
 
@@ -421,25 +418,25 @@ class DistrictData(APIView):
             zone_obj = Zone.objects.filter(name=request.data.get("zone"), state=state_id).first()
             if not zone_obj:
                 return CustomResponse(general_message=["Zone not found"]).get_failure_response()
-            if request.data.get('new_name'):
-                district_exist = District.objects.filter(name=request.data.get('new_name'), zone=zone_obj.id).first()
+            if request.data.get('newName'):
+                district_exist = District.objects.filter(name=request.data.get('newName'), zone=zone_obj.id).first()
                 if district_exist:
                     return CustomResponse(general_message=
                             [f"District already exists for {request.data.get('zone')}"]).get_failure_response()
-                request.data['name'] = request.data.get('new_name')
+                request.data['name'] = request.data.get('newName')
             else:
-                district_exist = District.objects.filter(name=request.data.get('old_name'), zone=zone_obj.id).first()
+                district_exist = District.objects.filter(name=request.data.get('oldName'), zone=zone_obj.id).first()
                 if district_exist:
                     return CustomResponse(general_message=
                     [f"District already exists for {request.data.get('zone')}"]).get_failure_response()
 
             request.data['zone'] = zone_obj.id
 
-        if request.data.get('new_name') and not request.data.get('zone'):
-            district_exist = District.objects.filter(name=request.data.get('new_name'), zone=zone_id).first()
+        if request.data.get('newName') and not request.data.get('zone'):
+            district_exist = District.objects.filter(name=request.data.get('newName'), zone=zone_id).first()
             if district_exist:
                 return CustomResponse(general_message=[f"District already exists for {zone}"]).get_failure_response()
-            request.data['name'] = request.data.get('new_name')
+            request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
         request.data['updated_at'] = datetime.now()
@@ -470,3 +467,6 @@ class DistrictData(APIView):
 
         district.delete()
         return CustomResponse(response={"response": "District deleted successfully"}).get_success_response()
+
+
+
