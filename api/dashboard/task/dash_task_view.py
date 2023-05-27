@@ -29,7 +29,7 @@ class TaskApi(APIView):
                                                    pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
-    def post(self, request):
+    def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
         task_data = TaskList.objects.create(
             id=uuid.uuid4(),
@@ -41,6 +41,8 @@ class TaskApi(APIView):
             active=request.data.get('active'),
             variable_karma=request.data.get('variable_karma'),
             usage_count=request.data.get('usage_count'),
+            level=request.data.get('level'),
+            ig=request.data.get('ig'),
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
             created_by_id=user_id,
@@ -49,7 +51,7 @@ class TaskApi(APIView):
         return CustomResponse(response={"taskList": serializer.data}).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
-    def put(self, request, pk):
+    def put(self, request, pk):  # edit
         user_id = JWTUtils.fetch_user_id(request)
         taskData = TaskList.objects.filter(id=pk).first()
         fields_to_update = ["hashtag",
@@ -59,7 +61,9 @@ class TaskApi(APIView):
                             "type",
                             "active",
                             "variable_karma",
-                            "usage_count"]
+                            "usage_count"
+                            "level",
+                            "ig"]
         for field in fields_to_update:
             if field in request.data:
                 setattr(taskData, field, request.data[field])
