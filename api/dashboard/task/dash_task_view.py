@@ -6,6 +6,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 from .dash_task_serializer import TaskListSerializer
+from db.user import User
 
 
 class TaskApi(APIView):
@@ -61,13 +62,13 @@ class TaskApi(APIView):
                             "type",
                             "active",
                             "variable_karma",
-                            "usage_count"
+                            "usage_count",
                             "level",
                             "ig"]
         for field in fields_to_update:
             if field in request.data:
                 setattr(taskData, field, request.data[field])
-        taskData.updated_by = user_id
+        taskData.updated_by_id = user_id
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
