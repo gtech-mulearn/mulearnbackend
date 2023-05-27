@@ -1,20 +1,21 @@
 import uuid
-from django.db import IntegrityError
-from django.core.exceptions import ObjectDoesNotExist
-from rest_framework.views import APIView
-from .dash_user_serializer import UserDashboardSerializer, UserVerificationSerializer
+from datetime import timedelta
 
 import decouple
-from datetime import timedelta
 from django.contrib.auth.hashers import make_password
+from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
+from django.db import IntegrityError
 from django.db.models import Q
+from rest_framework.views import APIView
+
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 from . import dash_user_serializer
+from .dash_user_serializer import UserDashboardSerializer, UserVerificationSerializer
 
 
 class UserInfoAPI(APIView):
@@ -93,11 +94,7 @@ class UserAPI(APIView):
 class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(
-        roles=[
-            RoleType.ADMIN,
-        ]
-    )
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         user = User.objects.all()
         user_serializer_data = UserDashboardSerializer(user, many=True).data
@@ -110,11 +107,8 @@ class UserVerificationAPI(APIView):
     @RoleRequired(roles=[RoleType.ADMIN])
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
-        queryset = CommonUtils.get_paginated_queryset(
-            user_queryset,
-            request,
-            ["first_name", "last_name", "role_title"],
-        )
+        queryset = CommonUtils.get_paginated_queryset(user_queryset, request,
+                                                      ["first_name", "last_name", "role_title"], )
         serializer = UserVerificationSerializer(queryset.get("queryset"), many=True)
 
         return CustomResponse().paginated_response(
@@ -136,9 +130,7 @@ class UserVerificationAPI(APIView):
             ).get_failure_response()
         try:
             serializer.save()
-            return CustomResponse(
-                response={"user_role_link": serializer.data}
-            ).get_success_response()
+            return CustomResponse(response={"user_role_link": serializer.data}).get_success_response()
 
         except IntegrityError as e:
             return CustomResponse(
@@ -150,9 +142,7 @@ class UserVerificationAPI(APIView):
         try:
             link = UserRoleLink.objects.get(id=link_id)
             link.delete()
-            return CustomResponse(
-                general_message=["Link deleted successfully"]
-            ).get_success_response()
+            return CustomResponse(general_message=["Link deleted successfully"]).get_success_response()
 
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
@@ -161,11 +151,11 @@ class UserVerificationAPI(APIView):
 class ForgotPasswordAPI(APIView):
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
-        
+
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -177,7 +167,7 @@ class ForgotPasswordAPI(APIView):
         )
         email_host_user = decouple.config("EMAIL_HOST_USER")
         to = [user.email]
-        
+
         domain = decouple.config("FR_DOMAIN_NAME")
         message = f"Reset your password with this link {domain}/reset-password?token={forget_user.id}"
         subject = "Password Reset Requested"
@@ -189,7 +179,7 @@ class ForgotPasswordAPI(APIView):
 
 class ResetPasswordVerifyTokenAPI(APIView):
     def post(self, request, token):
-        
+
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):
             return CustomResponse(
                 general_message="Invalid Token"
