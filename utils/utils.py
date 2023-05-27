@@ -7,7 +7,7 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
-
+import io,openpyxl
 
 class CommonUtils:
     @staticmethod
@@ -158,3 +158,19 @@ class DiscordWebhooks:
 			"content": content
 		}
         requests.post(url, json=data)
+
+class ImportCSV:
+    def read_excel_file(file_obj):
+        workbook = openpyxl.load_workbook(filename=io.BytesIO(file_obj.read()))
+        sheet = workbook.active
+
+        data = []
+        headers = []
+        for row in sheet.iter_rows(values_only=True):
+            if not headers:
+                headers = row
+            else:
+                row_dict = dict(zip(headers, row))
+                data.append(row_dict)
+
+        return data
