@@ -10,6 +10,7 @@ from .dash_task_serializer import TaskListSerializer
 
 class TaskApi(APIView):
     authentication_classes = [CustomizePermission]
+
     def get(self, request):
         task_serializer = TaskList.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(task_serializer, request, ["id",
@@ -57,17 +58,17 @@ class TaskApi(APIView):
         fields_to_update = ["hashtag",
                             "title",
                             "karma",
-                            "channel",
-                            "type",
+                            "channel_id",
+                            "type_id",
                             "active",
                             "variable_karma",
-                            "usage_count"
-                            "level",
-                            "ig"]
+                            "usage_count",
+                            "level_id",
+                            "ig_id"]
         for field in fields_to_update:
             if field in request.data:
                 setattr(taskData, field, request.data[field])
-        taskData.updated_by = user_id
+        taskData.updated_by_id = user_id
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
@@ -76,7 +77,7 @@ class TaskApi(APIView):
         ).get_success_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
-    def patch(self, request, pk):
+    def patch(self, request, pk): #delete
         user_id = JWTUtils.fetch_user_id(request)
         taskData = TaskList.objects.filter(id=pk).first()
         taskData.active = False
@@ -87,6 +88,8 @@ class TaskApi(APIView):
         return CustomResponse(
             response={"taskList": serializer.data}
         ).get_success_response()
+
+
 class TaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
 
