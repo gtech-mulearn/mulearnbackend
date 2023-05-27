@@ -20,10 +20,7 @@ class RoleAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(roles_queryset, request, ["id", "title"])
         serializer = RoleDashboardSerializer(queryset.get("queryset"), many=True)
 
-        return CustomResponse().paginated_response(
-            data=serializer.data, pagination=queryset.get("pagination")
-        )
-
+        return CustomResponse().paginated_response(data=serializer.data, pagination=queryset.get("pagination"))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def patch(self, request, roles_id):
@@ -47,16 +44,13 @@ class RoleAPI(APIView):
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        role_data = Role.objects.create(
-            id=uuid.uuid4(),
-            title=request.data.get('title'),
-            description=request.data.get('description'),
-            updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time()
-        )
+        role_data = Role.objects.create(id=uuid.uuid4(),
+                                        title=request.data.get('title'),
+                                        description=request.data.get('description'),
+                                        updated_by_id=user_id,
+                                        updated_at=DateTimeUtils.get_current_utc_time(),
+                                        created_by_id=user_id,
+                                        created_at=DateTimeUtils.get_current_utc_time()
+                                        )
         serializer = RoleDashboardSerializer(role_data)
-        return CustomResponse(
-            response={"roles": serializer.data}
-        ).get_success_response()
+        return CustomResponse(response={"roles": serializer.data}).get_success_response()
