@@ -58,13 +58,9 @@ class TaskApi(APIView):
         fields_to_update = ["hashtag",
                             "title",
                             "karma",
-                            "channel_id",
-                            "type_id",
                             "active",
                             "variable_karma",
-                            "usage_count",
-                            "level_id",
-                            "ig_id"]
+                            "usage_count",]
         for field in fields_to_update:
             if field in request.data:
                 setattr(taskData, field, request.data[field])
