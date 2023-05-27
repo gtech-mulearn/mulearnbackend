@@ -9,4 +9,5 @@ class ShowShortenUrlsSerializer(ModelSerializer):
     shortUrl = serializers.CharField(source="short_url")
     class Meta:
         model = UrlShortener
+
         fields = ["title", "longUrl", "shortUrl"]
