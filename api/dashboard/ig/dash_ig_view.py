@@ -94,3 +94,14 @@ class InterestGroupCSV(APIView):
         ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
 
         return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
+
+
+
+class InterestGroupGetAPI(APIView):
+    authentication_classes = [CustomizePermission] 
+    
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def get(self, request, pk):
+        igData = InterestGroup.objects.get(id=pk)
+        serializer = InterestGroupSerializer(igData)
+        return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
