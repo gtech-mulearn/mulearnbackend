@@ -139,6 +139,7 @@ class _CustomHTTPHandler:
             ip_addr = req_headers.get("REMOTE_ADDR")
         return ip_addr
 
+
 class DiscordWebhooks:
     @staticmethod
     # for example refer api/dashboard/ig/dash_ig_view.py
@@ -155,8 +156,8 @@ class DiscordWebhooks:
             content = content + f"<|=|>{value}"
         url = config("DISCORD_WEBHOOK_LINK")
         data = {
-			"content": content
-		}
+            "content": content
+        }
         requests.post(url, json=data)
 
 class ImportCSV:
