@@ -4,7 +4,7 @@ from db.task import TaskList
 
 class TaskListSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
-    updated_by = serializers.CharField(source='created_by.fullname')
+    updated_by = serializers.CharField(source='updated_by.fullname')
 
     class Meta:
         model = TaskList
