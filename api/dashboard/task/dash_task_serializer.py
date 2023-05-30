@@ -7,7 +7,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     channel = serializers.CharField(source='channel.name')
     type = serializers.CharField(source='type.title')
     level = serializers.CharField(source='level.name')
-    ig = serializers.CharField(source='ig.name')
+    # ig = serializers.CharField(source='ig.name')
 
 
     class Meta:
