@@ -6,5 +6,6 @@ urlpatterns = [
     path('campus/', include('api.dashboard.campus.urls')),
     path('roles/', include('api.dashboard.roles.urls')),
     path('ig/', include('api.dashboard.ig.urls')),
-    path('task/', include('api.dashboard.task.urls'))
+    path('task/', include('api.dashboard.task.urls')),
+    path('profile/', include('api.dashboard.profile.urls')),
 ]
