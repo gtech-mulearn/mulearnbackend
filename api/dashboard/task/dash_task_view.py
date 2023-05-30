@@ -40,12 +40,12 @@ class TaskApi(APIView):
             title=request.data.get('title'),
             description=request.data.get('description'),
             karma=request.data.get('karma'),
-            channel=request.data.get('channel'),
+            channel=request.data.get('channel_id'),
             active=request.data.get('active'),
             variable_karma=request.data.get('variable_karma'),
             usage_count=request.data.get('usage_count'),
-            level=request.data.get('level'),
-            ig=request.data.get('ig'),
+            level=request.data.get('level_id'),
+            ig=request.data.get('ig_id'),
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
             created_by_id=user_id,
@@ -70,6 +70,7 @@ class TaskApi(APIView):
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
+        print(serializer.data)
         return CustomResponse(
             response={"taskList": serializer.data}
         ).get_success_response()
