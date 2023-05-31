@@ -23,7 +23,7 @@ class CountryDataAPI(APIView):
         required_data = {
             "countries": [
                 {"value": data["name"],
-                 "label": ' '.join(data["name"].split('_')).title() if not data["name"].isupper() else data["name"]}
+                 "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
         }
@@ -106,7 +106,7 @@ class StateDataAPI(APIView):
         required_data = {
             "states": [
                 {"value": data["name"],
-                 "label": ' '.join(data["name"].split('_')).title() if not data["name"].isupper() else data["name"]}
+                 "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
         }
@@ -233,7 +233,7 @@ class ZoneDataAPI(APIView):
         required_data = {
             "states": [
                 {"value": data["name"],
-                 "label": ' '.join(data["name"].split('_')).title() if not data["name"].isupper() else data["name"]}
+                 "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
         }
@@ -373,7 +373,7 @@ class DistrictDataAPI(APIView):
         required_data = {
             "states": [
                 {"value": data["name"],
-                 "label": ' '.join(data["name"].split('_')).title() if not data["name"].isupper() else data["name"]}
+                 "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
         }
