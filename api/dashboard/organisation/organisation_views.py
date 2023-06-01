@@ -23,13 +23,13 @@ class InstitutionsAPI(APIView):
         cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
         cmuty_orgs = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
 
-        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['name', 'code'])
+        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code'])
         clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
 
-        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['name', 'code'])
+        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code'])
         cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs.get("queryset"), many=True)
 
-        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['name', 'code'])
+        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['title', 'code'])
         cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs.get("queryset"), many=True)
 
         data = {
