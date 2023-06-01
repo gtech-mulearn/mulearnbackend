@@ -7,7 +7,8 @@ from db.url_shortener import UrlShortener
 class ShowShortenUrlsSerializer(ModelSerializer):
     longUrl = serializers.CharField(source="long_url")
     shortUrl = serializers.CharField(source="short_url")
+
     class Meta:
         model = UrlShortener
 
-        fields = ["title", "longUrl", "shortUrl"]
+        fields = ["id", "title", "longUrl", "shortUrl"]
