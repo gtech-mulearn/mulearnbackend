@@ -16,6 +16,7 @@ class UserProfileAPI(APIView):
 
         user = User.objects.filter(id=user_id).first()
         return CustomResponse(response={
+            'muid': user.mu_id,
             'name': user.first_name + user.last_name,
             'email': user.email,
             'mobile': user.mobile,
