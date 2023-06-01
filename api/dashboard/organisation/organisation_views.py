@@ -9,9 +9,12 @@ from db.task import TotalKarma
 from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import RoleRequired
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType
+from utils.types import RoleType, OrganizationType, WebHookCategory, WebHookActions
 from .serializers import OrganisationSerializer, PostOrganizationSerializer
+from utils.utils import CommonUtils, DiscordWebhooks
+from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
+from .serializers import OrganisationSerializer, PostOrganizationSerializer
 
 
 class InstitutionsAPI(APIView):
@@ -63,7 +66,8 @@ class InstitutionsAPI(APIView):
                 total_karma_by_college[user_link.org.id] = total_karma
 
             sorted_college_karma = sorted(total_karma_by_college.items(), key=lambda x: x[1], reverse=True)
-            rank = next((i + 1 for i, (college_id, _) in enumerate(sorted_college_karma) if college_id == org_obj.id), 0)
+            rank = next((i + 1 for i, (college_id, _) in enumerate(sorted_college_karma) if college_id == org_obj.id),
+                        0)
             score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
 
             return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data,
@@ -80,7 +84,8 @@ class GetInstitutionsAPI(APIView):
 
         organisation_serializer = OrganisationSerializer(paginated_organisations.get('queryset'), many=True)
         # organisation_serializer = OrganisationSerializer(organisations, many=True)
-        return CustomResponse().paginated_response(data=organisation_serializer.data, pagination=paginated_organisations.get('pagination'))
+        return CustomResponse().paginated_response(data=organisation_serializer.data,
+                                                   pagination=paginated_organisations.get('pagination'))
 
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
@@ -88,7 +93,8 @@ class GetInstitutionsAPI(APIView):
         organisations = Organization.objects.filter(org_type=organisation_type, district=district)
         paginated_organisations = CommonUtils.get_paginated_queryset(organisations, request, ['title', 'code'])
         organisation_serializer = OrganisationSerializer(paginated_organisations.get('queryset'), many=True)
-        return CustomResponse().paginated_response(data=organisation_serializer.data, pagination=paginated_organisations.get('pagination'))
+        return CustomResponse().paginated_response(data=organisation_serializer.data,
+                                                   pagination=paginated_organisations.get('pagination'))
 
 
 class PostInstitutionAPI(APIView):
@@ -137,7 +143,6 @@ class PostInstitutionAPI(APIView):
         created_at = datetime.now()
         updated_at = datetime.now()
 
-
         values = {
             'id': org_id,
             'title': request.data.get("title"),
@@ -152,8 +157,15 @@ class PostInstitutionAPI(APIView):
         }
 
         organisation_serializer = PostOrganizationSerializer(data=values)
+
         if organisation_serializer.is_valid():
             organisation_serializer.save()
+            if request.data.get("orgType") == OrganizationType.COMMUNITY.value:
+                DiscordWebhooks.channelsAndCategory(
+                    WebHookCategory.COMMUNITY.value,
+                    WebHookActions.CREATE.value,
+                    request.data.get('title')
+                )
             org_obj = Organization.objects.filter(code=values["code"]).first()
             return CustomResponse(response={'institution': OrganisationSerializer(org_obj).data}).get_success_response()
         return CustomResponse(general_message=[organisation_serializer.errors]).get_failure_response()
@@ -165,13 +177,16 @@ class PostInstitutionAPI(APIView):
             return CustomResponse(general_message=["User not found"]).get_failure_response()
 
         organisation_obj = Organization.objects.filter(code=org_code).first()
+        old_name = organisation_obj.title
+        old_type = organisation_obj.org_type
         if not organisation_obj:
             return CustomResponse(general_message=["Organisation not found"]).get_failure_response()
 
         if request.data.get('code'):
             org_code_exist = Organization.objects.filter(code=request.data.get("code"))
             if org_code_exist:
-                return CustomResponse(general_message=["Organisation with this code already exist"]).get_failure_response()
+                return CustomResponse(
+                    general_message=["Organisation with this code already exist"]).get_failure_response()
             else:
                 request.data['code'] = request.data.get('code')
 
@@ -223,22 +238,59 @@ class PostInstitutionAPI(APIView):
         if request.data.get("title"):
             request.data["title"] = request.data.get("title")
 
+
         request.data["updated_at"] = datetime.now()
         request.data["updated_by"] = user_id
-
-
 
         organisation_serializer = PostOrganizationSerializer(organisation_obj, data=request.data, partial=True)
         if organisation_serializer.is_valid():
             organisation_serializer.save()
-            return CustomResponse(response={'institution': OrganisationSerializer(organisation_obj).data}).get_success_response()
+
+            if request.data.get("title") != old_name and old_type == OrganizationType.COMMUNITY.value:
+                DiscordWebhooks.channelsAndCategory(
+                       WebHookCategory.COMMUNITY.value,
+                       WebHookActions.EDIT.value,
+                       request.data.get('title'),
+                       old_name
+                )
+
+            if request.data.get("orgType"):
+                if request.data.get("orgType") != OrganizationType.COMMUNITY.value and old_type == OrganizationType.COMMUNITY.value:
+                    DiscordWebhooks.channelsAndCategory(
+                        WebHookCategory.COMMUNITY.value,
+                        WebHookActions.DELETE.value,
+                        old_name
+                    )
+
+            if old_type != OrganizationType.COMMUNITY.value and request.data.get("orgType") == OrganizationType.COMMUNITY.value:
+                if request.data.get("title"):
+                    title = request.data.get('title')
+                else:
+                    title = old_name
+
+                DiscordWebhooks.channelsAndCategory(
+                    WebHookCategory.COMMUNITY.value,
+                    WebHookActions.CREATE.value,
+                    title
+                )
+
+            return CustomResponse(
+                response={'institution': OrganisationSerializer(organisation_obj).data}).get_success_response()
         return CustomResponse(general_message=[organisation_serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request, org_code):
         organisation = Organization.objects.filter(code=org_code).first()
+        org_type = organisation.org_type
         if organisation:
             organisation.delete()
+            if org_type == OrganizationType.COMMUNITY.value:
+                DiscordWebhooks.channelsAndCategory(
+                    WebHookCategory.COMMUNITY.value,
+                    WebHookActions.DELETE.value,
+                    organisation.title
+                )
             return CustomResponse(response={'Success': 'Deleted Successfully'}).get_success_response()
         else:
-            return CustomResponse(general_message=[f"Org with code '{org_code}', does not exist"]).get_failure_response()
+            return CustomResponse(
+                general_message=[f"Org with code '{org_code}', does not exist"]).get_failure_response()
