@@ -54,3 +54,8 @@ class PostOrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = "__all__"
+
+class AffiliationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrgAffiliation
+        fields = "__all__"        
