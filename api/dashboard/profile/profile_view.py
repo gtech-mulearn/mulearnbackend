@@ -1,4 +1,4 @@
-from api.dashboard.profile.serializers import UserLogSerializer, UserInterestGroupSerializer
+from api.dashboard.profile.serializers import UserLogSerializer, UserInterestGroupSerializer, UserSuggestionSerializer
 from db.task import KarmaActivityLog, TotalKarma, UserIgLink
 from db.user import User
 from db.organization import UserOrganizationLink
@@ -101,3 +101,15 @@ class UserInterestGroupAPI(APIView):
         org_link = UserIgLink.objects.filter(user_id=user_id).all()
         serializer = UserInterestGroupSerializer(org_link, many=True).data
         return CustomResponse(response=serializer).get_failure_response()
+
+
+class UserSuggestionAPI(APIView):
+
+    def get(self, request):
+
+        total_karma_object = TotalKarma.objects.all().order_by('-karma')[:5]
+        if total_karma_object is None:
+            return CustomResponse(general_message='No Karma Related data available').get_failure_response()
+
+        serializer = UserSuggestionSerializer(total_karma_object, many=True).data
+        return CustomResponse(response=serializer).get_success_response()

@@ -15,6 +15,16 @@ class UserLogSerializer(ModelSerializer):
 
 class UserInterestGroupSerializer(ModelSerializer):
     interestGroup = serializers.ReadOnlyField(source='ig.name')
+
     class Meta:
         model = UserIgLink
         fields = ["interestGroup"]
+
+
+class UserSuggestionSerializer(ModelSerializer):
+    totalKarma = serializers.IntegerField(source="karma")
+    fullName = serializers.ReadOnlyField(source="user.fullname")
+
+    class Meta:
+        model = TotalKarma
+        fields = ["fullName", "totalKarma"]
