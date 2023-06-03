@@ -35,9 +35,9 @@ class UserInfoAPI(APIView):
 
 
 class UserAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN])
+    # @RoleRequired(roles=[RoleType.ADMIN])
     def get(self, request):
         user_queryset = User.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
@@ -53,7 +53,7 @@ class UserAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @RoleRequired(roles=[RoleType.ADMIN])
+    # @RoleRequired(roles=[RoleType.ADMIN])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -78,13 +78,13 @@ class UserAPI(APIView):
                 general_message="Database integrity error",
             ).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN])
+    # @RoleRequired(roles=[RoleType.ADMIN])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
             user.delete()
             return CustomResponse(
-                general_message=["User deleted successfully"]
+                general_message="$1"
             ).get_success_response()
 
         except ObjectDoesNotExist as e:
