@@ -22,7 +22,7 @@ class CountryDataAPI(APIView):
         serializer = CountrySerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "countries": [
-                {"value": data["name"],
+                {"value": data["name"].lower(),
                  "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
@@ -105,7 +105,7 @@ class StateDataAPI(APIView):
         serializer = StateSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "states": [
-                {"value": data["name"],
+                {"value": data["name"].lower(),
                  "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
@@ -232,7 +232,7 @@ class ZoneDataAPI(APIView):
         serializer = ZoneSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "zones": [
-                {"value": data["name"],
+                {"value": data["name"].lower(),
                  "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
@@ -372,7 +372,7 @@ class DistrictDataAPI(APIView):
         serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "districts": [
-                {"value": data["name"],
+                {"value": data["name"].lower(),
                  "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
             ]
