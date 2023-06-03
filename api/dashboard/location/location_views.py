@@ -231,7 +231,7 @@ class ZoneDataAPI(APIView):
 
         serializer = ZoneSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
-            "states": [
+            "zones": [
                 {"value": data["name"],
                  "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
@@ -371,7 +371,7 @@ class DistrictDataAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,['id', 'name'])
         serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
-            "states": [
+            "districts": [
                 {"value": data["name"],
                  "label": ' '.join(data["name"].split('_')).title()}
                 for data in serializer.data
