@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 from rest_framework.response import Response
 
-from db.organization import UserOrganizationLink, Zone
+from db.organization import Organization, UserOrganizationLink, Zone
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
@@ -11,13 +11,13 @@ from . import dash_zonal_serializer
 
 
 class ZonalStudentsAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
     def get(self, request):
-        # user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request)
 
-        user_id = "3905c96e-a08d-47cc-85a9-b75a469eec70"
+        # user_id = "3905c96e-a08d-47cc-85a9-b75a469eec70"
 
         user_org_link = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
@@ -31,9 +31,16 @@ class ZonalStudentsAPI(APIView):
         user_queryset = User.objects.filter(id__in=users_in_zone)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            user_queryset, request, ["first_name", "last_name", "email", "mobile", "mu_id"]
+            user_queryset,
+            request,
+            ["first_name", "last_name", "email", "mobile", "mu_id"],
         )
-        serializer = dash_zonal_serializer.ZonalStudents(paginated_queryset.get("queryset"), many=True)
+
+        serializer = dash_zonal_serializer.ZonalStudents(
+            paginated_queryset["queryset"],
+            many=True,
+            context={"queryset": user_queryset},
+        )
 
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
@@ -46,24 +53,79 @@ class ZonalStudentsCSV(APIView):
     @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
+        # user_id = "3905c96e-a08d-47cc-85a9-b75a469eec70"
+
         user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id, org__org_type=OrganizationType.COLLEGE.value
+            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
         ).first()
-        user_org_links = UserOrganizationLink.objects.filter(
-            org_id=user_org_link.org_id
+
+        user_zone = user_org_link.org.district.zone
+        users_in_zone = UserOrganizationLink.objects.filter(
+            org__district__zone=user_zone
+        ).values("user")
+
+        user_queryset = User.objects.filter(id__in=users_in_zone)
+
+        serializer = dash_zonal_serializer.ZonalStudents(
+            user_queryset,
+            many=True,
+            context={"queryset": user_queryset},
         )
 
-        serializer = serializers.UserOrgSerializer(user_org_links, many=True)
-        return CommonUtils.generate_csv(serializer.data, "Campus Details")
+        return CommonUtils.generate_csv(serializer.data, "Zonal Student Details")
 
 
-# class CampusDetailsAPI(APIView):
-#     authentication_classes = [CustomizePermission]
+class ZonalCampusAPI(APIView):
+    # authentication_classes = [CustomizePermission]
 
-#     @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
-#     def get(self, request):
-#         user_id = JWTUtils.fetch_user_id(request)
-#         user_org_link = UserOrganizationLink.objects.filter(
-#             user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
-#         serializer = serializers.CollegeSerializer(user_org_link, many=False)
-#         return CustomResponse(response=serializer.data).get_success_response()
+    # @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        # user_id = "00d1ba08-bb83-4374-9864-d3ce9de6bd81"
+
+        user_org_link = UserOrganizationLink.objects.select_related(
+            "org", "org__district", "org__district__zone"
+        ).get(org__org_type=OrganizationType.COLLEGE.value, user_id=user_id)
+
+        campus_zone = user_org_link.org.district.zone
+        
+        organizations_in_zone = Organization.objects.select_related(
+            "district", "district__zone"
+        ).filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            organizations_in_zone,
+            request,
+            [
+                "title",
+                "code",
+                "org_type",
+                "district_name",
+            ],
+        )
+
+        serializer = dash_zonal_serializer.ZonalCampus(
+            paginated_queryset["queryset"],
+            many=True,
+            context={"queryset": organizations_in_zone},
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
+
+        # user_org_link = UserOrganizationLink.objects.filter(
+        #     org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
+        # ).first()
+
+        # campus_zone = user_org_link.org.district.zone
+        # campus_in_zone = UserOrganizationLink.objects.filter(
+        #     org__district__zone=campus_zone
+        # ).values("organization")
+
+        # campus_queryset = Organization.objects.filter(id__in=campus_in_zone)
+
+        # serializer = dash_zonal_serializer.ZonalCampus(campus_queryset, many=True, context={'current_zone': campus_zone})
+        # return CustomResponse(response=serializer.data).get_success_response()
