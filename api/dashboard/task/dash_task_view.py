@@ -10,6 +10,7 @@ from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import TaskListSerializer
 from db.user import User
 
+
 class TaskApi(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -105,8 +106,14 @@ class ImportTaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
 
     def post(self, request):
-        file_obj = request.FILES['task_list']
+        try:
+            file_obj = request.FILES['task_list']
+        except KeyError:
+            return CustomResponse(response={'task_list file not found'}).get_failure_response()
+
         excel_data = ImportCSV.read_excel_file(file_obj)
+        if not excel_data:
+            return CustomResponse(response={'Empty csv file'}).get_failure_response()
 
         valid_rows = []
         error_rows = []
@@ -136,13 +143,18 @@ class ImportTaskListCSV(APIView):
             else:
                 valid_rows.append(row)
 
+        if not valid_rows:
+            return CustomResponse(response={'No valid rows found'}).get_failure_response()
+
         workbook = Workbook()
         valid_sheet = workbook.active
         valid_headers = list(valid_rows[0].keys())
         valid_sheet.append(valid_headers)
+
         error_sheet = workbook.create_sheet(title='Invalid Rows')
         error_headers = list(error_rows[0].keys())
         error_sheet.append(error_headers)
+
         for row in valid_rows:
             valid_sheet.append([row.get(header, '') for header in valid_headers])
 
