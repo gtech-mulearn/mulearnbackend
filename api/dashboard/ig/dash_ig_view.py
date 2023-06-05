@@ -18,10 +18,7 @@ class InterestGroupAPI(APIView):
     @RoleRequired(roles=[RoleType.ADMIN, ])  # for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request,
-                                                                ['name', 'id', 'updated_by', 'created_by', 'updated_at',
-                                                                 'created_at', 'count']
-                                                                )
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name'] )
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=ig_serializer_data,
@@ -74,15 +71,12 @@ class InterestGroupAPI(APIView):
     def delete(self, request, pk):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
-        serializer = InterestGroupSerializer(igData)
         DiscordWebhooks.channelsAndCategory(
             WebHookCategory.INTEREST_GROUP.value,
             WebHookActions.DELETE.value,
             igData.name
         )
-        return CustomResponse(
-            response={"interestGroup": serializer.data}
-        ).get_success_response()
+        return CustomResponse().get_success_response()
 
 
 class InterestGroupCSV(APIView):

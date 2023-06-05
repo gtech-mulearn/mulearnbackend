@@ -23,8 +23,8 @@ class UrlShortenerAPI(APIView):
         user = User.objects.filter(id=user_id).first()
 
         special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,?\\]'
-        long_url = request.data.get('long_url')
-        short_url = request.data.get('short_url')
+        long_url = request.data.get('longUrl')
+        short_url = request.data.get('shortUrl')
         title = request.data.get('title')
 
         long_url_data = UrlShortener.objects.filter(long_url=long_url).first()
@@ -65,7 +65,7 @@ class UrlShortenerAPI(APIView):
                                                    pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
-    def post(self, request, url_id):
+    def put(self, request, url_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
 

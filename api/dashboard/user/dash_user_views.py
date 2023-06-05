@@ -84,7 +84,7 @@ class UserAPI(APIView):
             user = User.objects.get(id=user_id)
             user.delete()
             return CustomResponse(
-                general_message=["User deleted successfully"]
+                general_message="$1"
             ).get_success_response()
 
         except ObjectDoesNotExist as e:
@@ -162,7 +162,7 @@ class ForgotPasswordAPI(APIView):
             ).get_failure_response()
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
-        forget_user = ForgotPassword.objects.create(
+        forget_user = ForgotPassword.objects.create(# 
             id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )
         email_host_user = decouple.config("EMAIL_HOST_USER")

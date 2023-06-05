@@ -20,8 +20,16 @@ class CountryDataAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(countries, request, ['id', 'name'])
 
         serializer = CountrySerializer(paginated_queryset.get('queryset'), many=True)
-        print(serializer.data)
-        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+        required_data = {
+            "countries": [
+                {"value": data["name"],
+                 "label": ' '.join(data["name"].split('_')).title()}
+                for data in serializer.data
+            ]
+        }
+        # print(required_data)
+        # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+        return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
@@ -72,7 +80,7 @@ class CountryDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    # @RoleRequired(roles=[RoleType.ADMIN, ])
     def delete(self, request):
         country = Country.objects.filter(name=request.data.get('name')).first()
         if not country:
@@ -95,7 +103,15 @@ class StateDataAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(states, request, ['id', 'name'])
 
         serializer = StateSerializer(paginated_queryset.get('queryset'), many=True)
-        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+        required_data = {
+            "states": [
+                {"value": data["name"],
+                 "label": ' '.join(data["name"].split('_')).title()}
+                for data in serializer.data
+            ]
+        }
+        return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
+        # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, country):
@@ -214,7 +230,16 @@ class ZoneDataAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(zones, request, ['id', 'name'])
 
         serializer = ZoneSerializer(paginated_queryset.get('queryset'), many=True)
-        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+        required_data = {
+            "states": [
+                {"value": data["name"],
+                 "label": ' '.join(data["name"].split('_')).title()}
+                for data in serializer.data
+            ]
+        }
+        return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
+
+        # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, state, country):
@@ -345,7 +370,15 @@ class DistrictDataAPI(APIView):
         districts = District.objects.filter(zone=zone_id)
         paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,['id', 'name'])
         serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
-        return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+        required_data = {
+            "states": [
+                {"value": data["name"],
+                 "label": ' '.join(data["name"].split('_')).title()}
+                for data in serializer.data
+            ]
+        }
+        return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
+        # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
