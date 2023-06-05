@@ -41,4 +41,4 @@ class WebHookActions(Enum):
 
 class WebHookCategory(Enum):
     INTEREST_GROUP = 'ig'
-    
+    ROLE = 'role'
