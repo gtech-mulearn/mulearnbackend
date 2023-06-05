@@ -3,7 +3,7 @@ from rest_framework.views import APIView
 
 from db.organization import Organization, District
 from utils.response import CustomResponse
-from .serializer import OrganisationSerializer
+from .serializer import OrganisationSerializer, InstitutesRetrivalSerializer
 
 
 class GetInstitutionsAPI(APIView):
@@ -18,3 +18,11 @@ class GetInstitutionsAPI(APIView):
         organisations = Organization.objects.filter(org_type=organisation_type, district=district)
         organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse(response={'institutions': organisation_serializer.data}).get_success_response()
+
+
+class RetrieveInstitutesAPI(APIView):
+    def get(self, request, district_name):
+        district = District.objects.filter(name=district_name).first()
+        organisations = Organization.objects.filter(org_type__in=["School", "College"], district=district)
+        serializer = InstitutesRetrivalSerializer(organisations, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()

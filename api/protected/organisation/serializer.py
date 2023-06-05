@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from db.organization import Organization, District, Zone, State
 
+
 class StateSerializer(serializers.ModelSerializer):
     country = serializers.SlugRelatedField(
         many=False,
@@ -41,4 +42,12 @@ class OrganisationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ["id","title", "code", "affiliation", "district"]
+        fields = ["id", "title", "code", "affiliation", "district"]
+
+
+class InstitutesRetrivalSerializer(serializers.ModelSerializer):
+    district = serializers.CharField(source='district.name')
+
+    class Meta:
+        model = Organization
+        fields = ["id", "title", "district"]
