@@ -47,10 +47,15 @@ class OrganisationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ["title", "code", "affiliation", "district", "zone", "state", "country"]
+        fields = ["title", "code", "affiliation", "org_type", "district", "zone", "state", "country"]
 
 
 class PostOrganizationSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = "__all__"
+
+class AffiliationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = OrgAffiliation
+        fields = "__all__"        

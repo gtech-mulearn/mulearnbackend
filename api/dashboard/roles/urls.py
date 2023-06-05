@@ -5,6 +5,8 @@ from . import dash_roles_views
 urlpatterns = [
     path('', dash_roles_views.RoleAPI.as_view(),name="roles-list"),
     path('', dash_roles_views.RoleAPI.as_view(),name="roles-create"),
+    path('csv/', dash_roles_views.RoleManagementCSV.as_view(),name="roles-csv"),
     path('<str:roles_id>/', dash_roles_views.RoleAPI.as_view(),name="roles-edit"),
     path('<str:roles_id>/', dash_roles_views.RoleAPI.as_view(),name="roles-delete"),
+    
 ]

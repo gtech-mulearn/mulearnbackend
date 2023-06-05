@@ -41,12 +41,13 @@ class TaskApi(APIView):
             title=request.data.get('title'),
             description=request.data.get('description'),
             karma=request.data.get('karma'),
-            channel=request.data.get('channel'),
+            channel_id=request.data.get('channel_id'),
+            type_id=request.data.get('type_id'),
             active=request.data.get('active'),
             variable_karma=request.data.get('variable_karma'),
             usage_count=request.data.get('usage_count'),
-            level=request.data.get('level'),
-            ig=request.data.get('ig'),
+            level_id=request.data.get('level_id'),
+            ig_id=request.data.get('ig_id'),
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
             created_by_id=user_id,
@@ -71,6 +72,7 @@ class TaskApi(APIView):
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
+        print(serializer.data)
         return CustomResponse(
             response={"taskList": serializer.data}
         ).get_success_response()
@@ -80,7 +82,7 @@ class TaskApi(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         taskData = TaskList.objects.filter(id=pk).first()
         taskData.active = False
-        taskData.updated_by = user_id
+        taskData.updated_by = User.objects.filter(id=user_id).first()
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
@@ -170,3 +172,13 @@ class ImportTaskListCSV(APIView):
             row['created_at'] = str(DateTimeUtils.get_current_utc_time())
             TaskList.objects.create(**row)
         return CustomResponse(response={"Success": valid_rows , "Failed": error_rows}).get_success_response()
+
+
+class TaskGetAPI(APIView):
+    authentication_classes = [CustomizePermission] 
+    
+    @RoleRequired(roles=[RoleType.ADMIN, ])
+    def get(self, request, pk):
+        task_serializer = TaskList.objects.get(id=pk)
+        serializer = TaskListSerializer(task_serializer)
+        return CustomResponse(response={"Task": serializer.data}).get_success_response()
