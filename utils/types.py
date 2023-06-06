@@ -2,29 +2,23 @@ from enum import Enum
 
 
 class RoleType(Enum):
-    EXPLORER = "Explorer"
     ADMIN = "Admins"
-    DISCORD_MANAGER = "Discord Manager"
-    DISTRICT_INTEREST_GROUP_LEAD = "District Interest Group Lead"
+    DISCORD_MANAGER = "Discord Moderator"
     EX_OFFICIAL = "Ex Official"
     FELLOW = "Fellow"
     ZONAL_CAMPUS_LEAD = "Zonal Campus Lead"
-    STATE_CAMPUS_LEAD = "State Campus Lead"
-    STATE_INTEREST_GROUP_LEAD = "State Interest Group Lead"
     APPRAISER = "Appraiser"
     DISTRICT_CAMPUS_LEAD = "District Campus Lead"
     MENTOR = "Mentor"
     INTERN = "Intern"
-    CAMPUS_INTEREST_GROUP_LEAD = "Campus Interest Group Lead"
-    ZONAL_INTEREST_GROUP_LEAD = "Zonal Interest Group Lead"
-    CAMPUS_AMBASSADOR = "Campus Ambassador"
+    CAMPUS_LEAD = "Campus Lead"
     BOT_DEV = "Bot Dev"
     PRE_MEMBER = "Pre Member"
     SUSPEND = "Suspended"
     STUDENT = "Student"
-    MODERATOR = "Moderator"
     ENABLER = "Enabler"
-    GTECH_ATFG = "Gtech ATFG"
+    IG_FACILITATOR = "IG Facilitator"
+    TECH_TEAM = 'Tech Team'
 
 
 class OrganizationType(Enum):
