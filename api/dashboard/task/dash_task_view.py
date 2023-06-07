@@ -104,7 +104,7 @@ class TaskListCSV(APIView):
 
 class ImportTaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
-
+    @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request):
         try:
             file_obj = request.FILES['task_list']
@@ -171,12 +171,12 @@ class ImportTaskListCSV(APIView):
             row['created_by_id'] = user_id
             row['created_at'] = str(DateTimeUtils.get_current_utc_time())
             TaskList.objects.create(**row)
-        return CustomResponse(response={"Success": valid_rows , "Failed": error_rows}).get_success_response()
+        return CustomResponse(response={"Success": valid_rows, "Failed": error_rows}).get_success_response()
 
 
 class TaskGetAPI(APIView):
-    authentication_classes = [CustomizePermission] 
-    
+    authentication_classes = [CustomizePermission]
+
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request, pk):
         task_serializer = TaskList.objects.get(id=pk)
