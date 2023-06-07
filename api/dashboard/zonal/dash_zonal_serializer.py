@@ -45,7 +45,7 @@ class ZonalCampus(serializers.ModelSerializer):
     # zone_name = serializers.ReadOnlyField(source="district.zone.name")
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
-    # rank = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -57,8 +57,8 @@ class ZonalCampus(serializers.ModelSerializer):
             "district_name",
             "total_members",
             "active_members",
+            "rank",
             # "zone_name",
-            # "rank",
         ]
 
     def get_total_members(self, obj):
@@ -75,31 +75,20 @@ class ZonalCampus(serializers.ModelSerializer):
         )["total_karma"]
         return total_karma or 0
 
+    def get_rank(self, obj):
+        orgs = self.context["queryset"]
 
-    # def get_rank(self, obj):
-    #     queryset = self.context["queryset"]
-    #     rank = queryset.filter(total_karma__gt=obj.total_karma).count() + 1
-    #     return rank if obj.total_karma else None
+        results = []
+        for org in orgs:
+            self.get_total_karma(org)
 
-    # def get_rank(self, obj):
-    #     orgs = Organization.objects.filter(org_type="College")
+        results = [karma for karma in results if karma is not None]
 
-    #     results = []
-    #     for org in orgs:
-    #         for user_org_link in org.user_organization_link_org_id.filter(
-    #             verified=True
-    #         ):
-    #             results.append(user_org_link.user.total_karma_user.karma)
+        results.sort(reverse=True)
 
-    #     results.sort(reverse=True)
-
-    #     colleges = {}
-    #     for i, karma in enumerate(results):
-    #         colleges[karma] = i + 1
-
-    #     rank = colleges.get(obj.user.total_karma_user.karma, None)
-
-    #     return rank
+        colleges = {karma: i + 1 for i, karma in enumerate(results)}
+        total_karma = self.get_total_karma(obj)
+        return colleges.get(total_karma)
 
 
 # def get_rank(self, obj):
