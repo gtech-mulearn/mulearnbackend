@@ -8,6 +8,7 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import dash_zonal_serializer
 
+
 class ZonalStudentsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -77,7 +78,7 @@ class ZonalStudentsCSV(APIView):
 class ZonalCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -88,7 +89,7 @@ class ZonalCampusAPI(APIView):
         ).get(org__org_type=OrganizationType.COLLEGE.value, user_id=user_id)
 
         campus_zone = user_org_link.org.district.zone
-        
+
         organizations_in_zone = Organization.objects.select_related(
             "district", "district__zone"
         ).filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
@@ -118,7 +119,7 @@ class ZonalCampusAPI(APIView):
 class ZonalCampusCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -126,18 +127,20 @@ class ZonalCampusCSV(APIView):
 
         user_org_link = UserOrganizationLink.objects.select_related(
             "org", "org__district", "org__district__zone"
-        ).get(org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True)
+        ).get(
+            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
+        )
 
         campus_zone = user_org_link.org.district.zone
-        
+
         organizations_in_zone = Organization.objects.select_related(
             "district", "district__zone"
         ).filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
-        
+
         verified_organizations = list(
             organizations_in_zone.filter(user_organization_link_org_id__verified=True)
         )
-    
+
         serializer = dash_zonal_serializer.ZonalCampus(
             verified_organizations,
             many=True,
