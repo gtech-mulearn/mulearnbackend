@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from db.user import User, UserRoleLink, Role
+from db.user import User, UserRoleLink
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
