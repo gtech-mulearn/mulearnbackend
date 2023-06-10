@@ -16,8 +16,6 @@ class ZonalStudentsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        # user_id = "3905c96e-a08d-47cc-85a9-b75a469eec70"
-
         user_org_link = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
         ).first()
@@ -53,8 +51,6 @@ class ZonalStudentsCSV(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        # user_id = "3905c96e-a08d-47cc-85a9-b75a469eec70"
-
         user_org_link = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
         ).first()
@@ -82,17 +78,19 @@ class ZonalCampusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        # user_id = "00d1ba08-bb83-4374-9864-d3ce9de6bd81"
-
         user_org_link = UserOrganizationLink.objects.select_related(
             "org", "org__district", "org__district__zone"
-        ).get(org__org_type=OrganizationType.COLLEGE.value, user_id=user_id)
+        ).get(
+            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
+        )
 
         campus_zone = user_org_link.org.district.zone
 
-        organizations_in_zone = Organization.objects.select_related(
-            "district", "district__zone"
-        ).filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
+        organizations_in_zone = (
+            Organization.objects.select_related("district", "district__zone")
+            .filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
+            .distinct()
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations_in_zone,
@@ -123,8 +121,6 @@ class ZonalCampusCSV(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        # user_id = "00d1ba08-bb83-4374-9864-d3ce9de6bd81"
-
         user_org_link = UserOrganizationLink.objects.select_related(
             "org", "org__district", "org__district__zone"
         ).get(
@@ -133,18 +129,16 @@ class ZonalCampusCSV(APIView):
 
         campus_zone = user_org_link.org.district.zone
 
-        organizations_in_zone = Organization.objects.select_related(
-            "district", "district__zone"
-        ).filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
-
-        verified_organizations = list(
-            organizations_in_zone.filter(user_organization_link_org_id__verified=True)
+        organizations_in_zone = (
+            Organization.objects.select_related("district", "district__zone")
+            .filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
+            .distinct()
         )
 
         serializer = dash_zonal_serializer.ZonalCampus(
-            verified_organizations,
+            organizations_in_zone,
             many=True,
-            context={"queryset": verified_organizations},
+            context={"queryset": organizations_in_zone},
         )
 
         return CommonUtils.generate_csv(serializer.data, "Zonal Campus Details")

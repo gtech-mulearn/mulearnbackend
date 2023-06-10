@@ -42,7 +42,6 @@ class ZonalStudents(serializers.ModelSerializer):
 class ZonalCampus(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
     district_name = serializers.ReadOnlyField(source="district.name")
-    # zone_name = serializers.ReadOnlyField(source="district.zone.name")
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -50,6 +49,7 @@ class ZonalCampus(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = [
+            "id",
             "title",
             "code",
             "org_type",
@@ -57,8 +57,7 @@ class ZonalCampus(serializers.ModelSerializer):
             "district_name",
             "total_members",
             "active_members",
-            "rank",
-            # "zone_name",
+            "rank"
         ]
 
     def get_total_members(self, obj):
@@ -76,30 +75,13 @@ class ZonalCampus(serializers.ModelSerializer):
         return total_karma or 0
 
     def get_rank(self, obj):
-        orgs = self.context["queryset"]
-
-        results = []
-        for org in orgs:
-            self.get_total_karma(org)
-
-        results = [karma for karma in results if karma is not None]
-
-        results.sort(reverse=True)
-
-        colleges = {karma: i + 1 for i, karma in enumerate(results)}
-        total_karma = self.get_total_karma(obj)
-        return colleges.get(total_karma)
-
-
-# def get_rank(self, obj):
-#     orgs = Organization.objects.filter(org_type="College")
-#     results = []
-#
-#     for org in orgs:
-#         for user_org_link in org.user_organization_link_org_id.filter(verified=True):
-#             results.append({'rank': 0, 'college': org.title, 'totalKarma': user_org_link.user.total_karma_user.karma})
-#     results.sort(key=lambda x: x['totalKarma'], reverse=True)
-#     colleges = {}
-#     for i, college in enumerate(results):
-#         colleges[college.get('college')] = i+1
-#     return colleges[obj.org.title]
+        queryset = self.context["queryset"]
+        
+        sorted_campuses = sorted(
+            queryset,
+            key=self.get_total_karma,
+            reverse=True,
+        )
+        for i, campus in enumerate(sorted_campuses):
+            if campus.id == obj.id:
+                return i + 1
