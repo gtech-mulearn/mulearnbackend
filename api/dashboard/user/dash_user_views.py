@@ -15,7 +15,6 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 from . import dash_user_serializer
-from .dash_user_serializer import UserDashboardSerializer, UserVerificationSerializer
 
 
 class UserInfoAPI(APIView):
@@ -84,7 +83,7 @@ class UserAPI(APIView):
             user = User.objects.get(id=user_id)
             user.delete()
             return CustomResponse(
-                general_message=["User deleted successfully"]
+                general_message="$1"
             ).get_success_response()
 
         except ObjectDoesNotExist as e:
@@ -97,7 +96,7 @@ class UserManagementCSV(APIView):
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def get(self, request):
         user = User.objects.all()
-        user_serializer_data = UserDashboardSerializer(user, many=True).data
+        user_serializer_data = dash_user_serializer.UserDashboardSerializer(user, many=True).data
         return CommonUtils.generate_csv(user_serializer_data, "User")
 
 
@@ -109,7 +108,7 @@ class UserVerificationAPI(APIView):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(user_queryset, request,
                                                       ["first_name", "last_name", "role_title"], )
-        serializer = UserVerificationSerializer(queryset.get("queryset"), many=True)
+        serializer = dash_user_serializer.UserVerificationSerializer(queryset.get("queryset"), many=True)
 
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=queryset.get("pagination")
@@ -122,7 +121,7 @@ class UserVerificationAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-        serializer = UserVerificationSerializer(user, data=request.data, partial=True)
+        serializer = dash_user_serializer.UserVerificationSerializer(user, data=request.data, partial=True)
 
         if not serializer.is_valid():
             return CustomResponse(
@@ -162,7 +161,7 @@ class ForgotPasswordAPI(APIView):
             ).get_failure_response()
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
-        forget_user = ForgotPassword.objects.create(
+        forget_user = ForgotPassword.objects.create(# 
             id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )
         email_host_user = decouple.config("EMAIL_HOST_USER")
