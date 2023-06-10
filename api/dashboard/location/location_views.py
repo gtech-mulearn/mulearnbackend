@@ -56,7 +56,8 @@ class CountryDataAPI(APIView):
         serializer = CountrySerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["Country added successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -73,11 +74,14 @@ class CountryDataAPI(APIView):
             'updated_at': updated_at,
         }
 
-        country = Country.objects.get(name=request.data.get('oldName'))
+        country = Country.objects.filter(name=request.data.get('oldName')).first()
+        if not country:
+            return CustomResponse(general_message=["Country passed in oldName not found"]).get_failure_response()
         serializer = CountrySerializer(country, data=data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["Country updated Successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     # @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -87,7 +91,7 @@ class CountryDataAPI(APIView):
             return CustomResponse(general_message=["Country not found"]).get_failure_response()
 
         country.delete()
-        return CustomResponse(response={"response": "Country deleted successfully"}).get_success_response()
+        return CustomResponse(general_message=["Country deleted successfully"]).get_success_response()
 
 
 class StateDataAPI(APIView):
@@ -146,9 +150,9 @@ class StateDataAPI(APIView):
         serializer = StateSerializer(data=data)
 
         if serializer.is_valid():
-            print(serializer.validated_data)
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["State added successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -195,7 +199,8 @@ class StateDataAPI(APIView):
         serializer = StateSerializer(state, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["State updated successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -209,7 +214,7 @@ class StateDataAPI(APIView):
             return CustomResponse(general_message=["State not found"]).get_failure_response()
 
         state.delete()
-        return CustomResponse(response={"response": "State deleted successfully"}).get_success_response()
+        return CustomResponse(general_message=["State deleted successfully"]).get_success_response()
 
 
 class ZoneDataAPI(APIView):
@@ -276,7 +281,8 @@ class ZoneDataAPI(APIView):
         serializer = ZoneSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["Zone added successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -328,7 +334,8 @@ class ZoneDataAPI(APIView):
         serializer = ZoneSerializer(zone, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["Zone updated successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -379,6 +386,7 @@ class DistrictDataAPI(APIView):
         }
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+
     @RoleRequired(roles=[RoleType.ADMIN, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
@@ -420,7 +428,8 @@ class DistrictDataAPI(APIView):
         serializer = DistrictSerializer(data=data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["District added successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
@@ -477,7 +486,8 @@ class DistrictDataAPI(APIView):
         serializer = DistrictSerializer(district, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            # return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse(general_message=["District updated successfully"]).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
     @RoleRequired(roles=[RoleType.ADMIN, ])
