@@ -42,7 +42,10 @@ class RoleAPI(APIView):
         )
 
         DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.ROLE.value, WebHookActions.EDIT.value, role.title, oldName
+            WebHookCategory.ROLE.value, 
+            WebHookActions.EDIT.value, 
+            role.title, 
+            oldName
         )
 
         if not serializer.is_valid():

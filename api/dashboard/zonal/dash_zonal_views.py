@@ -47,7 +47,7 @@ class ZonalStudentsAPI(APIView):
 class ZonalStudentsCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
+    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
