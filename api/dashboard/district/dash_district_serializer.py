@@ -5,7 +5,7 @@ from db.task import TotalKarma
 from django.db.models import Sum
 
 
-class ZonalStudents(serializers.ModelSerializer):
+class DistrictStudents(serializers.ModelSerializer):
     karma = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
 
@@ -23,7 +23,7 @@ class ZonalStudents(serializers.ModelSerializer):
             reverse=True,
         )
         for i, person in enumerate(sorted_persons):
-            if person.id == obj.id:
+            if person == obj:
                 return i + 1
 
     class Meta:
@@ -39,9 +39,8 @@ class ZonalStudents(serializers.ModelSerializer):
         ]
 
 
-class ZonalCampus(serializers.ModelSerializer):
+class DistrictCampus(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
-    district_name = serializers.ReadOnlyField(source="district.name")
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -54,7 +53,6 @@ class ZonalCampus(serializers.ModelSerializer):
             "code",
             "org_type",
             "total_karma",
-            "district_name",
             "total_members",
             "active_members",
             "rank"
@@ -83,5 +81,5 @@ class ZonalCampus(serializers.ModelSerializer):
             reverse=True,
         )
         for i, campus in enumerate(sorted_campuses):
-            if campus.id == obj.id:
+            if campus == obj:
                 return i + 1

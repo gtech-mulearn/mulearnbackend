@@ -17,7 +17,7 @@ class ZonalStudentsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
+            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
         ).first()
 
         user_zone = user_org_link.org.district.zone
@@ -25,7 +25,7 @@ class ZonalStudentsAPI(APIView):
             org__district__zone=user_zone
         ).values("user")
 
-        user_queryset = User.objects.filter(id__in=users_in_zone)
+        user_queryset = User.objects.filter(id__in=users_in_zone).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
@@ -52,7 +52,7 @@ class ZonalStudentsCSV(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id
+            org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
         ).first()
 
         user_zone = user_org_link.org.district.zone
@@ -60,7 +60,7 @@ class ZonalStudentsCSV(APIView):
             org__district__zone=user_zone
         ).values("user")
 
-        user_queryset = User.objects.filter(id__in=users_in_zone)
+        user_queryset = User.objects.filter(id__in=users_in_zone).distinct()
 
         serializer = dash_zonal_serializer.ZonalStudents(
             user_queryset,
@@ -78,11 +78,9 @@ class ZonalCampusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.select_related(
-            "org", "org__district", "org__district__zone"
-        ).get(
+        user_org_link = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
-        )
+        ).first()
 
         campus_zone = user_org_link.org.district.zone
 
@@ -95,12 +93,7 @@ class ZonalCampusAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations_in_zone,
             request,
-            [
-                "title",
-                "code",
-                "org_type",
-                "district_name",
-            ],
+            ["title", "code", "org_type"],
         )
 
         serializer = dash_zonal_serializer.ZonalCampus(
@@ -121,11 +114,9 @@ class ZonalCampusCSV(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.select_related(
-            "org", "org__district", "org__district__zone"
-        ).get(
+        user_org_link = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
-        )
+        ).first()
 
         campus_zone = user_org_link.org.district.zone
 
