@@ -5,7 +5,7 @@ from db.task import TotalKarma
 from django.db.models import Sum
 
 
-class ZonalStudents(serializers.ModelSerializer):
+class DistrictStudents(serializers.ModelSerializer):
     karma = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
 
@@ -39,7 +39,7 @@ class ZonalStudents(serializers.ModelSerializer):
         ]
 
 
-class ZonalCampus(serializers.ModelSerializer):
+class DistrictCampus(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
@@ -48,6 +48,7 @@ class ZonalCampus(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = [
+            "id",
             "title",
             "code",
             "org_type",

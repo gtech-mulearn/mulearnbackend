@@ -13,7 +13,6 @@ from . import dash_roles_serializer
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-
     @RoleRequired(roles=[RoleType.ADMIN,])
     def get(self, request):
         roles_queryset = Role.objects.all()
@@ -43,7 +42,10 @@ class RoleAPI(APIView):
         )
 
         DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.ROLE.value, WebHookActions.EDIT.value, role.title, oldName
+            WebHookCategory.ROLE.value, 
+            WebHookActions.EDIT.value, 
+            role.title, 
+            oldName
         )
 
         if not serializer.is_valid():
