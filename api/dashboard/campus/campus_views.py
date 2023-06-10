@@ -11,7 +11,7 @@ from . import serializers
 class StudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -30,7 +30,7 @@ class StudentDetailsAPI(APIView):
 class StudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -45,7 +45,7 @@ class StudentDetailsCSVAPI(APIView):
 class CampusDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_AMBASSADOR])
+    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(

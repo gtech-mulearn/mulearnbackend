@@ -165,13 +165,12 @@ class ImportCSV:
         workbook = openpyxl.load_workbook(filename=io.BytesIO(file_obj.read()))
         sheet = workbook.active
 
-        data = []
-        headers = []
+        rows = []
         for row in sheet.iter_rows(values_only=True):
-            if not headers:
-                headers = row
-            else:
-                row_dict = dict(zip(headers, row))
-                data.append(row_dict)
+            row_dict = {}
+            for header, cell_value in zip(sheet[1], row):
+                row_dict[header.value] = cell_value
+            rows.append(row_dict)
+        workbook.close()
 
-        return data
+        return rows
