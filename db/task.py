@@ -1,7 +1,7 @@
 from django.db import models
 
 from .user import User
-
+from db.organization import Organization
 
 class Channel(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
@@ -95,6 +95,7 @@ class TaskList(models.Model):
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE)
     type = models.ForeignKey(TaskType, on_delete=models.CASCADE)
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank=True, null=True)
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='task_list_updated_by')
     updated_at = models.DateTimeField()
