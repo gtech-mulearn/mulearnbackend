@@ -6,13 +6,13 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
-from . import dash_zonal_serializer
+from . import dash_district_serializer
 
 
-class ZonalStudentsAPI(APIView):
+class DistrictStudentsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -20,12 +20,13 @@ class ZonalStudentsAPI(APIView):
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
         ).first()
 
-        user_zone = user_org_link.org.district.zone
-        users_in_zone = UserOrganizationLink.objects.filter(
-            org__district__zone=user_zone
+        user_district = user_org_link.org.district
+
+        users_in_district = UserOrganizationLink.objects.filter(
+            org__district=user_district
         ).values("user")
 
-        user_queryset = User.objects.filter(id__in=users_in_zone).distinct()
+        user_queryset = User.objects.filter(id__in=users_in_district).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
@@ -33,7 +34,7 @@ class ZonalStudentsAPI(APIView):
             ["first_name", "last_name", "email", "mobile", "mu_id"],
         )
 
-        serializer = dash_zonal_serializer.ZonalStudents(
+        serializer = dash_district_serializer.DistrictStudents(
             paginated_queryset["queryset"],
             many=True,
             context={"queryset": user_queryset},
@@ -44,10 +45,10 @@ class ZonalStudentsAPI(APIView):
         )
 
 
-class ZonalStudentsCSV(APIView):
+class DistrictStudentsCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -55,26 +56,27 @@ class ZonalStudentsCSV(APIView):
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
         ).first()
 
-        user_zone = user_org_link.org.district.zone
-        users_in_zone = UserOrganizationLink.objects.filter(
-            org__district__zone=user_zone
+        user_district = user_org_link.org.district
+
+        users_in_district = UserOrganizationLink.objects.filter(
+            org__district=user_district
         ).values("user")
 
-        user_queryset = User.objects.filter(id__in=users_in_zone).distinct()
+        user_queryset = User.objects.filter(id__in=users_in_district).distinct()
 
-        serializer = dash_zonal_serializer.ZonalStudents(
+        serializer = dash_district_serializer.DistrictStudents(
             user_queryset,
             many=True,
             context={"queryset": user_queryset},
         )
 
-        return CommonUtils.generate_csv(serializer.data, "Zonal Student Details")
+        return CommonUtils.generate_csv(serializer.data, "District Student Details")
 
 
-class ZonalCampusAPI(APIView):
+class DistrictCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -82,24 +84,23 @@ class ZonalCampusAPI(APIView):
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
         ).first()
 
-        campus_zone = user_org_link.org.district.zone
+        campus_district = user_org_link.org.district
 
-        organizations_in_zone = (
-            Organization.objects.select_related("district", "district__zone")
-            .filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
-            .distinct()
-        )
+        organizations_in_district = Organization.objects.filter(
+                district=campus_district,
+                org_type=OrganizationType.COLLEGE.value,
+            ).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            organizations_in_zone,
+            organizations_in_district,
             request,
             ["title", "code", "org_type"],
         )
 
-        serializer = dash_zonal_serializer.ZonalCampus(
+        serializer = dash_district_serializer.DistrictCampus(
             paginated_queryset["queryset"],
             many=True,
-            context={"queryset": organizations_in_zone},
+            context={"queryset": organizations_in_district},
         )
 
         return CustomResponse().paginated_response(
@@ -107,10 +108,10 @@ class ZonalCampusAPI(APIView):
         )
 
 
-class ZonalCampusCSV(APIView):
+class DistrictCampusCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -118,18 +119,17 @@ class ZonalCampusCSV(APIView):
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
         ).first()
 
-        campus_zone = user_org_link.org.district.zone
+        campus_district = user_org_link.org.district
 
-        organizations_in_zone = (
-            Organization.objects.select_related("district", "district__zone")
-            .filter(district__zone=campus_zone, org_type=OrganizationType.COLLEGE.value)
-            .distinct()
-        )
+        organizations_in_district = Organization.objects.filter(
+                district=campus_district,
+                org_type=OrganizationType.COLLEGE.value,
+            ).distinct()
 
-        serializer = dash_zonal_serializer.ZonalCampus(
-            organizations_in_zone,
+        serializer = dash_district_serializer.DistrictCampus(
+            organizations_in_district,
             many=True,
-            context={"queryset": organizations_in_zone},
+            context={"queryset": organizations_in_district},
         )
 
-        return CommonUtils.generate_csv(serializer.data, "Zonal Campus Details")
+        return CommonUtils.generate_csv(serializer.data, "District Campus Details")
