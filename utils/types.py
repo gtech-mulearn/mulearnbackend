@@ -6,6 +6,7 @@ class RoleType(Enum):
     DISCORD_MANAGER = "Discord Moderator"
     EX_OFFICIAL = "Ex Official"
     FELLOW = "Fellow"
+    ASSOCIATE = "Associate"
     ZONAL_CAMPUS_LEAD = "Zonal Campus Lead"
     APPRAISER = "Appraiser"
     DISTRICT_CAMPUS_LEAD = "District Campus Lead"

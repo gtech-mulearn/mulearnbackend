@@ -100,7 +100,7 @@ class UserInterestGroupAPI(APIView):
 
         org_link = UserIgLink.objects.filter(user_id=user_id).all()
         serializer = UserInterestGroupSerializer(org_link, many=True).data
-        return CustomResponse(response=serializer).get_failure_response()
+        return CustomResponse(response=serializer).get_success_response()
 
 
 class UserSuggestionAPI(APIView):
