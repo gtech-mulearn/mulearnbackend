@@ -30,8 +30,6 @@ class UserSerializer(serializers.ModelSerializer):
             "muid",
             "firstName",
             "lastName",
-            "fullname",
-            "fullname",
             "email",
             "mobile",
             "gender",
