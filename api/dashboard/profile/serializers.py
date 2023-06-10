@@ -52,8 +52,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'joined', 'firstName', 'lastName', 'muid', 'roles', 'college_code', 'karma', 'rank',
-            'karma_distribution', 'level', 'interest_groups')
+            'id', 'joined', 'firstName', 'lastName','gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
+            'karma_distribution', 'level', 'interest_groups',)
 
     def get_roles(self, obj):
         return [
