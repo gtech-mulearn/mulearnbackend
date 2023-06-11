@@ -6,7 +6,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
-
+from django.db.models import Sum, Case, When, IntegerField
 
 class StudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
