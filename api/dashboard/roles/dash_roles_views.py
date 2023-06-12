@@ -32,21 +32,15 @@ class RoleAPI(APIView):
     def patch(self, request, roles_id):
         try:
             role = Role.objects.filter(id=roles_id).first()
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+            oldName = role.title
+        except AttributeError as e:
+            return CustomResponse(general_message="Role doesn't exist").get_failure_response()
 
-        oldName = role.title
 
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             role, data=request.data, partial=True, context={"request": request}
         )
 
-        DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.ROLE.value, 
-            WebHookActions.EDIT.value, 
-            role.title, 
-            oldName
-        )
 
         if not serializer.is_valid():
             return CustomResponse(
@@ -54,7 +48,18 @@ class RoleAPI(APIView):
             ).get_failure_response()
 
         try:
-            serializer.save()
+            
+            
+            serializer.save()     
+            newname = role.title
+            
+            DiscordWebhooks.channelsAndCategory(
+                WebHookCategory.ROLE.value, 
+                WebHookActions.EDIT.value, 
+                newname, 
+                oldName
+            )
+            
             return CustomResponse(
                 response={"data": serializer.data}
             ).get_success_response()
@@ -72,7 +77,9 @@ class RoleAPI(APIView):
             role.delete()
 
             DiscordWebhooks.channelsAndCategory(
-                WebHookCategory.ROLE.value, WebHookActions.DELETE.value, role.title
+                WebHookCategory.ROLE.value, 
+                WebHookActions.DELETE.value, 
+                role.title
             )
             return CustomResponse(
                 general_message=["Role deleted successfully"]
@@ -85,7 +92,7 @@ class RoleAPI(APIView):
     @RoleRequired(roles=[RoleType.ADMIN,])
     def post(self, request):
         serializer = dash_roles_serializer.RoleDashboardSerializer(
-            data=request.data, partial=True
+            data=request.data, partial=True, context={"request": request}
         )
 
         if serializer.is_valid():
