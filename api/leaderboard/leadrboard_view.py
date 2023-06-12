@@ -9,7 +9,7 @@ from db.user import UserRoleLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-from .serializers import StudentLeaderboardSerializer, StudentMonthlySerializer, CollegeLeaderboardSerializer, \
+from .serializers import StudentLeaderboardSerializer, CollegeLeaderboardSerializer, \
     CollegeMonthlyLeaderboardSerializer
 
 
@@ -29,18 +29,34 @@ class StudentsMonthlyLeaderboard(APIView):
         start_date = today.replace(day=1)
         end_date = start_date.replace(day=1, month=(start_date.month % 12) + 1) - datetime.timedelta(days=1)
 
-        user_roles = UserRoleLink.objects.filter(role__title='Student').select_related('user')
+        student_monthly_leaderboard = (
+            UserRoleLink.objects.filter(role__title='Student')
+            .select_related('user')
+            .values(
+                'user__id',
+                'user__first_name',
+                'user__last_name',
+            )
+            .annotate(
+                total_karma=Sum('user__karma_activity_log_created_by__karma',
+                                filter=Q(user__karma_activity_log_created_by__created_at__range=(start_date, end_date)))
+            )
+            .order_by('-total_karma')[:20]
+        )
 
-        if not user_roles:
+        if not student_monthly_leaderboard:
             return CustomResponse(general_message='No student data available').get_failure_response()
 
-        student_monthly_leaderboard = user_roles.annotate(
-            total_karma=Sum('user__karma_activity_log_created_by__karma',
-                            filter=Q(user__karma_activity_log_created_by__created_at__range=(start_date, end_date)))
-        ).order_by('-total_karma')[:20]
+        student_monthly_leaderboard = [
+            {
+                'id': student['user__id'],
+                'fullName': f"{student['user__first_name']} {student['user__last_name']}",
+                'totalKarma': student['total_karma']
+            }
+            for student in student_monthly_leaderboard
+        ]
 
-        serializer = StudentMonthlySerializer(student_monthly_leaderboard, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        return CustomResponse(student_monthly_leaderboard).get_success_response()
 
 
 class CollegeLeaderboard(APIView):

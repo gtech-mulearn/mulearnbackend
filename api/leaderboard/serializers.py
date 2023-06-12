@@ -26,17 +26,13 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
             return None
 
 
-class StudentMonthlySerializer(serializers.ModelSerializer):
-    code = serializers.SerializerMethodField()
-    full_name = serializers.ReadOnlyField(source='user.full_name')
+class StudentMonthlySerializer(serializers.Serializer):
+    id = serializers.CharField(source='user__id')
+    fullName = serializers.SerializerMethodField()
+    totalKarma = serializers.IntegerField()
 
-    class Meta:
-        model = UserRoleLink
-        fields = ['code', 'full_name', 'total_karma']
-
-    def get_code(self, obj):
-        user_organization_link = obj.user.user_organization_link_user_id.filter(org__org_type='College').first()
-        return user_organization_link.org.code if user_organization_link else None
+    def get_fullName(self, obj):
+        return f"{obj['user__first_name']} {obj['user__last_name']}"
 
 
 class CollegeLeaderboardSerializer(serializers.ModelSerializer):
