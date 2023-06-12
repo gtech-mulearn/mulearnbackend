@@ -29,21 +29,10 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
 class StudentMonthlySerializer(serializers.ModelSerializer):
     code = serializers.SerializerMethodField()
     fullName = serializers.ReadOnlyField(source="user.fullname")
-    totalKarma = serializers.SerializerMethodField()
 
     class Meta:
         model = UserRoleLink
         fields = ["code", "fullName", "totalKarma"]
-
-    def get_totalKarma(self, obj):
-        start_date = self.context.get('start_date')
-        end_date = self.context.get('end_date')
-
-        total_karma = obj.user.karma_activity_log_created_by.filter(
-            created_at__range=(start_date, end_date)
-        ).aggregate(total_karma=Sum('karma'))['total_karma']
-
-        return total_karma if total_karma is not None else 0
 
     def get_code(self, obj):
         user_organization_link = obj.user.user_organization_link_user_id.filter(org__org_type="College").first()
