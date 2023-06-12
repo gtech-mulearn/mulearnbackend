@@ -39,9 +39,11 @@ class StudentMonthlySerializer(serializers.ModelSerializer):
         start_date = self.context.get('start_date')
         end_date = self.context.get('end_date')
 
-        return obj.user.karma_activity_log_created_by.filter(
+        total_karma = obj.user.karma_activity_log_created_by.filter(
             created_at__range=(start_date, end_date)
-        ).aggregate(total_karma=Sum('karma')).get('total_karma', 0)
+        ).aggregate(total_karma=Sum('karma'))['total_karma']
+
+        return total_karma if total_karma is not None else 0
 
     def get_code(self, obj):
         user_organization_link = obj.user.user_organization_link_user_id.filter(org__org_type="College").first()
