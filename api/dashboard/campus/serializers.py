@@ -7,8 +7,6 @@ from db.task import TotalKarma, UserLvlLink
 
 class UserOrgSerializer(serializers.ModelSerializer):
     fullname = serializers.ReadOnlyField(source="user.fullname")
-    email = serializers.ReadOnlyField(source="user.email")
-    phone = serializers.ReadOnlyField(source="user.mobile")
     muid = serializers.ReadOnlyField(source="user.mu_id")
     karma = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -16,7 +14,8 @@ class UserOrgSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TotalKarma
-        fields = ["fullname", "email", "phone", "karma", "muid", "rank","level"]
+
+        fields = ["fullname", "karma", "muid", "rank"]
 
     def get_karma(self, obj):
         return obj.user.total_karma_user.karma or 0
