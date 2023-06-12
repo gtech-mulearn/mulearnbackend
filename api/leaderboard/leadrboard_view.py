@@ -1,4 +1,5 @@
 import datetime
+from datetime import timedelta
 
 from django.db.models import Sum, Q
 from rest_framework.views import APIView
@@ -9,8 +10,7 @@ from db.user import UserRoleLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-from .serializers import StudentLeaderboardSerializer, CollegeLeaderboardSerializer, \
-    CollegeMonthlyLeaderboardSerializer
+from .serializers import StudentLeaderboardSerializer, CollegeLeaderboardSerializer, CollegeMonthlyLeaderboardSerializer
 
 
 class StudentsLeaderboard(APIView):
@@ -73,14 +73,14 @@ class CollegeMonthlyLeaderboard(APIView):
     def get(self, request):
         today = DateTimeUtils.get_current_utc_time()
         start_date = today.replace(day=1)
-        end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - datetime.timedelta(days=1)
+        end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - timedelta(days=1)
 
         organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value).annotate(
-            total_karma=Sum('user_organization_link_org_id__user__karma_activity_log_created_by__karma',
-                            filter=Q(
-                                user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
-                                    start_date, end_date)))
-        ).order_by('-total_karma')[:20]
+            totalKarma=Sum('user_organization_link_org_id__user__karma_activity_log_created_by__karma',
+                           filter=Q(
+                               user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
+                                   start_date, end_date)))
+        ).order_by('-totalKarma')[:20]
 
-        college_monthly_leaderboard = CollegeMonthlyLeaderboardSerializer(organizations, many=True).data
-        return CustomResponse(response=college_monthly_leaderboard).get_success_response()
+        serializer = CollegeMonthlyLeaderboardSerializer(organizations, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
