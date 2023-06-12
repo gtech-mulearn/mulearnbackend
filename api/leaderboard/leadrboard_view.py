@@ -7,7 +7,7 @@ from db.organization import Organization
 from db.task import TotalKarma
 from db.user import UserRoleLink
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from .serializers import StudentLeaderboardSerializer, StudentMonthlySerializer, CollegeLeaderboardSerializer, \
     CollegeMonthlyLeaderboardSerializer
@@ -29,19 +29,18 @@ class StudentsMonthlyLeaderboard(APIView):
         start_date = today.replace(day=1)
         end_date = start_date.replace(day=1, month=(start_date.month % 12) + 1) - datetime.timedelta(days=1)
 
-        user_roles = UserRoleLink.objects.filter(role__title=RoleType.STUDENT.value).select_related('user')
+        user_roles = UserRoleLink.objects.filter(role__title='Student').select_related('user')
 
         if not user_roles:
             return CustomResponse(general_message='No student data available').get_failure_response()
 
         student_monthly_leaderboard = user_roles.annotate(
-            totalKarma=Sum('user__karma_activity_log_created_by__karma',
-                           filter=Q(user__karma_activity_log_created_by__created_at__range=(start_date, end_date)))
-        ).order_by('-totalKarma')[:20]
+            total_karma=Sum('user__karma_activity_log_created_by__karma',
+                            filter=Q(user__karma_activity_log_created_by__created_at__range=(start_date, end_date)))
+        ).order_by('-total_karma')[:20]
 
-        student_monthly_leaderboard = StudentMonthlySerializer(student_monthly_leaderboard, many=True).data
-
-        return CustomResponse(response=student_monthly_leaderboard).get_success_response()
+        serializer = StudentMonthlySerializer(student_monthly_leaderboard, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class CollegeLeaderboard(APIView):
