@@ -2,7 +2,7 @@ from django.db.models import Sum, F
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import TotalKarma
+from db.task import TotalKarma, UserLvlLink
 
 
 class UserOrgSerializer(serializers.ModelSerializer):
@@ -12,10 +12,11 @@ class UserOrgSerializer(serializers.ModelSerializer):
     muid = serializers.ReadOnlyField(source="user.mu_id")
     karma = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
 
     class Meta:
         model = TotalKarma
-        fields = ["fullname", "email", "phone", "karma", "muid", "rank"]
+        fields = ["fullname", "email", "phone", "karma", "muid", "rank","level"]
 
     def get_karma(self, obj):
         return obj.user.total_karma_user.karma or 0
@@ -29,6 +30,12 @@ class UserOrgSerializer(serializers.ModelSerializer):
 
         ranks = {karma: i + 1 for i, karma in enumerate(rank)}
         return ranks.get(obj.user.total_karma_user.karma, None)
+
+    def get_level(self, obj):
+        user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
+        if user_level_link:
+            return user_level_link.level.name
+        return None
 
 
 # class UserOrgSerializer(serializers.ModelSerializer):
