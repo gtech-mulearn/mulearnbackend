@@ -56,7 +56,7 @@ class StudentsMonthlyLeaderboard(APIView):
             for student in student_monthly_leaderboard
         ]
 
-        return CustomResponse(data=student_monthly_leaderboard).get_success_response()
+        return CustomResponse(response=student_monthly_leaderboard).get_success_response()
 
 
 class CollegeLeaderboard(APIView):
