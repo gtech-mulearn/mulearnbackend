@@ -1,6 +1,6 @@
 import datetime
-from operator import itemgetter
 
+from django.db.models import Sum, Q
 from rest_framework.views import APIView
 
 from db.organization import Organization
@@ -16,8 +16,8 @@ from .serializers import StudentLeaderboardSerializer, StudentMonthlySerializer,
 class StudentsLeaderboard(APIView):
 
     def get(self, request):
-        users_total_karma = TotalKarma.objects.all().order_by('-karma')[:20]
-        if users_total_karma is None:
+        users_total_karma = TotalKarma.objects.select_related('user').order_by('-karma')[:20]
+        if not users_total_karma:
             return CustomResponse(general_message='No Karma Related data available').get_failure_response()
         data = StudentLeaderboardSerializer(users_total_karma, many=True).data
         return CustomResponse(response=data).get_success_response()
@@ -26,21 +26,20 @@ class StudentsLeaderboard(APIView):
 class StudentsMonthlyLeaderboard(APIView):
 
     def get(self, request):
-
         today = DateTimeUtils.get_current_utc_time()
         start_date = today.replace(day=1)
-        end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - datetime.timedelta(days=1)
+        end_date = start_date.replace(day=1, month=(start_date.month % 12) + 1) - datetime.timedelta(days=1)
 
-        user_roles = UserRoleLink.objects.filter(role__title=RoleType.STUDENT.value)
+        user_roles = UserRoleLink.objects.filter(role__title=RoleType.STUDENT.value).select_related('user')
 
-        if user_roles is None:
-            return CustomResponse('No student data available').get_failure_response()
+        if not user_roles:
+            return CustomResponse(general_message='No student data available').get_failure_response()
 
         student_monthly_leaderboard = StudentMonthlySerializer(user_roles, many=True,
                                                                context={'start_date': start_date,
                                                                         'end_date': end_date}).data
 
-        student_monthly_leaderboard.sort(key=itemgetter('totalKarma'), reverse=True)
+        student_monthly_leaderboard.sort(key=lambda x: x['totalKarma'], reverse=True)
 
         student_monthly_leaderboard = student_monthly_leaderboard[:20]
         return CustomResponse(response=student_monthly_leaderboard).get_success_response()
@@ -49,26 +48,26 @@ class StudentsMonthlyLeaderboard(APIView):
 class CollegeLeaderboard(APIView):
 
     def get(self, request):
-        organization = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
-        college_monthly_leaderboard = CollegeLeaderboardSerializer(organization, many=True).data
-        college_monthly_leaderboard.sort(key=itemgetter('totalKarma'), reverse=True)
+        organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
+        college_monthly_leaderboard = CollegeLeaderboardSerializer(organizations, many=True).data
+        college_monthly_leaderboard.sort(key=lambda x: x['totalKarma'], reverse=True)
         college_monthly_leaderboard = college_monthly_leaderboard[:20]
         return CustomResponse(response=college_monthly_leaderboard).get_success_response()
 
 
 class CollegeMonthlyLeaderboard(APIView):
-
     def get(self, request):
         today = DateTimeUtils.get_current_utc_time()
         start_date = today.replace(day=1)
         end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - datetime.timedelta(days=1)
 
-        organisation = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
-        college_monthly_leaderboard = CollegeMonthlyLeaderboardSerializer(organisation, many=True,
-                                                                          context={'start_date': start_date,
-                                                                                   'end_date': end_date}).data
+        organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value).annotate(
+            total_karma=Sum('user_organization_link_org_id__user__karma_activity_log_created_by__karma',
+                            filter=Q(
+                                user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
+                                start_date, end_date)))
+        ).order_by('-total_karma')[:20]
 
-        college_monthly_leaderboard.sort(key=itemgetter('totalKarma'), reverse=True)
-        college_monthly_leaderboard = college_monthly_leaderboard[:20]
 
+        college_monthly_leaderboard = CollegeMonthlyLeaderboardSerializer(organizations, many=True).data
         return CustomResponse(response=college_monthly_leaderboard).get_success_response()
