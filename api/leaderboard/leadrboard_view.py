@@ -24,7 +24,6 @@ class StudentsLeaderboard(APIView):
 
 
 class StudentsMonthlyLeaderboard(APIView):
-
     def get(self, request):
         today = DateTimeUtils.get_current_utc_time()
         start_date = today.replace(day=1)
@@ -35,13 +34,13 @@ class StudentsMonthlyLeaderboard(APIView):
         if not user_roles:
             return CustomResponse(general_message='No student data available').get_failure_response()
 
-        student_monthly_leaderboard = StudentMonthlySerializer(user_roles, many=True,
-                                                               context={'start_date': start_date,
-                                                                        'end_date': end_date}).data
+        student_monthly_leaderboard = user_roles.annotate(
+            totalKarma=Sum('user__karma_activity_log_created_by__karma',
+                           filter=Q(user__karma_activity_log_created_by__created_at__range=(start_date, end_date)))
+        ).order_by('-totalKarma')[:20]
 
-        student_monthly_leaderboard.sort(key=lambda x: x['totalKarma'], reverse=True)
+        student_monthly_leaderboard = StudentMonthlySerializer(student_monthly_leaderboard, many=True).data
 
-        student_monthly_leaderboard = student_monthly_leaderboard[:20]
         return CustomResponse(response=student_monthly_leaderboard).get_success_response()
 
 
@@ -65,9 +64,8 @@ class CollegeMonthlyLeaderboard(APIView):
             total_karma=Sum('user_organization_link_org_id__user__karma_activity_log_created_by__karma',
                             filter=Q(
                                 user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
-                                start_date, end_date)))
+                                    start_date, end_date)))
         ).order_by('-total_karma')[:20]
-
 
         college_monthly_leaderboard = CollegeMonthlyLeaderboardSerializer(organizations, many=True).data
         return CustomResponse(response=college_monthly_leaderboard).get_success_response()
