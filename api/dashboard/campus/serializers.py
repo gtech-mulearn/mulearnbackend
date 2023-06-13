@@ -38,10 +38,11 @@ class UserOrgSerializer(serializers.ModelSerializer):
     muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.IntegerField()
+    level = serializers.CharField()
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["fullname", "karma", "muid", "rank", ]
+        fields = ["fullname", "karma", "muid", "rank", "level"]
 
 
 # class UserOrgSerializer(serializers.ModelSerializer):
