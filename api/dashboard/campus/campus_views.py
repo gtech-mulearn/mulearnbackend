@@ -7,6 +7,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
+from .serializers import UserOrgSerializer
 
 
 # class StudentDetailsAPI(APIView):
@@ -53,11 +54,11 @@ class StudentDetailsAPI(APIView):
             level=F('user__userlvllink__level__name')
         ).order_by('-karma')
 
+        serializer = UserOrgSerializer(queryset, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
         # paginated_queryset = CommonUtils.get_paginated_queryset(queryset, request, ['fullname'])
-        serializer = serializers.UserOrgSerializer(queryset, many=True)
-
-
-        return CustomResponse(response={"data": serializer.data}).get_success_response()
+        # serializer = serializers.UserOrgSerializer(queryset, many=True)
 
         # return CustomResponse(response={"data": serializer,
         #                                 'pagination': paginated_queryset.get('pagination')}).get_success_response()
