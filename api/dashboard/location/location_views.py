@@ -4,7 +4,7 @@ from datetime import datetime
 from rest_framework.views import APIView
 
 from db.organization import Country, State, District, Zone
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -31,7 +31,7 @@ class CountryDataAPI(APIView):
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -59,7 +59,7 @@ class CountryDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -113,7 +113,7 @@ class StateDataAPI(APIView):
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
@@ -146,12 +146,11 @@ class StateDataAPI(APIView):
         serializer = StateSerializer(data=data)
 
         if serializer.is_valid():
-            print(serializer.validated_data)
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, country):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -173,13 +172,15 @@ class StateDataAPI(APIView):
                 state_exist = State.objects.filter(name=request.data.get('newName'), country=country_obj.id).first()
                 if state_exist:
                     return CustomResponse(general_message=
-                        [f"State already exists for {request.data.get('country')}"]).get_failure_response()
+                                          [
+                                              f"State already exists for {request.data.get('country')}"]).get_failure_response()
                 request.data['name'] = request.data.get('newName')
             else:
                 state_exist = State.objects.filter(name=request.data.get('oldName'), country=country_obj.id).first()
                 if state_exist:
                     return CustomResponse(general_message=
-                        [f"State already exists for {request.data.get('country')}"]).get_failure_response()
+                                          [
+                                              f"State already exists for {request.data.get('country')}"]).get_failure_response()
             country_id = country_obj.id
             request.data['country'] = country_id
 
@@ -198,7 +199,7 @@ class StateDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
@@ -241,7 +242,7 @@ class ZoneDataAPI(APIView):
 
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, state, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
@@ -279,7 +280,7 @@ class ZoneDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, state, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
@@ -307,13 +308,15 @@ class ZoneDataAPI(APIView):
                 zone_exists = Zone.objects.filter(name=request.data.get('newName'), state=state_obj.id).first()
                 if zone_exists:
                     return CustomResponse(general_message=
-                    [f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
+                                          [
+                                              f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
                 request.data['name'] = request.data.get('newName')
             else:
                 zone_exists = Zone.objects.filter(name=request.data.get('oldName'), state=state_obj.id).first()
                 if zone_exists:
                     return CustomResponse(general_message=
-                            [f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
+                                          [
+                                              f"Zone already exist for {request.data.get('state')}"]).get_failure_response()
             request.data['state'] = state_obj.id
 
         if request.data.get('newName') and not request.data.get('state'):
@@ -331,7 +334,7 @@ class ZoneDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, state, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
@@ -368,7 +371,7 @@ class DistrictDataAPI(APIView):
         zone_id = zone_obj.id
 
         districts = District.objects.filter(zone=zone_id)
-        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request, ['id', 'name'])
         serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "states": [
@@ -379,7 +382,8 @@ class DistrictDataAPI(APIView):
         }
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -423,7 +427,7 @@ class DistrictDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -455,13 +459,15 @@ class DistrictDataAPI(APIView):
                 district_exist = District.objects.filter(name=request.data.get('newName'), zone=zone_obj.id).first()
                 if district_exist:
                     return CustomResponse(general_message=
-                            [f"District already exists for {request.data.get('zone')}"]).get_failure_response()
+                                          [
+                                              f"District already exists for {request.data.get('zone')}"]).get_failure_response()
                 request.data['name'] = request.data.get('newName')
             else:
                 district_exist = District.objects.filter(name=request.data.get('oldName'), zone=zone_obj.id).first()
                 if district_exist:
                     return CustomResponse(general_message=
-                    [f"District already exists for {request.data.get('zone')}"]).get_failure_response()
+                                          [
+                                              f"District already exists for {request.data.get('zone')}"]).get_failure_response()
 
             request.data['zone'] = zone_obj.id
 
@@ -480,7 +486,7 @@ class DistrictDataAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         return CustomResponse(general_message=[serializer.errors]).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, country, state, zone):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
@@ -500,6 +506,3 @@ class DistrictDataAPI(APIView):
 
         district.delete()
         return CustomResponse(response={"response": "District deleted successfully"}).get_success_response()
-
-
-
