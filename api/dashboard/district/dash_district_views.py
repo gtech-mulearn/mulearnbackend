@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink
 from db.user import User
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
@@ -12,7 +12,7 @@ from . import dash_district_serializer
 class DistrictStudentsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -48,7 +48,7 @@ class DistrictStudentsAPI(APIView):
 class DistrictStudentsCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -76,7 +76,7 @@ class DistrictStudentsCSV(APIView):
 class DistrictCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -87,9 +87,9 @@ class DistrictCampusAPI(APIView):
         campus_district = user_org_link.org.district
 
         organizations_in_district = Organization.objects.filter(
-                district=campus_district,
-                org_type=OrganizationType.COLLEGE.value,
-            ).distinct()
+            district=campus_district,
+            org_type=OrganizationType.COLLEGE.value,
+        ).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations_in_district,
@@ -111,7 +111,7 @@ class DistrictCampusAPI(APIView):
 class DistrictCampusCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.DISTRICT_CAMPUS_LEAD])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -122,9 +122,9 @@ class DistrictCampusCSV(APIView):
         campus_district = user_org_link.org.district
 
         organizations_in_district = Organization.objects.filter(
-                district=campus_district,
-                org_type=OrganizationType.COLLEGE.value,
-            ).distinct()
+            district=campus_district,
+            org_type=OrganizationType.COLLEGE.value,
+        ).distinct()
 
         serializer = dash_district_serializer.DistrictCampus(
             organizations_in_district,

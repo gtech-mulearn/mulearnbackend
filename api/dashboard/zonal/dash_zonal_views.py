@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink
 from db.user import User
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
@@ -12,7 +12,7 @@ from . import dash_zonal_serializer
 class ZonalStudentsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -47,7 +47,7 @@ class ZonalStudentsAPI(APIView):
 class ZonalStudentsCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -74,7 +74,7 @@ class ZonalStudentsCSV(APIView):
 class ZonalCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -110,7 +110,7 @@ class ZonalCampusAPI(APIView):
 class ZonalCampusCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ZONAL_CAMPUS_LEAD])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
