@@ -4,7 +4,7 @@ from openpyxl import Workbook
 from rest_framework.views import APIView
 from db.task import TaskList, Channel, TaskType, Level, InterestGroup
 from db.organization import Organization
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
@@ -33,7 +33,7 @@ class TaskApi(APIView):
         return CustomResponse().paginated_response(data=task_serializer_data,
                                                    pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
         task_data = TaskList.objects.create(
@@ -56,7 +56,7 @@ class TaskApi(APIView):
         serializer = TaskListSerializer(task_data)
         return CustomResponse(response={"taskList": serializer.data}).get_success_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, pk):  # edit
         user_id = JWTUtils.fetch_user_id(request)
         taskData = TaskList.objects.filter(id=pk).first()
@@ -78,7 +78,7 @@ class TaskApi(APIView):
             response={"taskList": serializer.data}
         ).get_success_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, pk):  # delete
         user_id = JWTUtils.fetch_user_id(request)
         taskData = TaskList.objects.filter(id=pk).first()
@@ -95,7 +95,7 @@ class TaskApi(APIView):
 class TaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         task_serializer = TaskList.objects.all()
         task_serializer_data = TaskListSerializer(task_serializer, many=True).data
@@ -105,7 +105,7 @@ class TaskListCSV(APIView):
 
 class ImportTaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         try:
             file_obj = request.FILES['task_list']
@@ -200,7 +200,7 @@ class ImportTaskListCSV(APIView):
 class TaskGetAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request, pk):
         task_serializer = TaskList.objects.get(id=pk)
         serializer = TaskListSerializer(task_serializer)
