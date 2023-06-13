@@ -4,7 +4,6 @@ from rest_framework.serializers import ModelSerializer
 
 from db.organization import Organization
 from db.task import TotalKarma
-from db.user import UserRoleLink
 
 
 # serializers.py
@@ -61,8 +60,5 @@ class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
         fields = ["code", "institution", "totalKarma"]
 
     def get_totalKarma(self, obj):
-        total_karma = \
-            obj.user_organization_link_org_id.aggregate(total_karma=Sum('user__karma_activity_log_created_by__karma'))[
-                'total_karma']
-
+        total_karma = obj.totalKarma
         return total_karma or 0
