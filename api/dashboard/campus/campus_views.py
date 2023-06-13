@@ -56,6 +56,7 @@ class StudentDetailsAPI(APIView):
         # paginated_queryset = CommonUtils.get_paginated_queryset(queryset, request, ['fullname'])
         serializer = serializers.UserOrgSerializer(queryset, many=True)
 
+
         return CustomResponse(response={"data": serializer.data}).get_success_response()
 
         # return CustomResponse(response={"data": serializer,
