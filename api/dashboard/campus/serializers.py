@@ -1,9 +1,7 @@
-from django.db.models import Sum, F
+from django.db.models import Sum
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import TotalKarma
-from db.task import UserLvlLink
 
 
 # class UserOrgSerializer(serializers.ModelSerializer):
@@ -45,7 +43,6 @@ class UserOrgSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserOrganizationLink
         fields = ["fullname", "karma", "muid", "rank", "level"]
-
 
 
 # class UserOrgSerializer(serializers.ModelSerializer):

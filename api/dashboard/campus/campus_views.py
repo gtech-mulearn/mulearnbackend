@@ -53,11 +53,13 @@ class StudentDetailsAPI(APIView):
             level=F('user__userlvllink__level__name')
         ).order_by('-karma')
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(queryset, request, ['fullname'])
-        serializer = serializers.UserOrgSerializer(paginated_queryset.get('queryset'), many=True).data
+        # paginated_queryset = CommonUtils.get_paginated_queryset(queryset, request, ['fullname'])
+        serializer = serializers.UserOrgSerializer(queryset, many=True)
 
-        return CustomResponse(response={"data": serializer,
-                                        'pagination': paginated_queryset.get('pagination')}).get_success_response()
+        return CustomResponse(response={"data": serializer.data}).get_success_response()
+
+        # return CustomResponse(response={"data": serializer,
+        #                                 'pagination': paginated_queryset.get('pagination')}).get_success_response()
 
 
 class StudentDetailsCSVAPI(APIView):
