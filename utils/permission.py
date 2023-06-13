@@ -174,8 +174,7 @@ def role_required(roles):
                     return response
             else:
                 return CustomResponse(
-                    general_message="You do not have the required role to access this page."
-                ).get_failure_response()
+                    general_message="You do not have the required role to access this page.").get_failure_response()
 
         return wrapped_view_func
 
