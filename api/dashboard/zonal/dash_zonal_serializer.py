@@ -40,9 +40,9 @@ class ZonalStudents(serializers.ModelSerializer):
 
 
 class ZonalCampus(serializers.ModelSerializer):
-    total_karma = serializers.SerializerMethodField()
-    total_members = serializers.SerializerMethodField()
-    active_members = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    total_members = serializers.IntegerField()
+    active_members = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
 
     class Meta:
@@ -57,26 +57,12 @@ class ZonalCampus(serializers.ModelSerializer):
             "rank"
         ]
 
-    def get_total_members(self, obj):
-        return obj.user_organization_link_org_id.count()
-
-    def get_active_members(self, obj):
-        return obj.user_organization_link_org_id.filter(
-            verified=True, user__active=True
-        ).count()
-
-    def get_total_karma(self, obj):
-        total_karma = obj.user_organization_link_org_id.filter(verified=True).aggregate(
-            total_karma=Sum("user__total_karma_user__karma")
-        )["total_karma"]
-        return total_karma or 0
-
     def get_rank(self, obj):
         queryset = self.context["queryset"]
         
         sorted_campuses = sorted(
             queryset,
-            key=self.get_total_karma,
+            key=lambda campus: campus.total_karma,
             reverse=True,
         )
         for i, campus in enumerate(sorted_campuses):
