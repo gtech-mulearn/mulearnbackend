@@ -1,10 +1,9 @@
 import uuid
-from datetime import datetime
 
 from rest_framework.views import APIView
 
 from db.organization import Country, State, District, Zone
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, get_current_utc_time, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -41,8 +40,8 @@ class CountryDataAPI(APIView):
         if country:
             return CustomResponse(general_message="Country already exists").get_failure_response()
 
-        created_at = datetime.now()
-        updated_at = datetime.now()
+        created_at = get_current_utc_time()
+        updated_at = get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -66,7 +65,7 @@ class CountryDataAPI(APIView):
         if not user_id:
             return CustomResponse(general_message="User not found").get_failure_response()
 
-        updated_at = datetime.now()
+        updated_at = get_current_utc_time()
 
         data = {
             'name': request.data.get('newName'),
@@ -134,8 +133,8 @@ class StateDataAPI(APIView):
         if state:
             return CustomResponse(general_message="State already exists").get_failure_response()
 
-        created_at = datetime.now()
-        updated_at = datetime.now()
+        created_at = get_current_utc_time()
+        updated_at = get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -194,7 +193,7 @@ class StateDataAPI(APIView):
             request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
-        request.data['updated_at'] = datetime.now()
+        request.data['updated_at'] = get_current_utc_time()
 
         serializer = StateSerializer(state, data=request.data, partial=True)
         if serializer.is_valid():
@@ -265,8 +264,8 @@ class ZoneDataAPI(APIView):
         if zone:
             return CustomResponse(general_message="Zone already exists").get_failure_response()
 
-        created_at = datetime.now()
-        updated_at = datetime.now()
+        created_at = get_current_utc_time()
+        updated_at = get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -329,7 +328,7 @@ class ZoneDataAPI(APIView):
             request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
-        request.data['updated_at'] = datetime.now()
+        request.data['updated_at'] = get_current_utc_time()
 
         serializer = ZoneSerializer(zone, data=request.data, partial=True)
         if serializer.is_valid():
@@ -411,8 +410,8 @@ class DistrictDataAPI(APIView):
         if district:
             return CustomResponse(general_message="District already exists").get_failure_response()
 
-        created_at = datetime.now()
-        updated_at = datetime.now()
+        created_at = get_current_utc_time()
+        updated_at = get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -480,7 +479,7 @@ class DistrictDataAPI(APIView):
             request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
-        request.data['updated_at'] = datetime.now()
+        request.data['updated_at'] = get_current_utc_time()
 
         serializer = DistrictSerializer(district, data=request.data, partial=True)
         if serializer.is_valid():
