@@ -2,24 +2,17 @@ from rest_framework import serializers
 from db.organization import Organization
 from db.user import User
 from db.task import TotalKarma
-from django.db.models import Sum
 
 
 class ZonalStudents(serializers.ModelSerializer):
-    karma = serializers.SerializerMethodField()
+    karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
-
-    def get_karma(self, obj):
-        try:
-            return obj.total_karma_user.karma
-        except TotalKarma.DoesNotExist:
-            return 0
 
     def get_rank(self, obj):
         queryset = self.context["queryset"]
         sorted_persons = sorted(
-            (person for person in queryset if hasattr(person, "total_karma_user")),
-            key=lambda x: x.total_karma_user.karma,
+            queryset,
+            key=lambda x: x.karma,
             reverse=True,
         )
         for i, person in enumerate(sorted_persons):
@@ -37,6 +30,7 @@ class ZonalStudents(serializers.ModelSerializer):
             "karma",
             "rank",
         ]
+
 
 
 class ZonalCampus(serializers.ModelSerializer):

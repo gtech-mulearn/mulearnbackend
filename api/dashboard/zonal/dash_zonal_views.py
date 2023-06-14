@@ -75,12 +75,11 @@ class ZonalStudentsCSV(APIView):
     
 
 class ZonalCampusAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
-        # user_id = JWTUtils.fetch_user_id(request)
-        user_id = "3905c96e-a08d-47cc-85a9-b75a469eec70"
+        user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value, user_id=user_id, verified=True
