@@ -7,7 +7,7 @@ from rest_framework.views import APIView
 from db.organization import Organization, UserOrganizationLink, OrgAffiliation, Country, State, District, Zone
 from db.task import TotalKarma
 from utils.permission import CustomizePermission, JWTUtils
-from utils.permission import RoleRequired
+from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType, WebHookCategory, WebHookActions
 from .serializers import AffiliationSerializer, OrganisationSerializer, PostOrganizationSerializer
@@ -99,7 +99,7 @@ class GetInstitutionsAPI(APIView):
 class PostInstitutionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -169,7 +169,7 @@ class PostInstitutionAPI(APIView):
             return CustomResponse(general_message="Organisation Added Successfully").get_success_response()
         return CustomResponse(general_message=organisation_serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, org_code):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -277,7 +277,7 @@ class PostInstitutionAPI(APIView):
                 response={'institution': OrganisationSerializer(organisation_obj).data}).get_success_response()
         return CustomResponse(general_message=organisation_serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, org_code):
         organisation = Organization.objects.filter(code=org_code).first()
         org_type = organisation.org_type
@@ -313,7 +313,7 @@ class AffiliationAPI(APIView):
         return CustomResponse().paginated_response(data=data,
                                                     pagination=paginated_queryset.get("pagination"))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -340,7 +340,7 @@ class AffiliationAPI(APIView):
             return CustomResponse(general_message="Affiliation added successfully").get_success_response()
         return CustomResponse(general_message=affiliation_serializer.errors).get_failure_response()  
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -365,7 +365,7 @@ class AffiliationAPI(APIView):
             return CustomResponse(response=affiliation_serializer.data ).get_success_response()
         return CustomResponse(general_message=affiliation_serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request):
         title = request.data.get("title")
         affiliation = OrgAffiliation.objects.filter(title=title).first()

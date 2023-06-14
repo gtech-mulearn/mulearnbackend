@@ -1,4 +1,4 @@
-from django.db.models import Count, F
+from django.db.models import F
 from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -52,8 +52,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'joined', 'firstName', 'lastName','gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
-            'karma_distribution', 'level', 'interest_groups',)
+            'id', 'joined', 'firstName', 'lastName', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
+            'karma_distribution', 'level', 'interest_groups', 'profile_pic')
 
     def get_roles(self, obj):
         return [
@@ -88,7 +88,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             KarmaActivityLog.objects
             .filter(created_by=obj)
             .values(task_type=F('task__type__title'))
-            .annotate(karma=Count('karma'))
+            .annotate(karma=Sum('karma'))
         )
 
         return karma_distribution

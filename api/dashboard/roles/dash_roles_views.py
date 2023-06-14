@@ -1,9 +1,9 @@
-from rest_framework.views import APIView
 from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
+from rest_framework.views import APIView
 
 from db.user import Role
-from utils.permission import CustomizePermission, RoleRequired
+from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks
@@ -13,7 +13,7 @@ from . import dash_roles_serializer
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN,])
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         roles_queryset = Role.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
@@ -27,25 +27,16 @@ class RoleAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-
-    @RoleRequired(roles=[RoleType.ADMIN,])
+    @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, roles_id):
         try:
             role = Role.objects.filter(id=roles_id).first()
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-        oldName = role.title
+            oldName = role.title
+        except AttributeError as e:
+            return CustomResponse(general_message="Role doesn't exist").get_failure_response()
 
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             role, data=request.data, partial=True, context={"request": request}
-        )
-
-        DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.ROLE.value, 
-            WebHookActions.EDIT.value, 
-            role.title, 
-            oldName
         )
 
         if not serializer.is_valid():
@@ -54,7 +45,17 @@ class RoleAPI(APIView):
             ).get_failure_response()
 
         try:
+
             serializer.save()
+            newname = role.title
+
+            DiscordWebhooks.channelsAndCategory(
+                WebHookCategory.ROLE.value,
+                WebHookActions.EDIT.value,
+                newname,
+                oldName
+            )
+
             return CustomResponse(
                 response={"data": serializer.data}
             ).get_success_response()
@@ -64,15 +65,16 @@ class RoleAPI(APIView):
                 general_message="Database integrity error",
             ).get_failure_response()
 
-
-    @RoleRequired(roles=[RoleType.ADMIN,])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, roles_id):
         try:
             role = Role.objects.get(id=roles_id)
             role.delete()
 
             DiscordWebhooks.channelsAndCategory(
-                WebHookCategory.ROLE.value, WebHookActions.DELETE.value, role.title
+                WebHookCategory.ROLE.value,
+                WebHookActions.DELETE.value,
+                role.title
             )
             return CustomResponse(
                 general_message=["Role deleted successfully"]
@@ -81,11 +83,10 @@ class RoleAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-
-    @RoleRequired(roles=[RoleType.ADMIN,])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         serializer = dash_roles_serializer.RoleDashboardSerializer(
-            data=request.data, partial=True
+            data=request.data, partial=True, context={"request": request}
         )
 
         if serializer.is_valid():
@@ -109,7 +110,7 @@ class RoleAPI(APIView):
 class RoleManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN,])
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         role = Role.objects.all()
         role_serializer_data = dash_roles_serializer.RoleDashboardSerializer(

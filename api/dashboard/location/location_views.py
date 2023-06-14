@@ -4,7 +4,7 @@ from datetime import datetime
 from rest_framework.views import APIView
 
 from db.organization import Country, State, District, Zone
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -31,7 +31,7 @@ class CountryDataAPI(APIView):
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -60,7 +60,7 @@ class CountryDataAPI(APIView):
             return CustomResponse(general_message="Country added successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -84,7 +84,7 @@ class CountryDataAPI(APIView):
             return CustomResponse(general_message="Country updated Successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    # @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required(roles=[RoleType.ADMIN, ])
     def delete(self, request):
         country = Country.objects.filter(name=request.data.get('name')).first()
         if not country:
@@ -117,7 +117,7 @@ class StateDataAPI(APIView):
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
@@ -155,7 +155,7 @@ class StateDataAPI(APIView):
             return CustomResponse(general_message="State added successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, country):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -203,7 +203,7 @@ class StateDataAPI(APIView):
             return CustomResponse(general_message="State updated successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
@@ -246,7 +246,7 @@ class ZoneDataAPI(APIView):
 
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, state, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
@@ -285,7 +285,7 @@ class ZoneDataAPI(APIView):
             return CustomResponse(general_message="Zone added successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, state, country):
         user_id = JWTUtils.fetch_user_id(request)
         country_obj = Country.objects.filter(name=country).first()
@@ -338,7 +338,7 @@ class ZoneDataAPI(APIView):
             return CustomResponse(general_message="Zone updated successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, state, country):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
@@ -375,7 +375,7 @@ class DistrictDataAPI(APIView):
         zone_id = zone_obj.id
 
         districts = District.objects.filter(zone=zone_id)
-        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request,['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request, ['id', 'name'])
         serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "districts": [
@@ -386,8 +386,7 @@ class DistrictDataAPI(APIView):
         }
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
-
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required(roles=[RoleType.ADMIN, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -432,7 +431,7 @@ class DistrictDataAPI(APIView):
             return CustomResponse(general_message="District added successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -490,7 +489,7 @@ class DistrictDataAPI(APIView):
             return CustomResponse(general_message="District updated successfully").get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, country, state, zone):
         country_obj = Country.objects.filter(name=country).first()
         if not country_obj:
@@ -510,6 +509,3 @@ class DistrictDataAPI(APIView):
 
         district.delete()
         return CustomResponse(general_message="District deleted successfully").get_success_response()
-
-
-
