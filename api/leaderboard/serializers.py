@@ -2,12 +2,13 @@ from django.db.models import Sum
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from db.organization import UserOrganizationLink, Organization
+from db.organization import Organization
 from db.task import TotalKarma
-from db.user import UserRoleLink
 
 
-class StudentLeaderboardSerializer(ModelSerializer):
+# serializers.py
+
+class StudentLeaderboardSerializer(serializers.ModelSerializer):
     totalKarma = serializers.IntegerField(source="karma")
     fullName = serializers.ReadOnlyField(source="user.fullname")
     institution = serializers.SerializerMethodField()
@@ -18,47 +19,22 @@ class StudentLeaderboardSerializer(ModelSerializer):
 
     def get_institution(self, obj):
         try:
-            # no use .first()
-            user_organization = obj.user.user_organization_link_user_id.filter(org__org_type__in=["College"]).first()
-            # user_organization = obj.user.user_organization_link_user_id.first()
-            return user_organization.org.code if user_organization.org else None
-        except:
+            user_organization = obj.user.user_organization_link_user_id.first().org
+            return user_organization.code if user_organization else None
+        except Exception as e:
             return None
 
 
-class StudentMonthlySerializer(ModelSerializer):
-    code = serializers.SerializerMethodField()
-    fullName = serializers.ReadOnlyField(source="user.fullname")
-    totalKarma = serializers.SerializerMethodField()
+class StudentMonthlySerializer(serializers.Serializer):
+    id = serializers.CharField(source='user__id')
+    fullName = serializers.SerializerMethodField()
+    totalKarma = serializers.IntegerField()
 
-    class Meta:
-        model = UserRoleLink
-        fields = ["code", "fullName", "totalKarma"]
-
-    def get_totalKarma(self, obj):
-
-        start_date = self.context.get('start_date')
-        end_date = self.context.get('end_date')
-
-        try:
-            monthly_karma = obj.user.karma_activity_log_created_by.filter(
-                created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get(
-                'karma__sum') if obj.user.karma_activity_log_created_by.filter(
-                created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum') else 0
-        except Exception as e:
-            monthly_karma = 0
-        return monthly_karma
-
-    def get_code(self, obj):
-
-        try:
-            user_organization_link = obj.user.user_organization_link_user_id.all().first()
-        except:
-            user_organization_link = None
-        return user_organization_link.org.code if user_organization_link else None
+    def get_fullName(self, obj):
+        return f"{obj['user__first_name']} {obj['user__last_name']}"
 
 
-class CollegeLeaderboardSerializer(ModelSerializer):
+class CollegeLeaderboardSerializer(serializers.ModelSerializer):
     totalKarma = serializers.SerializerMethodField()
     institution = serializers.CharField(source='title')
 
@@ -68,12 +44,11 @@ class CollegeLeaderboardSerializer(ModelSerializer):
 
     def get_totalKarma(self, obj):
         try:
-            monthly_karma = 0
-            for user_org_link in UserOrganizationLink.objects.filter(org=obj):
-                monthly_karma += user_org_link.total_karma
+            total_karma = obj.user_organization_link_org_id.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
+                'total_karma']
+            return total_karma if total_karma is not None else 0
         except Exception as e:
-            monthly_karma = 0
-        return monthly_karma
+            return 0
 
 
 class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
@@ -85,18 +60,5 @@ class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
         fields = ["code", "institution", "totalKarma"]
 
     def get_totalKarma(self, obj):
-        start_date = self.context.get('start_date')
-        end_date = self.context.get('end_date')
-
-        monthly_karma = 0
-        for user_org_link in UserOrganizationLink.objects.filter(org=obj):
-
-            try:
-                monthly_karma += user_org_link.user.karma_activity_log_created_by.filter(
-                    created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get(
-                    'karma__sum') if user_org_link.user.karma_activity_log_created_by.filter(
-                    created_at__range=(start_date, end_date)).aggregate(Sum('karma')).get('karma__sum') else 0
-            except Exception as e:
-                monthly_karma += 0
-
-        return monthly_karma
+        total_karma = obj.totalKarma
+        return total_karma or 0

@@ -1,17 +1,17 @@
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
-from utils.permission import CustomizePermission, JWTUtils, RoleRequired
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
-from django.db.models import Sum, Case, When, IntegerField
+
 
 class StudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
+    @role_required([RoleType.CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -30,7 +30,7 @@ class StudentDetailsAPI(APIView):
 class StudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
+    @role_required([RoleType.CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -45,7 +45,7 @@ class StudentDetailsCSVAPI(APIView):
 class CampusDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.CAMPUS_LEAD])
+    @role_required([RoleType.CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(

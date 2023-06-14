@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 
 from db.task import InterestGroup
 from utils.permission import CustomizePermission
-from utils.permission import JWTUtils, RoleRequired
+from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
@@ -15,10 +15,11 @@ class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]  # for logged in users
 
     # GET Request to show all interest groups. Params availiable:[sortBy, search, perPage, pageIndex]
-    @RoleRequired(roles=[RoleType.ADMIN, ])  # for admin
+
+    @role_required([RoleType.ADMIN.value, ])  # for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name'] )
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name'])
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=ig_serializer_data,
@@ -26,7 +27,7 @@ class InterestGroupAPI(APIView):
 
     # POST Request to create a new interest group
     # body should contain 'name': '<new name of interest group>'
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_data = InterestGroup.objects.create(
@@ -46,7 +47,7 @@ class InterestGroupAPI(APIView):
 
     # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
     # body should contain 'name': '<new name of interst group>' for edit
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         igData = InterestGroup.objects.get(id=pk)
@@ -67,7 +68,7 @@ class InterestGroupAPI(APIView):
         ).get_success_response()
 
     # DELETE Request to delete an InterestGroup. Use endpoint + /<id>/
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, pk):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
@@ -82,7 +83,7 @@ class InterestGroupAPI(APIView):
 class InterestGroupCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
         ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
@@ -90,11 +91,10 @@ class InterestGroupCSV(APIView):
         return CommonUtils.generate_csv(ig_serializer_data, 'Interest Group')
 
 
-
 class InterestGroupGetAPI(APIView):
-    authentication_classes = [CustomizePermission] 
-    
-    @RoleRequired(roles=[RoleType.ADMIN, ])
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request, pk):
         igData = InterestGroup.objects.get(id=pk)
         serializer = InterestGroupSerializer(igData)
