@@ -7,6 +7,8 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import dash_district_serializer
+from django.db.models import Count, Sum, Q
+from django.db.models.functions import Coalesce
 
 
 class DistrictStudentsAPI(APIView):
@@ -86,10 +88,31 @@ class DistrictCampusAPI(APIView):
 
         campus_district = user_org_link.org.district
 
-        organizations_in_district = Organization.objects.filter(
-            district=campus_district,
-            org_type=OrganizationType.COLLEGE.value,
-        ).distinct()
+        organizations_in_district = (
+            Organization.objects.filter(
+                district=campus_district,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .annotate(total_members=Count("user_organization_link_org_id"))
+            .annotate(
+                active_members=Count(
+                    "user_organization_link_org_id",
+                    filter=Q(
+                        user_organization_link_org_id__verified=True,
+                        user_organization_link_org_id__user__active=True,
+                    ),
+                )
+            )
+            .annotate(
+                total_karma=Coalesce(
+                    Sum(
+                        "user_organization_link_org_id__user__total_karma_user__karma",
+                        filter=Q(user_organization_link_org_id__verified=True),
+                    ),
+                    0,
+                ),
+            )
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations_in_district,
@@ -121,10 +144,31 @@ class DistrictCampusCSV(APIView):
 
         campus_district = user_org_link.org.district
 
-        organizations_in_district = Organization.objects.filter(
-            district=campus_district,
-            org_type=OrganizationType.COLLEGE.value,
-        ).distinct()
+        organizations_in_district = (
+            Organization.objects.filter(
+                district=campus_district,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .annotate(total_members=Count("user_organization_link_org_id"))
+            .annotate(
+                active_members=Count(
+                    "user_organization_link_org_id",
+                    filter=Q(
+                        user_organization_link_org_id__verified=True,
+                        user_organization_link_org_id__user__active=True,
+                    ),
+                )
+            )
+            .annotate(
+                total_karma=Coalesce(
+                    Sum(
+                        "user_organization_link_org_id__user__total_karma_user__karma",
+                        filter=Q(user_organization_link_org_id__verified=True),
+                    ),
+                    0,
+                ),
+            )
+        )
 
         serializer = dash_district_serializer.DistrictCampus(
             organizations_in_district,
