@@ -125,7 +125,7 @@ class UserOrganizationLink(models.Model):
     department = models.ForeignKey(Department, on_delete=models.CASCADE, blank=True, null=True,
                                    related_name='user_organization_link_department_id')
     graduation_year = models.CharField(max_length=10, blank=True, null=True)
-    verified = models.IntegerField()
+    verified = models.BooleanField()
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='user_organization_link_created_by')
     created_at = models.DateTimeField()

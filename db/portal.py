@@ -24,7 +24,7 @@ class PortalUserAuth(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     portal = models.ForeignKey(Portal, on_delete=models.CASCADE)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    is_authenticated = models.IntegerField()
+    is_authenticated = models.BooleanField()
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='portal_user_auth_created_by')
     created_at = models.DateTimeField()
