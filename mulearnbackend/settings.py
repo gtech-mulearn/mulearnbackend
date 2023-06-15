@@ -78,7 +78,6 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "mulearnbackend.wsgi.application"
 
-
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
 
@@ -111,9 +110,7 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-#logging
-
-import logging
+# logging
 
 LOGGING = {
     'version': 1,
@@ -122,25 +119,25 @@ LOGGING = {
         'request_log': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH")+'/request.log',
+            'filename': decouple.config("LOGGER_DIR_PATH") + '/request.log',
             'formatter': 'verbose',
         },
         'error_log': {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH")+'/error.log',
+            'filename': decouple.config("LOGGER_DIR_PATH") + '/error.log',
             'formatter': 'verbose',
         },
         'sql_log': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH")+'/sql.log',
+            'filename': decouple.config("LOGGER_DIR_PATH") + '/sql.log',
             'formatter': 'verbose',
         },
         'root_log': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH")+'/root.log',
+            'filename': decouple.config("LOGGER_DIR_PATH") + '/root.log',
             'formatter': 'verbose',
         },
     },
@@ -174,7 +171,6 @@ LOGGING = {
     },
 }
 
-
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
 
@@ -203,4 +199,3 @@ EMAIL_HOST_USER = config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
 EMAIL_PORT = config("EMAIL_PORT")
 EMAIL_USE_TLS = config("EMAIL_USE_TLS")
-
