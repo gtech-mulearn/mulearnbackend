@@ -7,7 +7,7 @@ from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from .serializer import HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerailzier
 
 
-class ackathonManagementAPI(APIView):
+class HackathonManagementAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
