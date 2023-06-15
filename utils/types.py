@@ -26,7 +26,7 @@ class OrganizationType(Enum):
     COLLEGE = 'College'
     COMPANY = 'Company'
     COMMUNITY = 'Community'
-    
+
 
 class WebHookActions(Enum):
     SEPERATOR = '<|=|>'
@@ -34,7 +34,21 @@ class WebHookActions(Enum):
     EDIT = 'edit'
     DELETE = 'delete'
 
+
 class WebHookCategory(Enum):
     INTEREST_GROUP = 'ig'
     COMMUNITY = 'community'
     ROLE = 'role'
+
+
+DEFAULT_HACKATHON_FORM_FIELDS = {
+    'name': 'system',
+    'gender': 'system',
+    'email': 'system',
+    'mobile': 'system',
+    'bio': 'system',
+    'college': 'system',
+    'experience': 'input',
+    'github': 'input',
+    'linkedin': 'input',
+}

@@ -1,13 +1,16 @@
 import csv
 import datetime
-from decouple import config
-import requests
+import io
+import openpyxl
+
 import pytz
+import requests
+from decouple import config
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
-import io,openpyxl
+
 
 class CommonUtils:
     @staticmethod
@@ -159,6 +162,7 @@ class DiscordWebhooks:
             "content": content
         }
         requests.post(url, json=data)
+
 
 class ImportCSV:
     def read_excel_file(file_obj):
