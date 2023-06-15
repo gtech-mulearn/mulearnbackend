@@ -1,12 +1,11 @@
 import uuid
-from datetime import datetime
 
 from django.db.models import Sum
 from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink, OrgAffiliation, Country, State, District, Zone
 from db.task import TotalKarma
-from utils.permission import CustomizePermission, JWTUtils
+from utils.permission import CustomizePermission, JWTUtils, get_current_utc_time
 from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType, WebHookCategory, WebHookActions
@@ -139,8 +138,8 @@ class PostInstitutionAPI(APIView):
             affiliation_id = None
 
         org_id = str(uuid.uuid4())
-        created_at = datetime.now()
-        updated_at = datetime.now()
+        created_at = get_current_utc_time()
+        updated_at = get_current_utc_time()
 
         values = {
             'id': org_id,
@@ -238,7 +237,7 @@ class PostInstitutionAPI(APIView):
             request.data["title"] = request.data.get("title")
 
 
-        request.data["updated_at"] = datetime.now()
+        request.data["updated_at"] = get_current_utc_time()
         request.data["updated_by"] = user_id
 
         organisation_serializer = PostOrganizationSerializer(organisation_obj, data=request.data, partial=True)
@@ -296,8 +295,6 @@ class PostInstitutionAPI(APIView):
         
 class AffiliationAPI(APIView):
 
-    authentication_classes = [CustomizePermission]
-
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(affiliation, request, ['id', 'title'])
@@ -312,6 +309,8 @@ class AffiliationAPI(APIView):
 
         return CustomResponse().paginated_response(data=data,
                                                     pagination=paginated_queryset.get("pagination"))
+    
+    authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
@@ -320,9 +319,12 @@ class AffiliationAPI(APIView):
             return CustomResponse(general_message="User not found").get_failure_response()
 
         affiliation_id = str(uuid.uuid4())
-        created_at = datetime.now()
-        updated_at = datetime.now()
+        created_at = get_current_utc_time()
+        updated_at = get_current_utc_time()
         title = request.data.get("title")
+        org_exist = OrgAffiliation.objects.filter(title=title).first()
+        if org_exist:
+            return CustomResponse(general_message="Affiliation already exist").get_failure_response()
 
         values = {
             'id': affiliation_id,
@@ -356,13 +358,13 @@ class AffiliationAPI(APIView):
         if new_title:
             request.data["title"] = new_title
 
-        request.data["updated_at"] = datetime.now()
+        request.data["updated_at"] = get_current_utc_time()
         request.data["updated_by"] = user_id
 
         affiliation_serializer = AffiliationSerializer(affiliation_obj, data=request.data, partial=True)
         if affiliation_serializer.is_valid():
             affiliation_serializer.save()
-            return CustomResponse(response=affiliation_serializer.data ).get_success_response()
+            return CustomResponse(general_message="Affiliation edited successfully" ).get_success_response()
         return CustomResponse(general_message=affiliation_serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])
@@ -374,4 +376,4 @@ class AffiliationAPI(APIView):
             return CustomResponse(general_message='Deleted Successfully').get_success_response()
         else:
             return CustomResponse(
-                general_message=f"Org with code '{title}', does not exist").get_failure_response()     
+                general_message=f"Org with code {title}, does not exist").get_failure_response()     
