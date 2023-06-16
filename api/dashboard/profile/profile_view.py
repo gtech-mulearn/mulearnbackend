@@ -1,9 +1,7 @@
 from rest_framework.views import APIView
 
-from api.dashboard.profile.serializers import UserLogSerializer, UserInterestGroupSerializer, UserSuggestionSerializer, \
-    UserProfileSerializer
-from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog, TotalKarma, UserIgLink
+from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer
+from db.task import KarmaActivityLog
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -15,13 +13,15 @@ class UserProfileAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user = User.objects.filter(id=user_id).first()
+        user = User.objects.select_related('total_karma_user').prefetch_related(
+            'user_organization_link_user_id__org',
+            'user_organization_link_user_id__department',
+            'user_role_link_user__role',
+            'userlvllink_set__level',
+        ).filter(id=user_id).first()
+
         serializer = UserProfileSerializer(user, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
-
-
-class EditUserDetailsAPI(APIView):
-    authentication_classes = [CustomizePermission]
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -56,54 +56,4 @@ class UserLogAPI(APIView):
             return CustomResponse(general_message="No karma details available for user").get_success_response()
 
         serializer = UserLogSerializer(karma_activity_log, many=True).data
-        return CustomResponse(response=serializer).get_success_response()
-
-
-class UserTaskLogAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-
-        karma = TotalKarma.objects.filter(user_id=user_id).first()
-        if karma is None:
-            return CustomResponse(general_message='Karma details note available for user').get_failure_response()
-
-        org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
-        if org_link is None:
-            return CustomResponse(general_message='No organization details available for user').get_failure_response()
-
-        total_karma = TotalKarma.objects.all().order_by('-karma')
-        rank = 1
-        for data in total_karma:
-            if data != karma:
-                rank += 1
-            else:
-                break
-        return CustomResponse(response={
-            'userKarma': karma.karma,
-            'OrgCode': org_link.org.code,
-            'rank': rank
-        }).get_success_response()
-
-
-class UserInterestGroupAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-
-        org_link = UserIgLink.objects.filter(user_id=user_id).all()
-        serializer = UserInterestGroupSerializer(org_link, many=True).data
-        return CustomResponse(response=serializer).get_success_response()
-
-
-class UserSuggestionAPI(APIView):
-
-    def get(self, request):
-        total_karma_object = TotalKarma.objects.all().order_by('-karma')[:5]
-        if total_karma_object is None:
-            return CustomResponse(general_message='No Karma Related data available').get_failure_response()
-
-        serializer = UserSuggestionSerializer(total_karma_object, many=True).data
         return CustomResponse(response=serializer).get_success_response()
