@@ -175,10 +175,11 @@ class PostInstitutionAPI(APIView):
             return CustomResponse(general_message="User not found").get_failure_response()
 
         organisation_obj = Organization.objects.filter(code=org_code).first()
-        old_name = organisation_obj.title
-        old_type = organisation_obj.org_type
         if not organisation_obj:
             return CustomResponse(general_message="Organisation not found").get_failure_response()
+        
+        old_name = organisation_obj.title
+        old_type = organisation_obj.org_type
 
         if request.data.get('code'):
             org_code_exist = Organization.objects.filter(code=request.data.get("code"))
