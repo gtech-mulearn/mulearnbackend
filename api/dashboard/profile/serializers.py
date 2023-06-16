@@ -55,7 +55,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         user_karma = obj.total_karma_user.karma
-        ranks = TotalKarma.objects.filter(karma__gt=user_karma).count() + 1
+        ranks = TotalKarma.objects.filter(karma__gte=user_karma).count() + 1
         return ranks if ranks > 0 else None
 
     def get_karma_distribution(self, obj):
