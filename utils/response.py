@@ -70,7 +70,6 @@ class CustomResponse:
             status=http_status_code,
         )
 
-
     def paginated_response(self, data: dict, pagination: dict) -> Response:
         """
         Generates a paginated response.

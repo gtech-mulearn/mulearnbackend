@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from db.user import User, UserRoleLink
 
 
@@ -20,7 +21,7 @@ class UserSerializer(serializers.ModelSerializer):
     muid = serializers.CharField(source="mu_id")
     firstName = serializers.CharField(source="first_name")
     lastName = serializers.CharField(source="last_name")
-    existInGuild = serializers.CharField(source="exist_in_guild")
+    existInGuild = serializers.BooleanField(source="exist_in_guild")
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
 
