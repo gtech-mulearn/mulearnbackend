@@ -1,4 +1,4 @@
-from django.db.models import Sum, F, Value
+from django.db.models import Sum, F, Value, Q
 from django.db.models.functions import Coalesce
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -79,8 +79,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         interest_groups = (
             UserIgLink.objects
             .filter(user=obj)
-            .annotate(total_karma=Coalesce(Sum('ig__tasklist__karmaactivitylog__karma'), Value(0)))
+            .annotate(
+                total_karma=Coalesce(
+                    Sum(
+                        'ig__tasklist__karmaactivitylog__karma',
+                        filter=Q(ig__tasklist__karmaactivitylog__created_by=obj)
+                    ),
+                    Value(0)
+                )
+            )
             .values(name=F('ig__name'), karma=F('total_karma'))
         )
-
         return interest_groups
