@@ -1,5 +1,4 @@
-from django.db.models import Sum, F, Value
-from django.db.models.functions import Coalesce
+from django.db.models import Sum, F
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -75,12 +74,24 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return user_level_link.level.name
         return None
 
+    # def get_interest_groups(self, obj):
+    #
+    #     interest_groups = (
+    #         UserIgLink.objects.filter(user=obj).annotate(
+    #             total_karma=Coalesce(
+    #                 Sum('ig__tasklist__karmaactivitylog__karma',
+    #                     filter=Q(ig__tasklist__karmaactivitylog__created_by=obj)), Value(0)
+    #             )).values(name=F('ig__name'), karma=F('total_karma'))
+    #     )
+    #
+    #     return interest_groups
     def get_interest_groups(self, obj):
-        interest_groups = (
-            UserIgLink.objects
-            .filter(user=obj)
-            .annotate(total_karma=Coalesce(Sum('ig__tasklist__karmaactivitylog__karma'), Value(0)))
-            .values(name=F('ig__name'), karma=F('total_karma'))
-        )
-
+        interest_groups = []
+        for ig_link in UserIgLink.objects.filter(user=obj):
+            total_ig_karma = 0 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, created_by=obj).aggregate(
+                Sum('karma')).get(
+                'karma__sum') is None else KarmaActivityLog.objects.filter(task__ig=ig_link.ig,
+                                                                           created_by=obj).aggregate(
+                Sum('karma')).get('karma__sum')
+            interest_groups.append({'name': ig_link.ig.name, 'karma': total_ig_karma})
         return interest_groups
