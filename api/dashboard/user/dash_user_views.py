@@ -19,7 +19,7 @@ from . import dash_user_serializer
 
 
 class UserInfoAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
@@ -34,10 +34,11 @@ class UserInfoAPI(APIView):
         return CustomResponse(response=response).get_success_response()
 
 
+    # @role_required([RoleType.ADMIN.value, ])
 class UserAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         user_queryset = (
             User.objects.all()
@@ -60,7 +61,7 @@ class UserAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -85,7 +86,7 @@ class UserAPI(APIView):
                 general_message="Database integrity error",
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -97,9 +98,9 @@ class UserAPI(APIView):
 
 
 class UserManagementCSV(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         user = User.objects.all()
         user_serializer_data = dash_user_serializer.UserDashboardSerializer(
@@ -109,9 +110,9 @@ class UserManagementCSV(APIView):
 
 
 class UserVerificationAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
@@ -127,7 +128,7 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
@@ -153,7 +154,7 @@ class UserVerificationAPI(APIView):
                 response={"user_role_link": str(e)}
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
