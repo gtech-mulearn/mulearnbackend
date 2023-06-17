@@ -9,11 +9,12 @@ from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework.views import APIView
 from django.db.models import Sum
+from db.organization import UserOrganizationLink
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 from . import dash_user_serializer
 
@@ -80,6 +81,45 @@ class UserAPI(APIView):
             serializer.save()
             return CustomResponse(
                 response={"users": serializer.data}
+            ).get_success_response()
+        except IntegrityError as e:
+            return CustomResponse(
+                general_message="Database integrity error",
+            ).get_failure_response()
+            
+            
+    # @role_required([RoleType.ADMIN.value, ])
+    def put(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+        except ObjectDoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+        # admin_id = JWTUtils.fetch_user_id(self.context["admin"])
+        admin = User.objects.get(id="010128cf-a9e5-4295-87ad-bd7679955b97")
+
+        existing_links = UserOrganizationLink.objects.filter(
+            user=user, user_organization_link_org_id__org_type=OrganizationType.COLLEGE.value
+        )
+        
+        
+        new_link = UserOrganizationLink(
+            id=uuid.uuid4(),
+            user=user,
+            org=request.data.get("organization"),
+            department=request.data.get("department", None),
+            graduation_year=request.data.get("graduation_year", None),
+            verified=True,
+            created_by=admin,
+            created_at=DateTimeUtils.get_current_utc_time(),
+        )
+
+
+        try:
+            existing_links.delete()
+            new_link.save()
+            return CustomResponse(
+                response={"users": new_link.data}
             ).get_success_response()
         except IntegrityError as e:
             return CustomResponse(

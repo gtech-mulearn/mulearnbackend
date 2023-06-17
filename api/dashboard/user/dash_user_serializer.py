@@ -5,11 +5,12 @@ from utils.types import OrganizationType
 from db.organization import Organization, UserOrganizationLink
 
 
-
 class UserDashboardSerializer(serializers.ModelSerializer):
     total_karma = serializers.IntegerField()
     college = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+
 
     def get_company(self, obj):
         user_id = obj.id
@@ -17,16 +18,32 @@ class UserDashboardSerializer(serializers.ModelSerializer):
             organization_id := UserOrganizationLink.objects.filter(
                 user_id=user_id, verified=True
             )
-            .values_list('org_id', flat=True)
+            .values_list("org_id", flat=True)
             .first()
         ):
-            company_title = Organization.objects.filter(
-                id=organization_id,
-                org_type=OrganizationType.COMPANY.value
-            ).values_list('title', flat=True).first()
+            company_title = (
+                Organization.objects.filter(
+                    id=organization_id, org_type=OrganizationType.COMPANY.value
+                )
+                .values_list("title", flat=True)
+                .first()
+            )
             return company_title or None
 
         return None
+
+
+    def get_department(self, obj):
+        
+        if (
+            link := UserOrganizationLink.objects.filter(
+                user=obj, verified=True
+            )
+            .first()
+        ):
+            return link.department.title
+        else:
+            return ""
 
 
     def get_college(self, obj):
@@ -35,13 +52,16 @@ class UserDashboardSerializer(serializers.ModelSerializer):
             organization_id := UserOrganizationLink.objects.filter(
                 user_id=user_id, verified=True
             )
-            .values_list('org_id', flat=True)
+            .values_list("org_id", flat=True)
             .first()
         ):
-            college_title = Organization.objects.filter(
-                id=organization_id,
-                org_type=OrganizationType.COLLEGE.value
-            ).values_list('title', flat=True).first()
+            college_title = (
+                Organization.objects.filter(
+                    id=organization_id, org_type=OrganizationType.COLLEGE.value
+                )
+                .values_list("title", flat=True)
+                .first()
+            )
             return college_title or None
 
         return None
@@ -64,6 +84,7 @@ class UserDashboardSerializer(serializers.ModelSerializer):
             "college",
             "company",
             "total_karma",
+            "department",
         ]
         read_only_fields = ["id", "created_at", "total_karma"]
 
