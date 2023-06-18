@@ -8,6 +8,7 @@ urlpatterns = [
     path("state/list/", register_views.StateAPI.as_view()),
     path("district/list/", register_views.DistrictAPI.as_view()),
     path("college/list/", register_views.CollegeAPI.as_view()),
+    path("department/list/", register_views.DepartmentAPI.as_view()),
     path("company/list/", register_views.CompanyAPI.as_view()),
     path("community/list/", register_views.CommunityAPI.as_view()),
     path("area-of-interest/list/", register_views.AreaOfInterestAPI.as_view()),
