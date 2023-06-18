@@ -24,6 +24,7 @@ class UserSerializer(serializers.ModelSerializer):
     existInGuild = serializers.BooleanField(source="exist_in_guild")
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
+    profilePic = serializers.CharField(source="profile_pic")
 
     class Meta:
         model = User
@@ -39,6 +40,7 @@ class UserSerializer(serializers.ModelSerializer):
             "existInGuild",
             "joined",
             "roles",
+            "profilePic"
         ]
 
     def get_roles(self, obj):
