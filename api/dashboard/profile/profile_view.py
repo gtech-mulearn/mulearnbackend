@@ -2,9 +2,10 @@ from rest_framework.views import APIView
 
 from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer
 from db.task import KarmaActivityLog
-from db.user import User
+from db.user import User, UserSettings
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from utils.utils import DateTimeUtils
 
 
 class UserProfileAPI(APIView):
@@ -57,3 +58,21 @@ class UserLogAPI(APIView):
 
         serializer = UserLogSerializer(karma_activity_log, many=True).data
         return CustomResponse(response=serializer).get_success_response()
+
+
+class ShareUserProfileAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def put(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        is_public = request.data.get('isPublic')
+
+        user_settings = UserSettings.objects.filter(user=user_id).first()
+
+        user_settings.is_public = is_public
+        user_settings.updated_by = user_id
+        user_settings.updated_at = DateTimeUtils.get_current_utc_time()
+
+        user_settings.save()
+
+        return CustomResponse(general_message='Now your profile is shareable').get_success_response()
