@@ -20,7 +20,7 @@ class UserProfileAPI(APIView):
             'userlvllink_set__level',
         ).filter(id=user_id).first()
 
-        serializer = UserProfileSerializer(user, many=False)
+        serializer = UserProfileSerializer(user, many=False, context={'roles': JWTUtils.fetch_role(request)})
         return CustomResponse(response=serializer.data).get_success_response()
 
     def put(self, request):
