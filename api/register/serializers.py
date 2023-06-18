@@ -89,13 +89,13 @@ class RegisterSerializer(serializers.ModelSerializer):
             full_name = validated_data["first_name"]
         else:
             full_name = validated_data["first_name"] + \
-                validated_data["last_name"]
+                        validated_data["last_name"]
         full_name = full_name.replace(" ", "").lower()[:85]
-        mu_id = full_name + "@mulearn"
+        mu_id = f"{full_name}@mulearn"
         counter = 0
         while User.objects.filter(mu_id=mu_id).exists():
             counter += 1
-            mu_id = full_name + "-" + str(counter) + "@mulearn"
+            mu_id = f"{full_name}-{counter}@mulearn"
         role_id = validated_data.pop('role')
         organization_ids = validated_data.pop('organizations')
         dept = validated_data.pop('dept')
