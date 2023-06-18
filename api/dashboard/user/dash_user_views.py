@@ -7,8 +7,8 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Q
-from rest_framework.views import APIView
 from django.db.models import Sum
+from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -50,7 +50,7 @@ class UserAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["mu_id", "first_name", "last_name", "email", "mobile"],
+            ["mu_id", "first_name", "last_name", "email", "mobile"], {request.query_params.get('sortBy'): 'total_karma'}
         )
         serializer = dash_user_serializer.UserDashboardSerializer(
             queryset.get("queryset"), many=True
@@ -171,9 +171,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

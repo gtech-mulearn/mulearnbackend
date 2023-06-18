@@ -1,10 +1,10 @@
-from django.db.models import Sum, F
+from django.db.models import Sum, F, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.task import KarmaActivityLog, TotalKarma, UserIgLink
 from db.user import User
-from utils.types import OrganizationType
+from utils.types import OrganizationType, RoleType
 
 
 class UserLogSerializer(ModelSerializer):
@@ -53,8 +53,17 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return None
 
     def get_rank(self, obj):
+        roles = self.context.get('roles')
         user_karma = obj.total_karma_user.karma
-        ranks = TotalKarma.objects.filter(karma__gte=user_karma).count()
+        if RoleType.MENTOR.value in roles:
+            ranks = TotalKarma.objects.filter(user__user_role_link_user__role__title=RoleType.MENTOR.value,
+                                              karma__gte=user_karma).count()
+        elif RoleType.ENABLER.value in roles:
+            ranks = TotalKarma.objects.filter(user__user_role_link_user__role__title=RoleType.ENABLER.value,
+                                              karma__gte=user_karma).count()
+        else:
+            ranks = TotalKarma.objects.filter(karma__gte=user_karma).exclude(
+                Q(user__user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value])).count()
         return ranks if ranks > 0 else None
 
     def get_karma_distribution(self, obj):
