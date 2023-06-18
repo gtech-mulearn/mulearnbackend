@@ -4,15 +4,11 @@ from db.user import User, UserRoleLink
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
-    total_karma = serializers.SerializerMethodField()
-
-    def get_total_karma(self, obj):
-        karma = obj.total_karma_user.karma if hasattr(obj, "total_karma_user") else 0
-        return karma
+    total_karma = serializers.IntegerField()
 
     class Meta:
         model = User
-        exclude = ("password",)
+        exclude = ("password","profile_pic")
         extra_fields = ["total_karma"]
         read_only_fields = ["id", "created_at", "total_karma"]
 
