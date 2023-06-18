@@ -6,11 +6,15 @@ from db.organization import Organization, UserOrganizationLink
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
-    total_karma = serializers.IntegerField()
     college = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
+    total_karma = serializers.SerializerMethodField()
+    graduation_year = serializers.SerializerMethodField()
 
+    def get_total_karma(self, obj):
+        karma = obj.total_karma_user.karma if hasattr(obj, "total_karma_user") else 0
+        return karma
 
     def get_company(self, obj):
         user_id = obj.id
@@ -32,19 +36,13 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 
         return None
 
-
     def get_department(self, obj):
-        
-        if (
-            link := UserOrganizationLink.objects.filter(
-                user=obj, verified=True
-            )
-            .first()
-        ):
-            return link.department.title
-        else:
-            return ""
-
+        link = UserOrganizationLink.objects.filter(user=obj, verified=True).first()
+        return link.department.title if link and link.department else ""
+    
+    def get_graduation_year(self, obj):
+        link = UserOrganizationLink.objects.filter(user=obj, verified=True).first()
+        return link.graduation_year if link else ""
 
     def get_college(self, obj):
         user_id = obj.id
@@ -85,6 +83,7 @@ class UserDashboardSerializer(serializers.ModelSerializer):
             "company",
             "total_karma",
             "department",
+            "graduation_year"
         ]
         read_only_fields = ["id", "created_at", "total_karma"]
 

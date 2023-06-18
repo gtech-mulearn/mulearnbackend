@@ -1,3 +1,4 @@
+import contextlib
 import uuid
 from datetime import timedelta
 
@@ -9,8 +10,9 @@ from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework.views import APIView
 from django.db.models import Sum
-from db.organization import UserOrganizationLink
+from django.db import IntegrityError
 
+from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -33,22 +35,36 @@ class UserInfoAPI(APIView):
 
         response = dash_user_serializer.UserSerializer(user, many=False).data
         return CustomResponse(response=response).get_success_response()
+    
 
+class UserStudentAPI(APIView):
+    # authentication_classes = [CustomizePermission]
 
     # @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        user_queryset = User.objects.all()
+        queryset = CommonUtils.get_paginated_queryset(
+            user_queryset,
+            request,
+            ["mu_id", "first_name", "last_name", "email", "mobile"],
+        )
+        serializer = dash_user_serializer.UserDashboardSerializer(
+            queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=queryset.get("pagination")
+        )
+    
+class UserOtherAPI(APIView):
+
+
 class UserAPI(APIView):
     # authentication_classes = [CustomizePermission]
 
     # @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
-        user_queryset = (
-            User.objects.all()
-            .distinct()
-            .prefetch_related(
-                "total_karma_user",
-            )
-            .annotate(total_karma=Sum("total_karma_user__karma"))
-        )
+        user_queryset = User.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -69,58 +85,46 @@ class UserAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-        serializer = dash_user_serializer.UserDashboardSerializer(
-            user, data=request.data, partial=True
+        admin_id = JWTUtils.fetch_user_id(request)
+        admin = User.objects.get(id=admin_id)
+
+        existing_link = UserOrganizationLink.objects.filter(
+            Q(user=user)
+            & (
+                Q(org__org_type=OrganizationType.COMPANY.value)
+                | Q(org__org_type=OrganizationType.COLLEGE.value)
+            )
         )
-        if not serializer.is_valid():
-            return CustomResponse(
-                general_message=serializer.errors
-            ).get_failure_response()
+        existing_link.delete()
 
         try:
+            if organization_id := request.data.get("organization"):
+                
+                UserOrganizationLink.objects.create(
+                    id=uuid.uuid4(),
+                    user=user,
+                    org_id=organization_id,
+                    department_id=request.data.get("department", None),
+                    graduation_year=request.data.get("graduation_year", None),
+                    verified=True,
+                    created_by=admin,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                )
+
+            serializer = dash_user_serializer.UserDashboardSerializer(
+                user, data=request.data, partial=True
+            )
+
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
+
             serializer.save()
             return CustomResponse(
                 response={"users": serializer.data}
             ).get_success_response()
-        except IntegrityError as e:
-            return CustomResponse(
-                general_message="Database integrity error",
-            ).get_failure_response()
             
-            
-    # @role_required([RoleType.ADMIN.value, ])
-    def put(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-        # admin_id = JWTUtils.fetch_user_id(self.context["admin"])
-        admin = User.objects.get(id="010128cf-a9e5-4295-87ad-bd7679955b97")
-
-        existing_links = UserOrganizationLink.objects.filter(
-            user=user, user_organization_link_org_id__org_type=OrganizationType.COLLEGE.value
-        )
-        
-        
-        new_link = UserOrganizationLink(
-            id=uuid.uuid4(),
-            user=user,
-            org=request.data.get("organization"),
-            department=request.data.get("department", None),
-            graduation_year=request.data.get("graduation_year", None),
-            verified=True,
-            created_by=admin,
-            created_at=DateTimeUtils.get_current_utc_time(),
-        )
-
-
-        try:
-            existing_links.delete()
-            new_link.save()
-            return CustomResponse(
-                response={"users": new_link.data}
-            ).get_success_response()
         except IntegrityError as e:
             return CustomResponse(
                 general_message="Database integrity error",
@@ -131,7 +135,9 @@ class UserAPI(APIView):
         try:
             user = User.objects.get(id=user_id)
             user.delete()
-            return CustomResponse(general_message="$1").get_success_response()
+            return CustomResponse(
+                general_message="User deleted successfully"
+            ).get_success_response()
 
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
@@ -220,7 +226,7 @@ class ForgotPasswordAPI(APIView):
                 general_message="User not exist"
             ).get_failure_response()
         created_at = DateTimeUtils.get_current_utc_time()
-        expiry = created_at + timedelta(seconds=900)  # 15 minutes
+        expiry = created_at + timedelta(seconds=900)  ## 15 minutes
         forget_user = ForgotPassword.objects.create(  #
             id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )
