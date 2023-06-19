@@ -155,6 +155,7 @@ class AreaOfInterestAPI(APIView):
             aoi_queryset, many=True).data
         return CustomResponse(response={"aois": aoi_serializer_data}).get_success_response()
 
+
 class UserEmailVerificationAPI(APIView):
 
     def post(self, request):
@@ -166,6 +167,7 @@ class UserEmailVerificationAPI(APIView):
         else:
             return CustomResponse(general_message="User email not exist",
                                   response={"value": False}).get_success_response()
+
 
 class UserCountryAPI(APIView):
 
