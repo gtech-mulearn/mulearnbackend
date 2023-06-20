@@ -11,8 +11,6 @@ class UserDashboardSerializer(serializers.ModelSerializer):
     department = serializers.SerializerMethodField()
     total_karma = serializers.SerializerMethodField()
     graduation_year = serializers.SerializerMethodField()
-    total_karma = serializers.SerializerMethodField()
-    graduation_year = serializers.SerializerMethodField()
 
     def get_total_karma(self, obj):
         karma = obj.total_karma_user.karma if hasattr(obj, "total_karma_user") else 0
