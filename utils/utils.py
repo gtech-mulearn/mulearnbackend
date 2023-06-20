@@ -1,8 +1,8 @@
 import csv
 import datetime
 import io
-import openpyxl
 
+import openpyxl
 import pytz
 import requests
 from decouple import config
@@ -14,7 +14,7 @@ from django.http import HttpResponse
 
 class CommonUtils:
     @staticmethod
-    def get_paginated_queryset(queryset: QuerySet, request, fields) -> QuerySet:
+    def get_paginated_queryset(queryset: QuerySet, request, search_fields, sort_fields={}) -> QuerySet:
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage", 10))
         search_query = request.query_params.get('search')
@@ -22,13 +22,17 @@ class CommonUtils:
 
         if search_query:
             query = Q()
-            for field in fields:
+            for field in search_fields:
                 query |= Q(**{f'{field}__icontains': search_query})
 
             queryset = queryset.filter(query)
 
         if sort_by:
-            queryset = queryset.order_by(sort_by)
+            sort_field_name = sort_fields.get(sort_by)
+            if sort_field_name:
+                if sort_by.startswith('-'):
+                    sort_field_name = '-' + sort_field_name
+                queryset = queryset.order_by(sort_field_name)
 
         paginator = Paginator(queryset, per_page)
         try:
