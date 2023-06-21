@@ -29,6 +29,7 @@ class KKEMAuthorizationAPI(APIView):
     def patch(self, request, token):
         if authorization := KKEMAuthorization.objects.filter(id=token).first():
             authorization.verified = True
+            authorization.updated_at = get_current_utc_time()
             authorization.save()
             return CustomResponse(
                 general_message="User authenticated successfully"
@@ -47,6 +48,7 @@ class KKEMAuthorizationAPI(APIView):
                 dwms_id=dwms_id,
                 verified=False,
                 created_at=get_current_utc_time(),
+                updated_at=get_current_utc_time(),
             )
 
         except IntegrityError:
