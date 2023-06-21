@@ -76,3 +76,21 @@ class ShareUserProfileAPI(APIView):
         user_settings.save()
 
         return CustomResponse(general_message='Now your profile is shareable').get_success_response()
+
+
+class AccessUserProfileAPI(APIView):
+
+    def get(self, request, muid):
+
+        user = User.objects.filter(mu_id=muid).first()
+        if user is None:
+            return CustomResponse(general_message='invalid muid').get_success_response()
+
+        user_settings = UserSettings.objects.filter(user_id=user).first()
+
+        if user_settings.is_public == 1:
+            serializer = UserProfileSerializer(user, many=False)
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        else:
+            return CustomResponse(general_message='User profile is privet').get_success_response()
