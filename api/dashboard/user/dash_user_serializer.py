@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
+from db.organization import Organization, UserOrganizationLink
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
-from db.organization import Organization, UserOrganizationLink
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -19,11 +19,11 @@ class UserDashboardSerializer(serializers.ModelSerializer):
     def get_company(self, obj):
         user_id = obj.id
         if (
-            organization_id := UserOrganizationLink.objects.filter(
-                user_id=user_id, verified=True
-            )
-            .values_list("org_id", flat=True)
-            .first()
+                organization_id := UserOrganizationLink.objects.filter(
+                    user_id=user_id, verified=True
+                )
+                        .values_list("org_id", flat=True)
+                        .first()
         ):
             company_title = (
                 Organization.objects.filter(
@@ -47,11 +47,11 @@ class UserDashboardSerializer(serializers.ModelSerializer):
     def get_college(self, obj):
         user_id = obj.id
         if (
-            organization_id := UserOrganizationLink.objects.filter(
-                user_id=user_id, verified=True
-            )
-            .values_list("org_id", flat=True)
-            .first()
+                organization_id := UserOrganizationLink.objects.filter(
+                    user_id=user_id, verified=True
+                )
+                        .values_list("org_id", flat=True)
+                        .first()
         ):
             college_title = (
                 Organization.objects.filter(

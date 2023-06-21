@@ -5,14 +5,15 @@ from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink, OrgAffiliation, Country, State, District, Zone
 from db.task import TotalKarma
-from utils.permission import CustomizePermission, JWTUtils, get_current_utc_time
+from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType, WebHookCategory, WebHookActions
-from .serializers import AffiliationSerializer, OrganisationSerializer, PostOrganizationSerializer
-from utils.utils import CommonUtils, DiscordWebhooks
 from utils.types import RoleType, OrganizationType
+from utils.types import WebHookCategory, WebHookActions
 from utils.utils import CommonUtils
+from utils.utils import DateTimeUtils
+from utils.utils import DiscordWebhooks
+from .serializers import AffiliationSerializer, OrganisationSerializer, PostOrganizationSerializer
 
 
 class InstitutionsAPI(APIView):
@@ -138,8 +139,8 @@ class PostInstitutionAPI(APIView):
             affiliation_id = None
 
         org_id = str(uuid.uuid4())
-        created_at = get_current_utc_time()
-        updated_at = get_current_utc_time()
+        created_at = DateTimeUtils.get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
 
         values = {
             'id': org_id,
@@ -177,7 +178,7 @@ class PostInstitutionAPI(APIView):
         organisation_obj = Organization.objects.filter(code=org_code).first()
         if not organisation_obj:
             return CustomResponse(general_message="Organisation not found").get_failure_response()
-        
+
         old_name = organisation_obj.title
         old_type = organisation_obj.org_type
 
@@ -237,8 +238,7 @@ class PostInstitutionAPI(APIView):
         if request.data.get("title"):
             request.data["title"] = request.data.get("title")
 
-
-        request.data["updated_at"] = get_current_utc_time()
+        request.data["updated_at"] = DateTimeUtils.get_current_utc_time()
         request.data["updated_by"] = user_id
 
         organisation_serializer = PostOrganizationSerializer(organisation_obj, data=request.data, partial=True)
@@ -247,21 +247,23 @@ class PostInstitutionAPI(APIView):
 
             if request.data.get("title") != old_name and old_type == OrganizationType.COMMUNITY.value:
                 DiscordWebhooks.channelsAndCategory(
-                       WebHookCategory.COMMUNITY.value,
-                       WebHookActions.EDIT.value,
-                       request.data.get('title'),
-                       old_name
+                    WebHookCategory.COMMUNITY.value,
+                    WebHookActions.EDIT.value,
+                    request.data.get('title'),
+                    old_name
                 )
 
             if request.data.get("orgType"):
-                if request.data.get("orgType") != OrganizationType.COMMUNITY.value and old_type == OrganizationType.COMMUNITY.value:
+                if request.data.get(
+                        "orgType") != OrganizationType.COMMUNITY.value and old_type == OrganizationType.COMMUNITY.value:
                     DiscordWebhooks.channelsAndCategory(
                         WebHookCategory.COMMUNITY.value,
                         WebHookActions.DELETE.value,
                         old_name
                     )
 
-            if old_type != OrganizationType.COMMUNITY.value and request.data.get("orgType") == OrganizationType.COMMUNITY.value:
+            if old_type != OrganizationType.COMMUNITY.value and request.data.get(
+                    "orgType") == OrganizationType.COMMUNITY.value:
                 if request.data.get("title"):
                     title = request.data.get('title')
                 else:
@@ -293,7 +295,8 @@ class PostInstitutionAPI(APIView):
         else:
             return CustomResponse(
                 general_message=f"Org with code '{org_code}', does not exist").get_failure_response()
-        
+
+
 class AffiliationAPI(APIView):
 
     def get(self, request):
@@ -309,8 +312,8 @@ class AffiliationAPI(APIView):
         }
 
         return CustomResponse().paginated_response(data=data,
-                                                    pagination=paginated_queryset.get("pagination"))
-    
+                                                   pagination=paginated_queryset.get("pagination"))
+
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, ])
@@ -320,8 +323,8 @@ class AffiliationAPI(APIView):
             return CustomResponse(general_message="User not found").get_failure_response()
 
         affiliation_id = str(uuid.uuid4())
-        created_at = get_current_utc_time()
-        updated_at = get_current_utc_time()
+        created_at = DateTimeUtils.get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
         title = request.data.get("title")
         org_exist = OrgAffiliation.objects.filter(title=title).first()
         if org_exist:
@@ -336,12 +339,12 @@ class AffiliationAPI(APIView):
             'created_at': created_at,
         }
 
-        affiliation_serializer   = AffiliationSerializer(data=values)
+        affiliation_serializer = AffiliationSerializer(data=values)
 
         if affiliation_serializer.is_valid():
             affiliation_serializer.save()
             return CustomResponse(general_message="Affiliation added successfully").get_success_response()
-        return CustomResponse(general_message=affiliation_serializer.errors).get_failure_response()  
+        return CustomResponse(general_message=affiliation_serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])
     def put(self, request):
@@ -359,13 +362,13 @@ class AffiliationAPI(APIView):
         if new_title:
             request.data["title"] = new_title
 
-        request.data["updated_at"] = get_current_utc_time()
+        request.data["updated_at"] = DateTimeUtils.get_current_utc_time()
         request.data["updated_by"] = user_id
 
         affiliation_serializer = AffiliationSerializer(affiliation_obj, data=request.data, partial=True)
         if affiliation_serializer.is_valid():
             affiliation_serializer.save()
-            return CustomResponse(general_message="Affiliation edited successfully" ).get_success_response()
+            return CustomResponse(general_message="Affiliation edited successfully").get_success_response()
         return CustomResponse(general_message=affiliation_serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])
@@ -377,4 +380,4 @@ class AffiliationAPI(APIView):
             return CustomResponse(general_message='Deleted Successfully').get_success_response()
         else:
             return CustomResponse(
-                general_message=f"Org with code {title}, does not exist").get_failure_response()     
+                general_message=f"Org with code {title}, does not exist").get_failure_response()

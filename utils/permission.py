@@ -10,12 +10,13 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
 from mulearnbackend.settings import SECRET_KEY
+from utils.utils import DateTimeUtils
 from .exception import CustomException
 from .response import CustomResponse
 
 
-def get_current_utc_time():
-    return format_time(datetime.utcnow())
+# def get_current_utc_time():
+#     return format_time(datetime.utcnow())
 
 
 def format_time(date_time):
@@ -62,7 +63,8 @@ class CustomizePermission(BasePermission):
             user_id = payload.get("id")
             expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S")
 
-            if not user_id or expiry < get_current_utc_time():
+            print(expiry, DateTimeUtils.get_current_utc_time())
+            if not user_id or expiry < DateTimeUtils.get_current_utc_time():
                 raise CustomException("Token Expired or Invalid")
 
             return None, payload
@@ -81,6 +83,7 @@ class CustomizePermission(BasePermission):
         except AuthenticationFailed as e:
             raise CustomException(str(e))
         except Exception as e:
+            print(e)
             raise CustomException(
                 {
                     "hasError": True,
@@ -172,9 +175,10 @@ def role_required(roles):
                 if role in roles:
                     response = view_func(obj, request, *args, **kwargs)
                     return response
-            else:
-                return CustomResponse(
-                    general_message="You do not have the required role to access this page.").get_failure_response()
+            res = CustomResponse(
+                general_message="You do not have the required role to access this page.", response={}
+            ).get_failure_response()
+            return res
 
         return wrapped_view_func
 
