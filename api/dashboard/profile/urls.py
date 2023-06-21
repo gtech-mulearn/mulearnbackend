@@ -6,4 +6,5 @@ urlpatterns = [
     path('user-profile/', profile_view.UserProfileAPI.as_view()),
     path('edit-user-profile/', profile_view.UserProfileAPI.as_view()),
     path('user-log/', profile_view.UserLogAPI.as_view()),
+    path('share-user-profile/', profile_view.UserProfilePublicAPI.as_view())
 ]
