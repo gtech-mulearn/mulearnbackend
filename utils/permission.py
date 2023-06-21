@@ -61,9 +61,8 @@ class CustomizePermission(BasePermission):
             payload = jwt.decode(token, self.secret_key, algorithms=["HS256"], verify=True)
 
             user_id = payload.get("id")
-            expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S")
+            expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
 
-            print(expiry, DateTimeUtils.get_current_utc_time())
             if not user_id or expiry < DateTimeUtils.get_current_utc_time():
                 raise CustomException("Token Expired or Invalid")
 
@@ -83,7 +82,6 @@ class CustomizePermission(BasePermission):
         except AuthenticationFailed as e:
             raise CustomException(str(e))
         except Exception as e:
-            print(e)
             raise CustomException(
                 {
                     "hasError": True,

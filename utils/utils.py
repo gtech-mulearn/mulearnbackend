@@ -99,7 +99,6 @@ class DateTimeUtils:
         return datetime.datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S %z")
 
 
-
 class _CustomHTTPHandler:
     @staticmethod
     def get_client_ip_address(request):
