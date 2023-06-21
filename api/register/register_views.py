@@ -197,6 +197,7 @@ class AreaOfInterestAPI(APIView):
         ).get_success_response()
 
 
+
 class UserEmailVerificationAPI(APIView):
     def post(self, request):
         user_email = request.data.get("email")
@@ -208,6 +209,7 @@ class UserEmailVerificationAPI(APIView):
             return CustomResponse(
                 general_message="User email not exist", response={"value": False}
             ).get_success_response()
+
 
 
 class UserCountryAPI(APIView):
