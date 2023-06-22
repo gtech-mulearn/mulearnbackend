@@ -15,6 +15,16 @@ from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
 
 
+class InstitutionCSV(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request, org_type):
+        org_objs = Organization.objects.filter(org_type=org_type).all()
+        orgs_data = OrganisationSerializer(org_objs, many=True).data
+        return CommonUtils.generate_csv(orgs_data, org_type)
+
+
 class InstitutionsAPI(APIView):
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
@@ -119,17 +129,15 @@ class PostInstitutionAPI(APIView):
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(general_message="State not found").get_failure_response()
-        zone_id = zone_obj.id
-        if not zone_id:
             return CustomResponse(general_message="Zone not found").get_failure_response()
+        zone_id = zone_obj.id
 
         district = District.objects.filter(name=district, zone=zone_id).first()
         if not district:
             return CustomResponse(general_message="District not found").get_failure_response()
         district_id = district.id
 
-        if request.data.get("affiliation"):
+        if request.data.get("affiliation") and (request.data.get("orgType") == OrganizationType.COLLEGE.value):
             affiliation = OrgAffiliation.objects.filter(title=request.data.get("affiliation")).first()
             if not affiliation:
                 return CustomResponse(general_message="Affiliation not found").get_failure_response()
@@ -164,7 +172,6 @@ class PostInstitutionAPI(APIView):
                     WebHookActions.CREATE.value,
                     request.data.get('title')
                 )
-            org_obj = Organization.objects.filter(code=values["code"]).first()
             return CustomResponse(general_message="Organisation Added Successfully").get_success_response()
         return CustomResponse(general_message=organisation_serializer.errors).get_failure_response()
 
@@ -181,7 +188,7 @@ class PostInstitutionAPI(APIView):
         old_name = organisation_obj.title
         old_type = organisation_obj.org_type
 
-        if request.data.get('code'):
+        if request.data.get('code') and (request.data.get('code') != org_code):
             org_code_exist = Organization.objects.filter(code=request.data.get("code"))
             if org_code_exist:
                 return CustomResponse(
