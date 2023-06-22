@@ -119,17 +119,15 @@ class PostInstitutionAPI(APIView):
         state_id = state_obj.id
         zone_obj = Zone.objects.filter(name=zone, state=state_id).first()
         if not zone_obj:
-            return CustomResponse(general_message="State not found").get_failure_response()
-        zone_id = zone_obj.id
-        if not zone_id:
             return CustomResponse(general_message="Zone not found").get_failure_response()
+        zone_id = zone_obj.id
 
         district = District.objects.filter(name=district, zone=zone_id).first()
         if not district:
             return CustomResponse(general_message="District not found").get_failure_response()
         district_id = district.id
 
-        if request.data.get("affiliation"):
+        if request.data.get("affiliation") and (request.data.get("orgType") == OrganizationType.COLLEGE.value):
             affiliation = OrgAffiliation.objects.filter(title=request.data.get("affiliation")).first()
             if not affiliation:
                 return CustomResponse(general_message="Affiliation not found").get_failure_response()
@@ -164,7 +162,6 @@ class PostInstitutionAPI(APIView):
                     WebHookActions.CREATE.value,
                     request.data.get('title')
                 )
-            org_obj = Organization.objects.filter(code=values["code"]).first()
             return CustomResponse(general_message="Organisation Added Successfully").get_success_response()
         return CustomResponse(general_message=organisation_serializer.errors).get_failure_response()
 
