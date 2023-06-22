@@ -8,8 +8,6 @@ from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework.views import APIView
-from django.db.models import Sum
-from django.db import IntegrityError
 
 from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
@@ -41,6 +39,7 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
+        print('data processing getttt')
         user_queryset = User.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
@@ -68,8 +67,8 @@ class UserAPI(APIView):
         existing_link = UserOrganizationLink.objects.filter(
             Q(user=user)
             & (
-                Q(org__org_type=OrganizationType.COMPANY.value)
-                | Q(org__org_type=OrganizationType.COLLEGE.value)
+                    Q(org__org_type=OrganizationType.COMPANY.value)
+                    | Q(org__org_type=OrganizationType.COLLEGE.value)
             )
         )
         existing_link.delete()
@@ -194,15 +193,15 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
             ).get_failure_response()
         created_at = DateTimeUtils.get_current_utc_time()
-        expiry = created_at + timedelta(seconds=900)  #15 minutes
+        expiry = created_at + timedelta(seconds=900)  # 15 minutes
         forget_user = ForgotPassword.objects.create(  #
             id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )

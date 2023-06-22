@@ -82,6 +82,7 @@ class CustomResponse:
             Response: The generated paginated response.
 
         """
+
         self.response.update({'data': data, 'pagination': pagination})
         return Response(
             data={

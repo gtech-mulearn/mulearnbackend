@@ -4,6 +4,7 @@ from db.hackathon import Hackathon
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
+from utils.utils import DateTimeUtils
 from .serializer import HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerailzier
 
 
@@ -12,6 +13,10 @@ class HackathonManagementAPI(APIView):
 
     def get(self, request):
         hackathons_queryset = Hackathon.objects.all()
+        for i in hackathons_queryset:
+            print(i.created_at, DateTimeUtils.get_current_utc_time(),
+                  i.created_at > DateTimeUtils.get_current_utc_time())
+
         serializer = HackathonRetrivalSerailzier(hackathons_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
