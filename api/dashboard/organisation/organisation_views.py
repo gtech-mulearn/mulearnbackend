@@ -15,6 +15,16 @@ from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
 
 
+class InstitutionCSV(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request, org_type):
+        org_objs = Organization.objects.filter(org_type=org_type).all()
+        orgs_data = OrganisationSerializer(org_objs, many=True).data
+        return CommonUtils.generate_csv(orgs_data, org_type)
+
+
 class InstitutionsAPI(APIView):
     def get(self, request):
         clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)

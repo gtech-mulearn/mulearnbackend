@@ -3,6 +3,7 @@ from . import organisation_views
 
 urlpatterns = [
     # path('add', portal_views.AddPortal.as_view()),
+    path('institutes/csv/<str:org_type>', organisation_views.InstitutionCSV.as_view()),
     path('institutes/add', organisation_views.PostInstitutionAPI.as_view()),
     path('institutes/<str:org_code>', organisation_views.PostInstitutionAPI.as_view()),
     path('institutes/info/all_inst', organisation_views.InstitutionsAPI.as_view()),
