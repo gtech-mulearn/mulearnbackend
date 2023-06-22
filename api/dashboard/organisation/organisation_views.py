@@ -178,7 +178,7 @@ class PostInstitutionAPI(APIView):
         old_name = organisation_obj.title
         old_type = organisation_obj.org_type
 
-        if request.data.get('code'):
+        if request.data.get('code') and (request.data.get('code') != org_code):
             org_code_exist = Organization.objects.filter(code=request.data.get("code"))
             if org_code_exist:
                 return CustomResponse(
