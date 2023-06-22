@@ -1,17 +1,62 @@
-import uuid
-import decouple
-
-from rest_framework import serializers
 from rest_framework.views import APIView
+from db.task import KarmaActivityLog, UserIgLink
 
 from db.user import User
 from db.integrations import KKEMAuthorization
 from utils.permission import get_current_utc_time
 from utils.response import CustomResponse
+from utils.utils import CommonUtils
+from . import kkem_serializer
+from .kkem_helper import HandleAuthorization
 
-from django.db import IntegrityError
-from django.db.models import Q
-from django.core.mail import send_mail
+from django.db.models import Prefetch
+
+
+class KKEMBulkKarmaAPI(APIView):
+    def get(self, request):
+        datetime = request.GET.get("datetime")
+
+        users_with_updates = KarmaActivityLog.objects.filter(
+            appraiser_approved=True, updated_at__gte=datetime
+        ).values_list("created_by", flat=True)
+
+        users = KKEMAuthorization.objects.filter(
+            verified=True, user__in=users_with_updates
+        ).values_list("user", flat=True)
+
+        users = User.objects.filter(pk__in=users).prefetch_related(
+            Prefetch("useriglink_set", queryset=UserIgLink.objects.select_related("ig"))
+        )
+
+        queryset = CommonUtils.get_paginated_queryset(
+            users,
+            request,
+            ["mu_id", "first_name", "last_name", "email", "mobile"],
+        )
+
+        serialized_users = kkem_serializer.KKEMBulkKarmaSerializer(
+            queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serialized_users.data, pagination=queryset.get("pagination")
+        )
+
+
+class KKEMIndividualKarmaAPI(APIView):
+    def get(self, request, mu_id):
+        user = (
+            KKEMAuthorization.objects.filter(user__mu_id=mu_id, verified=True)
+            .first()
+            .user
+        )
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_success_response()
+        serializer = kkem_serializer.KKEMBulkKarmaSerializer(user)
+
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class KKEMAuthorizationAPI(APIView):
@@ -20,12 +65,12 @@ class KKEMAuthorizationAPI(APIView):
         dwms_id = request.data.get("dwms_id")
 
         if user := User.objects.filter(mu_id=mu_id).first():
-            return self.handle_kkem_authorization(user, dwms_id)
+            return HandleAuthorization.handle_kkem_authorization(user, dwms_id)
         else:
             return CustomResponse(
                 general_message="User doesn't exist"
             ).get_failure_response()
-            
+
     def patch(self, request, token):
         if authorization := KKEMAuthorization.objects.filter(id=token).first():
             authorization.verified = True
@@ -38,39 +83,3 @@ class KKEMAuthorizationAPI(APIView):
             return CustomResponse(
                 general_message="Invalid token"
             ).get_failure_response()
-
-            
-
-    def handle_kkem_authorization(self, user, dwms_id):
-        try:
-            kkem_link = KKEMAuthorization.objects.create(
-                user=user,
-                dwms_id=dwms_id,
-                verified=False,
-                created_at=get_current_utc_time(),
-                updated_at=get_current_utc_time(),
-            )
-
-        except IntegrityError:
-            if kkem_link := KKEMAuthorization.objects.filter(
-                Q(user=user) | Q(dwms_id=dwms_id), verified=True
-            ).first():
-                return CustomResponse(
-                    general_message="Authorization already exists and is verified."
-                ).get_failure_response()
-
-        return self.send_kkm_mail(user, kkem_link)
-
-    def send_kkm_mail(self, user, kkem_link):
-        email_host_user = decouple.config("EMAIL_HOST_USER")
-        to_email = [user.email]
-
-        domain = decouple.config("FR_DOMAIN_NAME")
-        message = f"Click here to confirm the authorization {domain}/kkem-authorization?token={kkem_link.id}"
-        subject = "KKEM Authorization"
-
-        send_mail(subject, message, email_host_user, to_email, fail_silently=False)
-
-        return CustomResponse(
-            general_message="Authorization created successfully. Email sent."
-        ).get_success_response()

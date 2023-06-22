@@ -4,7 +4,7 @@ import uuid
 
 class KKEMAuthorization(models.Model):
     id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4, editable=False)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='kkem_authorizations')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='kkem_authorization_user')
     dwms_id = models.CharField(max_length=36, unique=True)
     verified = models.BooleanField(default=False)
     updated_at = models.DateTimeField()

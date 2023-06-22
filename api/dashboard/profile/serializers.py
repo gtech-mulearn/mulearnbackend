@@ -94,6 +94,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     #     )
     #
     #     return interest_groups
+    
     def get_interest_groups(self, obj):
         interest_groups = []
         for ig_link in UserIgLink.objects.filter(user=obj):
