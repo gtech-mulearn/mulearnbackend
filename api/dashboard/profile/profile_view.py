@@ -11,9 +11,8 @@ from utils.utils import DateTimeUtils
 class UserProfileAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
+    def get(self, request, muid=None):
         user_id = JWTUtils.fetch_user_id(request)
-
         user = User.objects.select_related('total_karma_user').prefetch_related(
             'user_organization_link_user_id__org',
             'user_organization_link_user_id__department',
@@ -22,6 +21,20 @@ class UserProfileAPI(APIView):
         ).filter(id=user_id).first()
 
         serializer = UserProfileSerializer(user, many=False, context={'roles': JWTUtils.fetch_role(request)})
+
+        if muid is not None:
+
+            user = User.objects.filter(mu_id=muid).first()
+            if user is None:
+                return CustomResponse(general_message='invalid muid').get_success_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+            if user_settings.is_public:
+                user_settings_serializer = UserProfileSerializer(user, many=False)
+                return CustomResponse(response=user_settings_serializer.data).get_success_response()
+            else:
+                return CustomResponse(general_message='User profile is privet').get_success_response()
+
         return CustomResponse(response=serializer.data).get_success_response()
 
     def put(self, request):
@@ -77,20 +90,3 @@ class ShareUserProfileAPI(APIView):
 
         return CustomResponse(general_message='Now your profile is shareable').get_success_response()
 
-
-class AccessUserProfileAPI(APIView):
-
-    def get(self, request, muid):
-
-        user = User.objects.filter(mu_id=muid).first()
-        if user is None:
-            return CustomResponse(general_message='invalid muid').get_success_response()
-
-        user_settings = UserSettings.objects.filter(user_id=user).first()
-
-        if user_settings.is_public == 1:
-            serializer = UserProfileSerializer(user, many=False)
-            return CustomResponse(response=serializer.data).get_success_response()
-
-        else:
-            return CustomResponse(general_message='User profile is privet').get_success_response()
