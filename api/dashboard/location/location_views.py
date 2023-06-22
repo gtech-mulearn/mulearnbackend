@@ -3,7 +3,7 @@ import uuid
 from rest_framework.views import APIView
 
 from db.organization import Country, State, District, Zone
-from utils.permission import CustomizePermission, JWTUtils, get_current_utc_time, role_required
+from utils.permission import CustomizePermission, JWTUtils, DateTimeUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
@@ -40,8 +40,8 @@ class CountryDataAPI(APIView):
         if country:
             return CustomResponse(general_message="Country already exists").get_failure_response()
 
-        created_at = get_current_utc_time()
-        updated_at = get_current_utc_time()
+        created_at = DateTimeUtils.get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -65,7 +65,7 @@ class CountryDataAPI(APIView):
         if not user_id:
             return CustomResponse(general_message="User not found").get_failure_response()
 
-        updated_at = get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
 
         data = {
             'name': request.data.get('newName'),
@@ -133,8 +133,8 @@ class StateDataAPI(APIView):
         if state:
             return CustomResponse(general_message="State already exists").get_failure_response()
 
-        created_at = get_current_utc_time()
-        updated_at = get_current_utc_time()
+        created_at = DateTimeUtils.get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -176,13 +176,13 @@ class StateDataAPI(APIView):
                 state_exist = State.objects.filter(name=request.data.get('newName'), country=country_obj.id).first()
                 if state_exist:
                     return CustomResponse(general_message=
-                        f"State already exists for {request.data.get('country')}").get_failure_response()
+                                          f"State already exists for {request.data.get('country')}").get_failure_response()
                 request.data['name'] = request.data.get('newName')
             else:
                 state_exist = State.objects.filter(name=request.data.get('oldName'), country=country_obj.id).first()
                 if state_exist:
                     return CustomResponse(general_message=
-                        f"State already exists for {request.data.get('country')}").get_failure_response()
+                                          f"State already exists for {request.data.get('country')}").get_failure_response()
             country_id = country_obj.id
             request.data['country'] = country_id
 
@@ -193,7 +193,7 @@ class StateDataAPI(APIView):
             request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
-        request.data['updated_at'] = get_current_utc_time()
+        request.data['updated_at'] = DateTimeUtils.get_current_utc_time()
 
         serializer = StateSerializer(state, data=request.data, partial=True)
         if serializer.is_valid():
@@ -264,8 +264,8 @@ class ZoneDataAPI(APIView):
         if zone:
             return CustomResponse(general_message="Zone already exists").get_failure_response()
 
-        created_at = get_current_utc_time()
-        updated_at = get_current_utc_time()
+        created_at = DateTimeUtils.get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -312,13 +312,13 @@ class ZoneDataAPI(APIView):
                 zone_exists = Zone.objects.filter(name=request.data.get('newName'), state=state_obj.id).first()
                 if zone_exists:
                     return CustomResponse(general_message=
-                    f"Zone already exist for {request.data.get('state')}").get_failure_response()
+                                          f"Zone already exist for {request.data.get('state')}").get_failure_response()
                 request.data['name'] = request.data.get('newName')
             else:
                 zone_exists = Zone.objects.filter(name=request.data.get('oldName'), state=state_obj.id).first()
                 if zone_exists:
                     return CustomResponse(general_message=
-                            f"Zone already exist for {request.data.get('state')}").get_failure_response()
+                                          f"Zone already exist for {request.data.get('state')}").get_failure_response()
             request.data['state'] = state_obj.id
 
         if request.data.get('newName') and not request.data.get('state'):
@@ -328,7 +328,7 @@ class ZoneDataAPI(APIView):
             request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
-        request.data['updated_at'] = get_current_utc_time()
+        request.data['updated_at'] = DateTimeUtils.get_current_utc_time()
 
         serializer = ZoneSerializer(zone, data=request.data, partial=True)
         if serializer.is_valid():
@@ -385,6 +385,7 @@ class DistrictDataAPI(APIView):
         }
         return CustomResponse().paginated_response(data=required_data, pagination=paginated_queryset.get('pagination'))
         # return CustomResponse().paginated_response(data=serializer.data, pagination=paginated_queryset.get('pagination'))
+
     @role_required(roles=[RoleType.ADMIN, ])
     def post(self, request, country, state, zone):
         user_id = JWTUtils.fetch_user_id(request)
@@ -410,8 +411,8 @@ class DistrictDataAPI(APIView):
         if district:
             return CustomResponse(general_message="District already exists").get_failure_response()
 
-        created_at = get_current_utc_time()
-        updated_at = get_current_utc_time()
+        created_at = DateTimeUtils.get_current_utc_time()
+        updated_at = DateTimeUtils.get_current_utc_time()
 
         data = {
             'id': str(uuid.uuid4()),
@@ -462,13 +463,13 @@ class DistrictDataAPI(APIView):
                 district_exist = District.objects.filter(name=request.data.get('newName'), zone=zone_obj.id).first()
                 if district_exist:
                     return CustomResponse(general_message=
-                            f"District already exists for {request.data.get('zone')}").get_failure_response()
+                                          f"District already exists for {request.data.get('zone')}").get_failure_response()
                 request.data['name'] = request.data.get('newName')
             else:
                 district_exist = District.objects.filter(name=request.data.get('oldName'), zone=zone_obj.id).first()
                 if district_exist:
                     return CustomResponse(general_message=
-                    f"District already exists for {request.data.get('zone')}").get_failure_response()
+                                          f"District already exists for {request.data.get('zone')}").get_failure_response()
 
             request.data['zone'] = zone_obj.id
 
@@ -479,7 +480,7 @@ class DistrictDataAPI(APIView):
             request.data['name'] = request.data.get('newName')
 
         request.data['updated_by'] = user_id
-        request.data['updated_at'] = get_current_utc_time()
+        request.data['updated_at'] = DateTimeUtils.get_current_utc_time()
 
         serializer = DistrictSerializer(district, data=request.data, partial=True)
         if serializer.is_valid():
