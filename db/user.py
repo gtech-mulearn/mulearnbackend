@@ -82,3 +82,19 @@ class ForgotPassword(models.Model):
     class Meta:
         managed = False
         db_table = 'forgot_password'
+
+
+class UserSettings(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    is_public = models.BooleanField(default=False)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='user_settings_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='user_settings_created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'user_settings'
