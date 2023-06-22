@@ -1,3 +1,4 @@
+from datetime import datetime
 from rest_framework.views import APIView
 from db.task import KarmaActivityLog, UserIgLink
 
@@ -10,20 +11,25 @@ from . import kkem_serializer
 from .kkem_helper import HandleAuthorization
 
 from django.db.models import Prefetch
+from django.core.exceptions import ValidationError
 
 
 class KKEMBulkKarmaAPI(APIView):
     def get(self, request):
-        from_datetime = request.GET.get("from_datetime")
-        
-        if not from_datetime:
+        if not (from_datetime := request.GET.get("from_datetime")):
             return CustomResponse(
-                general_message="Given an undefined or unspecified time parameter"
+                general_message="Unspecified time parameter", response={}
             ).get_failure_response()
 
-        users_with_updates = KarmaActivityLog.objects.filter(
-            appraiser_approved=True, updated_at__gte=from_datetime
-        ).values_list("created_by", flat=True)
+        try:
+            from_datetime = datetime.strptime(from_datetime, "%Y-%m-%dT%H:%M:%S")
+            users_with_updates = KarmaActivityLog.objects.filter(
+                appraiser_approved=True, updated_at__gte=from_datetime
+            ).values_list("created_by", flat=True)
+        except ValueError:
+            return CustomResponse(
+                general_message="Invalid datetime format", response={}
+            ).get_failure_response()
 
         users = KKEMAuthorization.objects.filter(
             verified=True, user__in=users_with_updates
@@ -50,16 +56,16 @@ class KKEMBulkKarmaAPI(APIView):
 
 class KKEMIndividualKarmaAPI(APIView):
     def get(self, request, mu_id):
-        user = (
+        kkem_user = (
             KKEMAuthorization.objects.filter(user__mu_id=mu_id, verified=True)
             .first()
-            .user
         )
-        if not user:
+        if not kkem_user:
             return CustomResponse(
                 general_message="User not found"
-            ).get_success_response()
-        serializer = kkem_serializer.KKEMBulkKarmaSerializer(user)
+            ).get_failure_response()
+            
+        serializer = kkem_serializer.KKEMBulkKarmaSerializer(kkem_user.user)
 
         return CustomResponse(response=serializer.data).get_success_response()
 
