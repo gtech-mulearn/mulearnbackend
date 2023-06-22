@@ -2,7 +2,7 @@ import decouple
 
 
 from db.integrations import KKEMAuthorization
-from utils.permission import get_current_utc_time
+from utils.permission import DateTimeUtils
 from utils.response import CustomResponse
 
 from django.db import IntegrityError
@@ -18,8 +18,8 @@ class HandleAuthorization:
                 user=user,
                 dwms_id=dwms_id,
                 verified=False,
-                created_at=get_current_utc_time(),
-                updated_at=get_current_utc_time(),
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_at=DateTimeUtils.get_current_utc_time(),
             )
 
         except IntegrityError:

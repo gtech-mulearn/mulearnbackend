@@ -3,7 +3,7 @@ from db.task import KarmaActivityLog, UserIgLink
 
 from db.user import User
 from db.integrations import KKEMAuthorization
-from utils.permission import get_current_utc_time
+from utils.utils import DateTimeUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from . import kkem_serializer
@@ -14,10 +14,15 @@ from django.db.models import Prefetch
 
 class KKEMBulkKarmaAPI(APIView):
     def get(self, request):
-        datetime = request.GET.get("datetime")
+        from_datetime = request.GET.get("from_datetime")
+        
+        if not from_datetime:
+            return CustomResponse(
+                general_message="Given an undefined or unspecified time parameter"
+            ).get_failure_response()
 
         users_with_updates = KarmaActivityLog.objects.filter(
-            appraiser_approved=True, updated_at__gte=datetime
+            appraiser_approved=True, updated_at__gte=from_datetime
         ).values_list("created_by", flat=True)
 
         users = KKEMAuthorization.objects.filter(
@@ -31,7 +36,7 @@ class KKEMBulkKarmaAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["mu_id", "first_name", "last_name", "email", "mobile"],
+            ["mu_id"],
         )
 
         serialized_users = kkem_serializer.KKEMBulkKarmaSerializer(
@@ -74,7 +79,7 @@ class KKEMAuthorizationAPI(APIView):
     def patch(self, request, token):
         if authorization := KKEMAuthorization.objects.filter(id=token).first():
             authorization.verified = True
-            authorization.updated_at = get_current_utc_time()
+            authorization.updated_at = DateTimeUtils.get_current_utc_time()
             authorization.save()
             return CustomResponse(
                 general_message="User authenticated successfully"
