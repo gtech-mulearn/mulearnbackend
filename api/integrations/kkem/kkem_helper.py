@@ -22,13 +22,11 @@ class HandleAuthorization:
                 updated_at=DateTimeUtils.get_current_utc_time(),
             )
 
-        except IntegrityError:
+        except IntegrityError as e:
             if kkem_link := KKEMAuthorization.objects.filter(
                 Q(user=user) | Q(dwms_id=dwms_id), verified=True
             ).first():
-                return CustomResponse(
-                    general_message="Authorization already exists and is verified."
-                ).get_failure_response()
+                raise ValueError("Authorization already exists and is verified.") from e
 
         return cls.send_kkm_mail(user, kkem_link)
 
@@ -42,7 +40,3 @@ class HandleAuthorization:
         subject = "KKEM Authorization"
 
         send_mail(subject, message, email_host_user, to_email, fail_silently=False)
-
-        return CustomResponse(
-            general_message="Authorization created successfully. Email sent."
-        ).get_success_response()
