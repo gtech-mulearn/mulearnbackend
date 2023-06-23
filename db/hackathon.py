@@ -10,6 +10,7 @@ class Hackathon(models.Model):
     tagline = models.CharField(max_length=150, blank=True, null=True)
     description = models.CharField(max_length=5000, blank=True, null=True)
     participant_count = models.IntegerField(blank=True, null=True)
+    type = models.CharField(max_length=8, default="offline")
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     district = models.ForeignKey(District, on_delete=models.CASCADE, blank=True, null=True)
     place = models.CharField(max_length=255, blank=True, null=True)
@@ -38,6 +39,7 @@ class HackathonForm(models.Model):
     hackathon = models.ForeignKey(Hackathon, on_delete=models.CASCADE)
     field_name = models.CharField(max_length=255)
     field_type = models.CharField(max_length=50)
+    is_required = models.BooleanField(default=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='hackathon_form_updated_by')
     updated_at = models.DateTimeField()
