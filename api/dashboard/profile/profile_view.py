@@ -19,7 +19,7 @@ class UserProfileAPI(APIView):
 
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile")
+                return CustomResponse(general_message="Private Profile").get_failure_response()
             user_id = user.id
             roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
         else:
