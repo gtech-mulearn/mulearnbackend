@@ -60,7 +60,6 @@ class UserProfileAPI(APIView):
 
 
 class UserLogAPI(APIView):
-    authentication_classes = [CustomizePermission]
 
     def get(self, request, muid=None):
         if muid is not None:
