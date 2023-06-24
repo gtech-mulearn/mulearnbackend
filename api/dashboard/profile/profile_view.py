@@ -98,7 +98,7 @@ class ShareUserProfileAPI(APIView):
         user_settings = UserSettings.objects.filter(user=user_id).first()
 
         user_settings.is_public = is_public
-        user_settings.updated_by = user_id
+        user_settings.updated_by_id = user_id
         user_settings.updated_at = DateTimeUtils.get_current_utc_time()
 
         user_settings.save()
