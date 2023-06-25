@@ -38,11 +38,10 @@ class UserInfoAPI(APIView):
 
 
 class UserAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
-        print('data processing getttt')
         user_queryset = User.objects.annotate(
             total_karma=Case(
                 When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
@@ -98,7 +97,7 @@ class UserAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    # @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -150,7 +149,7 @@ class UserAPI(APIView):
                 general_message="Database integrity error",
             ).get_failure_response()
 
-    # @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -168,9 +167,49 @@ class UserManagementCSV(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
-        user = User.objects.all()
+        user_queryset = User.objects.annotate(
+            total_karma=Case(
+                When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
+                default=Value(0)
+            ),
+            company=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
+                    then=F('user_organization_link_user_id__org__title'),
+                ),
+                default=Value(None),
+                output_field=CharField()
+            ),
+            department=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    then=F('user_organization_link_user_id__department__title'),
+                ),
+                default=Value(''),
+                output_field=CharField()
+                
+            ),
+            graduation_year=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    then=F('user_organization_link_user_id__graduation_year'),
+                ),
+                default=Value(''),
+                output_field=CharField()
+            ),
+            college=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                    then=F('user_organization_link_user_id__org__title'),
+                ),
+                default=Value(None),
+                output_field=CharField()
+            ),
+        )
         user_serializer_data = dash_user_serializer.UserDashboardSerializer(
-            user, many=True
+            user_queryset, many=True
         ).data
         return CommonUtils.generate_csv(user_serializer_data, "User")
 
