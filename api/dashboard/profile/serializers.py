@@ -19,7 +19,7 @@ class UserLogSerializer(ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
-    muid = serializers.CharField
+    muid = serializers.CharField(source="mu_id")
     first_name = serializers.CharField
     last_name = serializers.CharField
     roles = serializers.SerializerMethodField()
