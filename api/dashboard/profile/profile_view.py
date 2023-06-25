@@ -107,15 +107,13 @@ class ShareUserProfileAPI(APIView):
 
 
 class UserLevelsAPI(APIView):
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
 
-        user_id = '1c0ba6c0-ee43-11ed-a05b-0242ac120003'
-        # user = User.objects.filter(id=user_id).first()
+        user_id = JWTUtils.fetch_user_id(request)
         user_level_link = UserLvlLink.objects.filter(user_id=user_id)
-        # print(user_level_link)
         serializer = UserLevelsSerializer(user_level_link, many=True)
-        # print(serializer.data)
 
         return CustomResponse(response=serializer.data).get_success_response()
 
