@@ -1,0 +1,11 @@
+from django.urls import path
+
+from . import kkem_views
+
+# app_name will help us do a reverse look-up latter.
+urlpatterns = [ 
+    path('authorization/', kkem_views.KKEMAuthorizationAPI.as_view(), name="create-auth"),
+    path('authorization/<str:token>/', kkem_views.KKEMAuthorizationAPI.as_view(), name="verify-auth"),
+    path('users/', kkem_views.KKEMBulkKarmaAPI.as_view(), name="list-user"),
+    path('users/<str:mu_id>/', kkem_views.KKEMIndividualKarmaAPI.as_view(), name="get-user"),
+]
