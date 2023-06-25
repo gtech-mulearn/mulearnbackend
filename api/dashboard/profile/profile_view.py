@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 
-from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer
-from db.task import KarmaActivityLog
+from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelsSerializer
+from db.task import KarmaActivityLog, UserLvlLink, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -104,3 +104,19 @@ class ShareUserProfileAPI(APIView):
         user_settings.save()
 
         return CustomResponse(general_message='Now your profile is shareable').get_success_response()
+
+
+class UserLevelsAPI(APIView):
+
+    def get(self, request):
+
+        user_id = '1c0ba6c0-ee43-11ed-a05b-0242ac120003'
+        # user = User.objects.filter(id=user_id).first()
+        user_level_link = UserLvlLink.objects.filter(user_id=user_id)
+        # print(user_level_link)
+        serializer = UserLevelsSerializer(user_level_link, many=True)
+        # print(serializer.data)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
