@@ -1,12 +1,9 @@
-import uuid
-from datetime import timedelta
-
 import decouple
 import requests
-from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.db.models import Q
 from rest_framework.views import APIView
+
 from db.organization import Country, District, Organization, Department, State, Zone
 from db.task import InterestGroup
 from db.user import Role, User
@@ -197,7 +194,6 @@ class AreaOfInterestAPI(APIView):
         ).get_success_response()
 
 
-
 class UserEmailVerificationAPI(APIView):
     def post(self, request):
         user_email = request.data.get("email")
@@ -209,7 +205,6 @@ class UserEmailVerificationAPI(APIView):
             return CustomResponse(
                 general_message="User email not exist", response={"value": False}
             ).get_success_response()
-
 
 
 class UserCountryAPI(APIView):
