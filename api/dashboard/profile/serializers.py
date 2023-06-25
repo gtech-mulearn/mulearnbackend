@@ -3,7 +3,7 @@ from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.task import KarmaActivityLog, TotalKarma, UserIgLink
-from db.user import User
+from db.user import User, UserSettings
 from utils.types import OrganizationType, RoleType
 
 
@@ -29,19 +29,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
+    is_public = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
             'id', 'joined', 'firstName', 'lastName', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
-            'karma_distribution', 'level', 'profile_pic', 'interest_groups'
+            'karma_distribution', 'level', 'profile_pic', 'interest_groups', 'is_public'
         )
 
     def get_roles(self, obj):
         return list(obj.user_role_link_user.values_list('role__title', flat=True))
 
     def get_college_code(self, obj):
-        user_org_link = obj.user_organization_link_user_id.filter(org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = obj.user_organization_link_user_id.filter(
+            org__org_type=OrganizationType.COLLEGE.value).first()
         if user_org_link:
             return user_org_link.org.code
         return None
@@ -102,5 +104,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 'karma__sum') is None else KarmaActivityLog.objects.filter(task__ig=ig_link.ig,
                                                                            created_by=obj).aggregate(
                 Sum('karma')).get('karma__sum')
-            interest_groups.append({'name': ig_link.ig.name, 'karma': total_ig_karma})
+            interest_groups.append(
+                {'name': ig_link.ig.name, 'karma': total_ig_karma})
         return interest_groups
+
+    def get_is_public(self, obj):
+        is_public_status = UserSettings.objects.filter(user=obj).first().is_public
+        return is_public_status
