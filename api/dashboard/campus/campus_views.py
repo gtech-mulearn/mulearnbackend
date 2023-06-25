@@ -23,7 +23,8 @@ class StudentDetailsAPI(APIView):
         for i, person in enumerate(sorted_persons):
             person['rank'] = i + 1
 
-        return CustomResponse(response={"data": sorted_persons,
+        sorted_data = sorted(sorted_persons, key=lambda x: x["fullname"])
+        return CustomResponse(response={"data": sorted_data,
                                         'pagination': paginated_queryset.get('pagination')}).get_success_response()
 
 
