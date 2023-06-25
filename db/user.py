@@ -75,7 +75,7 @@ class Github(models.Model):
 
 class ForgotPassword(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.OneToOneField(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     expiry = models.DateTimeField()
     created_at = models.DateTimeField()
 
