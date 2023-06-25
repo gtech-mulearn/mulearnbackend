@@ -1,3 +1,4 @@
+import contextlib
 import uuid
 from datetime import timedelta
 
@@ -99,6 +100,7 @@ class UserAPI(APIView):
             return CustomResponse(
                 response={"users": serializer.data}
             ).get_success_response()
+
 
         except IntegrityError as e:
             return CustomResponse(
