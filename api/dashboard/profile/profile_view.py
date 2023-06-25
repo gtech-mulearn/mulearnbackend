@@ -103,8 +103,5 @@ class ShareUserProfileAPI(APIView):
         user_settings.updated_at = DateTimeUtils.get_current_utc_time()
 
         user_settings.save()
-
-        # return CustomResponse(general_message='Now your profile is shareable').get_success_response()
-
         general_message = 'Now your profile is shareable' if user_settings.is_public else 'Now your profile is private'
         return CustomResponse(general_message=general_message).get_success_response()
