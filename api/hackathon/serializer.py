@@ -35,6 +35,8 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
     form_fields = serializers.JSONField(required=False)
     event_logo = serializers.ImageField(required=False)
     banner = serializers.ImageField(required=False)
+    org_id = serializers.CharField(required=False)
+    district_id = serializers.CharField(required=False)
 
     class Meta:
         model = Hackathon
@@ -69,9 +71,11 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+            if 'event_logo' in validated_data:
+                default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
 
-            default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
-            default_storage.save(validated_data.get('banner').name, validated_data.get('banner'))
+            if 'banner' in validated_data:
+                default_storage.save(validated_data.get('banner').name, validated_data.get('banner'))
 
             hackathon = Hackathon.objects.create(**validated_data)
 
@@ -105,14 +109,15 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
     form_fields = serializers.JSONField(required=False)
     event_logo = serializers.ImageField(required=False)
     banner = serializers.ImageField(required=False)
+    org_id = serializers.CharField(required=False)
+    district_id = serializers.CharField(required=False)
 
     class Meta:
         model = Hackathon
-        fields = (
-            'title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
-            'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
-            'form_fields',
-            'event_logo', 'banner', 'event_logo')
+        fields = ('title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
+                  'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
+                  'form_fields',
+                  'event_logo', 'banner', 'event_logo')
 
     def validate_org_id(self, value):
         organisation = Organization.objects.filter(id=value).first()
@@ -121,7 +126,6 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         return organisation
 
     def validate_district_id(self, value):
-        print(value)
         district = District.objects.filter(id=value).first()
         if not district:
             raise serializers.ValidationError("District Not Exists")
@@ -149,9 +153,12 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
             hackathon_form_fields = validated_data.pop('form_fields')
             if hackathon_form_fields:
                 for field_name, field_type in hackathon_form_fields.items():
-                    HackathonForm.objects.create(id=uuid.uuid4(), hackathon=instance, field_name=field_name,
-                                                 field_type=field_type, updated_by_id=user_id,
-                                                 updated_at=DateTimeUtils.get_current_utc_time(), created_by_id=user_id,
-                                                 created_at=DateTimeUtils.get_current_utc_time())
+                    hackathon = HackathonForm.objects.filter(field_name=field_name, hackathon=instance).first()
+                    if not hackathon:
+                        HackathonForm.objects.create(id=uuid.uuid4(), hackathon=instance, field_name=field_name,
+                                                     field_type=field_type, updated_by_id=user_id,
+                                                     updated_at=DateTimeUtils.get_current_utc_time(),
+                                                     created_by_id=user_id,
+                                                     created_at=DateTimeUtils.get_current_utc_time())
         instance.save()
         return instance
