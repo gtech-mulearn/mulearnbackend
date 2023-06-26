@@ -9,19 +9,17 @@ from utils.types import OrganizationType, RoleType
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source='task.title')
-    karma_point = serializers.CharField(source='karma')
+    karma = serializers.CharField(source='karma')
     created_date = serializers.CharField(source='created_at')
 
     class Meta:
         model = KarmaActivityLog
-        fields = ["task_name", "karma_point", "created_date"]
+        fields = ["task_name", "karma", "created_date"]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     muid = serializers.CharField(source="mu_id")
-    first_name = serializers.CharField
-    last_name = serializers.CharField
     roles = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
