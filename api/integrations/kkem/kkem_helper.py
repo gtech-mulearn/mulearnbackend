@@ -32,11 +32,15 @@ class HandleAuthorization:
 
     @classmethod
     def send_kkm_mail(cls, user, kkem_link):
-        email_host_user = decouple.config("EMAIL_HOST_USER")
-        to_email = [user.email]
+        try:
+            email_host_user = decouple.config("EMAIL_HOST_USER")
+            to_email = [user.email]
 
-        domain = decouple.config("FR_DOMAIN_NAME")
-        message = f"Click here to confirm the authorization {domain}/kkem-authorization?token={kkem_link.id}"
-        subject = "KKEM Authorization"
+            domain = decouple.config("FR_DOMAIN_NAME")
+            message = f"Click here to confirm the authorization {domain}/kkem-authorization?token={kkem_link.id}"
+            subject = "KKEM Authorization"
 
-        send_mail(subject, message, email_host_user, to_email, fail_silently=False)
+            send_mail(subject, message, email_host_user, to_email, fail_silently=False)
+            return True
+        except Exception as e:
+            return False

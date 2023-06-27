@@ -8,20 +8,18 @@ from utils.types import OrganizationType, RoleType
 
 
 class UserLogSerializer(ModelSerializer):
-    taskName = serializers.ReadOnlyField(source='task.title')
-    karmaPoint = serializers.CharField(source='karma')
-    createdDate = serializers.CharField(source='created_at')
+    task_name = serializers.ReadOnlyField(source='task.title')
+    karma = serializers.CharField(source='karma')
+    created_date = serializers.CharField(source='created_at')
 
     class Meta:
         model = KarmaActivityLog
-        fields = ["taskName", "karmaPoint", "createdDate"]
+        fields = ["task_name", "karma", "created_date"]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     muid = serializers.CharField(source="mu_id")
-    firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
     roles = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
@@ -34,7 +32,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
-            'id', 'joined', 'firstName', 'lastName', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
+            'id', 'joined', 'first_name', 'last_name', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
             'karma_distribution', 'level', 'profile_pic', 'interest_groups', 'is_public'
         )
 
@@ -110,5 +108,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return interest_groups
 
     def get_is_public(self, obj):
-        is_public_status = UserSettings.objects.filter(user=obj).first().is_public
+        user_settings = UserSettings.objects.filter(user=obj).first()
+        if user_settings is not None:
+            is_public_status = user_settings.is_public
+        else:
+            # Set a default value when UserSettings is not found
+            is_public_status = False
         return is_public_status
