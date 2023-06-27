@@ -19,9 +19,10 @@ class UserProfileAPI(APIView):
 
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile")
+                return CustomResponse(general_message="Private Profile").get_failure_response()
             user_id = user.id
-            roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
+            roles = [
+                role.role.title for role in UserRoleLink.objects.filter(user=user)]
         else:
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
@@ -34,7 +35,8 @@ class UserProfileAPI(APIView):
             'userlvllink_set__level',
         ).filter(id=user_id).first()
 
-        serializer = UserProfileSerializer(user, many=False, context={'roles': roles})
+        serializer = UserProfileSerializer(
+            user, many=False, context={'roles': roles})
 
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -60,7 +62,6 @@ class UserProfileAPI(APIView):
 
 
 class UserLogAPI(APIView):
-    authentication_classes = [CustomizePermission]
 
     def get(self, request, muid=None):
         if muid is not None:
@@ -98,9 +99,9 @@ class ShareUserProfileAPI(APIView):
         user_settings = UserSettings.objects.filter(user=user_id).first()
 
         user_settings.is_public = is_public
-        user_settings.updated_by = user_id
+        user_settings.updated_by_id = user_id
         user_settings.updated_at = DateTimeUtils.get_current_utc_time()
 
         user_settings.save()
-
-        return CustomResponse(general_message='Now your profile is shareable').get_success_response()
+        general_message = 'Now your profile is shareable' if user_settings.is_public else 'Now your profile is private'
+        return CustomResponse(general_message=general_message).get_success_response()
