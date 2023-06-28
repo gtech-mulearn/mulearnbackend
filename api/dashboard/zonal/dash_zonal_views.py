@@ -1,3 +1,6 @@
+from django.db.models import Count, Q
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink
@@ -6,9 +9,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
-from django.db.models import Count, Q
 from . import dash_zonal_serializer
 
 
@@ -72,7 +72,7 @@ class ZonalStudentsCSV(APIView):
         )
 
         return CommonUtils.generate_csv(serializer.data, "Zonal Student Details")
-    
+
 
 class ZonalCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -93,7 +93,9 @@ class ZonalCampusAPI(APIView):
             .distinct()
             .prefetch_related("user_organization_link_org_id", "user_organization_link_org_id__user__total_karma_user")
             .annotate(total_members=Count("user_organization_link_org_id"))
-            .annotate(active_members=Count("user_organization_link_org_id", filter=Q(user_organization_link_org_id__verified=True, user_organization_link_org_id__user__active=True)))
+            .annotate(active_members=Count("user_organization_link_org_id",
+                                           filter=Q(user_organization_link_org_id__verified=True,
+                                                    user_organization_link_org_id__user__active=True)))
             .annotate(total_karma=Coalesce(Sum("user_organization_link_org_id__user__total_karma_user__karma"), 0))
         )
 
@@ -112,7 +114,6 @@ class ZonalCampusAPI(APIView):
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
-
 
 
 class ZonalCampusCSV(APIView):
@@ -134,7 +135,9 @@ class ZonalCampusCSV(APIView):
             .distinct()
             .prefetch_related("user_organization_link_org_id", "user_organization_link_org_id__user__total_karma_user")
             .annotate(total_members=Count("user_organization_link_org_id"))
-            .annotate(active_members=Count("user_organization_link_org_id", filter=Q(user_organization_link_org_id__verified=True, user_organization_link_org_id__user__active=True)))
+            .annotate(active_members=Count("user_organization_link_org_id",
+                                           filter=Q(user_organization_link_org_id__verified=True,
+                                                    user_organization_link_org_id__user__active=True)))
             .annotate(total_karma=Coalesce(Sum("user_organization_link_org_id__user__total_karma_user__karma"), 0))
         )
 

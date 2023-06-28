@@ -55,6 +55,7 @@ class InstitutionsAPI(APIView):
 
         return CustomResponse().paginated_response(data=data, pagination=pagination)
 
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, org_code):
         org_obj = Organization.objects.filter(code=org_code).first()
         if org_obj is None:
@@ -95,7 +96,7 @@ class GetInstitutionsAPI(APIView):
         # organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse().paginated_response(data=organisation_serializer.data,
                                                    pagination=paginated_organisations.get('pagination'))
-
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
         district = District.objects.filter(name=district_name).first()
