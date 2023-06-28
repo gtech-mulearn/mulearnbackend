@@ -2,7 +2,6 @@ from django.db import models
 from db.user import User
 import uuid
 
-# from background_task import background
 
 class Integration(models.Model):
     id = models.CharField(max_length=255, primary_key=True, default=uuid.uuid4, editable=False)
