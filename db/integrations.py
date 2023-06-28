@@ -1,9 +1,7 @@
-from datetime import timezone
 from django.db import models
 from db.user import User
 import uuid
 
-from utils.utils import CommonUtils
 # from background_task import background
 
 class Integration(models.Model):
@@ -26,13 +24,3 @@ class IntegrationAuthorization(models.Model):
     
     class Meta:
         db_table = 'integration_authorization'
-        
-    # def is_expired(self):
-    #     expiration_time = self.created_at + timezone.timedelta(minutes=15)
-    #     return timezone.now() > expiration_time and not self.verified
-
-# @background(schedule=timezone.timedelta(minutes=30))
-# def delete_expired_verification_links():
-#     expired_links = IntegrationAuthorization.objects.filter(is_expired=True)
-#     expired_links.delete()
-

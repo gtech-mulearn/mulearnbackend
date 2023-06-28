@@ -42,7 +42,6 @@ INSTALLED_APPS = [
     "rest_framework",
     # custom apps
     "debug_toolbar",
-    # 'background_task',
     "utils.apps.UtilsConfig",
     "api.apps.ApiConfig",
     "corsheaders",
@@ -60,7 +59,7 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
-# BACKGROUND_TASK_RUN_ASYNC = True
+
 
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
 # paginator settings
