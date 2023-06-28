@@ -1,29 +1,26 @@
 from django.db.models import Sum, F, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-
-from db.task import KarmaActivityLog, TotalKarma, UserIgLink, UserLvlLink, Level
-from db.user import User
+from db.task import KarmaActivityLog, TotalKarma, UserIgLink,UserLvlLink, Level
+from db.user import User, UserSettings
 from utils.types import OrganizationType, RoleType
 
 
 from django.db.models import Count
 
 class UserLogSerializer(ModelSerializer):
-    taskName = serializers.ReadOnlyField(source='task.title')
-    karmaPoint = serializers.CharField(source='karma')
-    createdDate = serializers.CharField(source='created_at')
+    task_name = serializers.ReadOnlyField(source='task.title')
+    karma = serializers.CharField(source='karma')
+    created_date = serializers.CharField(source='created_at')
 
     class Meta:
         model = KarmaActivityLog
-        fields = ["taskName", "karmaPoint", "createdDate"]
+        fields = ["task_name", "karma", "created_date"]
 
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     muid = serializers.CharField(source="mu_id")
-    firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
     roles = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
@@ -31,19 +28,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
+    is_public = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
-            'id', 'joined', 'firstName', 'lastName', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
-            'karma_distribution', 'level', 'profile_pic', 'interest_groups'
+            'id', 'joined', 'first_name', 'last_name', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
+            'karma_distribution', 'level', 'profile_pic', 'interest_groups', 'is_public'
         )
 
     def get_roles(self, obj):
         return list(obj.user_role_link_user.values_list('role__title', flat=True))
 
     def get_college_code(self, obj):
-        user_org_link = obj.user_organization_link_user_id.filter(org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = obj.user_organization_link_user_id.filter(
+            org__org_type=OrganizationType.COLLEGE.value).first()
         if user_org_link:
             return user_org_link.org.code
         return None
@@ -96,6 +95,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     #     )
     #
     #     return interest_groups
+    
     def get_interest_groups(self, obj):
         interest_groups = []
         for ig_link in UserIgLink.objects.filter(user=obj):
@@ -104,7 +104,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 'karma__sum') is None else KarmaActivityLog.objects.filter(task__ig=ig_link.ig,
                                                                            created_by=obj).aggregate(
                 Sum('karma')).get('karma__sum')
-            interest_groups.append({'name': ig_link.ig.name, 'karma': total_ig_karma})
+            interest_groups.append(
+                {'name': ig_link.ig.name, 'karma': total_ig_karma})
         return interest_groups
 
 
@@ -129,3 +130,12 @@ class UserLevelsSerializer(ModelSerializer):
 
     def get_remaining_tasks(self, obj):
         return 1
+
+    def get_is_public(self, obj):
+        user_settings = UserSettings.objects.filter(user=obj).first()
+        if user_settings is not None:
+            is_public_status = user_settings.is_public
+        else:
+            # Set a default value when UserSettings is not found
+            is_public_status = False
+        return is_public_status

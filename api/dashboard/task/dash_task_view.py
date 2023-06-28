@@ -1,15 +1,15 @@
 import uuid
 
-from openpyxl import Workbook
 from rest_framework.views import APIView
-from db.task import TaskList, Channel, TaskType, Level, InterestGroup
+
 from db.organization import Organization
+from db.task import TaskList, Channel, TaskType, Level, InterestGroup
+from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import TaskListSerializer
-from db.user import User
 
 
 class TaskApi(APIView):
@@ -73,7 +73,6 @@ class TaskApi(APIView):
         taskData.updated_at = DateTimeUtils.get_current_utc_time()
         taskData.save()
         serializer = TaskListSerializer(taskData)
-        print(serializer.data)
         return CustomResponse(
             response={"taskList": serializer.data}
         ).get_success_response()
@@ -105,6 +104,7 @@ class TaskListCSV(APIView):
 
 class ImportTaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         try:
@@ -181,20 +181,20 @@ class ImportTaskListCSV(APIView):
                 valid_rows.append(row)
 
         return CustomResponse(response={"Success": valid_rows, "Failed": error_rows}).get_success_response()
-            # workbook = Workbook()
-            # valid_sheet = workbook.active
-            # valid_headers = list(valid_rows[0].keys())
-            # valid_sheet.append(valid_headers)
-            #
-            # error_sheet = workbook.create_sheet(title='Invalid Rows')
-            # error_headers = list(error_rows[0].keys())
-            # error_sheet.append(error_headers)
+        # workbook = Workbook()
+        # valid_sheet = workbook.active
+        # valid_headers = list(valid_rows[0].keys())
+        # valid_sheet.append(valid_headers)
+        #
+        # error_sheet = workbook.create_sheet(title='Invalid Rows')
+        # error_headers = list(error_rows[0].keys())
+        # error_sheet.append(error_headers)
 
-            # for row in valid_rows:
-            #     valid_sheet.append([row.get(header, '') for header in valid_headers])
-            #
-            # for row in error_rows:
-            #     error_sheet.append([row.get(header, '') for header in error_headers])
+        # for row in valid_rows:
+        #     valid_sheet.append([row.get(header, '') for header in valid_headers])
+        #
+        # for row in error_rows:
+        #     error_sheet.append([row.get(header, '') for header in error_headers])
 
 
 class TaskGetAPI(APIView):
