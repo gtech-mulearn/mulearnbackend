@@ -41,13 +41,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             .first()
             .dwms_id
         )
-
-    def create(self, validated_data):
-        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
-
-        return super().create(validated_data)
-
+        
     class Meta:
         model = User
         fields = [

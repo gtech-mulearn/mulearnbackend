@@ -20,14 +20,14 @@ class KKEMBulkKarmaAPI(APIView):
         token = request.GET.get("token")
         if not from_datetime:
             return CustomResponse(
-                general_message="Unspecified time parameter", response={}
+                general_message="Unspecified time parameter",
             ).get_failure_response()
 
         try:
             from_datetime = datetime.strptime(from_datetime, "%Y-%m-%dT%H:%M:%S")
         except ValueError:
             return CustomResponse(
-                general_message="Invalid datetime format", response={}
+                general_message="Invalid datetime format",
             ).get_failure_response()
 
         queryset = User.objects.filter(
@@ -99,11 +99,11 @@ class KKEMAuthorizationAPI(APIView):
                 return CustomResponse(
                     general_message="Invalid or missing Token"
                 ).get_failure_response()
-                
+
             authorization.verified = True
             authorization.updated_at = DateTimeUtils.get_current_utc_time()
             authorization.save()
-            
+
             return CustomResponse(
                 general_message="User authenticated successfully"
             ).get_success_response()
