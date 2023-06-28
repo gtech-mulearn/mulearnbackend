@@ -1,12 +1,11 @@
 from django.db.models import Sum, F, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-from db.task import KarmaActivityLog, TotalKarma, UserIgLink,UserLvlLink, Level
+
+from db.task import KarmaActivityLog, TotalKarma, UserIgLink, UserLvlLink, Level, TaskList
 from db.user import User, UserSettings
 from utils.types import OrganizationType, RoleType
 
-
-from django.db.models import Count
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source='task.title')
@@ -36,6 +35,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             'id', 'joined', 'first_name', 'last_name', 'gender', 'muid', 'roles', 'college_code', 'karma', 'rank',
             'karma_distribution', 'level', 'profile_pic', 'interest_groups', 'is_public'
         )
+
+    def get_is_public(self, obj):
+        is_public_status = UserSettings.objects.filter(user=obj).first().is_public
+        return is_public_status
 
     def get_roles(self, obj):
         return list(obj.user_role_link_user.values_list('role__title', flat=True))
@@ -95,7 +98,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     #     )
     #
     #     return interest_groups
-    
+
     def get_interest_groups(self, obj):
         interest_groups = []
         for ig_link in UserIgLink.objects.filter(user=obj):
@@ -139,3 +142,15 @@ class UserLevelsSerializer(ModelSerializer):
             # Set a default value when UserSettings is not found
             is_public_status = False
         return is_public_status
+
+
+class LevelsSerializer(serializers.ModelSerializer):
+    tasks = serializers.SerializerMethodField()
+    level = serializers.CharField(source='level.name')
+
+    class Meta:
+        model = UserLvlLink
+        fields = ('tasks', 'level')
+
+    def get_tasks(self, obj):
+        return TaskList.objects.filter(level=obj.level).values()

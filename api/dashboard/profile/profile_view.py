@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 
-from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelsSerializer
-from db.task import KarmaActivityLog, UserLvlLink, Level
+from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, LevelsSerializer
+from db.task import KarmaActivityLog, UserLvlLink,Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -111,10 +111,8 @@ class UserLevelsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-
         user_id = JWTUtils.fetch_user_id(request)
-        user_level_link = UserLvlLink.objects.filter(user_id=user_id)
-        serializer = UserLevelsSerializer(user_level_link, many=True)
+        user_levels_link_query = UserLvlLink.objects.filter(user_id=user_id)
+        serializer = LevelsSerializer(user_levels_link_query, many=True)
 
         return CustomResponse(response=serializer.data).get_success_response()
-
