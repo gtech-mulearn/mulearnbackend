@@ -10,7 +10,6 @@ from django.db.models import Count
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source='task.title')
-    karma = serializers.IntegerField(source='karma')
     created_date = serializers.CharField(source='created_at')
 
     class Meta:
