@@ -180,7 +180,7 @@ def role_required(roles):
                     response = view_func(obj, request, *args, **kwargs)
                     return response
             res = CustomResponse(
-                general_message="You do not have the required role to access this page.", response={}
+                general_message="You do not have the required role to access this page."
             ).get_failure_response()
             return res
 
