@@ -34,5 +34,4 @@ def token_required(func):
         else:
             result = func(self, *args, **kwargs)
         return result
-
     return wrapper
