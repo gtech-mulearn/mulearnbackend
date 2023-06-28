@@ -20,7 +20,7 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                            'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                            'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                            'status',
-                           'banner', 'event_logo', 'type')
+                           'banner', 'event_logo', 'type', 'website')
 
 
 class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
@@ -44,7 +44,7 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             'title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
             'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
             'form_fields',
-            'event_logo', 'banner', 'event_logo')
+            'event_logo', 'banner', 'event_logo', 'website')
 
     def validate_org_id(self, value):
         organisation = Organization.objects.filter(id=value).first()
@@ -117,7 +117,7 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         fields = ('title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
                   'form_fields',
-                  'event_logo', 'banner', 'event_logo')
+                  'event_logo', 'banner', 'event_logo', 'website')
 
     def validate_org_id(self, value):
         organisation = Organization.objects.filter(id=value).first()
@@ -146,6 +146,7 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         instance.event_start = validated_data.get('event_start', instance.event_start)
         instance.event_end = validated_data.get('event_end', instance.event_end)
         instance.status = validated_data.get('status', instance.status)
+        instance.status = validated_data.get('website', instance.website)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
