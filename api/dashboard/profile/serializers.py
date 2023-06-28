@@ -9,7 +9,7 @@ from utils.types import OrganizationType, RoleType
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source='task.title')
-    karma = serializers.CharField(source='karma')
+    karma = serializers.IntegerField(source='karma')
     created_date = serializers.CharField(source='created_at')
 
     class Meta:
