@@ -1,23 +1,23 @@
 from datetime import datetime
-from idna import valid_label_length
 from rest_framework.views import APIView
 from db.task import KarmaActivityLog, UserIgLink
 
 from db.user import User
-from db.integrations import KKEMAuthorization
+from db.integrations import Integration, IntegrationAuthorization
 from utils.utils import DateTimeUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
-from . import kkem_serializer
-from .kkem_helper import HandleAuthorization
+from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 from django.db.models import Prefetch
-from django.core.exceptions import ValidationError
+from .kkem_helper import token_required, send_kkm_mail
 
 
 class KKEMBulkKarmaAPI(APIView):
+    @token_required
     def get(self, request):
         from_datetime = request.GET.get("from_datetime")
+        token = request.GET.get("token")
         if not from_datetime:
             return CustomResponse(
                 general_message="Unspecified time parameter", response={}
@@ -31,7 +31,8 @@ class KKEMBulkKarmaAPI(APIView):
             ).get_failure_response()
 
         queryset = User.objects.filter(
-            kkem_authorization_user__verified=True,
+            integration_authorization_user__integration=token,
+            integration_authorization_user__verified=True,
             karma_activity_log_created_by__appraiser_approved=True,
             karma_activity_log_created_by__updated_at__gte=from_datetime,
         ).prefetch_related(
@@ -47,9 +48,7 @@ class KKEMBulkKarmaAPI(APIView):
             ["mu_id"],
         )
 
-        serialized_users = kkem_serializer.KKEMBulkKarmaSerializer(
-            queryset.get("queryset"), many=True
-        )
+        serialized_users = KKEMUserSerializer(queryset.get("queryset"), many=True)
 
         return CustomResponse().paginated_response(
             data=serialized_users.data, pagination=queryset.get("pagination")
@@ -57,50 +56,56 @@ class KKEMBulkKarmaAPI(APIView):
 
 
 class KKEMIndividualKarmaAPI(APIView):
-    def get(self, request, mu_id):
-        kkem_user = KKEMAuthorization.objects.filter(
-            user__mu_id=mu_id, verified=True
+    @token_required
+    def get(self, request, mu_id, token):
+        kkem_user = IntegrationAuthorization.objects.filter(
+            user__mu_id=mu_id, verified=True, integration=token
         ).first()
         if not kkem_user:
             return CustomResponse(
                 general_message="User not found"
             ).get_failure_response()
 
-        serializer = kkem_serializer.KKEMBulkKarmaSerializer(kkem_user.user)
+        serializer = KKEMUserSerializer(kkem_user.user)
         return CustomResponse(response=serializer.data).get_success_response()
 
 
 class KKEMAuthorizationAPI(APIView):
+    @token_required
     def post(self, request):
-        mu_id = request.data.get("mu_id")
-        dwms_id = request.data.get("dwms_id")
-
-        if not (user := User.objects.filter(mu_id=mu_id).first()):
-            return CustomResponse(
-                general_message="User doesn't exist"
-            ).get_failure_response()
+        serializer = KKEMAuthorization(data=request.data)
         try:
-            return (
-                CustomResponse(
-                    general_message="Authorization created successfully. Email sent."
-                ).get_success_response()
-                if HandleAuthorization.handle_kkem_authorization(user, dwms_id)
-                else CustomResponse(
-                    general_message="Something went wrong"
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
                 ).get_failure_response()
-            )
-        except ValueError as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+
+            try:
+                kkem_link = serializer.create(serializer.validated_data)
+                send_kkm_mail(kkem_link.user, kkem_link)
+            except ValueError as e:
+                return CustomResponse(general_message=e).get_failure_response()
+            return CustomResponse(
+                general_message="Authorization created successfully. Email sent."
+            ).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=e).get_failure_response()
 
     def patch(self, request, token):
-        if authorization := KKEMAuthorization.objects.filter(id=token).first():
+        try:
+            authorization = IntegrationAuthorization.objects.filter(id=token).first()
+            if not authorization:
+                return CustomResponse(
+                    general_message="Invalid or missing Token"
+                ).get_failure_response()
+                
             authorization.verified = True
             authorization.updated_at = DateTimeUtils.get_current_utc_time()
             authorization.save()
+            
             return CustomResponse(
                 general_message="User authenticated successfully"
             ).get_success_response()
-        else:
-            return CustomResponse(
-                general_message="Invalid token"
-            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=e).get_failure_response()
