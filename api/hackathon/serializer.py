@@ -11,16 +11,16 @@ from utils.utils import DateTimeUtils
 
 
 class HackathonRetrivalSerializer(serializers.ModelSerializer):
-    organisation = serializers.CharField(source='org.title')
-    district = serializers.CharField(source='district.name')
+    organisation = serializers.CharField(source='org.title', allow_null=True)
+    district = serializers.CharField(source='district.name', allow_null=True)
 
     class Meta:
         model = Hackathon
-        fields = fields = ('id',
-                           'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
-                           'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
-                           'status',
-                           'banner', 'event_logo', 'type', 'website')
+        fields = ('id',
+                  'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
+                  'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
+                  'status',
+                  'banner', 'event_logo', 'type', 'website')
 
 
 class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
