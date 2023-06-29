@@ -144,34 +144,20 @@ class UserLevelsSerializer(ModelSerializer):
 
 
 class UserLevelSerializer(serializers.ModelSerializer):
-    completed = serializers.SerializerMethodField()
-
-    level = serializers.SerializerMethodField()
+    tasks = serializers.SerializerMethodField()
 
     class Meta:
-        model = TaskList
-        fields = ('title', 'hashtag', 'completed', 'level')
+        model = Level
+        fields = ('name', 'tasks')
 
-    def get_completed(self, obj):
-        if KarmaActivityLog.objects.filter(task=obj, created_by=self.context.get('user_id'),
-                                           appraiser_approved=True).first():
-            return True
-        return False
+    def get_tasks(self, obj):
+        data = []
+        for i in TaskList.objects.filter(level=obj):
+            d = KarmaActivityLog.objects.filter(task=i, created_by=self.context.get('user_id'), appraiser_approved=True)
+            if d:
+                completed = True
+            else:
+                completed = False
 
-    def get_level(self, obj):
-        try:
-            return obj.level.name
-        except Exception as e:
-            return None
-
-    @staticmethod
-    def group_by_level(data):
-        grouped_data = {}
-        for item in data:
-            level = item.pop('level', None)
-            if level not in grouped_data:
-                grouped_data[level] = []
-
-            grouped_data[level].append(item)
-
-        return grouped_data
+            data.append({'task_name': i.title, 'hashtag': i.hashtag, 'completed': completed})
+        return data
