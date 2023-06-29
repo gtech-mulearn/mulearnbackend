@@ -9,5 +9,5 @@ urlpatterns = [
     path('user-log/', profile_view.UserLogAPI.as_view()),
     path('user-log/<str:muid>/', profile_view.UserLogAPI.as_view()),
     path('share-user-profile/', profile_view.ShareUserProfileAPI.as_view()),
-    path('user-tasks/', profile_view.UserLevelsAPI.as_view()),
+    path('get-user-levels/', profile_view.UserLevelsAPI.as_view()),
 ]
