@@ -114,5 +114,5 @@ class UserLevelsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         tasks_query = TaskList.objects.all().order_by('level__level_order')
         serializer = UserLevelSerializer(tasks_query, many=True, context={'user_id': user_id})
-        data = UserLevelSerializer.group_by_level(serializer.data)
-        return CustomResponse(response=data).get_success_response()
+        # data = UserLevelSerializer.group_by_level(serializer.data)
+        return CustomResponse(response=serializer.data).get_success_response()
