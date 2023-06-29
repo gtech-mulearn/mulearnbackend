@@ -37,6 +37,7 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
     banner = serializers.ImageField(required=False)
     org_id = serializers.CharField(required=False)
     district_id = serializers.CharField(required=False)
+    website = serializers.CharField(required=False)
 
     class Meta:
         model = Hackathon
@@ -111,6 +112,7 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
     banner = serializers.ImageField(required=False)
     org_id = serializers.CharField(required=False)
     district_id = serializers.CharField(required=False)
+    website = serializers.CharField(required=False)
 
     class Meta:
         model = Hackathon
