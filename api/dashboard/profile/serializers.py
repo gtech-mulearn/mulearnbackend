@@ -146,17 +146,23 @@ class UserLevelsSerializer(ModelSerializer):
 class UserLevelSerializer(serializers.ModelSerializer):
     completed = serializers.SerializerMethodField()
 
-    # level = serializers.CharField(source='level.name')
+    level = serializers.SerializerMethodField()
 
     class Meta:
         model = TaskList
-        fields = ('title', 'hashtag', 'completed')
+        fields = ('title', 'hashtag', 'completed', 'level')
 
     def get_completed(self, obj):
         if KarmaActivityLog.objects.filter(task=obj, created_by=self.context.get('user_id'),
                                            appraiser_approved=True).first():
             return True
         return False
+
+    def get_level(self, obj):
+        try:
+            return obj.level.name
+        except Exception as e:
+            return None
 
     @staticmethod
     def group_by_level(data):
