@@ -122,6 +122,8 @@ class UserRankAPI(APIView):
     def get(self, request, muid):
 
         user = User.objects.filter(mu_id=muid).first()
+        if user is None:
+            return CustomResponse(general_message='Invalid muid').get_failure_response()
         roles = [
             role.role.title for role in UserRoleLink.objects.filter(user=user)]
         serializer = UserRankSerializer(
