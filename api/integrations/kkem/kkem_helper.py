@@ -1,46 +1,37 @@
 import decouple
-
-
-from db.integrations import KKEMAuthorization
-from utils.permission import DateTimeUtils
-from utils.response import CustomResponse
-
-from django.db import IntegrityError
-from django.db.models import Q
 from django.core.mail import send_mail
 
+from db.integrations import Integration
+from utils.response import CustomResponse
 
-class HandleAuthorization:
-    @classmethod
-    def handle_kkem_authorization(cls, user, dwms_id):
-        try:
-            kkem_link = KKEMAuthorization.objects.create(
-                user=user,
-                dwms_id=dwms_id,
-                verified=False,
-                created_at=DateTimeUtils.get_current_utc_time(),
-                updated_at=DateTimeUtils.get_current_utc_time(),
-            )
 
-        except IntegrityError as e:
-            if kkem_link := KKEMAuthorization.objects.filter(
-                Q(user=user) | Q(dwms_id=dwms_id), verified=True
-            ).first():
-                raise ValueError("Authorization already exists and is verified.") from e
 
-        return cls.send_kkm_mail(user, kkem_link)
+def send_kkm_mail(self, user, kkem_link):
+    email_host_user = decouple.config("EMAIL_HOST_USER")
+    to_email = [user.email]
 
-    @classmethod
-    def send_kkm_mail(cls, user, kkem_link):
-        try:
-            email_host_user = decouple.config("EMAIL_HOST_USER")
-            to_email = [user.email]
+    domain = decouple.config("FR_DOMAIN_NAME")
+    message = f"Click here to confirm the authorization {domain}/kkem-authorization?token={kkem_link.id}"
+    subject = "KKEM Authorization"
 
-            domain = decouple.config("FR_DOMAIN_NAME")
-            message = f"Click here to confirm the authorization {domain}/kkem-authorization?token={kkem_link.id}"
-            subject = "KKEM Authorization"
+    send_mail(subject, message, email_host_user, to_email, fail_silently=False)
 
-            send_mail(subject, message, email_host_user, to_email, fail_silently=False)
-            return True
-        except Exception as e:
-            return False
+    return True
+    
+    
+def token_required(func):
+    def wrapper(self, *args, **kwargs):
+        # Assumes that the second parameter is always `request`
+        # Probably need to make this cleaner
+        request = args[0]
+
+        token = request.data.get("token")
+        integration = Integration.objects.filter(id=token).first()
+        if not integration:
+            return CustomResponse(
+                general_message="Token invalid or missing"
+            ).get_failure_response()
+        else:
+            result = func(self, *args, **kwargs)
+        return result
+    return wrapper

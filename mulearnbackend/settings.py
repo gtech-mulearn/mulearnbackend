@@ -31,6 +31,7 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.spl
 
 # Application definition
 
+
 INSTALLED_APPS = [
     # 'django.contrib.admin',
     "django.contrib.auth",
@@ -58,6 +59,7 @@ MIDDLEWARE = [
 
 ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
+
 
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
 # paginator settings
