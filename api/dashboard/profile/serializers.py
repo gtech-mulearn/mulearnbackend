@@ -143,13 +143,27 @@ class UserLevelsSerializer(ModelSerializer):
         return is_public_status
 
 
-class LevelsSerializer(serializers.ModelSerializer):
-    tasks = serializers.SerializerMethodField()
+class UserLevelSerializer(serializers.ModelSerializer):
+    completed = serializers.SerializerMethodField()
     level = serializers.CharField(source='level.name')
 
     class Meta:
-        model = UserLvlLink
-        fields = ('tasks', 'level')
+        model = TaskList
+        fields = ('title', 'hashtag', 'level', 'completed')
 
-    def get_tasks(self, obj):
-        return TaskList.objects.filter(level=obj.level).values()
+    def get_completed(self, obj):
+        if KarmaActivityLog.objects.filter(task=obj, created_by=self.context.get('user_id'),
+                                           appraiser_approved=True).first():
+            return True
+        return False
+
+    @staticmethod
+    def group_by_level(data):
+        grouped_data = {}
+        for item in data:
+            level = item.pop('level', None)
+            if level not in grouped_data:
+                grouped_data[level] = []
+
+            grouped_data[level].append(item)
+        return grouped_data
