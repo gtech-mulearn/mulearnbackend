@@ -11,8 +11,8 @@ from utils.utils import DateTimeUtils
 
 
 class HackathonRetrivalSerializer(serializers.ModelSerializer):
-    organisation = serializers.CharField(source='org.title')
-    district = serializers.CharField(source='district.name')
+    organisation = serializers.CharField(source='org.title', allow_null=True)
+    district = serializers.CharField(source='district.name', allow_null=True)
 
     class Meta:
         model = Hackathon
