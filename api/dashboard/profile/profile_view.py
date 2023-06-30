@@ -108,10 +108,20 @@ class ShareUserProfileAPI(APIView):
 
 
 class UserLevelsAPI(APIView):
-    authentication_classes = [CustomizePermission]
 
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        user_levels_link_query = Level.objects.all().order_by('level_order')
+    def get(self, request, muid=None):
+        if muid is not None:
+            user = User.objects.filter(mu_id=muid).first()
+            if user is None:
+                return CustomResponse(general_message='Invalid muid').get_failure_response()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+            if not user_settings.is_public:
+                return CustomResponse(general_message="Private Profile")
+            user_id = user.id
+            user_levels_link_query = Level.objects.all().order_by('level_order')
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+            user_id = JWTUtils.fetch_user_id(request)
+            user_levels_link_query = Level.objects.all().order_by('level_order')
         serializer = UserLevelSerializer(user_levels_link_query, many=True, context={'user_id': user_id})
         return CustomResponse(response=serializer.data).get_success_response()
