@@ -11,4 +11,5 @@ urlpatterns = [
     path('share-user-profile/', profile_view.ShareUserProfileAPI.as_view()),
     path('rank/<str:muid>/', profile_view.UserRankAPI.as_view()),
     path('get-user-levels/', profile_view.UserLevelsAPI.as_view()),
+    path('get-user-levels/<str:muid>/', profile_view.UserLevelsAPI.as_view()),
 ]
