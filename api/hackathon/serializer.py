@@ -1,11 +1,13 @@
+import json
 import uuid
 
 from django.core.files.storage import default_storage
 from django.db import transaction
 from rest_framework import serializers
 
-from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink
+from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
 from db.organization import Organization, District
+from db.user import User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -21,6 +23,11 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                            'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                            'status',
                            'banner', 'event_logo', 'type')
+
+class UpcomingHackathonRetrivalSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Hackathon
+        fields = ('id', 'title', 'description', 'event_logo', 'banner')
 
 
 class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
@@ -162,3 +169,29 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
                                                      created_at=DateTimeUtils.get_current_utc_time())
         instance.save()
         return instance
+
+class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
+    hackathon_id = serializers.CharField(required=False)
+    data = serializers.JSONField(required=False)
+
+    class Meta:
+        model = HackathonUserSubmission
+        fields = ('hackathon_id','data')
+    
+    def validate_hackathon_id(self, value):
+        hackathon = Hackathon.objects.filter(id=value).first()
+        if not hackathon:
+            raise serializers.ValidationError("Hackathon Not Exists")
+        return hackathon.id
+    
+    def create(self, validated_data):
+        with transaction.atomic():
+            user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+            validated_data['id'] = uuid.uuid4()
+            validated_data['user_id'] = user_id
+            validated_data['created_by_id'] = user_id
+            validated_data['updated_by_id'] = user_id
+            validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+            validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+            hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
+        return hackathon_submission
