@@ -161,3 +161,48 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
             data.append({'task_name': i.title, 'hashtag': i.hashtag, 'completed': completed})
         return data
+
+
+class UserRankSerializer(ModelSerializer):
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    role = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+    karma = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ('first_name', 'last_name', 'role', 'rank', 'karma', 'interest_groups')
+
+    def get_role(self, obj):
+        roles = self.context.get('roles')
+        if len(roles) == 0:
+            return ['Learner']
+        return roles
+
+    def get_rank(self, obj):
+        roles = self.context.get('roles')
+        user_karma = obj.total_karma_user.karma
+        if RoleType.MENTOR.value in roles:
+            ranks = TotalKarma.objects.filter(user__user_role_link_user__role__title=RoleType.MENTOR.value,
+                                              karma__gte=user_karma).count()
+        elif RoleType.ENABLER.value in roles:
+            ranks = TotalKarma.objects.filter(user__user_role_link_user__role__title=RoleType.ENABLER.value,
+                                              karma__gte=user_karma).count()
+        else:
+            ranks = TotalKarma.objects.filter(karma__gte=user_karma).exclude(
+                Q(user__user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value])).count()
+        return ranks if ranks > 0 else None
+
+    def get_karma(self, obj):
+        total_karma = obj.total_karma_user
+        if total_karma:
+            return total_karma.karma
+        return None
+
+    def get_interest_groups(self, obj):
+        interest_groups = []
+        for ig_link in UserIgLink.objects.filter(user=obj):
+            interest_groups.append(ig_link.ig.name)
+        return interest_groups

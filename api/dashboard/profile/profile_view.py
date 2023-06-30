@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelSerializer
+from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelSerializer, UserRankSerializer
 from db.task import KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
@@ -108,10 +108,34 @@ class ShareUserProfileAPI(APIView):
 
 
 class UserLevelsAPI(APIView):
-    authentication_classes = [CustomizePermission]
 
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        user_levels_link_query = Level.objects.all().order_by('level_order')
+    def get(self, request, muid=None):
+        if muid is not None:
+            user = User.objects.filter(mu_id=muid).first()
+            if user is None:
+                return CustomResponse(general_message='Invalid muid').get_failure_response()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+            if not user_settings.is_public:
+                return CustomResponse(general_message="Private Profile")
+            user_id = user.id
+            user_levels_link_query = Level.objects.all().order_by('level_order')
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+            user_id = JWTUtils.fetch_user_id(request)
+            user_levels_link_query = Level.objects.all().order_by('level_order')
         serializer = UserLevelSerializer(user_levels_link_query, many=True, context={'user_id': user_id})
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class UserRankAPI(APIView):
+
+    def get(self, request, muid):
+
+        user = User.objects.filter(mu_id=muid).first()
+        if user is None:
+            return CustomResponse(general_message='Invalid muid').get_failure_response()
+        roles = [
+            role.role.title for role in UserRoleLink.objects.filter(user=user)]
+        serializer = UserRankSerializer(
+            user, many=False, context={'roles': roles})
         return CustomResponse(response=serializer.data).get_success_response()
