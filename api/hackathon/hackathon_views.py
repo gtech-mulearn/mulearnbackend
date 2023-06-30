@@ -1,9 +1,10 @@
 from rest_framework.views import APIView
 
 from db.hackathon import Hackathon
-from utils.permission import CustomizePermission
+from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
+from utils.types import RoleType
 from .serializer import HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerializer, HackathonUpdateSerializer, HackathonUserSubmissionSerializer, UpcomingHackathonRetrivalSerializer
 
 from datetime import datetime
@@ -12,6 +13,7 @@ from datetime import datetime
 class HackathonManagementAPI(APIView):
     authentication_classes = [CustomizePermission]
     
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id=None):
         if request.path.endswith('upcoming/'):     
             hackathons_queryset = Hackathon.objects.filter(event_start__gt=datetime.now()).all()
@@ -26,6 +28,7 @@ class HackathonManagementAPI(APIView):
             serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         serializer = HackathonCreateUpdateDeleteSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -34,6 +37,7 @@ class HackathonManagementAPI(APIView):
                                   response={'hackathon_id': instance.id}).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @role_required([RoleType.ADMIN.value, ])
     def put(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:
@@ -44,6 +48,7 @@ class HackathonManagementAPI(APIView):
             return CustomResponse(general_message='Hackathon Updated').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:
@@ -56,6 +61,7 @@ class HackathonManagementAPI(APIView):
 class GetDefaultFieldsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         return CustomResponse(response=DEFAULT_HACKATHON_FORM_FIELDS).get_success_response()
 
