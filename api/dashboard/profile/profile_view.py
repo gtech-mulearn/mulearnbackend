@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
 
-from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelSerializer, UserRankSerializer
+from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelSerializer, \
+    UserRankSerializer
 from db.task import KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
@@ -130,7 +131,6 @@ class UserLevelsAPI(APIView):
 class UserRankAPI(APIView):
 
     def get(self, request, muid):
-
         user = User.objects.filter(mu_id=muid).first()
         if user is None:
             return CustomResponse(general_message='Invalid muid').get_failure_response()
