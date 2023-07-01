@@ -1,4 +1,3 @@
-import json
 import uuid
 
 from django.core.files.storage import default_storage
@@ -7,7 +6,6 @@ from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
 from db.organization import Organization, District
-from db.user import User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -23,6 +21,7 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
                   'banner', 'event_logo', 'type', 'website')
+
 
 class UpcomingHackathonRetrivalSerializer(serializers.ModelSerializer):
     class Meta:
@@ -173,20 +172,21 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
 class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
     hackathon_id = serializers.CharField(required=False)
     data = serializers.JSONField(required=False)
 
     class Meta:
         model = HackathonUserSubmission
-        fields = ('hackathon_id','data')
-    
+        fields = ('hackathon_id', 'data')
+
     def validate_hackathon_id(self, value):
         hackathon = Hackathon.objects.filter(id=value).first()
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
         return hackathon.id
-    
+
     def create(self, validated_data):
         with transaction.atomic():
             user_id = JWTUtils.fetch_user_id(self.context.get('request'))

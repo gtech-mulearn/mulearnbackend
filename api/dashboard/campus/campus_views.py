@@ -49,7 +49,7 @@ class CampusDetailsAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                            org__org_type=OrganizationType.COLLEGE.value).first()
         serializer = serializers.CollegeSerializer(user_org_link, many=False)
         return CustomResponse(response=serializer.data).get_success_response()

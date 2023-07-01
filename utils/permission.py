@@ -20,8 +20,8 @@ from .response import CustomResponse
 
 
 def format_time(date_time):
-    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S")
-    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
+    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S%z")
 
 
 class CustomizePermission(BasePermission):
