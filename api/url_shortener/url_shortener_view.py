@@ -16,7 +16,7 @@ from utils.utils import DateTimeUtils, CommonUtils
 class UrlShortenerAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def post(self, request):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -51,7 +51,7 @@ class UrlShortenerAPI(APIView):
                                         created_at=DateTimeUtils.get_current_utc_time())
             return CustomResponse(general_message='Url created successfully.').get_success_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(url_shortener_objects, request, ['title'])
@@ -64,7 +64,7 @@ class UrlShortenerAPI(APIView):
         return CustomResponse().paginated_response(data=url_shortener_list,
                                                    pagination=paginated_queryset.get('pagination'))
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def put(self, request, url_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -99,7 +99,7 @@ class UrlShortenerAPI(APIView):
 
         return CustomResponse(general_message='Url changed successfully').get_success_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def delete(self, request, url_id):
         url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
         if url_shortener_object is None:
