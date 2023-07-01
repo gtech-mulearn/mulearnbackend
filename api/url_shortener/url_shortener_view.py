@@ -1,9 +1,9 @@
-import re
+
 import uuid
 
 from rest_framework.views import APIView
 
-from api.url_shortener.serializers import ShowShortenUrlsSerializer
+from api.url_shortener.serializers import ShowShortenUrlsSerializer, CreateShortenUrlsSerializer
 from db.url_shortener import UrlShortener
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
@@ -18,38 +18,11 @@ class UrlShortenerAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
-
-        user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.filter(id=user_id).first()
-
-        special_characters_list = r'[~`!@#$%^&*()-+=|{}[\]:;"\'<>,?\\]'
-        long_url = request.data.get('longUrl')
-        short_url = request.data.get('shortUrl')
-        title = request.data.get('title')
-
-        long_url_data = UrlShortener.objects.filter(long_url=long_url).first()
-        if long_url_data:
-            return CustomResponse(general_message='Long url already exist').get_failure_response()
-
-        short_url_data = UrlShortener.objects.filter(short_url=short_url).first()
-        if short_url_data:
-            return CustomResponse(general_message='Short url already exist').get_failure_response()
-
-        special_character = re.search(special_characters_list, short_url)
-
-        if special_character or len(short_url) > 300:
-
-            return CustomResponse(general_message='Your shortened URL should be less than 300 characters in length.'
-                                                  'only include letters, numbers and following special characters (/_)'
-                                  ).get_failure_response()
-        else:
-            UrlShortener.objects.create(id=uuid.uuid4(), short_url=short_url, long_url=long_url,
-                                        title=title,
-                                        updated_by=user,
-                                        updated_at=DateTimeUtils.get_current_utc_time(),
-                                        created_by=user,
-                                        created_at=DateTimeUtils.get_current_utc_time())
+        serializer = CreateShortenUrlsSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            instance = serializer.save()
             return CustomResponse(general_message='Url created successfully.').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
