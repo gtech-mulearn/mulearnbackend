@@ -1,12 +1,9 @@
-import uuid
-from datetime import timedelta
-
 import decouple
 import requests
-from django.contrib.auth.hashers import make_password
 from django.core.mail import send_mail
 from django.db.models import Q
 from rest_framework.views import APIView
+
 from db.organization import Country, District, Organization, Department, State, Zone
 from db.task import InterestGroup
 from db.user import Role, User

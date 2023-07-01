@@ -7,9 +7,10 @@ from rest_framework import serializers
 
 from db.organization import Country, State, District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink
-from db.user import Role, User, UserRoleLink
+from db.user import Role, User, UserRoleLink, UserSettings
 from utils.types import RoleType
 from db.organization import Country, State, Zone
+from utils.utils import DateTimeUtils
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
@@ -125,7 +126,13 @@ class RegisterSerializer(serializers.ModelSerializer):
                                           graduation_year=year_of_graduation) for org_id in organization_ids])
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
             ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interests])
+
+            UserSettings.objects.create(id=uuid4(), user=user, is_public=0, created_by=user,
+                                        created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
+                                        updated_at=DateTimeUtils.get_current_utc_time())
+
         return user, password
+
 
     class Meta:
         model = User

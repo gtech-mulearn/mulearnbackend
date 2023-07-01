@@ -10,17 +10,18 @@ from rest_framework.exceptions import AuthenticationFailed
 from rest_framework.permissions import BasePermission
 
 from mulearnbackend.settings import SECRET_KEY
+from utils.utils import DateTimeUtils
 from .exception import CustomException
 from .response import CustomResponse
 
 
-def get_current_utc_time():
-    return format_time(datetime.utcnow())
+# def get_current_utc_time():
+#     return format_time(datetime.utcnow())
 
 
 def format_time(date_time):
-    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S")
-    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S")
+    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S%z")
 
 
 class CustomizePermission(BasePermission):
@@ -48,46 +49,7 @@ class CustomizePermission(BasePermission):
         Raises:
             CustomException: If authentication fails.
         """
-        try:
-            auth_header = get_authorization_header(request).decode("utf-8")
-            if not auth_header or not auth_header.startswith(self.token_prefix):
-                raise CustomException("Invalid token header")
-
-            token = auth_header[len(self.token_prefix):].strip()
-            if not token:
-                raise CustomException("Empty Token")
-
-            payload = jwt.decode(token, self.secret_key, algorithms=["HS256"], verify=True)
-
-            user_id = payload.get("id")
-            expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S")
-
-            if not user_id or expiry < get_current_utc_time():
-                raise CustomException("Token Expired or Invalid")
-
-            return None, payload
-        except jwt.exceptions.InvalidSignatureError as e:
-            raise CustomException({
-                "hasError": True,
-                "message": {"general": [str(e)]},
-                "statusCode": 1000,
-            })
-        except jwt.exceptions.DecodeError as e:
-            raise CustomException({
-                "hasError": True,
-                "message": {"general": [str(e)]},
-                "statusCode": 1000,
-            })
-        except AuthenticationFailed as e:
-            raise CustomException(str(e))
-        except Exception as e:
-            raise CustomException(
-                {
-                    "hasError": True,
-                    "message": {"general": [str(e)]},
-                    "statusCode": 1000,
-                }
-            )
+        return JWTUtils.is_jwt_authenticated(request)
 
     def authenticate_header(self, request):
         """
@@ -129,6 +91,51 @@ class JWTUtils:
         if muid is None:
             raise Exception("The corresponding JWT token does not contain the 'muid' key")
         return muid
+
+    @staticmethod
+    def is_jwt_authenticated(request):
+        token_prefix = "Bearer"
+        secret_key = SECRET_KEY
+        try:
+            auth_header = get_authorization_header(request).decode("utf-8")
+            if not auth_header or not auth_header.startswith(token_prefix):
+                raise CustomException("Invalid token header")
+
+            token = auth_header[len(token_prefix):].strip()
+            if not token:
+                raise CustomException("Empty Token")
+
+            payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
+
+            user_id = payload.get("id")
+            expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
+
+            if not user_id or expiry < DateTimeUtils.get_current_utc_time():
+                raise CustomException("Token Expired or Invalid")
+
+            return None, payload
+        except jwt.exceptions.InvalidSignatureError as e:
+            raise CustomException({
+                "hasError": True,
+                "message": {"general": [str(e)]},
+                "statusCode": 1000,
+            })
+        except jwt.exceptions.DecodeError as e:
+            raise CustomException({
+                "hasError": True,
+                "message": {"general": [str(e)]},
+                "statusCode": 1000,
+            })
+        except AuthenticationFailed as e:
+            raise CustomException(str(e))
+        except Exception as e:
+            raise CustomException(
+                {
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                }
+            )
 
 
 # class RoleRequired:
@@ -172,9 +179,10 @@ def role_required(roles):
                 if role in roles:
                     response = view_func(obj, request, *args, **kwargs)
                     return response
-            else:
-                return CustomResponse(
-                    general_message="You do not have the required role to access this page.").get_failure_response()
+            res = CustomResponse(
+                general_message="You do not have the required role to access this page."
+            ).get_failure_response()
+            return res
 
         return wrapped_view_func
 

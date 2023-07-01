@@ -12,8 +12,12 @@ class CustomResponse:
         response (Dict[str, Any]): A dictionary of response data.
     """
 
-    def __init__(self, message: Dict[str, Any] = {}, general_message: List[str] = [],
-                 response: Dict[str, Any] = {}) -> None:
+    def __init__(
+        self,
+        message: Dict[str, Any] = None,
+        general_message: List[str] = None,
+        response: Dict[str, Any] = None,
+    ) -> None:
         """Initializes the CustomResponse object.
 
         Args:
@@ -24,12 +28,15 @@ class CustomResponse:
             response (Dict[str, Any], optional): A dictionary of response data.
                 Defaults to {}.
         """
-        if not isinstance(general_message, list):
-            general_message = [general_message]
+        self.message = {} if message is None else message
+        self.general_message = [] if general_message is None else general_message
+        self.response = {} if response is None else response
 
-        self.message = {"general": general_message}
-        self.message.update(message)
-        self.response = response
+        if not isinstance(self.general_message, list):
+            self.general_message = [self.general_message]
+
+        self.message = {"general": self.general_message} | self.message
+        
 
     def get_success_response(self) -> Response:
         """Returns a success response.
@@ -47,8 +54,11 @@ class CustomResponse:
             status=status.HTTP_200_OK,
         )
 
-    def get_failure_response(self, status_code: int = 400,
-                             http_status_code: int = status.HTTP_400_BAD_REQUEST) -> Response:
+    def get_failure_response(
+        self,
+        status_code: int = 400,
+        http_status_code: int = status.HTTP_400_BAD_REQUEST,
+    ) -> Response:
         """Returns a failure response.
 
         Args:
@@ -82,7 +92,8 @@ class CustomResponse:
             Response: The generated paginated response.
 
         """
-        self.response.update({'data': data, 'pagination': pagination})
+
+        self.response.update({"data": data, "pagination": pagination})
         return Response(
             data={
                 "hasError": False,

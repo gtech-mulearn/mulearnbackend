@@ -1,3 +1,4 @@
+import contextlib
 import uuid
 from datetime import timedelta
 
@@ -8,8 +9,8 @@ from django.core.mail import send_mail
 from django.db import IntegrityError
 from django.db.models import Q
 from rest_framework.views import APIView
-from django.db.models import Sum
-from django.db import IntegrityError
+from django.db.models import Count, Case, When, F, Value, CharField
+
 
 from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
@@ -41,7 +42,48 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
-        user_queryset = User.objects.all()
+        user_queryset = User.objects.annotate(
+            total_karma=Case(
+                When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
+                default=Value(0)
+            ),
+            company=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
+                    then=F('user_organization_link_user_id__org__title'),
+                ),
+                default=Value(None),
+                output_field=CharField()
+            ),
+            department=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    then=F('user_organization_link_user_id__department__title'),
+                ),
+                default=Value(''),
+                output_field=CharField()
+                
+            ),
+            graduation_year=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    then=F('user_organization_link_user_id__graduation_year'),
+                ),
+                default=Value(''),
+                output_field=CharField()
+            ),
+            college=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                    then=F('user_organization_link_user_id__org__title'),
+                ),
+                default=Value(None),
+                output_field=CharField()
+            ),
+        )
+
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -68,8 +110,8 @@ class UserAPI(APIView):
         existing_link = UserOrganizationLink.objects.filter(
             Q(user=user)
             & (
-                Q(org__org_type=OrganizationType.COMPANY.value)
-                | Q(org__org_type=OrganizationType.COLLEGE.value)
+                    Q(org__org_type=OrganizationType.COMPANY.value)
+                    | Q(org__org_type=OrganizationType.COLLEGE.value)
             )
         )
         existing_link.delete()
@@ -101,6 +143,7 @@ class UserAPI(APIView):
                 response={"users": serializer.data}
             ).get_success_response()
 
+
         except IntegrityError as e:
             return CustomResponse(
                 general_message="Database integrity error",
@@ -124,9 +167,49 @@ class UserManagementCSV(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
-        user = User.objects.all()
+        user_queryset = User.objects.annotate(
+            total_karma=Case(
+                When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
+                default=Value(0)
+            ),
+            company=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
+                    then=F('user_organization_link_user_id__org__title'),
+                ),
+                default=Value(None),
+                output_field=CharField()
+            ),
+            department=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    then=F('user_organization_link_user_id__department__title'),
+                ),
+                default=Value(''),
+                output_field=CharField()
+                
+            ),
+            graduation_year=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    then=F('user_organization_link_user_id__graduation_year'),
+                ),
+                default=Value(''),
+                output_field=CharField()
+            ),
+            college=Case(
+                When(
+                    user_organization_link_user_id__verified=True,
+                    user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                    then=F('user_organization_link_user_id__org__title'),
+                ),
+                default=Value(None),
+                output_field=CharField()
+            ),
+        )
         user_serializer_data = dash_user_serializer.UserDashboardSerializer(
-            user, many=True
+            user_queryset, many=True
         ).data
         return CommonUtils.generate_csv(user_serializer_data, "User")
 
@@ -194,15 +277,15 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
             ).get_failure_response()
         created_at = DateTimeUtils.get_current_utc_time()
-        expiry = created_at + timedelta(seconds=900)  #15 minutes
+        expiry = created_at + timedelta(seconds=900)  # 15 minutes
         forget_user = ForgotPassword.objects.create(  #
             id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )
