@@ -5,17 +5,27 @@ from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.types import RoleType
-from .serializer import HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerializer, HackathonUpdateSerializer
+from .serializer import HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerializer, HackathonUpdateSerializer, HackathonUserSubmissionSerializer, UpcomingHackathonRetrivalSerializer
+
+from datetime import datetime
 
 
 class HackathonManagementAPI(APIView):
     authentication_classes = [CustomizePermission]
-
+    
     @role_required([RoleType.ADMIN.value, ])
-    def get(self, request):
-        hackathons_queryset = Hackathon.objects.all()
-
-        serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True)
+    def get(self, request, hackathon_id=None):
+        if request.path.endswith('upcoming/'):     
+            hackathons_queryset = Hackathon.objects.filter(event_start__gt=datetime.now()).all()
+            serializer = UpcomingHackathonRetrivalSerializer(hackathons_queryset, many=True)
+        elif hackathon_id:
+            hackathons_queryset = Hackathon.objects.filter(id=hackathon_id).first()
+            if hackathons_queryset is None:
+                return CustomResponse(general_message='Hackathon Does Not Exist').get_failure_response()
+            serializer = HackathonRetrivalSerializer(hackathons_queryset)
+        else:
+            hackathons_queryset = Hackathon.objects.all()
+            serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value, ])
@@ -54,3 +64,15 @@ class GetDefaultFieldsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         return CustomResponse(response=DEFAULT_HACKATHON_FORM_FIELDS).get_success_response()
+
+class HackathonSubmissionAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    def post(self, request):
+        serializer = HackathonUserSubmissionSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            instance = serializer.save()
+            return CustomResponse(general_message="Hackathon Submission Successfull",
+                                  response={'hackathon_id': instance.id}).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    
