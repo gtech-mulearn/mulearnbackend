@@ -3,7 +3,7 @@ import uuid
 
 from rest_framework.views import APIView
 
-from api.url_shortener.serializers import ShowShortenUrlsSerializer, CreateShortenUrlsSerializer
+from api.url_shortener.serializers import ShowShortenUrlsSerializer, ShortenUrlsCreateSerializer
 from db.url_shortener import UrlShortener
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
@@ -18,7 +18,7 @@ class UrlShortenerAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
-        serializer = CreateShortenUrlsSerializer(data=request.data, context={'request': request})
+        serializer = ShortenUrlsCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             instance = serializer.save()
             return CustomResponse(general_message='Url created successfully.').get_success_response()
