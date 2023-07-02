@@ -87,7 +87,7 @@ class KKEMAuthorizationAPI(APIView):
             try:
                 serialized_data = serialized_set.data
                 kkem_link = serialized_set.create(serialized_data)
-                # send_kkm_mail(kkem_link.user, kkem_link)
+                send_kkm_mail(kkem_link.user, kkem_link)
                 
             except ValueError as e:
                 return CustomResponse(general_message=str(e)).get_failure_response()
