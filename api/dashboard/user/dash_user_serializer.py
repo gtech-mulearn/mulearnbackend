@@ -38,28 +38,24 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 
 class UserSerializer(serializers.ModelSerializer):
     muid = serializers.CharField(source="mu_id")
-    firstName = serializers.CharField(source="first_name")
-    lastName = serializers.CharField(source="last_name")
-    existInGuild = serializers.BooleanField(source="exist_in_guild")
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
-    profilePic = serializers.CharField(source="profile_pic")
 
     class Meta:
         model = User
         fields = [
             "muid",
-            "firstName",
-            "lastName",
+            "first_name",
+            "last_name",
             "email",
             "mobile",
             "gender",
             "dob",
             "active",
-            "existInGuild",
+            "exist_in_guild",
             "joined",
             "roles",
-            "profilePic"
+            "profile_pic"
         ]
 
     def get_roles(self, obj):
