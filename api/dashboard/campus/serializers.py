@@ -38,19 +38,19 @@ class UserOrgSerializer(serializers.ModelSerializer):
 
 
 class CollegeSerializer(serializers.ModelSerializer):
-    collegeName = serializers.ReadOnlyField(source="org.title")
-    campusCode = serializers.ReadOnlyField(source="org.code")
-    campusZone = serializers.ReadOnlyField(source="org.district.zone.name")
-    campusLead = serializers.ReadOnlyField(source="user.fullname")
-    totalKarma = serializers.SerializerMethodField()
-    totalMembers = serializers.SerializerMethodField()
-    activeMembers = serializers.SerializerMethodField()
+    college_name = serializers.ReadOnlyField(source="org.title")
+    campus_code = serializers.ReadOnlyField(source="org.code")
+    campus_zone = serializers.ReadOnlyField(source="org.district.zone.name")
+    campus_lead = serializers.ReadOnlyField(source="user.fullname")
+    total_karma = serializers.SerializerMethodField()
+    total_members = serializers.SerializerMethodField()
+    active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["collegeName", "campusLead", "campusCode",
-                  "campusZone", "totalKarma", "totalMembers", "activeMembers", "rank"]
+        fields = ["college_name", "campus_lead", "campus_code",
+                  "campus_zone", "total_karma", "total_members", "active_members", "rank"]
 
     def get_totalMembers(self, obj):
         return obj.org.user_organization_link_org_id.count()
