@@ -1,11 +1,13 @@
 from rest_framework.views import APIView
 
-from db.hackathon import Hackathon
+from db.hackathon import Hackathon, HackathonOrganiserLink
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.types import RoleType
-from .serializer import HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerializer, HackathonUpdateSerializer, HackathonUserSubmissionSerializer, UpcomingHackathonRetrivalSerializer
+from .serializer import (HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerializer,
+                         HackathonUpdateSerializer, HackathonUserSubmissionSerializer, 
+                         UpcomingHackathonRetrivalSerializer, HackathonOrganiserSerializer)
 
 from datetime import datetime
 
@@ -67,6 +69,7 @@ class GetDefaultFieldsAPI(APIView):
 
 class HackathonSubmissionAPI(APIView):
     authentication_classes = [CustomizePermission]
+
     def post(self, request):
         serializer = HackathonUserSubmissionSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -75,4 +78,27 @@ class HackathonSubmissionAPI(APIView):
                                   response={'hackathon_id': instance.id}).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+
+class HackathonOrganiserAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def post(self, request, hackathon_id):
+        hackathon = Hackathon.objects.filter(id=hackathon_id).first()
+        if hackathon is None:
+            return CustomResponse(general_message='Hackathon Does Not Exist').get_failure_response()
+        serializer = HackathonOrganiserSerializer(data=request.data, context={'request': request, 'hackathon': hackathon})
+        if serializer.is_valid():
+            instance = serializer.save()
+            return CustomResponse(general_message="Hackathon Organiser Added",
+                                  response={'organiser_link_id': instance.id}).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
     
+    @role_required([RoleType.ADMIN.value, ])
+    def delete(self, request, organiser_id):
+        organiser = HackathonOrganiserLink.objects.filter(id=organiser_id).first()
+        if organiser is None:
+            return CustomResponse(general_message='Organiser Does Not Exist').get_failure_response()
+        serializer = HackathonOrganiserSerializer()
+        serializer.destroy(organiser)
+        return CustomResponse(general_message='Organiser Deleted').get_success_response()
