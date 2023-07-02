@@ -95,8 +95,8 @@ class HackathonOrganiserAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
     
     @role_required([RoleType.ADMIN.value, ])
-    def delete(self, request, organiser_id):
-        organiser = HackathonOrganiserLink.objects.filter(id=organiser_id).first()
+    def delete(self, request, organiser_link_id):
+        organiser = HackathonOrganiserLink.objects.filter(id=organiser_link_id).first()
         if organiser is None:
             return CustomResponse(general_message='Organiser Does Not Exist').get_failure_response()
         serializer = HackathonOrganiserSerializer()

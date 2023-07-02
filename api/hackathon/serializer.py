@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
 from db.organization import Organization, District
+from db.user import User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
