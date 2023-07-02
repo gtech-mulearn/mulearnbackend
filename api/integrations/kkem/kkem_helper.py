@@ -26,7 +26,7 @@ def token_required(func):
         request = args[0]
 
         token = request.data.get("token")
-        integration = Integration.objects.filter(id=token).first()
+        integration = Integration.objects.filter(token=token).first()
         if not integration:
             return CustomResponse(
                 general_message="Token invalid or missing"

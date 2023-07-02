@@ -9,13 +9,13 @@ from db.task import TotalKarma
 # serializers.py
 
 class StudentLeaderboardSerializer(serializers.ModelSerializer):
-    totalKarma = serializers.IntegerField(source="karma")
-    fullName = serializers.ReadOnlyField(source="user.fullname")
+    total_karma = serializers.IntegerField(source="karma")
+    full_name = serializers.ReadOnlyField(source="user.fullname")
     institution = serializers.SerializerMethodField()
 
     class Meta:
         model = TotalKarma
-        fields = ["fullName", "totalKarma", "institution"]
+        fields = ["full_name", "total_karma", "institution"]
 
     def get_institution(self, obj):
         try:
@@ -27,22 +27,22 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
 
 class StudentMonthlySerializer(serializers.Serializer):
     id = serializers.CharField(source='user__id')
-    fullName = serializers.SerializerMethodField()
-    totalKarma = serializers.IntegerField()
+    full_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
 
-    def get_fullName(self, obj):
+    def get_full_name(self, obj):
         return f"{obj['user__first_name']} {obj['user__last_name']}"
 
 
 class CollegeLeaderboardSerializer(serializers.ModelSerializer):
-    totalKarma = serializers.SerializerMethodField()
+    total_karma = serializers.SerializerMethodField()
     institution = serializers.CharField(source='title')
 
     class Meta:
         model = Organization
-        fields = ["code", "institution", "totalKarma"]
+        fields = ["code", "institution", "total_karma"]
 
-    def get_totalKarma(self, obj):
+    def get_total_karma(self, obj):
         try:
             total_karma = obj.user_organization_link_org_id.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
                 'total_karma']
@@ -53,12 +53,12 @@ class CollegeLeaderboardSerializer(serializers.ModelSerializer):
 
 class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
     institution = serializers.CharField(source="title")
-    totalKarma = serializers.SerializerMethodField()
+    total_karma = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
-        fields = ["code", "institution", "totalKarma"]
+        fields = ["code", "institution", "total_karma"]
 
-    def get_totalKarma(self, obj):
+    def get_total_karma(self, obj):
         total_karma = obj.totalKarma
         return total_karma or 0
