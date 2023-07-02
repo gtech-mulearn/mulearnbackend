@@ -1,7 +1,7 @@
 from django.db import IntegrityError
 from rest_framework import serializers
 from django.db.models import Sum
-from db.integrations import IntegrationAuthorization
+from db.integrations import IntegrationAuthorization, Integration
 from db.task import KarmaActivityLog, UserIgLink
 
 from db.user import User
@@ -41,7 +41,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             .first()
             .dwms_id
         )
-        
+
     class Meta:
         model = User
         fields = [
@@ -54,18 +54,19 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
 class KKEMAuthorization(serializers.ModelSerializer):
     mu_id = serializers.CharField(source="user.mu_id")
-    token = serializers.CharField(source="integration_id")
     dwms_id = serializers.CharField(source="integration_value")
 
     def create(self, validated_data):
-        mu_id = validated_data["user"]["mu_id"]
+        mu_id = validated_data["mu_id"]
         if not (user := User.objects.filter(mu_id=mu_id).first()):
             raise ValueError("User doesn't exist")
         try:
+            token = self.context["request"].headers.get("token")
+            integration = Integration.objects.filter(token=token).first()
             IntegrationAuthorization.objects.create(
-                integration_id=validated_data["integration_id"],
+                integration=integration,
                 user=user,
-                integration_value=validated_data["integration_value"],
+                integration_value=validated_data["dwms_id"],
                 created_at=DateTimeUtils.get_current_utc_time(),
                 updated_at=DateTimeUtils.get_current_utc_time(),
             )
@@ -79,10 +80,11 @@ class KKEMAuthorization(serializers.ModelSerializer):
             elif kkem_link.verified:
                 raise ValueError("Authorization already exists and is verified.") from e
             elif kkem_link.user == user:
-                kkem_link.integration_value = validated_data["integration_value"]
+                kkem_link.integration_value = validated_data["dwms_id"]
                 kkem_link.updated_at = DateTimeUtils.get_current_utc_time()
                 kkem_link.save()
 
+
     class Meta:
         model = IntegrationAuthorization
-        fields = ["mu_id", "dwms_id", "token"]
+        fields = ["mu_id", "dwms_id"]
