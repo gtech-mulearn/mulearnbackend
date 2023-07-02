@@ -39,7 +39,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         return (
             IntegrationAuthorization.objects.filter(user=obj, verified=True)
             .first()
-            .dwms_id
+            .integration_value
         )
 
     class Meta:
