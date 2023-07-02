@@ -105,7 +105,8 @@ class ShareUserProfileAPI(APIView):
 
         user_settings.save()
 
-        return CustomResponse(general_message='Now your profile is shareable').get_success_response()
+        general_message = 'Unleash your vibe, share your profile!' if user_settings.is_public else 'Embrace privacy, safeguard your profile.'
+        return CustomResponse(general_message=general_message).get_success_response()
 
 
 class UserLevelsAPI(APIView):
@@ -124,7 +125,8 @@ class UserLevelsAPI(APIView):
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
             user_levels_link_query = Level.objects.all().order_by('level_order')
-        serializer = UserLevelSerializer(user_levels_link_query, many=True, context={'user_id': user_id})
+        serializer = UserLevelSerializer(
+            user_levels_link_query, many=True, context={'user_id': user_id})
         return CustomResponse(response=serializer.data).get_success_response()
 
 
