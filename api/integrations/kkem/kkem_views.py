@@ -1,9 +1,9 @@
 from datetime import datetime
 from rest_framework.views import APIView
-from db.task import KarmaActivityLog, UserIgLink
+from db.task import UserIgLink
 
 from db.user import User
-from db.integrations import Integration, IntegrationAuthorization
+from db.integrations import IntegrationAuthorization
 from utils.utils import DateTimeUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
@@ -31,7 +31,7 @@ class KKEMBulkKarmaAPI(APIView):
             ).get_failure_response()
 
         queryset = User.objects.filter(
-            integration_authorization_user__integration=token,
+            integration_authorization_user__integration__token=token,
             integration_authorization_user__verified=True,
             karma_activity_log_created_by__appraiser_approved=True,
             karma_activity_log_created_by__updated_at__gte=from_datetime,
@@ -59,7 +59,7 @@ class KKEMIndividualKarmaAPI(APIView):
     @token_required
     def get(self, request, mu_id, token):
         kkem_user = IntegrationAuthorization.objects.filter(
-            user__mu_id=mu_id, verified=True, integration=token
+            user__mu_id=mu_id, verified=True, integration__token=token
         ).first()
         if not kkem_user:
             return CustomResponse(

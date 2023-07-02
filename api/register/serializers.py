@@ -62,26 +62,26 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
-    firstName = serializers.CharField(required=True, source="first_name")
-    lastName = serializers.CharField(required=True, source="last_name")
-    muId = serializers.CharField(required=True, source="mu_id")
+    first_name = serializers.CharField(required=True)
+    last_name = serializers.CharField(required=True)
+    mu_id = serializers.CharField(required=True)
 
     class Meta:
         model = User
-        fields = ["id", "muId", "firstName", "lastName", "email"]
+        fields = ["id", "mu_id", "first_name", "last_name", "email"]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=False, allow_null=True)
     organizations = serializers.ListField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
-    yearOfGraduation = serializers.CharField(
+    year_of_graduation = serializers.CharField(
         required=False, allow_null=True, max_length=4)
-    areaOfInterests = serializers.ListField(required=True, max_length=3)
-    firstName = serializers.CharField(
-        required=True, source='first_name', max_length=75)
-    lastName = serializers.CharField(
-        required=False, source='last_name', allow_null=True, max_length=75)
+    area_of_interests = serializers.ListField(required=True, max_length=3)
+    first_name = serializers.CharField(
+        required=True, max_length=75)
+    last_name = serializers.CharField(
+        required=False, allow_null=True, max_length=75)
     password = serializers.CharField(
         required=True, max_length=200)
 
@@ -100,8 +100,8 @@ class RegisterSerializer(serializers.ModelSerializer):
         role_id = validated_data.pop('role')
         organization_ids = validated_data.pop('organizations')
         dept = validated_data.pop('dept')
-        year_of_graduation = validated_data.pop('yearOfGraduation')
-        area_of_interests = validated_data.pop('areaOfInterests')
+        year_of_graduation = validated_data.pop('year_of_graduation')
+        area_of_interests = validated_data.pop('area_of_interests')
         password = validated_data.pop('password')
         hashed_password = make_password(password)
         user_role_verified = True
@@ -136,29 +136,29 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['firstName', 'lastName', 'email', 'mobile', 'gender', 'dob',
-                  'role', 'organizations', 'dept', 'yearOfGraduation', 'areaOfInterests', 'password']
+        fields = ['first_name', 'last_name', 'email', 'mobile', 'gender', 'dob',
+                  'role', 'organizations', 'dept', 'year_of_graduation', 'area_of_interests', 'password']
 
 
 class UserCountrySerializer(serializers.ModelSerializer):
-    countryName = serializers.CharField(source='name')
+    country_name = serializers.CharField(source='name')
 
     class Meta:
         model = Country
-        fields = ["countryName"]
+        fields = ["country_name"]
 
 
 class UserStateSerializer(serializers.ModelSerializer):
-    zoneName = serializers.CharField(source='name')
+    state_name = serializers.CharField(source='name')
 
     class Meta:
         model = State
-        fields = ["zoneName"]
+        fields = ["state_name"]
 
 
 class UserZoneSerializer(serializers.ModelSerializer):
-    zoneName = serializers.CharField(source='name')
+    zone_name = serializers.CharField(source='name')
 
     class Meta:
         model = Zone
-        fields = ["zoneName"]
+        fields = ["zone_name"]
