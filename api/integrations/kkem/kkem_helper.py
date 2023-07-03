@@ -25,7 +25,7 @@ def token_required(func):
         # Probably need to make this cleaner
         request = args[0]
 
-        token = request.data.get("token")
+        token = request.headers.get('token')
         integration = Integration.objects.filter(token=token).first()
         if not integration:
             return CustomResponse(
