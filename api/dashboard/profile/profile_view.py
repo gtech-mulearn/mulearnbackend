@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 
 from api.dashboard.profile.serializers import UserLogSerializer, UserProfileSerializer, UserLevelSerializer, \
-    UserRankSerializer
+    UserRankSerializer, ShareUserProfileUpdateSerializer
 from db.task import KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
@@ -41,26 +41,6 @@ class UserProfileAPI(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
-    # def put(self, request):
-    #     user_id = JWTUtils.fetch_user_id(request)
-    #
-    #     first_name = request.data.get('firstName')
-    #     last_name = request.data.get('lastName')
-    #     email = request.data.get('email')
-    #     mobile = request.data.get('mobile')
-    #     dob = request.data.get('dob')
-    #
-    #     user_object = User.objects.filter(id=user_id).first()
-    #
-    #     user_object.first_name = first_name
-    #     user_object.last_name = last_name
-    #     user_object.email = email
-    #     user_object.mobile = mobile
-    #     user_object.dob = dob
-    #     user_object.save()
-    #
-    #     return CustomResponse(general_message='profile edited successfully').get_success_response()
-
 
 class UserLogAPI(APIView):
 
@@ -95,18 +75,14 @@ class ShareUserProfileAPI(APIView):
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        is_public = request.data.get('isPublic')
-
-        user_settings = UserSettings.objects.filter(user=user_id).first()
-
-        user_settings.is_public = is_public
-        user_settings.updated_by_id = user_id
-        user_settings.updated_at = DateTimeUtils.get_current_utc_time()
-
-        user_settings.save()
-
-        general_message = 'Unleash your vibe, share your profile!' if user_settings.is_public else 'Embrace privacy, safeguard your profile.'
-        return CustomResponse(general_message=general_message).get_success_response()
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
+        if user_settings is None:
+            return CustomResponse(general_message='No data available ').get_failure_response()
+        serializer = ShareUserProfileUpdateSerializer(user_settings, data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Now your profile is shareable').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
 
 class UserLevelsAPI(APIView):
