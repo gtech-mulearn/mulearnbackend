@@ -41,7 +41,7 @@ class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, ])
-    def get(self, request):
+    def get(self, request, user_id=None):
         user_queryset = User.objects.annotate(
             total_karma=Case(
                 When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
@@ -84,18 +84,29 @@ class UserAPI(APIView):
             ),
         )
 
-        queryset = CommonUtils.get_paginated_queryset(
-            user_queryset,
-            request,
-            ["mu_id", "first_name", "last_name", "email", "mobile"],
-        )
-        serializer = dash_user_serializer.UserDashboardSerializer(
-            queryset.get("queryset"), many=True
-        )
+        if user_id:
+            user_data = user_queryset.filter(id=user_id)
+            if not user_data:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response()
+            serializer = dash_user_serializer.UserDashboardSerializer(
+                user_data, many=True
+            )
+            return CustomResponse(response=serializer.data).get_success_response()
+        else:
+            queryset = CommonUtils.get_paginated_queryset(
+                user_queryset,
+                request,
+                ["mu_id", "first_name", "last_name", "email", "mobile"],
+            )
+            serializer = dash_user_serializer.UserDashboardSerializer(
+                queryset.get("queryset"), many=True
+            )
 
-        return CustomResponse().paginated_response(
-            data=serializer.data, pagination=queryset.get("pagination")
-        )
+            return CustomResponse().paginated_response(
+                data=serializer.data, pagination=queryset.get("pagination")
+            )
 
     @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, user_id):
