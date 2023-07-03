@@ -6,6 +6,7 @@ from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
 from db.organization import Organization, District
+from db.user import User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -198,3 +199,33 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
             hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
         return hackathon_submission
+    
+class HackathonOrganiserSerializer(serializers.ModelSerializer):
+    mu_id = serializers.CharField(required=False)
+    
+    class Meta:
+        model = HackathonOrganiserLink
+        fields = ('mu_id',)
+    
+    def validate_mu_id(self, value):
+        user = User.objects.filter(mu_id=value).first()
+        if not user:
+            raise serializers.ValidationError("User Not Exists")
+        return user.id
+    
+    def create(self, validated_data):
+        with transaction.atomic():
+            organizer_id = validated_data.pop('mu_id')
+            user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+            validated_data['id'] = uuid.uuid4()
+            validated_data['hackathon_id'] = self.context.get('hackathon').id
+            validated_data['organiser_id'] = organizer_id
+            validated_data['created_by_id'] = user_id
+            validated_data['updated_by_id'] = user_id
+            validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+            validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+            organiser = HackathonOrganiserLink.objects.create(**validated_data)
+        return organiser
+
+    def destroy(self, obj):
+        obj.delete()
