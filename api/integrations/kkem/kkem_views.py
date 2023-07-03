@@ -17,7 +17,7 @@ class KKEMBulkKarmaAPI(APIView):
     @token_required
     def get(self, request):
         from_datetime = request.GET.get("from_datetime")
-        token = request.GET.get("token")
+        token = request.headers.get("token")
         if not from_datetime:
             return CustomResponse(
                 general_message="Unspecified time parameter",
@@ -57,7 +57,8 @@ class KKEMBulkKarmaAPI(APIView):
 
 class KKEMIndividualKarmaAPI(APIView):
     @token_required
-    def get(self, request, mu_id, token):
+    def get(self, request, mu_id):
+        token = request.headers.get("token")
         kkem_user = IntegrationAuthorization.objects.filter(
             user__mu_id=mu_id, verified=True, integration__token=token
         ).first()
@@ -73,18 +74,23 @@ class KKEMIndividualKarmaAPI(APIView):
 class KKEMAuthorizationAPI(APIView):
     @token_required
     def post(self, request):
-        serializer = KKEMAuthorization(data=request.data)
+        serialized_set = KKEMAuthorization(
+            data=request.data, context={"request": request}
+        )
+
         try:
-            if not serializer.is_valid():
+            if not serialized_set.is_valid():
                 return CustomResponse(
-                    general_message=serializer.errors
+                    general_message=serialized_set.errors
                 ).get_failure_response()
 
             try:
-                kkem_link = serializer.create(serializer.validated_data)
+                serialized_data = serialized_set.data
+                kkem_link = serialized_set.create(serialized_data)
                 send_kkm_mail(kkem_link.user, kkem_link)
+
             except ValueError as e:
-                return CustomResponse(general_message=e).get_failure_response()
+                return CustomResponse(general_message=str(e)).get_failure_response()
             return CustomResponse(
                 general_message="Authorization created successfully. Email sent."
             ).get_success_response()
