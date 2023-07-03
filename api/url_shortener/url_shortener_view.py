@@ -2,7 +2,7 @@ from rest_framework.views import APIView
 
 from rest_framework.views import APIView
 
-from api.url_shortener.serializers import ShowShortenUrlsSerializer, ShortenUrlsCreateSerializer
+from api.url_shortener.serializers import ShowShortenUrlsSerializer, ShortenUrlsCreateUpdateSerializer
 from db.url_shortener import UrlShortener
 from utils.permission import CustomizePermission
 from utils.permission import role_required
@@ -16,7 +16,7 @@ class UrlShortenerAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def post(self, request):
-        serializer = ShortenUrlsCreateSerializer(data=request.data, context={'request': request})
+        serializer = ShortenUrlsCreateUpdateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Url created successfully.').get_success_response()
@@ -40,7 +40,7 @@ class UrlShortenerAPI(APIView):
         url_shortener = UrlShortener.objects.filter(id=url_id).first()
         if url_shortener is None:
             return CustomResponse(general_message='Invalid Url ID').get_failure_response()
-        serializer = ShortenUrlsCreateSerializer(url_shortener, data=request.data, context={'request': request})
+        serializer = ShortenUrlsCreateUpdateSerializer(url_shortener, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Url Edited Successfully').get_success_response()

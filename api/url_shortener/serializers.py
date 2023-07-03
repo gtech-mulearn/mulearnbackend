@@ -17,8 +17,7 @@ class ShowShortenUrlsSerializer(ModelSerializer):
         fields = ["id", "title", "long_url", "short_url"]
 
 
-
-class ShortenUrlsCreateSerializer(ModelSerializer):
+class ShortenUrlsCreateUpdateSerializer(ModelSerializer):
     long_url = serializers.CharField(required=False)
     title = serializers.CharField(required=False)
 
@@ -36,7 +35,7 @@ class ShortenUrlsCreateSerializer(ModelSerializer):
 
         return UrlShortener.objects.create(**validated_data)
 
-    def Update(self, instance, validated_data):
+    def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
         instance.short_url = validated_data.get('short_url', instance.short_url)
         instance.updated_by_id = user_id
