@@ -89,8 +89,13 @@ class KKEMAuthorizationAPI(APIView):
             try:
                 serialized_data = serialized_set.data
                 kkem_link = serialized_set.create(serialized_data)
-                send_kkm_mail(kkem_link.user, kkem_link)
-
+                if hasattr(kkem_link, "user"):
+                    send_kkm_mail(kkem_link.user, kkem_link)
+                else:
+                    return CustomResponse(
+                        general_message="Failed to authenticate user"
+                    ).get_failure_response()
+                
             except ValueError as e:
                 return CustomResponse(general_message=str(e)).get_failure_response()
             return CustomResponse(
