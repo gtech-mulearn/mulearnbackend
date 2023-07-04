@@ -98,9 +98,9 @@ class KKEMAuthorizationAPI(APIView):
             ).get_success_response()
         except Exception as e:
             # Remove this line in production
-            return CustomResponse(
-                general_message=f"An error occurred: {traceback.format_exc()}"
-            ).get_failure_response()
+            traceback_info = traceback.format_exc()
+            error_message = "An error occurred: {}".format(traceback_info)
+            return CustomResponse(general_message=error_message).get_failure_response()
 
     def patch(self, request, token):
         try:
