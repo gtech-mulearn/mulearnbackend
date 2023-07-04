@@ -11,7 +11,7 @@ class Hackathon(models.Model):
     description = models.CharField(max_length=5000, blank=True, null=True)
     participant_count = models.IntegerField(blank=True, null=True)
     type = models.CharField(max_length=8, default="offline")
-    website = models.CharField(max_length=200)
+    website = models.CharField(max_length=200, null=True, blank=True)
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     district = models.ForeignKey(District, on_delete=models.CASCADE, blank=True, null=True)
     place = models.CharField(max_length=255, blank=True, null=True)

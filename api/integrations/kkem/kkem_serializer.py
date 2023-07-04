@@ -63,7 +63,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
         try:
             token = self.context["request"].headers.get("token")
             integration = Integration.objects.filter(token=token).first()
-            IntegrationAuthorization.objects.create(
+            kkem_link = IntegrationAuthorization.objects.create(
                 integration=integration,
                 user=user,
                 integration_value=validated_data["dwms_id"],
@@ -83,6 +83,9 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 kkem_link.integration_value = validated_data["dwms_id"]
                 kkem_link.updated_at = DateTimeUtils.get_current_utc_time()
                 kkem_link.save()
+                
+        finally:     
+            return kkem_link
 
 
     class Meta:
