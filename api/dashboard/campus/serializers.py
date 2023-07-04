@@ -38,43 +38,32 @@ class UserOrgSerializer(serializers.ModelSerializer):
 
 
 class CollegeSerializer(serializers.ModelSerializer):
-    collegeName = serializers.ReadOnlyField(source="org.title")
-    campusCode = serializers.ReadOnlyField(source="org.code")
-    campusZone = serializers.ReadOnlyField(source="org.district.zone.name")
-    campusLead = serializers.ReadOnlyField(source="user.fullname")
-    totalKarma = serializers.SerializerMethodField()
-    totalMembers = serializers.SerializerMethodField()
-    activeMembers = serializers.SerializerMethodField()
+    college_name = serializers.ReadOnlyField(source="org.title")
+    campus_code = serializers.ReadOnlyField(source="org.code")
+    campus_zone = serializers.ReadOnlyField(source="org.district.zone.name")
+    campus_lead = serializers.ReadOnlyField(source="user.fullname")
+    total_karma = serializers.SerializerMethodField()
+    total_members = serializers.SerializerMethodField()
+    active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["collegeName", "campusLead", "campusCode",
-                  "campusZone", "totalKarma", "totalMembers", "activeMembers", "rank"]
+        fields = ["college_name", "campus_lead", "campus_code",
+                  "campus_zone", "total_karma", "total_members", "active_members", "rank"]
 
-    def get_totalMembers(self, obj):
+    def get_total_members(self, obj):
         return obj.org.user_organization_link_org_id.count()
 
-    def get_activeMembers(self, obj):
+    def get_active_members(self, obj):
         return obj.org.user_organization_link_org_id.filter(verified=True, user__active=True).count()
 
-    def get_totalKarma(self, obj):
+    def get_total_karma(self, obj):
         karma = obj.org.user_organization_link_org_id.filter(org__org_type=OrganizationType.COLLEGE.value,
                                                              verified=True,
                                                              user__total_karma_user__isnull=False).aggregate(
             total_karma=Sum('user__total_karma_user__karma'))
         return karma['total_karma'] or 0
-
-    # def get_rank(self, obj):
-    #     rank = UserOrganizationLink.objects.filter(
-    #         org__org_type=OrganizationType.COLLEGE.value, verified=True, user__total_karma_user__isnull=False
-    #     ).annotate(
-    #         total_karma=Sum('user__total_karma_user__karma')
-    #     ).order_by('-total_karma').values('total_karma')
-    #
-    #     colleges = {karma.get('total_karma'): i + 1 for i, karma in enumerate(rank)}
-    #
-    #     return None
 
     def get_rank(self, obj):
         rank = UserOrganizationLink.objects.filter(
@@ -86,5 +75,3 @@ class CollegeSerializer(serializers.ModelSerializer):
         college_ranks = {college['org']: i + 1 for i, college in enumerate(rank)}
         college_id = obj.org.id
         return college_ranks.get(college_id)
-
-        # sum all students totalkarma in org and compare and give rank

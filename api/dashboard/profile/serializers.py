@@ -4,7 +4,9 @@ from rest_framework.serializers import ModelSerializer
 
 from db.task import KarmaActivityLog, TotalKarma, UserIgLink, UserLvlLink, Level, TaskList
 from db.user import User, UserSettings
+from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
+from utils.utils import DateTimeUtils
 
 
 class UserLogSerializer(ModelSerializer):
@@ -206,3 +208,20 @@ class UserRankSerializer(ModelSerializer):
         for ig_link in UserIgLink.objects.filter(user=obj):
             interest_groups.append(ig_link.ig.name)
         return interest_groups
+
+
+class ShareUserProfileUpdateSerializer(ModelSerializer):
+    updated_by = serializers.CharField(required=False)
+    updated_at = serializers.CharField(required=False)
+
+    class Meta:
+        model = UserSettings
+        fields = ("is_public", "updated_by", "updated_at")
+
+    def update(self, instance, validated_data):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        instance.is_public = validated_data.get('is_public', instance.is_public)
+        instance.updated_by_id = user_id
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        return instance
