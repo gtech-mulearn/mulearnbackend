@@ -211,4 +211,6 @@ MEDIA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file
 
 INTERNAL_IPS = [
     "127.0.0.1",
+    "https://dev.mulearn.org/",
+    "44.213.20.231"
 ]
