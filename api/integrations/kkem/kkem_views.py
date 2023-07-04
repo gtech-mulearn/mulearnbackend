@@ -96,7 +96,7 @@ class KKEMAuthorizationAPI(APIView):
             ).get_success_response()
 
         except Exception as e:
-            return CustomResponse(general_message=e).get_failure_response()
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     def patch(self, request, token):
         try:
