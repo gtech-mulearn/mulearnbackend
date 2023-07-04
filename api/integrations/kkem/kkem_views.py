@@ -12,6 +12,8 @@ from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 from django.db.models import Prefetch
 from .kkem_helper import token_required, send_kkm_mail
 
+import traceback
+
 
 class KKEMBulkKarmaAPI(APIView):
     @token_required
@@ -94,9 +96,11 @@ class KKEMAuthorizationAPI(APIView):
             return CustomResponse(
                 general_message="Authorization created successfully. Email sent."
             ).get_success_response()
-
         except Exception as e:
-            return CustomResponse(general_message=e).get_failure_response()
+            # Remove this line in production
+            traceback_info = traceback.format_exc()
+            error_message = "An error occurred: {}".format(traceback_info)
+            return CustomResponse(general_message=error_message).get_failure_response()
 
     def patch(self, request, token):
         try:
@@ -114,4 +118,7 @@ class KKEMAuthorizationAPI(APIView):
                 general_message="User authenticated successfully"
             ).get_success_response()
         except Exception as e:
-            return CustomResponse(general_message=e).get_failure_response()
+            # Remove this line in production
+            return CustomResponse(
+                general_message=f"An error occurred: {traceback.format_exc()}"
+            ).get_failure_response()
