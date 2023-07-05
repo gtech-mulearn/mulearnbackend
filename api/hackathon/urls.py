@@ -12,8 +12,9 @@ urlpatterns = [
 
     path('submit-hackathon/', hackathon_views.HackathonSubmissionAPI.as_view()),
 
-    path('add-organiser/<str:hackathon_id>', hackathon_views.HackathonOrganiserAPI.as_view()),
-    path('delete-organiser/<str:organiser_link_id>', hackathon_views.HackathonOrganiserAPI.as_view()),
+    path("list-orgniser-hackathons/", hackathon_views.HackathonOrganiserAPI.as_view()),
+    path('add-organiser/<str:hackathon_id>/', hackathon_views.HackathonOrganiserAPI.as_view()),
+    path('delete-organiser/<str:organiser_link_id>/', hackathon_views.HackathonOrganiserAPI.as_view()),
 
     path('list-default-form-fields/', hackathon_views.GetDefaultFieldsAPI.as_view()),
 
