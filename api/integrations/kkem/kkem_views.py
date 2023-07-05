@@ -89,7 +89,12 @@ class KKEMAuthorizationAPI(APIView):
             try:
                 serialized_data = serialized_set.data
                 kkem_link = serialized_set.create(serialized_data)
-                send_kkm_mail(kkem_link.user, kkem_link)
+                if hasattr(kkem_link, "user"):
+                    send_kkm_mail(kkem_link.user, kkem_link)
+                else:
+                    return CustomResponse(
+                        general_message="Failed to authenticate user"
+                    ).get_failure_response()
 
             except ValueError as e:
                 return CustomResponse(general_message=str(e)).get_failure_response()
@@ -98,27 +103,21 @@ class KKEMAuthorizationAPI(APIView):
             ).get_success_response()
         except Exception as e:
             # Remove this line in production
+            traceback_info = traceback.format_exc()
+            error_message = f"An error occurred: {traceback_info}"
+            return CustomResponse(general_message=error_message).get_failure_response()
+
+    def get(self, request, token):
+        authorization = IntegrationAuthorization.objects.filter(id=token).first()
+        if not authorization:
             return CustomResponse(
-                general_message=f"An error occurred: {traceback.format_exc()}"
+                general_message="Invalid or missing Token"
             ).get_failure_response()
 
-    def patch(self, request, token):
-        try:
-            authorization = IntegrationAuthorization.objects.filter(id=token).first()
-            if not authorization:
-                return CustomResponse(
-                    general_message="Invalid or missing Token"
-                ).get_failure_response()
+        authorization.verified = True
+        authorization.updated_at = DateTimeUtils.get_current_utc_time()
+        authorization.save()
 
-            authorization.verified = True
-            authorization.updated_at = DateTimeUtils.get_current_utc_time()
-            authorization.save()
-
-            return CustomResponse(
-                general_message="User authenticated successfully"
-            ).get_success_response()
-        except Exception as e:
-            # Remove this line in production
-            return CustomResponse(
-                general_message=f"An error occurred: {traceback.format_exc()}"
-            ).get_failure_response()
+        return CustomResponse(
+            general_message="User authenticated successfully"
+        ).get_success_response()
