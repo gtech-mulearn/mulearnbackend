@@ -78,10 +78,12 @@ class ShareUserProfileAPI(APIView):
         user_settings = UserSettings.objects.filter(user_id=user_id).first()
         if user_settings is None:
             return CustomResponse(general_message='No data available ').get_failure_response()
-        serializer = ShareUserProfileUpdateSerializer(user_settings, data=request.data, context={'request': request})
+        serializer = ShareUserProfileUpdateSerializer(
+            user_settings, data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message='Now your profile is shareable').get_success_response()
+            general_message = 'Unleash your vibe, share your profile!' if user_settings.is_public else 'Embrace privacy, safeguard your profile.'
+            return CustomResponse(general_message=general_message).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
