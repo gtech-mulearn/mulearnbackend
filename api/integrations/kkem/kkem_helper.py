@@ -6,12 +6,12 @@ from utils.response import CustomResponse
 
 
 
-def send_kkm_mail(self, user, kkem_link):
+def send_kkm_mail(user, kkem_link):
     email_host_user = decouple.config("EMAIL_HOST_USER")
     to_email = [user.email]
 
     domain = decouple.config("FR_DOMAIN_NAME")
-    message = f"Click here to confirm the authorization {domain}/kkem-authorization?token={kkem_link.id}"
+    message = f"Click here to confirm the authorization {domain}/api/v1/integrations/kkem/authorization/{kkem_link.id}/"
     subject = "KKEM Authorization"
 
     send_mail(subject, message, email_host_user, to_email, fail_silently=False)

@@ -12,6 +12,8 @@ from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 from django.db.models import Prefetch
 from .kkem_helper import token_required, send_kkm_mail
 
+import traceback
+
 
 class KKEMBulkKarmaAPI(APIView):
     @token_required
@@ -87,31 +89,35 @@ class KKEMAuthorizationAPI(APIView):
             try:
                 serialized_data = serialized_set.data
                 kkem_link = serialized_set.create(serialized_data)
-                send_kkm_mail(kkem_link.user, kkem_link)
+                if hasattr(kkem_link, "user"):
+                    send_kkm_mail(kkem_link.user, kkem_link)
+                else:
+                    return CustomResponse(
+                        general_message="Failed to authenticate user"
+                    ).get_failure_response()
 
             except ValueError as e:
                 return CustomResponse(general_message=str(e)).get_failure_response()
             return CustomResponse(
                 general_message="Authorization created successfully. Email sent."
             ).get_success_response()
-
         except Exception as e:
-            return CustomResponse(general_message=e).get_failure_response()
+            # Remove this line in production
+            traceback_info = traceback.format_exc()
+            error_message = f"An error occurred: {traceback_info}"
+            return CustomResponse(general_message=error_message).get_failure_response()
 
-    def patch(self, request, token):
-        try:
-            authorization = IntegrationAuthorization.objects.filter(id=token).first()
-            if not authorization:
-                return CustomResponse(
-                    general_message="Invalid or missing Token"
-                ).get_failure_response()
-
-            authorization.verified = True
-            authorization.updated_at = DateTimeUtils.get_current_utc_time()
-            authorization.save()
-
+    def get(self, request, token):
+        authorization = IntegrationAuthorization.objects.filter(id=token).first()
+        if not authorization:
             return CustomResponse(
-                general_message="User authenticated successfully"
-            ).get_success_response()
-        except Exception as e:
-            return CustomResponse(general_message=e).get_failure_response()
+                general_message="Invalid or missing Token"
+            ).get_failure_response()
+
+        authorization.verified = True
+        authorization.updated_at = DateTimeUtils.get_current_utc_time()
+        authorization.save()
+
+        return CustomResponse(
+            general_message="User authenticated successfully"
+        ).get_success_response()

@@ -60,6 +60,7 @@ MIDDLEWARE = [
 ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
 
+
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
 # paginator settings
 PAGE_SIZE = 10

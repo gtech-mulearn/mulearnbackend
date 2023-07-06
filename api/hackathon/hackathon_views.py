@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 
 from db.hackathon import Hackathon, HackathonOrganiserLink
-from utils.permission import CustomizePermission, role_required
+from utils.permission import CustomizePermission, role_required, JWTUtils
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.types import RoleType
@@ -79,8 +79,15 @@ class HackathonSubmissionAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
-class HackathonOrganiserAPI(APIView):
+class HackathonOrganiserAPI(APIView): 
     authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        hackathon_ids = HackathonOrganiserLink.objects.filter(organiser_id=JWTUtils.fetch_user_id(request)).values_list('hackathon_id', flat=True)
+        hackathons_queryset = Hackathon.objects.filter(id__in=hackathon_ids).all()
+        serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request, hackathon_id):

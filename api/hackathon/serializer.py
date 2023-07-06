@@ -40,11 +40,11 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
     title = serializers.CharField(required=True)
     status = serializers.ChoiceField(choices=STATUS_CHOICES, required=False)
     form_fields = serializers.JSONField(required=False)
-    event_logo = serializers.ImageField(required=False)
-    banner = serializers.ImageField(required=False)
+    event_logo = serializers.ImageField(required=False, allow_null=True)
+    banner = serializers.ImageField(required=False, allow_null=True)
     org_id = serializers.CharField(required=False)
     district_id = serializers.CharField(required=False)
-    website = serializers.CharField(required=False)
+    website = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = Hackathon
@@ -67,7 +67,6 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
         return district
 
     def create(self, validated_data):
-
         with transaction.atomic():
             hackathon_form_fields = None
             if 'form_fields' in validated_data:
@@ -79,10 +78,10 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-            if 'event_logo' in validated_data:
+            if validated_data.get('event_logo'):
                 default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
 
-            if 'banner' in validated_data:
+            if validated_data.get('banner'):
                 default_storage.save(validated_data.get('banner').name, validated_data.get('banner'))
 
             hackathon = Hackathon.objects.create(**validated_data)
@@ -115,11 +114,11 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
     title = serializers.CharField(required=False)
     status = serializers.ChoiceField(choices=STATUS_CHOICES, required=False)
     form_fields = serializers.JSONField(required=False)
-    event_logo = serializers.ImageField(required=False)
-    banner = serializers.ImageField(required=False)
+    event_logo = serializers.ImageField(required=False, allow_null=True)
+    banner = serializers.ImageField(required=False, allow_null=True)
     org_id = serializers.CharField(required=False)
     district_id = serializers.CharField(required=False)
-    website = serializers.CharField(required=False)
+    website = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = Hackathon

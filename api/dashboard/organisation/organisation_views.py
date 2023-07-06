@@ -389,3 +389,9 @@ class AffiliationAPI(APIView):
         else:
             return CustomResponse(
                 general_message=f"Org with code {title}, does not exist").get_failure_response()
+
+class GetInstitutionsNamesAPI(APIView):
+
+    def get(self, request, organisation_type):
+        organisations = Organization.objects.filter(org_type=organisation_type).values_list('title', flat=True)
+        return CustomResponse(response=organisations).get_success_response()
