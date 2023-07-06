@@ -60,7 +60,6 @@ MIDDLEWARE = [
 ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
 
-
 REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
 # paginator settings
 PAGE_SIZE = 10
@@ -209,6 +208,14 @@ DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 # Set the path to the media root directory
 MEDIA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'media/hackathon')
 
-INTERNAL_IPS = [
-    "127.0.0.1",
-]
+# INTERNAL_IPS = [
+#     "127.0.0.1",
+# ]
+
+
+import socket
+
+hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
+INTERNAL_IPS = [ip[:-1] + '1' for ip in ips] + ['127.0.0.1', '10.0.2.2']
+
+print(INTERNAL_IPS)
