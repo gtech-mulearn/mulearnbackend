@@ -1,4 +1,3 @@
-import contextlib
 import uuid
 from datetime import timedelta
 
@@ -7,10 +6,9 @@ from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
 from django.db import IntegrityError
+from django.db.models import Case, When, F, Value, CharField
 from django.db.models import Q
 from rest_framework.views import APIView
-from django.db.models import Count, Case, When, F, Value, CharField
-
 
 from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
@@ -63,7 +61,7 @@ class UserAPI(APIView):
                 ),
                 default=Value(''),
                 output_field=CharField()
-                
+
             ),
             graduation_year=Case(
                 When(
@@ -87,12 +85,8 @@ class UserAPI(APIView):
         if user_id:
             user_data = user_queryset.filter(id=user_id)
             if not user_data:
-                return CustomResponse(
-                    general_message="User not found"
-                ).get_failure_response()
-            serializer = dash_user_serializer.UserDashboardSerializer(
-                user_data, many=True
-            )
+                return CustomResponse(general_message="User not found").get_failure_response()
+            serializer = dash_user_serializer.UserDashboardSerializer(user_data, many=True)
             return CustomResponse(response=serializer.data).get_success_response()
         else:
             queryset = CommonUtils.get_paginated_queryset(
@@ -199,7 +193,7 @@ class UserManagementCSV(APIView):
                 ),
                 default=Value(''),
                 output_field=CharField()
-                
+
             ),
             graduation_year=Case(
                 When(
