@@ -9,7 +9,8 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
-from .dash_task_serializer import TaskListSerializer, TaskUpdateSerializer, TaskCreateSerializer
+from .dash_task_serializer import TaskListSerializer, TaskUpdateSerializer, TaskCreateSerializer, \
+    ChannelDropdownSerializer, IGDropdownSerializer, OrganizationDropdownSerialize, LevelDropdownSerialize
 
 
 class TaskApi(APIView):
@@ -234,3 +235,43 @@ class TaskGetAPI(APIView):
         task_serializer = TaskList.objects.get(id=pk)
         serializer = TaskListSerializer(task_serializer)
         return CustomResponse(response={"Task": serializer.data}).get_success_response()
+
+
+class ChannelDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        channel = Channel.objects.all()
+        serializer = ChannelDropdownSerializer(channel, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class IGDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        ig = InterestGroup.objects.all()
+        serializer = IGDropdownSerializer(ig, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class OrganizationDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        organization = Organization.objects.all()
+        serializer = OrganizationDropdownSerialize(organization, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LevelDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        level = Level.objects.all()
+        serializer = LevelDropdownSerialize(level, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()

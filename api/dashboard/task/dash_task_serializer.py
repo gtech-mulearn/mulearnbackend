@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.task import TaskList
+from db.task import TaskList, Channel, InterestGroup, Organization, Level
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -77,3 +77,27 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         instance.save()
 
         return instance
+
+
+class ChannelDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Channel
+        fields = ("id", "name")
+
+
+class IGDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InterestGroup
+        fields = ("id", "name")
+
+
+class OrganizationDropdownSerialize(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ("id", "title")
+
+
+class LevelDropdownSerialize(serializers.ModelSerializer):
+    class Meta:
+        model = Level
+        fields = ("id", "name")
