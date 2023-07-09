@@ -77,9 +77,9 @@ class CollegeMonthlyLeaderboard(APIView):
 
         organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value).annotate(
             total_karma=Sum('user_organization_link_org_id__user__karma_activity_log_created_by__karma',
-                           filter=Q(
-                               user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
-                                   start_date, end_date)))
+                            filter=Q(
+                                user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
+                                    start_date, end_date)))
         ).order_by('-total_karma')[:20]
 
         serializer = CollegeMonthlyLeaderboardSerializer(organizations, many=True)
