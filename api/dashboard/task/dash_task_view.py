@@ -10,7 +10,8 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import TaskListSerializer, TaskUpdateSerializer, TaskCreateSerializer, \
-    ChannelDropdownSerializer, IGDropdownSerializer, OrganizationDropdownSerialize, LevelDropdownSerialize
+    ChannelDropdownSerializer, IGDropdownSerializer, OrganizationDropdownSerialize, LevelDropdownSerialize, \
+    TaskTypeDropdownSerializer
 
 
 class TaskApi(APIView):
@@ -274,4 +275,14 @@ class LevelDropdownAPI(APIView):
     def get(self, request):
         level = Level.objects.all()
         serializer = LevelDropdownSerialize(level, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class TaskTypesDropDownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        task_types = TaskType.objects.all()
+        serializer = TaskTypeDropdownSerializer(task_types, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

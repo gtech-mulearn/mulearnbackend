@@ -1,18 +1,17 @@
+import traceback
 from datetime import datetime
-from rest_framework.views import APIView
-from db.task import UserIgLink
-
-from db.user import User
-from db.integrations import IntegrationAuthorization
-from utils.utils import DateTimeUtils
-from utils.response import CustomResponse
-from utils.utils import CommonUtils
-from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 from django.db.models import Prefetch
-from .kkem_helper import token_required, send_kkm_mail
+from rest_framework.views import APIView
 
-import traceback
+from db.integrations import IntegrationAuthorization
+from db.task import UserIgLink
+from db.user import User
+from utils.response import CustomResponse
+from utils.utils import CommonUtils
+from utils.utils import DateTimeUtils
+from .kkem_helper import token_required, send_kkm_mail
+from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -44,17 +43,11 @@ class KKEMBulkKarmaAPI(APIView):
             )
         )
 
-        queryset = CommonUtils.get_paginated_queryset(
-            queryset,
-            request,
-            ["mu_id"],
-        )
+        queryset = CommonUtils.get_paginated_queryset(queryset, request, ["mu_id"])
 
         serialized_users = KKEMUserSerializer(queryset.get("queryset"), many=True)
 
-        return CustomResponse().paginated_response(
-            data=serialized_users.data, pagination=queryset.get("pagination")
-        )
+        return CustomResponse().paginated_response(data=serialized_users.data, pagination=queryset.get("pagination"))
 
 
 class KKEMIndividualKarmaAPI(APIView):
