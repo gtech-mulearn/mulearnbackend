@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.task import TaskList, Channel, InterestGroup, Organization, Level
+from db.task import TaskList, Channel, InterestGroup, Organization, Level, TaskType
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -39,11 +39,10 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = TaskList
         fields = ("hashtag", "title", "description", "karma", "channel", "type", "org",
-                  "level", "ig", "active", "variable_karma", "usage_count", )
+                  "level", "ig", "active", "variable_karma", "usage_count",)
 
     def create(self, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
@@ -58,10 +57,9 @@ class TaskCreateSerializer(serializers.ModelSerializer):
 
 
 class TaskUpdateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = TaskList
-        fields = ("hashtag", "title", "karma", "active", "variable_karma", "usage_count", )
+        fields = ("hashtag", "title", "karma", "active", "variable_karma", "usage_count",)
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
@@ -101,3 +99,9 @@ class LevelDropdownSerialize(serializers.ModelSerializer):
     class Meta:
         model = Level
         fields = ("id", "name")
+
+
+class TaskTypeDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskType
+        fields = ("id", "title")
