@@ -5,7 +5,6 @@ from db.integrations import Integration
 from utils.response import CustomResponse
 
 
-
 def send_kkm_mail(user, kkem_link):
     email_host_user = decouple.config("EMAIL_HOST_USER")
     to_email = [user.email]
@@ -17,10 +16,11 @@ def send_kkm_mail(user, kkem_link):
     send_mail(subject, message, email_host_user, to_email, fail_silently=False)
 
     return True
-    
-    
+
+
 def token_required(func):
     def wrapper(self, *args, **kwargs):
+
         # Assumes that the second parameter is always `request`
         # Probably need to make this cleaner
         request = args[0]
@@ -34,4 +34,5 @@ def token_required(func):
         else:
             result = func(self, *args, **kwargs)
         return result
+
     return wrapper
