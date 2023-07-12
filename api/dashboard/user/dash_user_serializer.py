@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink
 from db.user import User, UserRoleLink
+from utils.types import OrganizationType, RoleType
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -114,7 +115,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         for link in organization_links:
             serializer = (
                 CollegeSerializer(link)
-                if link.org.org_type == "College"
+                if link.org.org_type == OrganizationType.COLLEGE.value
                 else OrganizationSerializer(link.org)
             )
             organizations_data.append(serializer.data)
@@ -122,7 +123,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
     def get_role(self, user):
         role = UserRoleLink.objects.filter(user=user).first()
-        if role and role.role.title in ["student", "Enabler"]:
+        if role and role.role.title in [RoleType.STUDENT.value, RoleType.ENABLER.value]:
             return role.role.title
         return None
     
