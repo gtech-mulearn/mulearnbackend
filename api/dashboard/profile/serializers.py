@@ -154,9 +154,10 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         data = []
-        for i in TaskList.objects.filter(level=obj):
-            d = KarmaActivityLog.objects.filter(task=i, created_by=self.context.get('user_id'), appraiser_approved=True)
-            if d:
+        for i in TaskList.objects.filter(level=obj, active=True):
+            karma_activity = KarmaActivityLog.objects.filter(task=i, created_by=self.context.get('user_id'),
+                                                             appraiser_approved=True)
+            if karma_activity:
                 completed = True
             else:
                 completed = False

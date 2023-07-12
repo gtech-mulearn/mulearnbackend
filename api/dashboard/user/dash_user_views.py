@@ -126,12 +126,8 @@ class UserAPI(APIView):
         if user_id:
             user_data = user_queryset.filter(id=user_id)
             if not user_data:
-                return CustomResponse(
-                    general_message="User not found"
-                ).get_failure_response()
-            serializer = dash_user_serializer.UserDashboardSerializer(
-                user_data, many=True
-            )
+                return CustomResponse(general_message="User not found").get_failure_response()
+            serializer = dash_user_serializer.UserDashboardSerializer(user_data, many=True)
             return CustomResponse(response=serializer.data).get_success_response()
         else:
             queryset = CommonUtils.get_paginated_queryset(
