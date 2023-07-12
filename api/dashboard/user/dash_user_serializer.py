@@ -2,7 +2,6 @@ from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink
 from db.user import User, UserRoleLink
-from utils.types import OrganizationType
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -55,7 +54,7 @@ class UserSerializer(serializers.ModelSerializer):
             "exist_in_guild",
             "joined",
             "roles",
-            "profile_pic"
+            "profile_pic",
         ]
 
     def get_roles(self, obj):
@@ -64,6 +63,69 @@ class UserSerializer(serializers.ModelSerializer):
             for user_role_link in obj.user_role_link_user.all()
         ]
 
+
+class CollegeSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source="org.title")
+    org_type = serializers.CharField(source="org.org_type")
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = [
+            "title",
+            "org_type",
+            "department",
+            "graduation_year",
+            "country",
+            "state",
+            "district",
+        ]
+
+
+class OrganizationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ["title", "org_type"]
+
+
+class UserDetailsSerializer(serializers.ModelSerializer):
+    organization = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = (
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "gender",
+            "dob",
+            "organization",
+            "role",
+        )
+
+    def get_organization(self, user):
+        organization_links = user.user_organization_link_user_id.select_related('org')
+        if not organization_links.exists():
+            return None
+        
+        organizations_data = []
+        for link in organization_links:
+            serializer = (
+                CollegeSerializer(link)
+                if link.org.org_type == "College"
+                else OrganizationSerializer(link.org)
+            )
+            organizations_data.append(serializer.data)
+        return organizations_data
+
+    def get_role(self, user):
+        role = UserRoleLink.objects.filter(user=user).first()
+        if role and role.role.title in ["student", "Enabler"]:
+            return role.role.title
+        return None
+    
 
 class UserVerificationSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField(source="user.fullname")
