@@ -1,4 +1,4 @@
-from django.db.models import Sum, F, Q
+from django.db.models import Sum, F, Q, Prefetch
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -152,17 +152,44 @@ class UserLevelSerializer(serializers.ModelSerializer):
         model = Level
         fields = ('name', 'tasks')
 
-    def get_tasks(self, obj):
-        data = []
-        for i in TaskList.objects.filter(level=obj, active=True):
-            karma_activity = KarmaActivityLog.objects.filter(task=i, created_by=self.context.get('user_id'),
-                                                             appraiser_approved=True)
-            if karma_activity:
-                completed = True
-            else:
-                completed = False
+    # def get_tasks(self, obj):
+    #     data = []
+    #     user_id = self.context.get('user_id')
+    #
+    #     for task in TaskList.objects.filter(level=obj):
+    #         completed = False
+    #         karma_activity = KarmaActivityLog.objects.filter(task=task, created_by=user_id, appraiser_approved=True)
+    #
+    #         if task.active:
+    #             if karma_activity:
+    #                 completed = True
+    #         else:
+    #             if karma_activity:
+    #                 completed = True
+    #             else:
+    #                 continue
+    #
+    #         data.append({'task_name': task.title, 'hashtag': task.hashtag, 'completed': completed})
+    #
+    #     return data
 
-            data.append({'task_name': i.title, 'hashtag': i.hashtag, 'completed': completed})
+    def get_tasks(self, obj):
+        user_id = self.context.get('user_id')
+        tasks = TaskList.objects.filter(level=obj).prefetch_related(
+            Prefetch('karmaactivitylog_set',
+                     queryset=KarmaActivityLog.objects.filter(created_by=user_id, appraiser_approved=True))
+        )
+
+        data = []
+        for task in tasks:
+            completed = task.karmaactivitylog_set.exists()
+
+            if task.active or completed:
+                data.append({
+                    'task_name': task.title,
+                    'hashtag': task.hashtag,
+                    'completed': completed
+                })
         return data
 
 
