@@ -146,12 +146,16 @@ class RegisterSerializer(serializers.ModelSerializer):
             if referral_id:
                 referrer_karma = TotalKarma.objects.get(user=referral_provider)
                 referrer_karma.karma = referrer_karma.karma + karma_amount
+                referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
+                referrer_karma.updated_by = user
                 referrer_karma.save()
 
                 KarmaActivityLog.objects.create(
-                    id=uuid4(), karma=karma_amount, task=task_list, task_message_id=uuid4(), lobby_message_id=uuid4(),dm_message_id=uuid4(), peer_approved=True, peer_approved_by=user,  appraiser_approved=True, appraiser_approved_by=user, created_by=referral_provider, created_at=DateTimeUtils.get_current_utc_time(), updated_by=referral_provider, updated_at=DateTimeUtils.get_current_utc_time())
+                    id=uuid4(), karma=karma_amount, task=task_list, task_message_id=uuid4(), lobby_message_id=uuid4(),dm_message_id=uuid4(), peer_approved=True, peer_approved_by=user,  appraiser_approved=True, appraiser_approved_by=user, created_by=user, created_at=DateTimeUtils.get_current_utc_time(), updated_by=user, updated_at=DateTimeUtils.get_current_utc_time())
                 
                 task_list.usage_count = task_list.usage_count + 1
+                task_list.updated_at = DateTimeUtils.get_current_utc_time()
+                task_list.updated_by = user
                 task_list.save()
 
 
