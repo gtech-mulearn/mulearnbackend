@@ -67,7 +67,6 @@ class KKEMIndividualKarmaAPI(APIView):
 
 
 class KKEMAuthorizationAPI(APIView):
-    @token_required
     def post(self, request):
         serialized_set = KKEMAuthorization(
             data=request.data, context={"request": request}
@@ -100,7 +99,7 @@ class KKEMAuthorizationAPI(APIView):
             error_message = f"An error occurred: {traceback_info}"
             return CustomResponse(general_message=error_message).get_failure_response()
 
-    def get(self, request, token):
+    def patch(self, request, token):
         authorization = IntegrationAuthorization.objects.filter(id=token).first()
         if not authorization:
             return CustomResponse(
