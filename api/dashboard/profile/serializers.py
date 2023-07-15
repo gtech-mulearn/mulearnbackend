@@ -38,7 +38,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_is_public(self, obj):
-        is_public_status = UserSettings.objects.filter(user=obj).first().is_public
+        is_public_status = UserSettings.objects.filter(
+            user=obj).first().is_public
         return is_public_status
 
     def get_roles(self, obj):
@@ -121,7 +122,8 @@ class UserLevelsSerializer(ModelSerializer):
 
     class Meta:
         model = UserLvlLink
-        fields = ["level_number", "task_names", "task_completed", "remaining_tasks"]
+        fields = ["level_number", "task_names",
+                  "task_completed", "remaining_tasks"]
 
     def get_task_names(self, obj):
         task_names = []
@@ -150,7 +152,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Level
-        fields = ('name', 'tasks')
+        fields = ('name', 'tasks', 'karma')
 
     def get_tasks(self, obj):
         data = []
@@ -162,7 +164,8 @@ class UserLevelSerializer(serializers.ModelSerializer):
             else:
                 completed = False
 
-            data.append({'task_name': i.title, 'hashtag': i.hashtag, 'completed': completed})
+            data.append({'task_name': i.title, 'hashtag': i.hashtag,
+                        'completed': completed, 'karma': i.karma})
         return data
 
 
@@ -176,7 +179,8 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ('first_name', 'last_name', 'role', 'rank', 'karma', 'interest_groups')
+        fields = ('first_name', 'last_name', 'role',
+                  'rank', 'karma', 'interest_groups')
 
     def get_role(self, obj):
         roles = self.context.get('roles')
@@ -221,7 +225,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        instance.is_public = validated_data.get('is_public', instance.is_public)
+        instance.is_public = validated_data.get(
+            'is_public', instance.is_public)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
