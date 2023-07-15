@@ -10,7 +10,7 @@ from db.user import User
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from utils.utils import DateTimeUtils
-from .kkem_helper import token_required, send_kkm_mail
+from ..integrations_helper import token_required, send_kkm_mail
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 
@@ -18,7 +18,8 @@ class KKEMBulkKarmaAPI(APIView):
     @token_required
     def get(self, request):
         from_datetime = request.GET.get("from_datetime")
-        token = request.headers.get("token")
+        auth_header = request.META.get("HTTP_AUTHORIZATION")
+        token = auth_header.split(" ")[1]
         if not from_datetime:
             return CustomResponse(
                 general_message="Unspecified time parameter",
@@ -44,16 +45,18 @@ class KKEMBulkKarmaAPI(APIView):
         )
 
         queryset = CommonUtils.get_paginated_queryset(queryset, request, ["mu_id"])
-
         serialized_users = KKEMUserSerializer(queryset.get("queryset"), many=True)
 
-        return CustomResponse().paginated_response(data=serialized_users.data, pagination=queryset.get("pagination"))
+        return CustomResponse().paginated_response(
+            data=serialized_users.data, pagination=queryset.get("pagination")
+        )
 
 
 class KKEMIndividualKarmaAPI(APIView):
     @token_required
     def get(self, request, mu_id):
-        token = request.headers.get("token")
+        auth_header = request.META.get("HTTP_AUTHORIZATION")
+        token = auth_header.split(" ")[1]
         kkem_user = IntegrationAuthorization.objects.filter(
             user__mu_id=mu_id, verified=True, integration__token=token
         ).first()
@@ -78,26 +81,23 @@ class KKEMAuthorizationAPI(APIView):
                     general_message=serialized_set.errors
                 ).get_failure_response()
 
-            try:
-                serialized_data = serialized_set.data
-                kkem_link = serialized_set.create(serialized_data)
-                if hasattr(kkem_link, "user"):
-                    send_kkm_mail(kkem_link.user, kkem_link)
-                else:
-                    return CustomResponse(
-                        general_message="Failed to authenticate user"
-                    ).get_failure_response()
+            kkem_link = serialized_set.save()
+            if hasattr(kkem_link, "user"):
+                send_kkm_mail(kkem_link.user, kkem_link)
+            else:
+                return CustomResponse(
+                    general_message="Failed to authenticate user"
+                ).get_failure_response()
 
-            except ValueError as e:
-                return CustomResponse(general_message=str(e)).get_failure_response()
             return CustomResponse(
                 general_message="Authorization created successfully. Email sent."
             ).get_success_response()
+
         except Exception as e:
             # Remove this line in production
-            traceback_info = traceback.format_exc()
-            error_message = f"An error occurred: {traceback_info}"
-            return CustomResponse(general_message=error_message).get_failure_response()
+            # traceback_info = traceback.format_exc()
+            # error_message = f"An error occurred: {traceback_info}"
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     def patch(self, request, token):
         authorization = IntegrationAuthorization.objects.filter(id=token).first()
