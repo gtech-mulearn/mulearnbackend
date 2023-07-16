@@ -14,5 +14,5 @@ urlpatterns = [
     path('ig/', dash_task_view.IGDropdownAPI.as_view()),
     path('organization/', dash_task_view.OrganizationDropdownAPI.as_view()),
     path('level/', dash_task_view.LevelDropdownAPI.as_view()),
-
+    path('task-types/', dash_task_view.TaskTypesDropDownAPI.as_view()),
 ]

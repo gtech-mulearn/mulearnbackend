@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.task import TaskList, Channel, InterestGroup, Organization, Level
+from db.task import TaskList, Channel, InterestGroup, Organization, Level, TaskType
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -10,11 +10,11 @@ from utils.utils import DateTimeUtils
 class TaskListSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
-    channel = serializers.CharField(source='channel.name')
-    type = serializers.CharField(source='type.title')
-    level = serializers.CharField(source='level.name', allow_null=True)
-
-    # ig = serializers.CharField(source='ig.name')
+    channel = serializers.CharField(source='channel.id', allow_null=True)
+    type = serializers.CharField(source='type.id', allow_null=True)
+    level = serializers.CharField(source='level.id', allow_null=True)
+    ig = serializers.CharField(source='ig.id', allow_null=True)
+    org = serializers.CharField(source='org.id', allow_null=True)
 
     class Meta:
         model = TaskList
@@ -30,6 +30,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "variable_karma",
             "usage_count",
             "level",
+            "org",
             "ig",
             "updated_at",
             "updated_by",
@@ -39,11 +40,10 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 
 class TaskCreateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = TaskList
         fields = ("hashtag", "title", "description", "karma", "channel", "type", "org",
-                  "level", "ig", "active", "variable_karma", "usage_count", )
+                  "level", "ig", "active", "variable_karma", "usage_count",)
 
     def create(self, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
@@ -59,9 +59,16 @@ class TaskCreateSerializer(serializers.ModelSerializer):
 
 class TaskUpdateSerializer(serializers.ModelSerializer):
 
+    channel = serializers.CharField()
+    type = serializers.CharField()
+    org = serializers.CharField()
+    level = serializers.CharField()
+    ig = serializers.CharField()
+
     class Meta:
         model = TaskList
-        fields = ("hashtag", "title", "karma", "active", "variable_karma", "usage_count", )
+        fields = ("hashtag", "title", "karma", "active", "variable_karma", "usage_count", "channel", "type", "org",
+                  "level", "ig")
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
@@ -77,6 +84,36 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         instance.save()
 
         return instance
+
+    def validate_channel(self, value):
+        channel = Channel.objects.filter(id=value).first()
+        if channel is None:
+            raise serializers.ValidationError("Enter a valid channel id")
+        return value
+
+    def validate_type(self, value):
+        task_type = TaskType.objects.filter(id=value).first()
+        if task_type is None:
+            raise serializers.ValidationError("Enter a valid task type id")
+        return value
+
+    def validate_org(self, value):
+        org = Organization.objects.filter(id=value).first()
+        if org is None:
+            raise serializers.ValidationError("Enter a valid organization id")
+        return value
+
+    def validate_level(self, value):
+        level = Level.objects.filter(id=value).first()
+        if level is None:
+            raise serializers.ValidationError("Enter a valid level id")
+        return value
+
+    def validate_ig(self, value):
+        ig = InterestGroup.objects.filter(id=value).first()
+        if ig is None:
+            raise serializers.ValidationError("Enter a valid interest group id")
+        return value
 
 
 class ChannelDropdownSerializer(serializers.ModelSerializer):
@@ -101,3 +138,9 @@ class LevelDropdownSerialize(serializers.ModelSerializer):
     class Meta:
         model = Level
         fields = ("id", "name")
+
+
+class TaskTypeDropdownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TaskType
+        fields = ("id", "title")

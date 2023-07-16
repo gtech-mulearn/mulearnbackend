@@ -18,6 +18,7 @@ class User(models.Model):
     exist_in_guild = models.BooleanField(default=False)
     profile_pic = models.CharField(max_length=200, blank=True, null=True)
     created_at = models.DateTimeField()
+    referral = models.ForeignKey('self', models.DO_NOTHING, blank=True, null=True)
 
     class Meta:
         managed = False
