@@ -63,28 +63,32 @@ class LearningCircleListApi(APIView):
 
 class LearningCircleHomeApi(APIView):
     authentication_classes = [CustomizePermission]
-    def get(self, request,circle_id):
+
+    def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
+
+        members = UserCircleLink.objects.filter(circle=learning_circle, accepted=1)
+        pending_members = UserCircleLink.objects.filter(circle=learning_circle, accepted=0)
+
+        total_karma = TotalKarma.objects.filter(user__usercirclelink__circle=learning_circle).aggregate(total_karma=Sum('karma'))[
+            'total_karma'] or 0
+
         learning_circle_data = {
             'circle': learning_circle.name,
             'circle_code': learning_circle.circle_code,
             'college': learning_circle.org.title,
-            'members': [],
-            'rank': 3,
-            'total_karma': TotalKarma.objects.filter(user__usercirclelink__circle=learning_circle)
-                           .aggregate(total_karma=Sum('karma'))['total_karma'] or 0,
-        }
-        members = UserCircleLink.objects.filter(circle=learning_circle)
-        for member in members:
-            member_data = {
-                'username': f'{member.user.first_name} {member.user.last_name}'
-                if member.user.last_name
-                else member.user.first_name,
+            'members': [{
+                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
-                'karma': TotalKarma.objects.filter(user=member.user.id)
-                .values_list('karma', flat=True)
-                .first(),
-            }
-            learning_circle_data['members'].append(member_data)
+                'karma': TotalKarma.objects.filter(user=member.user.id).values_list('karma', flat=True).first(),
+            } for member in members],
+            'pending_members': [{
+                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
+                'profile_pic': member.user.profile_pic or None,
+            } for member in pending_members],
+            'rank': 3,
+            'total_karma': total_karma,
+        }
+
         return CustomResponse(response=learning_circle_data).get_success_response()
