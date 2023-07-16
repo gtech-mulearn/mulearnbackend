@@ -7,7 +7,9 @@ from db.task import InterestGroup
 from db.organization import UserOrganizationLink , Organization
 from utils.utils import DateTimeUtils
 from db.learning_circle import LearningCircle , UserCircleLink
+from db.task import TotalKarma
 from .dash_lc_serializer import LearningCircleSerializer
+from django.db.models import Sum
 class LearningCircleAPI(APIView):
     authentication_classes = [CustomizePermission]
     def get(self, request): #lists the learning circle in the user's college
@@ -16,7 +18,13 @@ class LearningCircleAPI(APIView):
                                                                                                            flat=True).first()
         learning_queryset = LearningCircle.objects.filter(org=org_id)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
-        return CustomResponse(response=learning_serializer.data).get_success_response()
+        learning_circle_data = learning_serializer.data
+        for circle_data in learning_circle_data:
+            circle_id = circle_data['id']
+            member_count = UserCircleLink.objects.filter(circle_id=circle_id).count()
+            circle_data['member_count'] = member_count
+        return CustomResponse(response=learning_circle_data).get_success_response()
+
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -52,3 +60,31 @@ class LearningCircleListApi(APIView):
         learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response={"User_id": learning_serializer.data}).get_success_response()
+
+class LearningCircleHomeApi(APIView):
+    authentication_classes = [CustomizePermission]
+    def get(self, request,circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
+        learning_circle_data = {
+            'circle': learning_circle.name,
+            'circle_code': learning_circle.circle_code,
+            'college': learning_circle.org.title,
+            'members': [],
+            'rank': 3,
+            'total_karma': TotalKarma.objects.filter(user__usercirclelink__circle=learning_circle)
+                           .aggregate(total_karma=Sum('karma'))['total_karma'] or 0,
+        }
+        members = UserCircleLink.objects.filter(circle=learning_circle)
+        for member in members:
+            member_data = {
+                'username': f'{member.user.first_name} {member.user.last_name}'
+                if member.user.last_name
+                else member.user.first_name,
+                'profile_pic': member.user.profile_pic or None,
+                'karma': TotalKarma.objects.filter(user=member.user.id)
+                .values_list('karma', flat=True)
+                .first(),
+            }
+            learning_circle_data['members'].append(member_data)
+        return CustomResponse(response=learning_circle_data).get_success_response()
