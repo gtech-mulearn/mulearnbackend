@@ -10,11 +10,11 @@ from utils.utils import DateTimeUtils
 class TaskListSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
-    channel = serializers.CharField(source='channel.name')
-    type = serializers.CharField(source='type.title')
-    level = serializers.CharField(source='level.name', allow_null=True)
-    ig = serializers.CharField(source='ig.name')
-    org = serializers.CharField(source='org.title')
+    channel = serializers.CharField(source='channel.id')
+    type = serializers.CharField(source='type.id')
+    level = serializers.CharField(source='level.id', allow_null=True)
+    ig = serializers.CharField(source='ig.id')
+    org = serializers.CharField(source='org.id')
 
     class Meta:
         model = TaskList
