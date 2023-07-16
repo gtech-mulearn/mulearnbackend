@@ -13,8 +13,8 @@ class TaskListSerializer(serializers.ModelSerializer):
     channel = serializers.CharField(source='channel.name')
     type = serializers.CharField(source='type.title')
     level = serializers.CharField(source='level.name', allow_null=True)
-
-    # ig = serializers.CharField(source='ig.name')
+    ig = serializers.CharField(source='ig.name')
+    org = serializers.CharField(source='org.title')
 
     class Meta:
         model = TaskList
@@ -30,6 +30,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "variable_karma",
             "usage_count",
             "level",
+            "org",
             "ig",
             "updated_at",
             "updated_by",
@@ -113,6 +114,7 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         if ig is None:
             raise serializers.ValidationError("Enter a valid interest group id")
         return value
+
 
 class ChannelDropdownSerializer(serializers.ModelSerializer):
     class Meta:
