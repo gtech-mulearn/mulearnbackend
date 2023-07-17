@@ -1,10 +1,32 @@
 from os import write
+import uuid
 from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
+from django.db import transaction
+from datetime import datetime
+from uuid import uuid4
+
+from django.contrib.auth.hashers import make_password
+from django.db import transaction
+from rest_framework import serializers
+
+from db.organization import (
+    Country,
+    State,
+    District,
+    Department,
+    Organization,
+    UserOrganizationLink,
+)
+from db.task import InterestGroup, TotalKarma, UserIgLink
+from db.user import Role, User, UserRoleLink, UserSettings
+from utils.types import RoleType
+from db.organization import Country, State, Zone
+from utils.utils import DateTimeUtils
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -68,35 +90,17 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CollegeSerializer(serializers.ModelSerializer):
-    link_id = serializers.CharField(source="id")
-    org_id = serializers.CharField(write_only=True)
-    department_id = serializers.CharField(source="department", write_only=True)
     title = serializers.CharField(source="org.title")
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.title")
 
-    def update(self, instance, validated_data):
-        validated_data["department"] = validated_data.pop("department_id")
-        return super().update(instance, validated_data)
-
     class Meta:
         model = UserOrganizationLink
         fields = [
-            "link_id",
-            "org_id",
             "title",
             "org_type",
             "department",
-            "department_id",
             "graduation_year",
-            "country",
-            "state",
-            "district",
-        ]
-        read_only_fields = [
-            "department",
-            "title",
-            "org_type",
             "country",
             "state",
             "district",
@@ -104,116 +108,110 @@ class CollegeSerializer(serializers.ModelSerializer):
 
 
 class CommunitySerializer(serializers.ModelSerializer):
-    user_id = serializers.CharField(write_only=True)
-    org_id = serializers.CharField(write_only=True)
     title = serializers.CharField(source="org.title", read_only=True)
     org_type = serializers.CharField(source="org.org_type", read_only=True)
 
-    def create(self, instance, validated_data):
-        user_links = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COMMUNITY.value,
-            user=self.context["user_id"],
-        )
-        user_links.delete()
-
-        return super().create(instance, validated_data)
-
     class Meta:
         model = UserOrganizationLink
-        fields = ["title", "org_type", "org_id", "user_id"]
+        fields = ["title", "org_type"]
 
 
 class CompanySerializer(serializers.ModelSerializer):
-    link_id = serializers.CharField(source="id")
-    org_id = serializers.CharField(write_only=True)
     title = serializers.CharField(source="org.title", read_only=True)
     org_type = serializers.CharField(source="org.org_type", read_only=True)
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["link_id", "title", "org_type", "org_id"]
+        fields = ["title", "org_type"]
 
 
 class UserEditSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="id")
     organizations = serializers.SerializerMethodField(read_only=True)
+    interest_groups = serializers.SerializerMethodField(read_only=True)
+    igs = serializers.ListField(write_only=True)
+    orgs = serializers.ListField(write_only=True)
     role = serializers.SerializerMethodField(read_only=True)
-    community = serializers.ListField(write_only=True)
-    college = serializers.DictField(write_only=True)
-    company = serializers.DictField(write_only=True)
+    department = serializers.CharField(write_only=True)
+    graduation_year = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
         fields = [
-            "id",
+            "user_id",
             "first_name",
             "last_name",
             "email",
             "mobile",
             "gender",
             "dob",
-            "organizations",
             "role",
-            "community",
-            "college",
-            "company",
-        ]
-        read_only_fields = [
-            "email",
+            "organizations",
+            "orgs",
+            "department",
+            "graduation_year",
+            "interest_groups",
+            "igs",
         ]
 
     def validate(self, data):
-        user_id = "51175869-241f-49c9-a028-5d0e4b869589"
-        # user_id = JWTUtils.fetch_user_id(self.context["request"])
-        # admin = User.objects.get(id=user_id)
-        data["created_by"] = user_id
-        data["verified"] = True
+        if "id" not in data:
+            raise serializers.ValidationError("User id is a required field")
 
-        if "company" in data:
-            data["company"]["user_id"] = data["id"]
-            company_serializer = CompanySerializer(data=data["company"], context=data["id"])
-            if not company_serializer.is_valid():
-                raise serializers.ValidationError(company_serializer.errors)
-            data["company"] = company_serializer
-
-        if "college" in data:
-            data["college"]["user_id"] = data["id"]
-            college_serializer = CollegeSerializer(data=data["college"], context=data["id"])
-            if not college_serializer.is_valid():
-                raise serializers.ValidationError(college_serializer.errors)
-            data["college"] = college_serializer
-
-        if "community" in data:
-            data["community"]["user_id"] = data["id"]
-            community_serializer = CommunitySerializer(data=data["community"], context=data["id"])
-            if not community_serializer.is_valid():
-                raise serializers.ValidationError(community_serializer.errors)
-            data["community"] = community_serializer
-
+        if (
+            "email" in data
+            and User.objects.filter(email=data["email"])
+            .exclude(id=data["user_id"].id)
+            .all()
+        ):
+            raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
 
     def update(self, instance, validated_data):
         user_id = "51175869-241f-49c9-a028-5d0e4b869589"
         # user_id = JWTUtils.fetch_user_id(self.context["request"])
         admin = User.objects.get(id=user_id)
-        validated_data["created_by"] = admin
-        validated_data["verified"] = True
+        user = User.objects.get(id=validated_data["id"])
+        orgs = validated_data.get("orgs")
+        department = validated_data.get("department")
+        graduation_year = validated_data.get("graduation_year")
+        interest_groups = validated_data.get("igs")
 
-        if "company" in validated_data:
-            validated_data["company"].save()
+        with transaction.atomic():
+            if orgs is not None:
+                existing_orgs = UserOrganizationLink.objects.filter(user=user)
+                new_orgs = [
+                    UserOrganizationLink(
+                        id=uuid.uuid4(),
+                        user=user,
+                        org_id=org_id,
+                        created_by=admin,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                        verified=True,
+                        department_id=department,
+                        graduation_year=graduation_year,
+                    )
+                    for org_id in orgs
+                ]
+                existing_orgs.delete()
+                UserOrganizationLink.objects.bulk_create(new_orgs)
 
-        if "college" in validated_data:
-            college_serializer = CollegeSerializer(
-                data=validated_data.pop("college"), context=validated_data["id"]
-            )
-            college_serializer.save()
+            if interest_groups is not None:
+                existing_ig = UserIgLink.objects.filter(user=user)
+                new_ig = [
+                    UserIgLink(
+                        id=uuid.uuid4(),
+                        user=user,
+                        ig_id=ig,
+                        created_by=admin,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                    )
+                    for ig in interest_groups
+                ]
+                existing_ig.delete()
+                UserIgLink.objects.bulk_create(new_ig)
 
-        if "community" in validated_data:
-            community_serializer = CommunitySerializer(
-                data=validated_data.pop("community"), context=validated_data["id"]
-            )
-            community_serializer.save()
-
-        return super().update(instance, validated_data)
+            return super().update(instance, validated_data)
 
     def get_organizations(self, user):
         organization_links = user.user_organization_link_user_id.select_related("org")
@@ -231,6 +229,12 @@ class UserEditSerializer(serializers.ModelSerializer):
 
             organizations_data.append(serializer.data)
         return organizations_data
+
+    def get_interest_groups(self, user):
+        igs = user.user_ig_link_user.all()
+        if igs:
+            igs = [ig.ig.name for ig in igs]
+        return igs
 
     def get_role(self, user):
         role = UserRoleLink.objects.filter(user=user).first()

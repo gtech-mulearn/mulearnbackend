@@ -5,7 +5,14 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import Country, State, District, Department, Organization, UserOrganizationLink
+from db.organization import (
+    Country,
+    State,
+    District,
+    Department,
+    Organization,
+    UserOrganizationLink,
+)
 from db.task import InterestGroup, TotalKarma, UserIgLink
 from db.user import Role, User, UserRoleLink, UserSettings
 from utils.types import RoleType
@@ -76,34 +83,35 @@ class RegisterSerializer(serializers.ModelSerializer):
     organizations = serializers.ListField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
     year_of_graduation = serializers.CharField(
-        required=False, allow_null=True, max_length=4)
+        required=False, allow_null=True, max_length=4
+    )
     area_of_interests = serializers.ListField(required=True, max_length=3)
-    first_name = serializers.CharField(
-        required=True, max_length=75)
-    last_name = serializers.CharField(
-        required=False, allow_null=True, max_length=75)
-    password = serializers.CharField(
-        required=True, max_length=200)
+    first_name = serializers.CharField(required=True, max_length=75)
+    last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
+    password = serializers.CharField(required=True, max_length=200)
 
     def create(self, validated_data):
         if validated_data["last_name"] is None:
             full_name = validated_data["first_name"]
         else:
-            full_name = validated_data["first_name"] + \
-                        validated_data["last_name"]
+            full_name = validated_data["first_name"] + validated_data["last_name"]
+            
         full_name = full_name.replace(" ", "").lower()[:85]
         mu_id = f"{full_name}@mulearn"
         counter = 0
         while User.objects.filter(mu_id=mu_id).exists():
             counter += 1
             mu_id = f"{full_name}-{counter}@mulearn"
-        role_id = validated_data.pop('role')
-        organization_ids = validated_data.pop('organizations')
-        dept = validated_data.pop('dept')
-        year_of_graduation = validated_data.pop('year_of_graduation')
-        area_of_interests = validated_data.pop('area_of_interests')
-        password = validated_data.pop('password')
+            
+        role_id = validated_data.pop("role")
+        organization_ids = validated_data.pop("organizations")
+        dept = validated_data.pop("dept")
+        year_of_graduation = validated_data.pop("year_of_graduation")
+        area_of_interests = validated_data.pop("area_of_interests")
+        
+        password = validated_data.pop("password")
         hashed_password = make_password(password)
+        
         user_role_verified = True
         if role_id:
             role = Role.objects.get(id=role_id)
@@ -111,37 +119,92 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             user = User.objects.create(
-                **validated_data, id=uuid4(), mu_id=mu_id, password=hashed_password,
-                created_at=datetime.now())
-            TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
-            ), updated_by=user, updated_at=datetime.now())
+                **validated_data,
+                id=uuid4(),
+                mu_id=mu_id,
+                password=hashed_password,
+                created_at=datetime.now(),
+            )
+            TotalKarma.objects.create(
+                id=uuid4(),
+                user=user,
+                karma=0,
+                created_by=user,
+                created_at=datetime.now(),
+                updated_by=user,
+                updated_at=datetime.now(),
+            )
 
             if role_id:
-                UserRoleLink.objects.create(id=uuid4(
-                ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
+                UserRoleLink.objects.create(
+                    id=uuid4(),
+                    user=user,
+                    role_id=role_id,
+                    created_by=user,
+                    created_at=datetime.now(),
+                    verified=user_role_verified,
+                )
             if organization_ids is not None:
                 UserOrganizationLink.objects.bulk_create(
-                    [UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
-                                          created_at=datetime.now(), verified=True, department_id=dept,
-                                          graduation_year=year_of_graduation) for org_id in organization_ids])
-            UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
-            ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interests])
+                    [
+                        UserOrganizationLink(
+                            id=uuid4(),
+                            user=user,
+                            org_id=org_id,
+                            created_by=user,
+                            created_at=datetime.now(),
+                            verified=True,
+                            department_id=dept,
+                            graduation_year=year_of_graduation,
+                        )
+                        for org_id in organization_ids
+                    ]
+                )
+            UserIgLink.objects.bulk_create(
+                [
+                    UserIgLink(
+                        id=uuid4(),
+                        user=user,
+                        ig_id=ig,
+                        created_by=user,
+                        created_at=datetime.now(),
+                    )
+                    for ig in area_of_interests
+                ]
+            )
 
-            UserSettings.objects.create(id=uuid4(), user=user, is_public=0, created_by=user,
-                                        created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
-                                        updated_at=DateTimeUtils.get_current_utc_time())
+            UserSettings.objects.create(
+                id=uuid4(),
+                user=user,
+                is_public=0,
+                created_by=user,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
 
         return user, password
 
-
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'mobile', 'gender', 'dob',
-                  'role', 'organizations', 'dept', 'year_of_graduation', 'area_of_interests', 'password']
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "gender",
+            "dob",
+            "role",
+            "organizations",
+            "dept",
+            "year_of_graduation",
+            "area_of_interests",
+            "password",
+        ]
 
 
 class UserCountrySerializer(serializers.ModelSerializer):
-    country_name = serializers.CharField(source='name')
+    country_name = serializers.CharField(source="name")
 
     class Meta:
         model = Country
@@ -149,7 +212,7 @@ class UserCountrySerializer(serializers.ModelSerializer):
 
 
 class UserStateSerializer(serializers.ModelSerializer):
-    state_name = serializers.CharField(source='name')
+    state_name = serializers.CharField(source="name")
 
     class Meta:
         model = State
@@ -157,7 +220,7 @@ class UserStateSerializer(serializers.ModelSerializer):
 
 
 class UserZoneSerializer(serializers.ModelSerializer):
-    zone_name = serializers.CharField(source='name')
+    zone_name = serializers.CharField(source="name")
 
     class Meta:
         model = Zone

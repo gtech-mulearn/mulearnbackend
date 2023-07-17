@@ -64,7 +64,6 @@ class UserEditAPI(APIView):
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
-            request.data["id"] = user_id
             serializer = dash_user_serializer.UserEditSerializer(
                 user, data=request.data, partial=True, context=request
             )
