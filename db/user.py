@@ -31,6 +31,22 @@ class User(models.Model):
         return f"{self.first_name} {self.last_name}"
 
 
+class UserReferralLink(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')
+    referral = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_referral')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by',
+                                   db_column='updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by',
+                                   db_column='created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'user_referral_link'
+
+
 class Role(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=75)

@@ -14,6 +14,7 @@ from utils.utils import DateTimeUtils
 class HackathonRetrivalSerializer(serializers.ModelSerializer):
     organisation = serializers.CharField(source='org.title', allow_null=True)
     district = serializers.CharField(source='district.name', allow_null=True)
+    editable = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -21,7 +22,11 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                   'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
-                  'banner', 'event_logo', 'type', 'website')
+                  'banner', 'event_logo', 'type', 'website', 'editable')
+
+    def get_editable(self, obj):
+        user_id = self.context.get('user_id')
+        return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
 
 
 class UpcomingHackathonRetrivalSerializer(serializers.ModelSerializer):
@@ -108,7 +113,6 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
     STATUS_CHOICES = (
         ("Draft", "Draft"),
         ("Completed", "Completed"),
-        ("Published", "Published"),
         ("Deleted", "Deleted"),
     )
     title = serializers.CharField(required=False)
@@ -173,6 +177,17 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+class HackathonPublishingSerializer(serializers.ModelSerializer):
+    STATUS_CHOICES = (
+        ("Published", "Published"),
+    )
+    status = serializers.ChoiceField(choices=STATUS_CHOICES, required=True)
+
+    class Meta:
+        model = Hackathon
+        fields = ('status',)
+
+
 class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
     hackathon_id = serializers.CharField(required=False)
     data = serializers.JSONField(required=False)
@@ -198,20 +213,21 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
             hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
         return hackathon_submission
-    
+
+
 class HackathonOrganiserSerializer(serializers.ModelSerializer):
     mu_id = serializers.CharField(required=False)
-    
+
     class Meta:
         model = HackathonOrganiserLink
         fields = ('mu_id',)
-    
+
     def validate_mu_id(self, value):
         user = User.objects.filter(mu_id=value).first()
         if not user:
             raise serializers.ValidationError("User Not Exists")
         return user.id
-    
+
     def create(self, validated_data):
         with transaction.atomic():
             organizer_id = validated_data.pop('mu_id')
@@ -228,3 +244,15 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+
+
+class ListApplicantsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HackathonUserSubmission
+        fields = ('id', 'data')
+
+
+class HackathonInfoSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Hackathon
+        fields = '__all__'

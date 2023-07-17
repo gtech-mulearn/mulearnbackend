@@ -1,7 +1,7 @@
 from rest_framework import serializers
+
 from db.organization import Organization
 from db.user import User
-from db.task import TotalKarma
 
 
 class ZonalStudents(serializers.ModelSerializer):
@@ -32,7 +32,6 @@ class ZonalStudents(serializers.ModelSerializer):
         ]
 
 
-
 class ZonalCampus(serializers.ModelSerializer):
     total_karma = serializers.IntegerField()
     total_members = serializers.IntegerField()
@@ -53,7 +52,7 @@ class ZonalCampus(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         queryset = self.context["queryset"]
-        
+
         sorted_campuses = sorted(
             queryset,
             key=lambda campus: campus.total_karma,
