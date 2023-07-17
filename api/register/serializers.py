@@ -1,15 +1,14 @@
-from datetime import datetime
 from uuid import uuid4
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import Country, State, District, Department, Organization, UserOrganizationLink
-from db.task import InterestGroup, TotalKarma, UserIgLink
-from db.user import Role, User, UserRoleLink, UserSettings
-from utils.types import RoleType
 from db.organization import Country, State, Zone
+from db.organization import District, Department, Organization, UserOrganizationLink
+from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
+from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink
+from utils.types import RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 
 
@@ -84,6 +83,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=False, allow_null=True, max_length=75)
     password = serializers.CharField(
         required=True, max_length=200)
+    referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
 
     def create(self, validated_data):
         if validated_data["last_name"] is None:
@@ -104,40 +104,75 @@ class RegisterSerializer(serializers.ModelSerializer):
         area_of_interests = validated_data.pop('area_of_interests')
         password = validated_data.pop('password')
         hashed_password = make_password(password)
+        referral_id = validated_data.pop('referral_id')
+        referral_provider = None
+
         user_role_verified = True
         if role_id:
             role = Role.objects.get(id=role_id)
             user_role_verified = role.title == RoleType.STUDENT.value
 
+        if referral_id:
+            if User.objects.filter(mu_id=referral_id).exists():
+                referral_provider = User.objects.get(mu_id=referral_id)
+                task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
+                karma_amount = task_list.karma
+
         with transaction.atomic():
+
             user = User.objects.create(
                 **validated_data, id=uuid4(), mu_id=mu_id, password=hashed_password,
-                created_at=datetime.now())
-            TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user, created_at=datetime.now(
-            ), updated_by=user, updated_at=datetime.now())
+                created_at=DateTimeUtils.get_current_utc_time())
+
+            TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user,
+                                      created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
+                                      updated_at=DateTimeUtils.get_current_utc_time())
 
             if role_id:
                 UserRoleLink.objects.create(id=uuid4(
-                ), user=user, role_id=role_id, created_by=user, created_at=datetime.now(), verified=user_role_verified)
+                ), user=user, role_id=role_id, created_by=user, created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=user_role_verified)
+
             if organization_ids is not None:
                 UserOrganizationLink.objects.bulk_create(
                     [UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
-                                          created_at=datetime.now(), verified=True, department_id=dept,
+                                          created_at=DateTimeUtils.get_current_utc_time(), verified=True,
+                                          department_id=dept,
                                           graduation_year=year_of_graduation) for org_id in organization_ids])
+
             UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
-            ), user=user, ig_id=ig, created_by=user, created_at=datetime.now()) for ig in area_of_interests])
+            ), user=user, ig_id=ig, created_by=user, created_at=DateTimeUtils.get_current_utc_time()) for ig in
+                area_of_interests])
 
             UserSettings.objects.create(id=uuid4(), user=user, is_public=0, created_by=user,
                                         created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
                                         updated_at=DateTimeUtils.get_current_utc_time())
 
-        return user, password
+            if referral_id:
+                UserReferralLink.objects.create(id=uuid4(), referral=referral_provider, user=user,
+                                                created_by=user,
+                                                created_at=DateTimeUtils.get_current_utc_time(),
+                                                updated_by=user,
+                                                updated_at=DateTimeUtils.get_current_utc_time())
+                KarmaActivityLog.objects.create(
+                    id=uuid4(), karma=karma_amount, task=task_list, created_by=referral_provider,
+                    user=referral_provider,
+                    created_at=DateTimeUtils.get_current_utc_time(), appraiser_approved=True, peer_approved=True,
+                    appraiser_approved_by=user, peer_approved_by=user,
+                    updated_by=user, updated_at=DateTimeUtils.get_current_utc_time())
 
+                referrer_karma = TotalKarma.objects.filter(user=referral_provider).first()
+                referrer_karma.karma = referrer_karma.karma + karma_amount
+                referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
+                referrer_karma.updated_by = user
+                referrer_karma.save()
+
+        return user, password
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'mobile', 'gender', 'dob',
-                  'role', 'organizations', 'dept', 'year_of_graduation', 'area_of_interests', 'password']
+        fields = ['first_name', 'last_name', 'email', 'mobile', 'gender', 'dob', 'role', 'organizations', 'dept',
+                  'year_of_graduation', 'area_of_interests', 'password', 'referral_id']
 
 
 class UserCountrySerializer(serializers.ModelSerializer):

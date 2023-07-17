@@ -41,6 +41,10 @@ class WebHookCategory(Enum):
     ROLE = 'role'
 
 
+class TasksTypesHashtag(Enum):
+    REFERRAL = '#refrral'
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
     'name': 'system',
     'gender': 'system',

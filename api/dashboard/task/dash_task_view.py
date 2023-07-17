@@ -19,17 +19,10 @@ class TaskApi(APIView):
 
     def get(self, request):
         task_serializer = TaskList.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(task_serializer, request, ["id",
-                                                                                           "hashtag",
-                                                                                           "title",
-                                                                                           "karma",
-                                                                                           "channel",
-                                                                                           "type",
-                                                                                           "active",
-                                                                                           "variable_karma",
-                                                                                           "usage_count",
-                                                                                           "created_by",
-                                                                                           "created_at"])
+        paginated_queryset = CommonUtils.get_paginated_queryset(task_serializer, request,
+                                                                ["title", "channel__name", "description", "karma",
+                                                                 "usage_count", ],
+                                                                {'title': 'title', 'karma': 'karma'})
         task_serializer_data = TaskListSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=task_serializer_data,
