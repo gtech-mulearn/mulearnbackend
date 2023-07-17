@@ -35,23 +35,24 @@ class UserInfoAPI(APIView):
 
 
 class UserEditAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def get(self, request, user_id):
         user = (
             User.objects.filter(id=user_id)
             .prefetch_related("user_organization_link_user_id")
             .first()
         )
-        serializer = dash_user_serializer.UserDetailsSerializer(user)
+        serializer = dash_user_serializer.UserEditSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    # @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
-            user.delete()
+            user.active = False
+            user.save()
             return CustomResponse(
                 general_message="User deleted successfully"
             ).get_success_response()
@@ -59,28 +60,33 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
-    def put(self, request, user_id):
-        user = User.objects.get(id=user_id)
-        serializer = dash_user_serializer.UserEditSerializer(
-            user, data=request.data, partial=True
-        )
-
-        if not serializer.is_valid():
-            return CustomResponse(response=serializer.errors).get_failure_response()
-
+    # @role_required([RoleType.ADMIN.value, ])
+    def patch(self, request, user_id):
         try:
+            user = User.objects.get(id=user_id)
+            request.data["id"] = user_id
+            serializer = dash_user_serializer.UserEditSerializer(
+                user, data=request.data, partial=True, context=request
+            )
+
+            if not serializer.is_valid():
+                return CustomResponse(response=serializer.errors).get_failure_response()
+
             serializer.save()
             return CustomResponse(response=serializer.data).get_success_response()
 
-        except IntegrityError as e:
+        except Exception as e:
             return CustomResponse(response=str(e)).get_failure_response()
 
 
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def get(self, request, user_id=None):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -126,8 +132,12 @@ class UserAPI(APIView):
         if user_id:
             user_data = user_queryset.filter(id=user_id)
             if not user_data:
-                return CustomResponse(general_message="User not found").get_failure_response()
-            serializer = dash_user_serializer.UserDashboardSerializer(user_data, many=True)
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response()
+            serializer = dash_user_serializer.UserDashboardSerializer(
+                user_data, many=True
+            )
             return CustomResponse(response=serializer.data).get_success_response()
         else:
             queryset = CommonUtils.get_paginated_queryset(
@@ -147,7 +157,11 @@ class UserAPI(APIView):
 class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -198,7 +212,11 @@ class UserManagementCSV(APIView):
 class UserVerificationAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
@@ -214,7 +232,11 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
@@ -240,7 +262,11 @@ class UserVerificationAPI(APIView):
                 response={"user_role_link": str(e)}
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
@@ -258,9 +284,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(mu_id=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -323,7 +349,14 @@ class ForgotPasswordAPI(APIView):
         contact_msg = strip_tags(html_message)
         # message = f"Reset your password with this link {domain}/reset-password?token={forget_user.id}"
         subject = "Password Reset Requested"
-        send_mail(subject, contact_msg, email_host_user, to, fail_silently=False, html_message=html_message)
+        send_mail(
+            subject,
+            contact_msg,
+            email_host_user,
+            to,
+            fail_silently=False,
+            html_message=html_message,
+        )
         return CustomResponse(
             general_message="Forgot Password Email Send Successfully"
         ).get_success_response()
