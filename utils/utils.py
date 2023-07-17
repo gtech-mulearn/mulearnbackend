@@ -26,9 +26,9 @@ class CommonUtils:
                 query |= Q(**{f'{field}__icontains': search_query})
 
             queryset = queryset.filter(query)
-
         if sort_by:
-            sort_field_name = sort_fields.get(sort_by)
+            sort = sort_by[1:] if sort_by.startswith('-') else sort_by
+            sort_field_name = sort_fields.get(sort)
             if sort_field_name:
                 if sort_by.startswith('-'):
                     sort_field_name = '-' + sort_field_name
