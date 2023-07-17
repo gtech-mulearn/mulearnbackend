@@ -1,94 +1,57 @@
 from rest_framework.views import APIView
-import uuid
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType , OrganizationType
-from db.task import InterestGroup
-from db.organization import UserOrganizationLink , Organization
-from utils.utils import DateTimeUtils
-from db.learning_circle import LearningCircle , UserCircleLink
-from db.task import TotalKarma
-from .dash_lc_serializer import LearningCircleSerializer
-from django.db.models import Sum
+from utils.types import RoleType, OrganizationType
+from db.organization import UserOrganizationLink
+from db.learning_circle import LearningCircle, UserCircleLink
+from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer , LearningCircleUpdateSerializer
+
 class LearningCircleAPI(APIView):
     authentication_classes = [CustomizePermission]
-    def get(self, request): #lists the learning circle in the user's college
+
+    def get(self, request):  # lists the learning circle in the user's college
         user_id = JWTUtils.fetch_user_id(request)
-        org_id = UserOrganizationLink.objects.filter(user_id=user_id, org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
-                                                                                                           flat=True).first()
+        org_id = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                     org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
+                                                                                                               flat=True).first()
         learning_queryset = LearningCircle.objects.filter(org=org_id)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
-        learning_circle_data = learning_serializer.data
-        for circle_data in learning_circle_data:
-            circle_id = circle_data['id']
-            member_count = UserCircleLink.objects.filter(circle_id=circle_id).count()
-            circle_data['member_count'] = member_count
-        return CustomResponse(response=learning_circle_data).get_success_response()
+        return CustomResponse(response=learning_serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        org_link = UserOrganizationLink.objects.filter(user_id=user_id,
-                                                       org__org_type=OrganizationType.COLLEGE.value).first()
-        lc_data = LearningCircle.objects.create(
-            id=uuid.uuid4(),
-            name=request.data.get('name'),
-            circle_code=request.data.get('circle_code'),
-            ig_id= InterestGroup.objects.filter(name=request.data.get('ig')).values_list('id', flat=True).first(),
-            org = org_link.org,
-            updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time())
+        # COLLEGE_CODE+FIRST_TWO_LETTES_OF_LEARNING_CIRCLE+INTEREST_GROUP
 
-        UserCircleLink.objects.create(
-            id=uuid.uuid4(),
-            user=org_link.user,
-            circle=lc_data,
-            lead_id=user_id,
-            accepted=1,
-            accepted_at=DateTimeUtils.get_current_utc_time(),
-            created_at=DateTimeUtils.get_current_utc_time()
-        )
-        serializer = LearningCircleSerializer(lc_data)
-        return CustomResponse(response={"interstGroup": serializer.data}).get_success_response()
+        serializer = LearningCircleCreateSerializer(data=request.data, context={'user_id': user_id})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='LearningCircle created successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
 
 class LearningCircleListApi(APIView):
     authentication_classes = [CustomizePermission]
-    def get(self, request): #Lists user's learning circle
+
+    def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
         learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
-        return CustomResponse(response={"User_id": learning_serializer.data}).get_success_response()
+        return CustomResponse(response=learning_serializer.data).get_success_response()
+
 
 class LearningCircleHomeApi(APIView):
     authentication_classes = [CustomizePermission]
-
-    def get(self, request, circle_id):
-        user_id = JWTUtils.fetch_user_id(request)
+    def get(self,request,circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
+        serializer = LearningCircleHomeSerializer(learning_circle, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
 
-        members = UserCircleLink.objects.filter(circle=learning_circle, accepted=1)
-        pending_members = UserCircleLink.objects.filter(circle=learning_circle, accepted=0)
-
-        total_karma = TotalKarma.objects.filter(user__usercirclelink__circle=learning_circle).aggregate(total_karma=Sum('karma'))[
-            'total_karma'] or 0
-
-        learning_circle_data = {
-            'circle': learning_circle.name,
-            'circle_code': learning_circle.circle_code,
-            'college': learning_circle.org.title,
-            'members': [{
-                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
-                'profile_pic': member.user.profile_pic or None,
-                'karma': TotalKarma.objects.filter(user=member.user.id).values_list('karma', flat=True).first(),
-            } for member in members],
-            'pending_members': [{
-                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
-                'profile_pic': member.user.profile_pic or None,
-            } for member in pending_members],
-            'rank': 3,
-            'total_karma': total_karma,
-        }
-
-        return CustomResponse(response=learning_circle_data).get_success_response()
+    def patch(self,request,member_id,circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id,circle_id=circle_id).first()
+        serializer = LearningCircleUpdateSerializer(learning_circle_link,data=request.data, context={'user_id': user_id})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='LearningCircle updated successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
