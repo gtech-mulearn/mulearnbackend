@@ -19,7 +19,7 @@ class InterestGroupAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])  # for admin
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, ['name'], {'name': 'name'})
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=ig_serializer_data,
