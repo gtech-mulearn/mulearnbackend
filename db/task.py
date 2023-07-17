@@ -143,6 +143,8 @@ class KarmaActivityLog(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='karma_activity_log_created_by')
     created_at = models.DateTimeField()
+    user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True,
+                             related_name='karma_activity_log_user')
 
     class Meta:
         managed = False
