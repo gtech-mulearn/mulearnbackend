@@ -120,6 +120,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 karma_amount = task_list.karma
 
         with transaction.atomic():
+
             user = User.objects.create(
                 **validated_data, id=uuid4(), mu_id=mu_id, password=hashed_password,
                 created_at=DateTimeUtils.get_current_utc_time(), referral=referral_provider)
@@ -156,8 +157,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                     appraiser_approved_by=user, peer_approved_by=user,
                     updated_by=user, updated_at=DateTimeUtils.get_current_utc_time())
 
-                referrer_karma = TotalKarma.objects.get(user=referral_provider)
-                print(referrer_karma)
+                referrer_karma = TotalKarma.objects.filter(user=referral_provider).first()
                 referrer_karma.karma = referrer_karma.karma + karma_amount
                 referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
                 referrer_karma.updated_by = user
