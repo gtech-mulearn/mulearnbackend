@@ -7,7 +7,7 @@ from rest_framework import serializers
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
-from db.user import Role, User, UserRoleLink, UserSettings
+from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink
 from utils.types import RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 
@@ -115,7 +115,6 @@ class RegisterSerializer(serializers.ModelSerializer):
         if referral_id:
             if User.objects.filter(mu_id=referral_id).exists():
                 referral_provider = User.objects.get(mu_id=referral_id)
-
                 task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
                 karma_amount = task_list.karma
 
@@ -123,7 +122,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
             user = User.objects.create(
                 **validated_data, id=uuid4(), mu_id=mu_id, password=hashed_password,
-                created_at=DateTimeUtils.get_current_utc_time(), referral=referral_provider)
+                created_at=DateTimeUtils.get_current_utc_time())
 
             TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user,
                                       created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
@@ -150,6 +149,11 @@ class RegisterSerializer(serializers.ModelSerializer):
                                         updated_at=DateTimeUtils.get_current_utc_time())
 
             if referral_id:
+                UserReferralLink.objects.create(id=uuid4(), referral=referral_provider, user=user,
+                                                created_by=user,
+                                                created_at=DateTimeUtils.get_current_utc_time(),
+                                                updated_by=user,
+                                                updated_at=DateTimeUtils.get_current_utc_time())
                 KarmaActivityLog.objects.create(
                     id=uuid4(), karma=karma_amount, task=task_list, created_by=referral_provider,
                     user=referral_provider,
