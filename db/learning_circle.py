@@ -24,8 +24,8 @@ class UserCircleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, models.DO_NOTHING)
     circle = models.ForeignKey(LearningCircle, models.DO_NOTHING)
-    lead_id = models.CharField(max_length=36)
-    accepted = models.IntegerField()
+    lead = models.BooleanField(default=False)
+    accepted = models.BooleanField()
     accepted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField()
 
