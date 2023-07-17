@@ -109,7 +109,7 @@ class TaskList(models.Model):
 
 class TotalKarma(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='total_karma_user')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='total_karma_user')
     karma = models.IntegerField()
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='total_karma_updated_by')
@@ -143,6 +143,8 @@ class KarmaActivityLog(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='karma_activity_log_created_by')
     created_at = models.DateTimeField()
+    user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True,
+                             related_name='karma_activity_log_user')
 
     class Meta:
         managed = False

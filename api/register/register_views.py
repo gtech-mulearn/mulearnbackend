@@ -8,7 +8,7 @@ from db.organization import Country, District, Organization, Department, State, 
 from db.task import InterestGroup
 from db.user import Role, User
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType
+from utils.types import RoleType, OrganizationType,TasksTypesHashtag
 from . import serializers
 
 
@@ -60,13 +60,8 @@ class RegisterDataAPI(APIView):
         access_token = res_data.get("accessToken")
         refresh_token = res_data.get("refreshToken")
 
-        send_mail(
-            "Congrats, You have been successfully registered in μlearn",
-            f" Your Muid {user_obj.mu_id}",
-            decouple.config("EMAIL_HOST_USER"),
-            [user_obj.email],
-            fail_silently=False,
-        )
+        send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
+                  decouple.config("EMAIL_HOST_USER"), [user_obj.email], fail_silently=False)
 
         return CustomResponse(
             response={
