@@ -12,5 +12,6 @@ services:
     volumes:
       - /var/log/mulearnbackend:/var/log/mulearnbackend
       - /var/www/mulearnbackend/assets:/app/mulearnbackend
+      - /var/www/media/assets:/app/media
     env_file:
       - .env
