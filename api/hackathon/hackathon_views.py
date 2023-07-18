@@ -97,7 +97,7 @@ class GetDefaultFieldsAPI(APIView):
 
 class HackathonSubmissionAPI(APIView):
     authentication_classes = [CustomizePermission]
-
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         serializer = HackathonUserSubmissionSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -109,7 +109,7 @@ class HackathonSubmissionAPI(APIView):
 
 class ListApplicantsAPI(APIView):
     authentication_classes = [CustomizePermission]
-
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id=None):
         if hackathon_id:
             datas = HackathonUserSubmission.objects.filter(id=hackathon_id).first()
