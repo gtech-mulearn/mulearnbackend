@@ -100,8 +100,10 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-            validated_data['org'] = validated_data.pop('org_id')
-            validated_data['district'] = validated_data.pop('district_id')
+
+            validated_data['org'] = validated_data.pop('org_id') if validated_data.get('org_id', None) else None
+            validated_data['district'] = validated_data.pop('district_id') if validated_data.get('district_id',
+                                                                                                 None) else None
             if validated_data.get('event_logo'):
                 default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
 
