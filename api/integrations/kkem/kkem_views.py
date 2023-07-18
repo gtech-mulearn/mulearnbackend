@@ -2,6 +2,7 @@ import traceback
 from datetime import datetime
 
 from django.db.models import Prefetch
+import requests
 from rest_framework.views import APIView
 
 from db.integrations import IntegrationAuthorization
@@ -12,6 +13,7 @@ from utils.utils import CommonUtils
 from utils.utils import DateTimeUtils
 from ..integrations_helper import token_required, send_kkm_mail
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
+import decouple
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -78,9 +80,7 @@ class KKEMIndividualKarmaAPI(APIView):
 
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
-        serialized_set = KKEMAuthorization(
-            data=request.data, context={"request": request}
-        )
+        serialized_set = KKEMAuthorization(data=request.data)
 
         try:
             if not serialized_set.is_valid():
@@ -120,3 +120,53 @@ class KKEMAuthorizationAPI(APIView):
         return CustomResponse(
             general_message="User authenticated successfully"
         ).get_success_response()
+
+
+class KKEMIntegrationLogin(APIView):
+    def post(self, request):
+        try:
+            email_or_muid = request.data["emailOrMuid"]
+            password = request.data["password"]
+
+            auth_domain = decouple.config("AUTH_DOMAIN")
+
+            response = requests.post(
+                f"{auth_domain}/api/v1/auth/user-authentication/",
+                data={"emailOrMuid": email_or_muid, "password": password},
+            )
+            response = response.json()
+            if response.get("statusCode") != 200:
+                return CustomResponse(
+                    message=response.get("message")
+                ).get_failure_response()
+            res_data = response.get("response")
+            access_token = res_data.get("accessToken")
+            refresh_token = res_data.get("refreshToken")
+
+            serialized_set = KKEMAuthorization(data=request.data)
+
+            if not serialized_set.is_valid():
+                return CustomResponse(
+                    general_message=serialized_set.errors
+                ).get_failure_response()
+
+            serialized_set.save()
+
+            return CustomResponse(
+                response={
+                    "data": serialized_set.data,
+                    "accessToken": access_token,
+                    "refreshToken": refresh_token,
+                }
+            ).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+        # send_mail(
+        #     "Congrats, You have been successfully registered in μlearn",
+        #     f" Your Muid {user_obj.mu_id}",
+        #     decouple.config("EMAIL_HOST_USER"),
+        #     [user_obj.email],
+        #     fail_silently=False,
+        # )

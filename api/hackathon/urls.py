@@ -22,6 +22,9 @@ urlpatterns = [
     path('list-applicants/', hackathon_views.ListApplicantsAPI.as_view()),
     path('list-applicants/<str:hackathon_id>/', hackathon_views.ListApplicantsAPI.as_view()),
 
+    path('list-organisations/', hackathon_views.ListOrganisations.as_view()),
+    path('list-districts/', hackathon_views.ListDistricts.as_view()),
+
     path('list-default-form-fields/', hackathon_views.GetDefaultFieldsAPI.as_view()),
 
 ]

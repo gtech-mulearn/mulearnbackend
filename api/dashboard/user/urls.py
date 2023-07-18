@@ -1,6 +1,6 @@
 from django.urls import path
-from . import dash_user_views
 
+from . import dash_user_views
 
 urlpatterns = [
     
