@@ -161,8 +161,8 @@ def is_own_profile(user_id, request):
 
 def role_required(roles, allow_self_edit=False):
     def decorator(view_func):
-        def wrapped_view_func(obj, request, user_id, *args, **kwargs):
-            if allow_self_edit and is_own_profile(user_id, request):
+        def wrapped_view_func(obj, request, *args, **kwargs):
+            if allow_self_edit and is_own_profile(args[0], request):
                 response = view_func(obj, request, *args, **kwargs)
                 return response
 
@@ -171,10 +171,9 @@ def role_required(roles, allow_self_edit=False):
                     response = view_func(obj, request, *args, **kwargs)
                     return response
 
-            res = CustomResponse(
+            return CustomResponse(
                 general_message="You do not have the required role to access this page."
             ).get_failure_response()
-            return res
 
         return wrapped_view_func
 
