@@ -2,6 +2,8 @@ import uuid
 
 from django.db import models
 
+from utils.utils import DateTimeUtils
+
 from .user import User
 
 
@@ -108,10 +110,10 @@ class Department(models.Model):
     title = models.CharField(max_length=100)
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='department_updated_by')
-    updated_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='department_created_by')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=DateTimeUtils.get_current_utc_time())
 
     class Meta:
         managed = False
@@ -130,7 +132,7 @@ class UserOrganizationLink(models.Model):
     verified = models.BooleanField()
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='user_organization_link_created_by')
-    created_at = models.DateTimeField(auto_now_add=True)
+    created_at = models.DateTimeField(default=DateTimeUtils.get_current_utc_time())
 
     class Meta:
         managed = False
