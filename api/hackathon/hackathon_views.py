@@ -3,6 +3,7 @@ from datetime import datetime
 from rest_framework.views import APIView
 
 from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission
+from db.organization import District
 from db.organization import Organization
 from utils.permission import CustomizePermission, role_required, JWTUtils
 from utils.response import CustomResponse
@@ -11,7 +12,8 @@ from utils.types import RoleType
 from .serializer import (HackathonCreateUpdateDeleteSerializer, HackathonRetrivalSerializer,
                          HackathonUpdateSerializer, HackathonUserSubmissionSerializer,
                          UpcomingHackathonRetrivalSerializer, HackathonOrganiserSerializer,
-                         HackathonPublishingSerializer, ListApplicantsSerializer, HackathonInfoSerializer)
+                         HackathonPublishingSerializer, ListApplicantsSerializer, HackathonInfoSerializer,
+                         OrganisationSerializer, DistrictSerializer)
 
 
 class HackathonManagementAPI(APIView):
@@ -84,7 +86,7 @@ class HackathonInfoAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
-        serializer = HackathonInfoSerializer(hackathon, many=False,context={'request':request})
+        serializer = HackathonInfoSerializer(hackathon, many=False, context={'request': request})
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -98,6 +100,7 @@ class GetDefaultFieldsAPI(APIView):
 
 class HackathonSubmissionAPI(APIView):
     authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         serializer = HackathonUserSubmissionSerializer(data=request.data, context={'request': request})
@@ -110,6 +113,7 @@ class HackathonSubmissionAPI(APIView):
 
 class ListApplicantsAPI(APIView):
     authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id=None):
         if hackathon_id:
@@ -158,5 +162,15 @@ class HackathonOrganiserAPI(APIView):
 
 class ListOrganisations(APIView):
     @role_required([RoleType.ADMIN.value, ])
-    def get(self,request):
+    def get(self, request):
         organisations = Organization.objects.all()
+        serializer = OrganisationSerializer(organisations, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class ListDistricts(APIView):
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        districts = District.objects.all()
+        serializer = DistrictSerializer(districts, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
