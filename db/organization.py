@@ -1,4 +1,5 @@
 import uuid
+
 from django.db import models
 
 from .user import User
@@ -141,7 +142,7 @@ class UserOrganizationLink(models.Model):
             return self.user.total_karma_user.karma
         except Exception as e:
             return 0
-        
+
     @property
     def country(self):
         return self.org.district.zone.state.country.name
@@ -149,7 +150,6 @@ class UserOrganizationLink(models.Model):
     @property
     def state(self):
         return self.org.district.zone.state.name
-
 
     @property
     def district(self):

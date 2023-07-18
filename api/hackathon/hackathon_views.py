@@ -3,6 +3,7 @@ from datetime import datetime
 from rest_framework.views import APIView
 
 from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission
+from db.organization import Organization
 from utils.permission import CustomizePermission, role_required, JWTUtils
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
@@ -83,7 +84,7 @@ class HackathonInfoAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
-        serializer = HackathonInfoSerializer(hackathon, many=False)
+        serializer = HackathonInfoSerializer(hackathon, many=False,context={'request':request})
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -153,3 +154,9 @@ class HackathonOrganiserAPI(APIView):
         serializer = HackathonOrganiserSerializer()
         serializer.destroy(organiser)
         return CustomResponse(general_message='Organiser Deleted').get_success_response()
+
+
+class ListOrganisations(APIView):
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self,request):
+        organisations = Organization.objects.all()

@@ -1,5 +1,6 @@
 import uuid
 
+from django.conf import settings
 from django.core.files.storage import default_storage
 from django.db import transaction
 from rest_framework import serializers
@@ -16,6 +17,9 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source='district.name', allow_null=True)
     editable = serializers.SerializerMethodField()
 
+    banner = serializers.SerializerMethodField()
+    event_logo = serializers.SerializerMethodField()
+
     class Meta:
         model = Hackathon
         fields = ('id',
@@ -23,6 +27,18 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
                   'banner', 'event_logo', 'type', 'website', 'editable')
+
+    def get_banner(self, obj):
+        media = obj.banner
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
+
+    def get_event_logo(self, obj):
+        media = obj.event_logo
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
 
     def get_editable(self, obj):
         user_id = self.context.get('user_id')
@@ -72,6 +88,7 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
         return district
 
     def create(self, validated_data):
+
         with transaction.atomic():
             hackathon_form_fields = None
             if 'form_fields' in validated_data:
@@ -83,6 +100,10 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+
+            validated_data['org'] = validated_data.pop('org_id') if validated_data.get('org_id', None) else None
+            validated_data['district'] = validated_data.pop('district_id') if validated_data.get('district_id',
+                                                                                                 None) else None
             if validated_data.get('event_logo'):
                 default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
 
@@ -253,6 +274,21 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
 
 
 class HackathonInfoSerializer(serializers.ModelSerializer):
+    banner = serializers.SerializerMethodField()
+    event_logo = serializers.SerializerMethodField()
+
     class Meta:
         model = Hackathon
         fields = '__all__'
+
+    def get_banner(self, obj):
+        media = obj.banner
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
+
+    def get_event_logo(self, obj):
+        media = obj.event_logo
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
