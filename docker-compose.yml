@@ -11,6 +11,7 @@ services:
       - "8000:8000"
     volumes:
       - /var/log/mulearnbackend:/var/log/mulearnbackend
-      - /var/www/mulearnbackend/assets:/app/mulearnbackend
+      - /var/www/mulearnbackend/assets:/app/assets
+      - /var/www/mulearnbackend/media:/app/media
     env_file:
       - .env
