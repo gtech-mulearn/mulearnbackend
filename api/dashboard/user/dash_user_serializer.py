@@ -1,31 +1,12 @@
-from os import write
 import uuid
+
+from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import Organization, UserOrganizationLink
+from db.organization import UserOrganizationLink
+from db.task import UserIgLink
 from db.user import User, UserRoleLink
-from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
-from django.db import transaction
-from datetime import datetime
-from uuid import uuid4
-
-from django.contrib.auth.hashers import make_password
-from django.db import transaction
-from rest_framework import serializers
-
-from db.organization import (
-    Country,
-    State,
-    District,
-    Department,
-    Organization,
-    UserOrganizationLink,
-)
-from db.task import InterestGroup, TotalKarma, UserIgLink
-from db.user import Role, User, UserRoleLink, UserSettings
-from utils.types import RoleType
-from db.organization import Country, State, Zone
 from utils.utils import DateTimeUtils
 
 
