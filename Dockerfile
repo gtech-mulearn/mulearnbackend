@@ -3,7 +3,7 @@ WORKDIR /app
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 RUN pip install gunicorn
-RUN mkdir ./media && mkdir ./static && mkdir ./assets && mkdir /var/log/mulearnbackend
+RUN mkdir /var/log/mulearnbackend
 RUN apt-get update -y  && apt-get install -y default-libmysqlclient-dev python-dev && apt install build-essential -y
 COPY ./requirements.txt .
 RUN pip install -r requirements.txt
