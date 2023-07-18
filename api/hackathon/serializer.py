@@ -292,3 +292,15 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
         if media:
             return f"{settings.MEDIA_URL}{media}"
         return None
+
+
+class OrganisationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ('id', 'title')
+
+
+class DistrictSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = District
+        fields = ('id', 'name')
