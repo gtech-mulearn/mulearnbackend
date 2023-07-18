@@ -153,7 +153,7 @@ class KarmaActivityLog(models.Model):
 
 class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_ig_link_user')
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name='user_ig_link_ig')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='user_ig_link_created_by')

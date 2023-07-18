@@ -14,7 +14,12 @@ class KKEMUserSerializer(serializers.ModelSerializer):
     dwms_id = serializers.SerializerMethodField()
 
     def get_total_karma(self, obj):
-        karma = obj.total_karma_user.karma if hasattr(obj, "total_karma_user") else 0
+        karma = (
+            obj.total_karma_user.karma
+            if hasattr(obj, "total_karma_user")
+            and hasattr(obj.total_karma_user, "karma")
+            else 0
+        )
         return karma
 
     def get_interest_groups(self, obj):
@@ -55,21 +60,20 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 class KKEMAuthorization(serializers.ModelSerializer):
     mu_id = serializers.CharField(source="user.mu_id")
     dwms_id = serializers.CharField(source="integration_value")
-    token = serializers.CharField(source="integration")
+    integration = serializers.CharField(source="integration.name")
 
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
 
         try:
             user = User.objects.get(mu_id=user_mu_id)
-            integration = Integration.objects.get(token=validated_data["integration"])
+            integration = Integration.objects.get(name=validated_data["integration"]["name"])
         except User.DoesNotExist as e:
             raise ValueError("User doesn't exist") from e
         except Integration.DoesNotExist as e:
             raise ValueError("Invalid request token") from e
 
         try:
-
             kkem_link = IntegrationAuthorization.objects.create(
                 integration=integration,
                 user=user,
@@ -80,10 +84,15 @@ class KKEMAuthorization(serializers.ModelSerializer):
 
         except IntegrityError as e:
             kkem_link = IntegrationAuthorization.objects.filter(user=user).first()
-            if not kkem_link and IntegrationAuthorization.objects.filter(
-                integration_value=validated_data["integration_value"]
-            ).first():
-                raise ValueError("This dwms_id is already associated with another user") from e
+            if (
+                not kkem_link
+                and IntegrationAuthorization.objects.filter(
+                    integration_value=validated_data["integration_value"]
+                ).first()
+            ):
+                raise ValueError(
+                    "This dwms_id is already associated with another user"
+                ) from e
             elif kkem_link.verified:
                 raise ValueError("Authorization already exists and is verified.") from e
             elif kkem_link.user == user:
@@ -94,7 +103,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 raise
 
         return kkem_link
-    
+
     class Meta:
         model = IntegrationAuthorization
-        fields = ["mu_id", "dwms_id", "token"]
+        fields = ["mu_id", "dwms_id", "integration"]

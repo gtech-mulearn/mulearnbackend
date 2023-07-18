@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 
 from .user import User
@@ -106,10 +107,10 @@ class Department(models.Model):
     title = models.CharField(max_length=100)
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='department_updated_by')
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='department_created_by')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -117,7 +118,7 @@ class Department(models.Model):
 
 
 class UserOrganizationLink(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE,
                              related_name='user_organization_link_user_id')
     org = models.ForeignKey(Organization, on_delete=models.CASCADE,
@@ -128,7 +129,7 @@ class UserOrganizationLink(models.Model):
     verified = models.BooleanField()
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='user_organization_link_created_by')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
