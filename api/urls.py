@@ -1,5 +1,5 @@
 from django.urls import path, include
-
+import debug_toolbar
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
     path('register/', include('api.register.urls')),
@@ -11,4 +11,6 @@ urlpatterns = [
     path('location/', include('api.dashboard.location.urls')),
     path('protected/', include('api.protected.urls')),
     path('hackathon/', include('api.hackathon.urls')),
+
+    path("__debug__/", include(debug_toolbar.urls)),
 ]
