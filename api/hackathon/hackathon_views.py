@@ -83,7 +83,7 @@ class HackathonInfoAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
-        serializer = HackathonInfoSerializer(hackathon, many=False)
+        serializer = HackathonInfoSerializer(hackathon, many=False,context={'request':request})
         return CustomResponse(response=serializer.data).get_success_response()
 
 

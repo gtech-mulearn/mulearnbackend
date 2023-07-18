@@ -206,12 +206,9 @@ EMAIL_USE_TLS = config("EMAIL_USE_TLS")
 DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
 # Set the path to the media root directory
-MEDIA_ROOT = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'media/hackathon')
 
-# INTERNAL_IPS = [
-#     "127.0.0.1",
-# ]
-
+MEDIA_URL = '/media/'
+MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 
 import socket
 
