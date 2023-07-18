@@ -17,39 +17,46 @@ from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 class KKEMBulkKarmaAPI(APIView):
     @token_required
     def get(self, request):
-        from_datetime = request.GET.get("from_datetime")
+        from_datetime_str = request.GET.get("from_datetime")
         auth_header = request.META.get("HTTP_AUTHORIZATION")
         token = auth_header.split(" ")[1]
-        if not from_datetime:
-            return CustomResponse(
-                general_message="Unspecified time parameter",
-            ).get_failure_response()
 
-        try:
-            from_datetime = datetime.strptime(from_datetime, "%Y-%m-%dT%H:%M:%S")
-        except ValueError:
-            return CustomResponse(
-                general_message="Invalid datetime format",
-            ).get_failure_response()
+        if from_datetime_str:
+            try:
+                from_datetime = datetime.strptime(
+                    from_datetime_str, "%Y-%m-%dT%H:%M:%S"
+                )
+            except ValueError:
+                return CustomResponse(
+                    general_message="Invalid datetime format",
+                ).get_failure_response()
 
-        queryset = User.objects.filter(
-            integration_authorization_user__integration__token=token,
-            integration_authorization_user__verified=True,
-            karma_activity_log_created_by__appraiser_approved=True,
-            karma_activity_log_created_by__updated_at__gte=from_datetime,
-        ).prefetch_related(
-            Prefetch(
-                "user_ig_link_created_by",
-                queryset=UserIgLink.objects.select_related("ig"),
+            queryset = User.objects.filter(
+                integration_authorization_user__integration__token=token,
+                integration_authorization_user__verified=True,
+                karma_activity_log_created_by__appraiser_approved=True,
+                karma_activity_log_created_by__updated_at__gte=from_datetime,
+            ).prefetch_related(
+                Prefetch(
+                    "user_ig_link_created_by",
+                    queryset=UserIgLink.objects.select_related("ig"),
+                )
             )
-        )
+        else:
+            queryset = User.objects.filter(
+                integration_authorization_user__integration__token=token,
+                integration_authorization_user__verified=True,
+                karma_activity_log_created_by__appraiser_approved=True,
+            ).prefetch_related(
+                Prefetch(
+                    "user_ig_link_created_by",
+                    queryset=UserIgLink.objects.select_related("ig"),
+                )
+            )
 
-        queryset = CommonUtils.get_paginated_queryset(queryset, request, ["mu_id"])
-        serialized_users = KKEMUserSerializer(queryset.get("queryset"), many=True)
+        serialized_users = KKEMUserSerializer(queryset, many=True)
 
-        return CustomResponse().paginated_response(
-            data=serialized_users.data, pagination=queryset.get("pagination")
-        )
+        return CustomResponse(response=serialized_users.data).get_success_response()
 
 
 class KKEMIndividualKarmaAPI(APIView):
