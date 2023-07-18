@@ -20,8 +20,8 @@ from .response import CustomResponse
 
 
 def format_time(date_time):
-    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S%z")
-    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S%z")
+    formatted_time = date_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    return datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S%z")
 
 
 class CustomizePermission(BasePermission):
@@ -61,7 +61,7 @@ class CustomizePermission(BasePermission):
         Returns:
             str: The value for the WWW-Authenticate header.
         """
-        return self.token_prefix + ' realm="api"'
+        return f'{self.token_prefix} realm="api"'
 
 
 class JWTUtils:
@@ -133,7 +133,7 @@ class JWTUtils:
                     "message": {"general": [str(e)]},
                     "statusCode": 1000,
                 }
-            )
+            ) from e
         except jwt.exceptions.DecodeError as e:
             raise CustomException(
                 {
@@ -141,9 +141,9 @@ class JWTUtils:
                     "message": {"general": [str(e)]},
                     "statusCode": 1000,
                 }
-            )
+            ) from e
         except AuthenticationFailed as e:
-            raise CustomException(str(e))
+            raise CustomException(str(e)) from e
         except Exception as e:
             raise CustomException(
                 {
@@ -151,7 +151,7 @@ class JWTUtils:
                     "message": {"general": [str(e)]},
                     "statusCode": 1000,
                 }
-            )
+            ) from e
 
 
 def is_own_profile(user_id, request):
