@@ -380,3 +380,27 @@ class ResetPasswordConfirmAPI(APIView):
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()
+
+
+class UserInviteAPI(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        if User.objects.filter(email=email).exists() :
+            return CustomResponse(
+                general_message="User already exist"
+            ).get_failure_response()
+        
+        email_host_user = decouple.config("EMAIL_HOST_USER")
+        to = [email]
+        domain = decouple.config("FR_DOMAIN_NAME")
+        message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
+        send_mail(
+            "Invitation to join MuLearn",
+            message,
+            email_host_user,
+            to,
+            fail_silently=False,
+        )
+        return CustomResponse(
+            general_message="Invitation sent successfully"
+        ).get_success_response()
