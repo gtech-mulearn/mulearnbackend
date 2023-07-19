@@ -1,7 +1,6 @@
 import uuid
 
 from django.conf import settings
-from django.core.files.storage import default_storage
 from django.db import transaction
 from rest_framework import serializers
 
@@ -201,12 +200,33 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
 class HackathonPublishingSerializer(serializers.ModelSerializer):
     STATUS_CHOICES = (
         ("Published", "Published"),
+        ("Draft", "Draft"),
     )
+
     status = serializers.ChoiceField(choices=STATUS_CHOICES, required=True)
+    title = serializers.CharField(required=True)
+    tagline = serializers.CharField(required=True)
+    description = serializers.CharField(required=True)
+    participant_count = serializers.CharField(required=True)
+    org_id = serializers.CharField(required=True)
+    district_id = serializers.CharField(required=True)
+    place = serializers.CharField(required=True)
+    is_open_to_all = serializers.CharField(required=True)
+    application_start = serializers.DateTimeField(required=True)
+    application_ends = serializers.DateTimeField(required=True)
+    event_start = serializers.DateTimeField(required=True)
+    event_end = serializers.DateTimeField(required=True)
+    form_fields = serializers.JSONField(required=True)
+    event_logo = serializers.ImageField(required=True, allow_null=True)
+    banner = serializers.ImageField(required=True, allow_null=True)
+    website = serializers.CharField(required=True, allow_null=True)
 
     class Meta:
         model = Hackathon
-        fields = ('status',)
+        fields = ('title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
+                  'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
+                  'form_fields',
+                  'event_logo', 'banner', 'website')
 
 
 class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
