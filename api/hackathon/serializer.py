@@ -103,11 +103,6 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             validated_data['org'] = validated_data.pop('org_id') if validated_data.get('org_id', None) else None
             validated_data['district'] = validated_data.pop('district_id') if validated_data.get('district_id',
                                                                                                  None) else None
-            # if validated_data.get('event_logo'):
-            #     default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
-            #
-            # if validated_data.get('banner'):
-            #     default_storage.save(validated_data.get('banner').name, validated_data.get('banner'))
 
             hackathon = Hackathon.objects.create(**validated_data)
 
