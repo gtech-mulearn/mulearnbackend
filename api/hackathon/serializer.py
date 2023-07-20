@@ -223,6 +223,51 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
                   'form_fields',
                   'event_logo', 'banner', 'website')
 
+    def validate_org_id(self, value):
+        organisation = Organization.objects.filter(id=value).first()
+        if not organisation:
+            raise serializers.ValidationError('Organisation Not Exists')
+        return organisation
+
+    def validate_district_id(self, value):
+        district = District.objects.filter(id=value).first()
+        if not district:
+            raise serializers.ValidationError("District Not Exists")
+        return district
+
+    def update(self, instance, validated_data):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        instance.title = validated_data.get('title', instance.title)
+        instance.tagline = validated_data.get('tagline', instance.tagline)
+        instance.description = validated_data.get('description', instance.description)
+        instance.participant_count = validated_data.get('participant_count', instance.participant_count)
+        instance.org = validated_data.get('org_id', instance.org)
+        instance.district = validated_data.get('district_id', instance.district)
+        instance.place = validated_data.get('place', instance.place)
+        instance.is_open_to_all = validated_data.get('is_open_to_all', instance.is_open_to_all)
+        instance.application_start = validated_data.get('application_start', instance.application_start)
+        instance.application_ends = validated_data.get('application_ends', instance.application_ends)
+        instance.event_start = validated_data.get('event_start', instance.event_start)
+        instance.event_end = validated_data.get('event_end', instance.event_end)
+        instance.status = validated_data.get('status', instance.status)
+        instance.status = validated_data.get('website', instance.website)
+        instance.updated_by_id = user_id
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+
+        if 'form_fields' in validated_data:
+            hackathon_form_fields = validated_data.pop('form_fields')
+            if hackathon_form_fields:
+                for field_name, field_type in hackathon_form_fields.items():
+                    hackathon = HackathonForm.objects.filter(field_name=field_name, hackathon=instance).first()
+                    if not hackathon:
+                        HackathonForm.objects.create(id=uuid.uuid4(), hackathon=instance, field_name=field_name,
+                                                     field_type=field_type, updated_by_id=user_id,
+                                                     updated_at=DateTimeUtils.get_current_utc_time(),
+                                                     created_by_id=user_id,
+                                                     created_at=DateTimeUtils.get_current_utc_time())
+        instance.save()
+        return instance
+
 
 class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
     hackathon_id = serializers.CharField(required=False)
