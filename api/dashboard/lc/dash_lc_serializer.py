@@ -41,7 +41,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(required=True, error_messages={
         'required': 'ig field must not be left blank.'
     })
-    name = serializers.CharField(required=True, error_messages={
+    name = serializers.CharField(required=True,unique=True, error_messages={
         'required': 'name field must not be left blank.'}
                                  )
 
