@@ -15,7 +15,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
-
 from . import dash_user_serializer
 
 
@@ -48,7 +47,7 @@ class UserEditAPI(APIView):
         serializer = dash_user_serializer.UserEditSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -61,7 +60,7 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -82,7 +81,7 @@ class UserEditAPI(APIView):
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def get(self, request, user_id=None):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -153,7 +152,7 @@ class UserAPI(APIView):
 class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -204,7 +203,7 @@ class UserManagementCSV(APIView):
 class UserVerificationAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
@@ -220,7 +219,7 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
@@ -246,7 +245,7 @@ class UserVerificationAPI(APIView):
                 response={"user_role_link": str(e)}
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
@@ -264,9 +263,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -386,11 +385,11 @@ class ResetPasswordConfirmAPI(APIView):
 class UserInviteAPI(APIView):
     def post(self, request):
         email = request.data.get("email")
-        if User.objects.filter(email=email).exists() :
+        if User.objects.filter(email=email).exists():
             return CustomResponse(
                 general_message="User already exist"
             ).get_failure_response()
-        
+
         email_host_user = decouple.config("EMAIL_HOST_USER")
         to = [email]
         domain = decouple.config("FR_DOMAIN_NAME")

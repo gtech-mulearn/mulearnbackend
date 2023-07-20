@@ -162,7 +162,7 @@ def is_own_profile(user_id, request):
 def role_required(roles, allow_self_edit=False):
     def decorator(view_func):
         def wrapped_view_func(obj, request, *args, **kwargs):
-            if allow_self_edit and is_own_profile(args[0], request):
+            if allow_self_edit and is_own_profile(kwargs.get('user_id'), request):
                 response = view_func(obj, request, *args, **kwargs)
                 return response
 
