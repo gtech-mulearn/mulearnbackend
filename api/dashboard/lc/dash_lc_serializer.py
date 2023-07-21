@@ -3,7 +3,7 @@ import uuid
 from django.db.models import Sum
 from rest_framework import serializers
 
-from db.learning_circle import LearningCircle, UserCircleLink
+from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
 from db.organization import UserOrganizationLink
 from db.task import TotalKarma
 from utils.types import OrganizationType
@@ -42,7 +42,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(required=True, error_messages={
         'required': 'ig field must not be left blank.'
     })
-    name = serializers.CharField(required=True,error_messages={
+    name = serializers.CharField(required=True, error_messages={
         'required': 'name field must not be left blank.'}
                                  )
 
