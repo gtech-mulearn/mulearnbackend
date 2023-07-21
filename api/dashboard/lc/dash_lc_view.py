@@ -1,10 +1,13 @@
 from rest_framework.views import APIView
+
+from db.learning_circle import LearningCircle, UserCircleLink
+from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
-from db.organization import UserOrganizationLink
-from db.learning_circle import LearningCircle, UserCircleLink
-from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer , LearningCircleUpdateSerializer
+from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
+    LearningCircleUpdateSerializer
+
 
 class LearningCircleAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -42,15 +45,17 @@ class LearningCircleListApi(APIView):
 
 class LearningCircleHomeApi(APIView):
     authentication_classes = [CustomizePermission]
-    def get(self,request,circle_id):
+
+    def get(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
         serializer = LearningCircleHomeSerializer(learning_circle, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    def patch(self,request,member_id,circle_id):
+    def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
-        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id,circle_id=circle_id).first()
-        serializer = LearningCircleUpdateSerializer(learning_circle_link,data=request.data, context={'user_id': user_id})
+        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
+                                                    context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='LearningCircle updated successfully').get_success_response()

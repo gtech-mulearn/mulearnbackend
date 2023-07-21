@@ -14,6 +14,7 @@ from utils.utils import DateTimeUtils
 from ..integrations_helper import token_required, send_kkm_mail
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 import decouple
+from django.db.models import Q
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -80,6 +81,7 @@ class KKEMIndividualKarmaAPI(APIView):
 
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
+        request.data["verified"] = False
         serialized_set = KKEMAuthorization(data=request.data)
 
         try:
@@ -125,40 +127,48 @@ class KKEMAuthorizationAPI(APIView):
 class KKEMIntegrationLogin(APIView):
     def post(self, request):
         try:
-            email_or_muid = request.data["emailOrMuid"]
-            password = request.data["password"]
+            email_or_muid = request.data.get(
+                "emailOrMuid", request.data.get("mu_id", None)
+            )
+
+            # password = request.data.get("password")
+            dwms_id = request.data.get("dwms_id", None)
+            integration = request.data.get("integration", None)
 
             auth_domain = decouple.config("AUTH_DOMAIN")
 
-            response = requests.post(
-                f"{auth_domain}/api/v1/auth/user-authentication/",
-                data={"emailOrMuid": email_or_muid, "password": password},
-            )
-            response = response.json()
-            if response.get("statusCode") != 200:
-                return CustomResponse(
-                    message=response.get("message")
-                ).get_failure_response()
-            res_data = response.get("response")
-            access_token = res_data.get("accessToken")
-            refresh_token = res_data.get("refreshToken")
+            # response = requests.post(
+            #     f"{auth_domain}/api/v1/auth/user-authentication/",
+            #     data={"emailOrMuid": email_or_muid, "password": password},
+            # )
+            # response = response.json()
+            # if response.get("statusCode") != 200:
+            #     return CustomResponse(
+            #         message=response.get("message")
+            #     ).get_failure_response()
 
-            serialized_set = KKEMAuthorization(data=request.data)
+            # res_data = response.get("response")
+            # access_token = res_data.get("accessToken")
+            # refresh_token = res_data.get("refreshToken")
 
-            if not serialized_set.is_valid():
-                return CustomResponse(
-                    general_message=serialized_set.errors
-                ).get_failure_response()
+            response = {
+                "accessToken": "access_token",
+                "refreshToken": "refresh_token",
+            }
 
-            serialized_set.save()
+            if dwms_id and integration:
+                request.data["verified"] = True
+                serialized_set = KKEMAuthorization(data=request.data)
 
-            return CustomResponse(
-                response={
-                    "data": serialized_set.data,
-                    "accessToken": access_token,
-                    "refreshToken": refresh_token,
-                }
-            ).get_success_response()
+                if not serialized_set.is_valid():
+                    return CustomResponse(
+                        general_message=serialized_set.errors
+                    ).get_failure_response()
+
+                serialized_set.save()
+                response["data"] = serialized_set.data
+
+            return CustomResponse(response=response).get_success_response()
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
