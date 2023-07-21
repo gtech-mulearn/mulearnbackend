@@ -2,7 +2,7 @@ from datetime import datetime
 
 from rest_framework.views import APIView
 
-from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission
+from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission, HackathonForm
 from db.organization import District
 from db.organization import Organization
 from utils.permission import CustomizePermission, role_required, JWTUtils
@@ -13,7 +13,7 @@ from .serializer import (HackathonCreateUpdateDeleteSerializer, HackathonRetriva
                          HackathonUpdateSerializer, HackathonUserSubmissionSerializer,
                          UpcomingHackathonRetrivalSerializer, HackathonOrganiserSerializer,
                          HackathonPublishingSerializer, ListApplicantsSerializer, HackathonInfoSerializer,
-                         OrganisationSerializer, DistrictSerializer)
+                         OrganisationSerializer, DistrictSerializer, HackathonFormSerializer)
 
 
 class HackathonManagementAPI(APIView):
@@ -173,4 +173,15 @@ class ListDistricts(APIView):
     def get(self, request):
         districts = District.objects.all()
         serializer = DistrictSerializer(districts, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class ListHackathonFormAPI(APIView):
+    # @role_required([RoleType.ADMIN.value, ])
+    def get(self, request, hackathon_id):
+        print(hackathon_id, 'ehhh')
+        hackathon = Hackathon.objects.filter(id=hackathon_id).first()
+        print(hackathon)
+        hackathon_form = HackathonForm.objects.filter(hackathon=hackathon)
+        serializer = HackathonFormSerializer(hackathon_form, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
