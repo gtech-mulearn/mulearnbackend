@@ -127,6 +127,8 @@ class KKEMIntegrationLogin(APIView):
         try:
             email_or_muid = request.data["emailOrMuid"]
             password = request.data["password"]
+            dwms_id = request.data["dwms_id"]
+            integration = request.data["integration"]
 
             auth_domain = decouple.config("AUTH_DOMAIN")
 
@@ -139,26 +141,28 @@ class KKEMIntegrationLogin(APIView):
                 return CustomResponse(
                     message=response.get("message")
                 ).get_failure_response()
+
             res_data = response.get("response")
             access_token = res_data.get("accessToken")
             refresh_token = res_data.get("refreshToken")
 
-            serialized_set = KKEMAuthorization(data=request.data)
+            response = {
+                "accessToken": access_token,
+                "refreshToken": refresh_token,
+            }
 
-            if not serialized_set.is_valid():
-                return CustomResponse(
-                    general_message=serialized_set.errors
-                ).get_failure_response()
+            if dwms_id and integration:
+                serialized_set = KKEMAuthorization(data=request.data)
 
-            serialized_set.save()
+                if not serialized_set.is_valid():
+                    return CustomResponse(
+                        general_message=serialized_set.errors
+                    ).get_failure_response()
 
-            return CustomResponse(
-                response={
-                    "data": serialized_set.data,
-                    "accessToken": access_token,
-                    "refreshToken": refresh_token,
-                }
-            ).get_success_response()
+                serialized_set.save()
+                response["data"] = serialized_set.data
+
+            return CustomResponse(response=response).get_success_response()
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
