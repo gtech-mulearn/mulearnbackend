@@ -42,7 +42,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(required=True, error_messages={
         'required': 'ig field must not be left blank.'
     })
-    name = serializers.CharField(required=True, error_messages={
+    name = serializers.CharField(required=True,error_messages={
         'required': 'name field must not be left blank.'}
                                  )
 
@@ -58,12 +58,13 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                        org__org_type=OrganizationType.COLLEGE.value).first()
+        ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
             name=validated_data.get('name'),
             circle_code=validated_data.get('circle_code'),
-            ig_id=validated_data.get('ig'),
+            ig=ig,
             org=org_link.org,
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
@@ -74,7 +75,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             id=uuid.uuid4(),
             user=org_link.user,
             circle=lc,
-            lead_id=True,
+            lead=True,
             accepted=1,
             accepted_at=DateTimeUtils.get_current_utc_time(),
             created_at=DateTimeUtils.get_current_utc_time()
