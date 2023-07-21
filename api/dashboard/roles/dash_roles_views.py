@@ -17,7 +17,11 @@ class RoleAPI(APIView):
     def get(self, request):
         roles_queryset = Role.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
-            roles_queryset, request, ["id", "title"]
+            roles_queryset, request, ["id", "title", "description", "updated_by__first_name","updated_by__last_name"],
+            {
+                'updated_by': 'updated_by',
+                'created_at': 'created_at'
+            }
         )
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             queryset.get("queryset"), many=True

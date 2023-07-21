@@ -138,7 +138,13 @@ class UserAPI(APIView):
             queryset = CommonUtils.get_paginated_queryset(
                 user_queryset,
                 request,
-                ["mu_id", "first_name", "last_name", "email", "mobile"],
+                ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
+                {
+                    'first_name': 'first_name',
+                    'total_karma': 'total_karma',
+                    'email': 'email',
+                    'created_at': 'created_at'
+                }
             )
             serializer = dash_user_serializer.UserDashboardSerializer(
                 queryset.get("queryset"), many=True
@@ -209,7 +215,8 @@ class UserVerificationAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["first_name", "last_name", "role_title"],
+            ["user__first_name", "user__last_name", "role__title"],
+            {'fullname': 'fullname'}      
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
             queryset.get("queryset"), many=True
