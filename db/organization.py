@@ -113,7 +113,7 @@ class Department(models.Model):
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='department_created_by')
-    created_at = models.DateTimeField(default=DateTimeUtils.get_current_utc_time())
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
@@ -132,7 +132,7 @@ class UserOrganizationLink(models.Model):
     verified = models.BooleanField()
     created_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='created_by', related_name='user_organization_link_created_by')
-    created_at = models.DateTimeField(default=DateTimeUtils.get_current_utc_time())
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
