@@ -6,6 +6,7 @@ from db.task import KarmaActivityLog, UserIgLink
 
 from db.user import User
 from utils.utils import DateTimeUtils
+from django.db.models import Q
 
 
 class KKEMUserSerializer(serializers.ModelSerializer):
@@ -58,18 +59,24 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
 
 class KKEMAuthorization(serializers.ModelSerializer):
-    mu_id = serializers.CharField(source="user.mu_id")
+    emailOrMuid = serializers.CharField(source="user.mu_id")
     dwms_id = serializers.CharField(source="integration_value")
     integration = serializers.CharField(source="integration.name")
+    verified = serializers.BooleanField()
 
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
 
         try:
-            user = User.objects.get(mu_id=user_mu_id)
-            integration = Integration.objects.get(name=validated_data["integration"]["name"])
-        except User.DoesNotExist as e:
-            raise ValueError("User doesn't exist") from e
+            if not (
+                user := User.objects.filter(
+                    Q(mu_id=user_mu_id) | Q(email=user_mu_id)
+                ).first()
+            ):
+                raise ValueError("User doesn't exist")
+            integration = Integration.objects.get(
+                name=validated_data["integration"]["name"]
+            )
         except Integration.DoesNotExist as e:
             raise ValueError("Invalid request token") from e
 
@@ -77,6 +84,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
             kkem_link = IntegrationAuthorization.objects.create(
                 integration=integration,
                 user=user,
+                verified=validated_data["verified"],
                 integration_value=validated_data["integration_value"],
                 created_at=DateTimeUtils.get_current_utc_time(),
                 updated_at=DateTimeUtils.get_current_utc_time(),
@@ -106,4 +114,4 @@ class KKEMAuthorization(serializers.ModelSerializer):
 
     class Meta:
         model = IntegrationAuthorization
-        fields = ["mu_id", "dwms_id", "integration"]
+        fields = ["emailOrMuid", "dwms_id", "integration", "verified"]
