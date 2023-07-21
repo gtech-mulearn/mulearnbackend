@@ -1,12 +1,13 @@
-from rest_framework import serializers
 import uuid
-from db.task import InterestGroup
+
+from django.db.models import Sum
+from rest_framework import serializers
+
 from db.learning_circle import LearningCircle, UserCircleLink
 from db.organization import UserOrganizationLink
-from utils.utils import DateTimeUtils
-from utils.types import RoleType, OrganizationType
-from django.db.models import Sum
 from db.task import TotalKarma
+from utils.types import OrganizationType
+from utils.utils import DateTimeUtils
 
 
 class LearningCircleSerializer(serializers.ModelSerializer):
