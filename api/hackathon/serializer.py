@@ -309,3 +309,9 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ('id', 'name')
+
+
+class HackathonFormSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HackathonForm
+        fields = ('field_name', 'field_type', 'is_required')
