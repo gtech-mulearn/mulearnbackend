@@ -131,7 +131,7 @@ class KKEMIntegrationLogin(APIView):
                 "emailOrMuid", request.data.get("mu_id", None)
             )
 
-            # password = request.data.get("password")
+            password = request.data.get("password")
             dwms_id = request.data.get("dwms_id", None)
             integration = request.data.get("integration", None)
 
