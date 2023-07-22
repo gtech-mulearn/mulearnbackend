@@ -106,6 +106,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
             elif kkem_link.user == user:
                 kkem_link.integration_value = validated_data["integration_value"]
                 kkem_link.updated_at = DateTimeUtils.get_current_utc_time()
+                kkem_link.verified = validated_data["verified"]
                 kkem_link.save()
             else:
                 raise
