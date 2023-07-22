@@ -148,3 +148,38 @@ class ZonalCampusCSV(APIView):
         )
 
         return CommonUtils.generate_csv(serializer.data, "Zonal Campus Details")
+
+
+class ZonalDetailsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
+        serializer = dash_zonal_serializer.ZonalDetailsSerializer(user_org_link, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class TopThreeDistrictAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
+        org_user_district = UserOrganizationLink.objects.filter(
+            org__district__zone__name=user_org_link.org.district.zone.name)
+        serializer = dash_zonal_serializer.TopThreeDistrictSerializer(org_user_district, many=True).data
+        sorted_serializer = sorted(serializer, key=lambda x: x['rank'])[:3]
+        return CustomResponse(response=sorted_serializer).get_success_response()
+
+
+class StudentLevelStatusAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        district_id = request.data.get('district_id')
+        print(district_id)
+        org_user_district = UserOrganizationLink.objects.filter(org__district__id=district_id)
+        serializer = dash_zonal_serializer.StudentLevelStatusSerializer(org_user_district, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
