@@ -32,13 +32,28 @@ class InstitutionsAPI(APIView):
         cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
         cmuty_orgs = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
 
-        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code'])
+        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code',
+                                                                                    'affiliation__title','district__name' ],
+                                                                {
+                                                                    'title': 'title',
+                                                                    'affiliation': 'affiliation',
+                                                                    'district': 'district'
+                                                                })
         clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
 
-        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code'])
+        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code',
+                                                                                        'district__name'],
+                                                                  {
+                                                                        'title': 'title',
+                                                                        'district': 'district'
+                                                                  })
         cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs.get("queryset"), many=True)
 
-        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['title', 'code'])
+        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['title', 'code'     ],
+                                                                  {
+                                                                        'title': 'title',
+                                                                        'district': 'district'
+                                                                  })
         cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs.get("queryset"), many=True)
 
         data = {
