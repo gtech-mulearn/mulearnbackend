@@ -42,7 +42,7 @@ class WebHookCategory(Enum):
 
 
 class TasksTypesHashtag(Enum):
-    REFERRAL = '#refrral'
+    REFERRAL = 'refrral'
 
 
 DEFAULT_HACKATHON_FORM_FIELDS = {
