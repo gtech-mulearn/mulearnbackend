@@ -131,29 +131,29 @@ class KKEMIntegrationLogin(APIView):
                 "emailOrMuid", request.data.get("mu_id", None)
             )
 
-            # password = request.data.get("password")
+            password = request.data.get("password")
             dwms_id = request.data.get("dwms_id", None)
             integration = request.data.get("integration", None)
 
             auth_domain = decouple.config("AUTH_DOMAIN")
 
-            # response = requests.post(
-            #     f"{auth_domain}/api/v1/auth/user-authentication/",
-            #     data={"emailOrMuid": email_or_muid, "password": password},
-            # )
-            # response = response.json()
-            # if response.get("statusCode") != 200:
-            #     return CustomResponse(
-            #         message=response.get("message")
-            #     ).get_failure_response()
+            response = requests.post(
+                f"{auth_domain}/api/v1/auth/user-authentication/",
+                data={"emailOrMuid": email_or_muid, "password": password},
+            )
+            response = response.json()
+            if response.get("statusCode") != 200:
+                return CustomResponse(
+                    message=response.get("message")
+                ).get_failure_response()
 
-            # res_data = response.get("response")
-            # access_token = res_data.get("accessToken")
-            # refresh_token = res_data.get("refreshToken")
+            res_data = response.get("response")
+            access_token = res_data.get("accessToken")
+            refresh_token = res_data.get("refreshToken")
 
             response = {
-                "accessToken": "access_token",
-                "refreshToken": "refresh_token",
+                "accessToken": access_token,
+                "refreshToken": refresh_token,
             }
 
             if dwms_id and integration:
