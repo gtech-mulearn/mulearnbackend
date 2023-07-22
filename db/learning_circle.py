@@ -6,7 +6,7 @@ from db.user import User
 
 class LearningCircle(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    name = models.CharField(unique=True, max_length=255)
+    name = models.CharField(max_length=255)
     circle_code = models.CharField(unique=True, max_length=36)
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank=True, null=True)
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
