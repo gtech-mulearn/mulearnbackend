@@ -44,7 +44,7 @@ class KKEMBulkKarmaAPI(APIView):
                     "user_ig_link_created_by",
                     queryset=UserIgLink.objects.select_related("ig"),
                 )
-            )
+            ).distinct()
         else:
             queryset = User.objects.filter(
                 integration_authorization_user__integration__token=token,
@@ -55,7 +55,7 @@ class KKEMBulkKarmaAPI(APIView):
                     "user_ig_link_created_by",
                     queryset=UserIgLink.objects.select_related("ig"),
                 )
-            )
+            ).distinct()
 
         serialized_users = KKEMUserSerializer(queryset, many=True)
 
