@@ -161,6 +161,8 @@ class HackathonOrganiserAPI(APIView):
 
 
 class ListOrganisations(APIView):
+    authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         organisations = Organization.objects.all()
@@ -169,6 +171,8 @@ class ListOrganisations(APIView):
 
 
 class ListDistricts(APIView):
+    authentication_classes = [CustomizePermission]
+
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         districts = District.objects.all()
@@ -177,11 +181,13 @@ class ListDistricts(APIView):
 
 
 class ListHackathonFormAPI(APIView):
-    # @role_required([RoleType.ADMIN.value, ])
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id):
-        print(hackathon_id, 'ehhh')
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
-        print(hackathon)
+        if hackathon is None:
+            return CustomResponse(general_message='Hackathon Does Not Exist').get_failure_response()
         hackathon_form = HackathonForm.objects.filter(hackathon=hackathon)
         serializer = HackathonFormSerializer(hackathon_form, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
