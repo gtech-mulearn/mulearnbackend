@@ -47,7 +47,7 @@ class UserEditAPI(APIView):
         serializer = dash_user_serializer.UserEditSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -60,7 +60,7 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -81,7 +81,7 @@ class UserEditAPI(APIView):
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id=None):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -158,7 +158,7 @@ class UserAPI(APIView):
 class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -209,7 +209,7 @@ class UserManagementCSV(APIView):
 class UserVerificationAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
@@ -226,7 +226,7 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
@@ -252,7 +252,7 @@ class UserVerificationAPI(APIView):
                 response={"user_role_link": str(e)}
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value], allow_self_edit=True)
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
