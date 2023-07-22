@@ -16,7 +16,10 @@ class CountryDataAPI(APIView):
     # Params available:[sortBy, search, perPage, pageIndex]
     def get(self, request):
         countries = Country.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(countries, request, ['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(countries, request, ['id', 'name'],
+                                                                {
+                                                                    'name': 'name'
+                                                                })
 
         serializer = CountrySerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
@@ -103,7 +106,8 @@ class StateDataAPI(APIView):
             return CustomResponse(general_message="Country not found").get_failure_response()
         country_id = country_obj.id
         states = State.objects.filter(country=country_id)
-        paginated_queryset = CommonUtils.get_paginated_queryset(states, request, ['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(states, request, ['id', 'name'], 
+                                                                {'name': 'name'})
 
         serializer = StateSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
@@ -231,7 +235,8 @@ class ZoneDataAPI(APIView):
 
         state_id = state_obj.id
         zones = Zone.objects.filter(state=state_id)
-        paginated_queryset = CommonUtils.get_paginated_queryset(zones, request, ['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(zones, request, ['id', 'name'], 
+                                                                {'name': 'name'})
 
         serializer = ZoneSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
@@ -374,7 +379,8 @@ class DistrictDataAPI(APIView):
         zone_id = zone_obj.id
 
         districts = District.objects.filter(zone=zone_id)
-        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request, ['id', 'name'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(districts, request, ['id', 'name'],
+                                                                {'name': 'name'})
         serializer = DistrictSerializer(paginated_queryset.get('queryset'), many=True)
         required_data = {
             "districts": [
