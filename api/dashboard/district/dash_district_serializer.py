@@ -132,10 +132,13 @@ class StudentDistrictDetailsSerializer(serializers.ModelSerializer):
         end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - timedelta(days=1)
 
         user_org_link = UserOrganizationLink.objects.filter(org__district__name=obj.org.district.name).all()
+        active_members = []
         for data in user_org_link:
-            karma_activity_log = KarmaActivityLog.objects.filter(created_by=data.user, created_at__range=(start_date,
-                                                                                                          end_date))
-        return len(karma_activity_log)
+            karma_activity_log = KarmaActivityLog.objects.filter(created_by=data.user, created_at__range=(
+                start_date, end_date)).first()
+            if karma_activity_log is not None:
+                active_members.append(karma_activity_log)
+        return len(active_members)
 
 
 class TopThreeCampusSerializer(serializers.ModelSerializer):

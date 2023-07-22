@@ -1,17 +1,14 @@
 from rest_framework.views import APIView
-
 from db.learning_circle import LearningCircle, UserCircleLink
 from db.organization import UserOrganizationLink
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
-    LearningCircleUpdateSerializer
+    LearningCircleUpdateSerializer, LearningCircleJoinSerializer
 
 
 class LearningCircleAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
     def get(self, request):  # lists the learning circle in the user's college
         user_id = JWTUtils.fetch_user_id(request)
         org_id = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -21,11 +18,9 @@ class LearningCircleAPI(APIView):
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         # COLLEGE_CODE+FIRST_TWO_LETTES_OF_LEARNING_CIRCLE+INTEREST_GROUP
-
         serializer = LearningCircleCreateSerializer(data=request.data, context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
@@ -33,9 +28,18 @@ class LearningCircleAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
-class LearningCircleListApi(APIView):
-    authentication_classes = [CustomizePermission]
+class LearningCircleJoinApi(APIView):
+    def post(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        serializer = LearningCircleJoinSerializer(data=request.data,
+                                                  context={'user_id': user_id, 'circle_id': circle_id})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Request sent').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
+
+class LearningCircleListApi(APIView):
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
         learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id)
@@ -44,8 +48,6 @@ class LearningCircleListApi(APIView):
 
 
 class LearningCircleHomeApi(APIView):
-    authentication_classes = [CustomizePermission]
-
     def get(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
         serializer = LearningCircleHomeSerializer(learning_circle, many=False)
