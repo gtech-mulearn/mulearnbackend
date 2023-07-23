@@ -233,19 +233,16 @@ class UserVerificationAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-        serializer = dash_user_serializer.UserVerificationSerializer(
-            user, data=request.data, partial=True
-        )
+        serializer = dash_user_serializer.UserVerificationSerializer(user, data=request.data, partial=True)
 
         if not serializer.is_valid():
             return CustomResponse(
                 response={"user_role_link": serializer.errors}
             ).get_failure_response()
         try:
-            data = serializer.save()
-            return CustomResponse(
-                response={"user_role_link": data}
-            ).get_success_response()
+            obj = serializer.save()
+            data = dash_user_serializer.UserVerificationSerializer(obj, many=False).data
+            return CustomResponse(response={"user_role_link": data}).get_success_response()
 
         except IntegrityError as e:
             return CustomResponse(

@@ -93,13 +93,13 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         channel = Channel.objects.filter(id=value).first()
         if channel is None:
             raise serializers.ValidationError("Enter a valid channel id")
-        return value
+        return channel
 
     def validate_type(self, value):
         task_type = TaskType.objects.filter(id=value).first()
         if task_type is None:
             raise serializers.ValidationError("Enter a valid task type id")
-        return value
+        return task_type
 
     def validate_org(self, value):
         org = Organization.objects.filter(id=value).first()
@@ -111,13 +111,13 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         level = Level.objects.filter(id=value).first()
         if level is None:
             raise serializers.ValidationError("Enter a valid level id")
-        return value
+        return level
 
     def validate_ig(self, value):
         ig = InterestGroup.objects.filter(id=value).first()
         if ig is None:
             raise serializers.ValidationError("Enter a valid interest group id")
-        return value
+        return ig
 
 
 class ChannelDropdownSerializer(serializers.ModelSerializer):
