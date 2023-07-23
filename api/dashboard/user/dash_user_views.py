@@ -216,7 +216,7 @@ class UserVerificationAPI(APIView):
             user_queryset,
             request,
             ["user__first_name", "user__last_name", "role__title"],
-            {'fullname': 'fullname'}      
+            {'fullname': 'fullname'}
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
             queryset.get("queryset"), many=True
@@ -242,9 +242,9 @@ class UserVerificationAPI(APIView):
                 response={"user_role_link": serializer.errors}
             ).get_failure_response()
         try:
-            serializer.save()
+            data = serializer.save()
             return CustomResponse(
-                response={"user_role_link": serializer.data}
+                response={"user_role_link": data}
             ).get_success_response()
 
         except IntegrityError as e:
