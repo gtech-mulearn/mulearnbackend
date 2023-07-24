@@ -284,7 +284,7 @@ class ForgotPasswordAPI(APIView):
 
         domain = decouple.config("FR_DOMAIN_NAME")
         html_message = f"""
-      <!DOCTYPE html>
+     <!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -310,17 +310,20 @@ class ForgotPasswordAPI(APIView):
 
                 <div style="background: transparent;width: 100%;height: 170px;">
                     <center>
-                        <h1 style="color: black;font-family: 'Poppins';font-weight: 600;font-size: 30px;">REFRESH YOUR SECRETS</h1>
-                        <P style="color: rgb(65, 64, 64);font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Hey there, we got a request to fix up your password!
-                        Don't worry, click the button below to reset your password!
-</P>
+                        <h1 style="color: black;font-family: 'Poppins';font-weight: 600;font-size: 30px;">REFRESH YOUR
+                            SECRETS</h1>
+                        <P style="color: rgb(65, 64, 64);font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Hey
+                            there, we got a request to fix up your password!
+                            Don't worry, click the button below to reset your password!
+                        </P>
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
 
-                        <a href="{domain}/reset-password?token={forget_user.id}/" style="width:160px;height: 40px;">
-
+                    
+                        < href="{domain}/reset-password?token={forget_user.id}/" style="width:160px;height: 40px;"> 
                             <img style="width:160px;height: 40px;" src="https://iili.io/HQFXsFp.png" alt=""></a>
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
-                        <p style="color: black;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Didn't request a password reset? You can ignore this email then.</p>
+                        <p style="color: black;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Didn't request
+                            a password reset? You can ignore this email then.</p>
                     </center>
                 </div>
                 <div style="background: transparent;width: 100%;height: 100px;"></div>
@@ -335,19 +338,20 @@ class ForgotPasswordAPI(APIView):
                         <div style="background:transparent ;width: 370px;height: 10px;"></div>
                         <div style="background:transparent ;width: 100px;display: flex;">
 
-                            <a style="width: 20px;height: 20px;" href="https://www.linkedin.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://www.linkedin.com/company/mulearn/"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/RYr8YHc/linkedin.png"
                                     alt="linkedin" border="0"></a>
                             <div style="width: 20px;height: 20px; background: transparent"></div>
-                            <a style="width: 20px;height: 20px;" href="https://www.instagram.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://www.instagram.com/gtechmulearn/"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/tJxZw29/insta.png"
                                     alt="insta" border="0"></a>
                             <div style="width: 20px;height: 20px; background: transparent"></div>
-                            <a style="width: 20px;height: 20px;" href="https://twitter.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://twitter.com/GtechMulearn"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/MCnV8jP/twitter.png"
                                     alt="twitter" border="0"></a>
                         </div>
-                        <p style="font-family: 'Poppins';line-height: 1.2;font-size: 13px;">µLearn Foundation | Copyright © 2023. All rights reserved</p>
+                        <p style="font-family: 'Poppins';line-height: 1.2;font-size: 13px;">µLearn Foundation |
+                            Copyright © 2023. All rights reserved</p>
                     </center>
                 </div>
                 <div style="background: transparent;width: 100%;height: 20px;"></div>
