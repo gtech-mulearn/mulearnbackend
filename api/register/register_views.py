@@ -85,10 +85,10 @@ class RegisterDataAPI(APIView):
                 <img style="width: 400px;height: 220px;" src="https://iili.io/HQFW5rB.png" alt="HLi9NHP.md.png"
                     border="0">
 
-                <div style="background: transparent;width: 100%;height: 250px;">
+                <div style="background: transparent;width: 100%;">
                     <center>
                         <h1 style="color: black;font-family: 'Poppins';font-weight: 600;font-size:26px;">YOUR TICKET TO µFAM IS HERE!</h1>
-                        <P style="color: rgb(65, 64, 64);font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Hey
+                        <P style="color: rgb(65, 64, 64);font-family: 'Poppins';line-height: 1.3;font-size: 13px;">Hey
                             there! A hearty welcome to the MuLearn Family.<br>
                             We are delighted to have you on board and we hereby acknowledge as well as appreciate your
                             interest to join our community and to take part in our initiatives.<br>
@@ -97,23 +97,19 @@ class RegisterDataAPI(APIView):
                         </P>
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
 
-                        <a href="https://mulearn.org/"
-                            style="display: flex; background-color: #EADCFF;border-radius: 30px;padding-left: 20px;padding-right: 5px;font-size: 15px;padding-top: 5px;padding-bottom: 5px;width: 245px;">
-                            <p style="padding-right: 20px;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">{user_obj.mu_id}</p>
-                            <div
-                                style="background-color: blueviolet;border-radius: 25px; padding-right: 15px;padding-left: 15px;padding-top: 16px;width: 35px;height: 35px;">
-                                <img style="width: 18px;height: 18px;" src="https://i.ibb.co/wg1KCHv/copyicon.png"
-                                    alt="">
-                            </div>
+                        <a 
+                            style="display: flex; background-color: #EADCFF;border-radius: 28px;width: fit-content;">
+                            <p style="padding-left: 20px; padding-right: 20px;font-family: 'Poppins';line-height: 1.2;font-size: 13px;"> {user_obj.mu_id}</p>
+                       
                         </a>
 
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
-                        <p style="color: black;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Stay tuned for
+                        <p style="color: black;font-family: 'Poppins';line-height: 1.3;font-size: 13px;">Stay tuned for
                             our events and notifications. Remember, you are not just any learner; you're a
                             MuLearner😉.<br><br>Happy Learning!</p>
                     </center>
                 </div>
-                <div style="background: transparent;width: 100%;height: 100px;"></div>
+                <div style="background: transparent;width: 100%;height: 40px;"></div>
                 <div style="background: transparent;width: 100%;height: 160px;">
                     <center>
                         <a href="https://mulearn.org/" style="width: 120px;height: 30px;"><img
