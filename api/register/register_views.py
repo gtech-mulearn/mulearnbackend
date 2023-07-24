@@ -61,7 +61,7 @@ class RegisterDataAPI(APIView):
         access_token = res_data.get("accessToken")
         refresh_token = res_data.get("refreshToken")
         html_message = f"""
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 
 <head>
@@ -99,8 +99,8 @@ class RegisterDataAPI(APIView):
 
                         <a 
                             style="display: flex; background-color: #EADCFF;border-radius: 28px;width: fit-content;">
-                            <p style="padding-left: 20px; padding-right: 20px;font-family: 'Poppins';line-height: 1.2;font-size: 13px;"> {user_obj.mu_id}</p>
-                       
+                            <p style="padding-left: 20px; padding-right: 20px;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">{user_obj.mu_id}</p>
+                  
                         </a>
 
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
@@ -121,15 +121,15 @@ class RegisterDataAPI(APIView):
                         <div style="background:transparent ;width: 370px;height: 10px;"></div>
                         <div style="background:transparent ;width: 100px;display: flex;">
 
-                            <a style="width: 20px;height: 20px;" href="https://www.linkedin.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://www.linkedin.com/company/mulearn/"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/RYr8YHc/linkedin.png"
                                     alt="linkedin" border="0"></a>
                             <div style="width: 20px;height: 20px; background: transparent"></div>
-                            <a style="width: 20px;height: 20px;" href="https://www.instagram.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://www.instagram.com/gtechmulearn/"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/tJxZw29/insta.png"
                                     alt="insta" border="0"></a>
                             <div style="width: 20px;height: 20px; background: transparent"></div>
-                            <a style="width: 20px;height: 20px;" href="https://twitter.com/"><img
+                            <a style="width: 20px;height: 20px;" href="https://twitter.com/GtechMulearn"><img
                                     style="width: 15px;height: 15px;" src="https://i.ibb.co/MCnV8jP/twitter.png"
                                     alt="twitter" border="0"></a>
                         </div>
