@@ -16,7 +16,7 @@ urlpatterns = [
 
     path('submit-hackathon/', hackathon_views.HackathonSubmissionAPI.as_view()),
 
-
+    path("list-organiser-hackathons/", hackathon_views.HackathonOrganiserAPI.as_view()),
     path('add-organiser/<str:hackathon_id>/', hackathon_views.HackathonOrganiserAPI.as_view()),
     path('delete-organiser/<str:organiser_link_id>/', hackathon_views.HackathonOrganiserAPI.as_view()),
     path('list-applicants/', hackathon_views.ListApplicantsAPI.as_view()),
