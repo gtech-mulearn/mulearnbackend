@@ -2,7 +2,7 @@ from django.db.models import Sum, F
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import UserLvlLink, TotalKarma
+from db.task import UserLvlLink, TotalKarma, Level
 from utils.types import OrganizationType
 
 
@@ -75,3 +75,18 @@ class CollegeSerializer(serializers.ModelSerializer):
         college_ranks = {college['org']: i + 1 for i, college in enumerate(rank)}
         college_id = obj.org.id
         return college_ranks.get(college_id)
+
+
+class StudentInEachLevelSerializer(serializers.ModelSerializer):
+    level = serializers.ReadOnlyField(source='level_order')
+    students = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Level
+        fields = ["level", "students"]
+
+    def get_students(self, obj):
+        user_org = self.context.get('user_org')
+        user_level_link = UserLvlLink.objects.filter(level__level_order=obj.level_order,
+                                                     user__user_organization_link_user_id__org__title=user_org).all()
+        return len(user_level_link)

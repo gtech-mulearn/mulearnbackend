@@ -107,7 +107,6 @@ class TaskApi(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Task Edited Successfully').get_success_response()
-
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])

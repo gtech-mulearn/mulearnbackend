@@ -38,8 +38,10 @@ class InstitutionsAPI(APIView):
                                                                 {
                                                                     'title': 'title',
                                                                     'affiliation': 'affiliation',
-                                                                    'district': 'district'
+                                                                    'district': 'district',
+                                                                    'zone': 'district__zone__name'
                                                                 })
+
         clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
 
         paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code',
