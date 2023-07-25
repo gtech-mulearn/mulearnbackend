@@ -14,7 +14,8 @@ from .serializer import (HackathonCreateUpdateDeleteSerializer, HackathonRetriva
                          HackathonUpdateSerializer, HackathonUserSubmissionSerializer,
                          UpcomingHackathonRetrivalSerializer, HackathonOrganiserSerializer,
                          HackathonPublishingSerializer, ListApplicantsSerializer, HackathonInfoSerializer,
-                         OrganisationSerializer, DistrictSerializer, HackathonFormSerializer)
+                         OrganisationSerializer, DistrictSerializer, HackathonFormSerializer,
+                         HackathonOrganiserSerializerRetrival)
 
 
 class HackathonManagementAPI(APIView):
@@ -134,11 +135,9 @@ class HackathonOrganiserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, ])
-    def get(self, request):
-        hackathon_ids = HackathonOrganiserLink.objects.filter(organiser_id=JWTUtils.fetch_user_id(request)).values_list(
-            'hackathon_id', flat=True)
-        hackathons_queryset = Hackathon.objects.filter(id__in=hackathon_ids).all()
-        serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True)
+    def get(self, request, hackathon_id):
+        hackathon_ids = HackathonOrganiserLink.objects.filter(hackathon__id=hackathon_id)
+        serializer = HackathonOrganiserSerializerRetrival(hackathon_ids, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value, ])

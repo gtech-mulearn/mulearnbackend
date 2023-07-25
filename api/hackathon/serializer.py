@@ -338,3 +338,14 @@ class HackathonFormSerializer(serializers.ModelSerializer):
     class Meta:
         model = HackathonForm
         fields = ('field_name', 'field_type', 'is_required')
+
+
+class HackathonOrganiserSerializerRetrival(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='organiser.fullname')
+    email = serializers.CharField(source='organiser.email')
+    muid = serializers.CharField(source='organiser.mu_id')
+    profile_pic = serializers.CharField(source='organiser.profile_pic')
+
+    class Meta:
+        model = HackathonOrganiserLink
+        fields = ('id', 'full_name', 'email', 'muid', 'profile_pic')
