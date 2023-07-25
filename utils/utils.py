@@ -1,5 +1,6 @@
 import csv
 import datetime
+import gzip
 import io
 
 import openpyxl
@@ -66,7 +67,14 @@ class CommonUtils:
         writer.writeheader()
         writer.writerows(queryset)
 
-        return response
+        compressed_response = HttpResponse(
+            gzip.compress(response.content),
+            content_type='text/csv',
+        )
+        compressed_response['Content-Disposition'] = f'attachment; filename="{csv_name}.csv"'
+        compressed_response['Content-Encoding'] = 'gzip'
+
+        return compressed_response
 
 
 class DateTimeUtils:
