@@ -187,6 +187,8 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         instance.status = validated_data.get('status', instance.status)
         instance.website = validated_data.get('website', instance.website)
         instance.type = validated_data.get('type', instance.type)
+        instance.event_logo = validated_data.get('event_logo', instance.event_logo)
+        instance.banner = validated_data.get('banner', instance.banner)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
