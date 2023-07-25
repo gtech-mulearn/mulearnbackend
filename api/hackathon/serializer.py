@@ -14,6 +14,8 @@ from utils.utils import DateTimeUtils
 class HackathonRetrivalSerializer(serializers.ModelSerializer):
     organisation = serializers.CharField(source='org.title', allow_null=True)
     district = serializers.CharField(source='district.name', allow_null=True)
+    org_id = serializers.CharField(source='org.id', allow_null=True)
+    district_id = serializers.CharField(source='district.id', allow_null=True)
     editable = serializers.SerializerMethodField()
 
     banner = serializers.SerializerMethodField()
@@ -25,7 +27,7 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                   'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
-                  'banner', 'event_logo', 'type', 'website', 'editable')
+                  'banner', 'event_logo', 'type', 'website', 'editable', 'org_id', 'district_id')
 
     def get_banner(self, obj):
         media = obj.banner
