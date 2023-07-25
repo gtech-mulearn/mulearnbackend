@@ -1,5 +1,6 @@
 import csv
 import datetime
+import gzip
 import io
 
 import openpyxl
@@ -26,12 +27,14 @@ class CommonUtils:
                 query |= Q(**{f'{field}__icontains': search_query})
 
             queryset = queryset.filter(query)
+
         if sort_by:
             sort = sort_by[1:] if sort_by.startswith('-') else sort_by
             sort_field_name = sort_fields.get(sort)
             if sort_field_name:
                 if sort_by.startswith('-'):
                     sort_field_name = '-' + sort_field_name
+
                 queryset = queryset.order_by(sort_field_name)
 
         paginator = Paginator(queryset, per_page)
@@ -64,7 +67,14 @@ class CommonUtils:
         writer.writeheader()
         writer.writerows(queryset)
 
-        return response
+        compressed_response = HttpResponse(
+            gzip.compress(response.content),
+            content_type='text/csv',
+        )
+        compressed_response['Content-Disposition'] = f'attachment; filename="{csv_name}.csv"'
+        compressed_response['Content-Encoding'] = 'gzip'
+
+        return compressed_response
 
 
 class DateTimeUtils:

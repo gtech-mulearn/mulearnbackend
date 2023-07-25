@@ -1,5 +1,6 @@
 from datetime import datetime
 
+from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.hackathon import Hackathon, HackathonOrganiserLink, HackathonUserSubmission, HackathonForm
@@ -13,7 +14,8 @@ from .serializer import (HackathonCreateUpdateDeleteSerializer, HackathonRetriva
                          HackathonUpdateSerializer, HackathonUserSubmissionSerializer,
                          UpcomingHackathonRetrivalSerializer, HackathonOrganiserSerializer,
                          HackathonPublishingSerializer, ListApplicantsSerializer, HackathonInfoSerializer,
-                         OrganisationSerializer, DistrictSerializer, HackathonFormSerializer)
+                         OrganisationSerializer, DistrictSerializer, HackathonFormSerializer,
+                         HackathonOrganiserSerializerRetrival)
 
 
 class HackathonManagementAPI(APIView):
@@ -27,11 +29,14 @@ class HackathonManagementAPI(APIView):
             serializer = UpcomingHackathonRetrivalSerializer(hackathons_queryset, many=True)
         elif hackathon_id:
             hackathons_queryset = Hackathon.objects.filter(id=hackathon_id).first()
+
             if hackathons_queryset is None:
                 return CustomResponse(general_message='Hackathon Does Not Exist').get_failure_response()
             serializer = HackathonRetrivalSerializer(hackathons_queryset)
         else:
-            hackathons_queryset = Hackathon.objects.filter(status="Published")
+            hackathons_queryset = Hackathon.objects.filter(
+                Q(status='Published') | Q(hackathonorganiserlink__organiser_id=user_id)
+            )
             serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True, context={'user_id': user_id})
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -130,11 +135,9 @@ class HackathonOrganiserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, ])
-    def get(self, request):
-        hackathon_ids = HackathonOrganiserLink.objects.filter(organiser_id=JWTUtils.fetch_user_id(request)).values_list(
-            'hackathon_id', flat=True)
-        hackathons_queryset = Hackathon.objects.filter(id__in=hackathon_ids).all()
-        serializer = HackathonRetrivalSerializer(hackathons_queryset, many=True)
+    def get(self, request, hackathon_id):
+        hackathon_ids = HackathonOrganiserLink.objects.filter(hackathon__id=hackathon_id)
+        serializer = HackathonOrganiserSerializerRetrival(hackathon_ids, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value, ])

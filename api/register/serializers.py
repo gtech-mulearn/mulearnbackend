@@ -155,7 +155,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                                                 updated_by=user,
                                                 updated_at=DateTimeUtils.get_current_utc_time())
                 KarmaActivityLog.objects.create(
-                    id=uuid4(), karma=karma_amount, task=task_list, created_by=referral_provider,
+                    id=uuid4(), karma=karma_amount, task=task_list, created_by=user,
                     user=referral_provider,
                     created_at=DateTimeUtils.get_current_utc_time(), appraiser_approved=True, peer_approved=True,
                     appraiser_approved_by=user, peer_approved_by=user,

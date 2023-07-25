@@ -1,10 +1,10 @@
-from datetime import timedelta
 from django.db.models import Sum, F
 from rest_framework import serializers
+
 from db.organization import UserOrganizationLink
-from db.task import UserLvlLink, TotalKarma, KarmaActivityLog, Level
+from db.task import UserLvlLink, TotalKarma, Level
 from utils.types import OrganizationType
-from utils.utils import DateTimeUtils
+
 
 class UserOrgSerializer(serializers.ModelSerializer):
     fullname = serializers.ReadOnlyField(source="user.fullname")
@@ -78,7 +78,6 @@ class CollegeSerializer(serializers.ModelSerializer):
 
 
 class StudentInEachLevelSerializer(serializers.ModelSerializer):
-
     level = serializers.ReadOnlyField(source='level_order')
     students = serializers.SerializerMethodField()
 
