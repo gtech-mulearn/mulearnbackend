@@ -1,11 +1,14 @@
 from rest_framework.views import APIView
-from db.task import UserLvlLink, Level
+from db.task import UserLvlLink, Level, KarmaActivityLog
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
+
+from django.utils import timezone
+from datetime import timedelta
 
 
 class StudentDetailsAPI(APIView):
@@ -68,4 +71,16 @@ class StudentInEachLevelAPI(APIView):
         level = Level.objects.all()
         serializer = serializers.StudentInEachLevelSerializer(level, many=True,
                                                               context={'user_org': user_org_link.org.title})
+        return CustomResponse(response=serializer.data).get_success_response()
+    
+class WeeklyKarmaAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                            org__org_type=OrganizationType.COLLEGE.value).first()
+        today = timezone.now()
+        serializer = serializers.WeeklyKarmaSerializer(user_org_link)
         return CustomResponse(response=serializer.data).get_success_response()

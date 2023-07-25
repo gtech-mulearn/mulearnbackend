@@ -91,3 +91,56 @@ class StudentInEachLevelSerializer(serializers.ModelSerializer):
         user_level_link = UserLvlLink.objects.filter(level__level_order=obj.level_order,
                                                      user__user_organization_link_user_id__org__title=user_org).all()
         return len(user_level_link)
+    
+
+
+class WeeklyKarmaSerializer(serializers.ModelSerializer):
+    college_name = serializers.ReadOnlyField(source="org.title")
+    day_0 = serializers.SerializerMethodField()
+    day_1 = serializers.SerializerMethodField()
+    day_2 = serializers.SerializerMethodField()
+    day_3 = serializers.SerializerMethodField()
+    day_4 = serializers.SerializerMethodField()
+    day_5 = serializers.SerializerMethodField()
+    day_6 = serializers.SerializerMethodField()
+
+    days = 7
+    
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = ["college_name", "day_0", "day_1", "day_2", "day_3", "day_4", "day_5", "day_6"]
+
+    def karma_by_date(self, obj, days_delta):
+        today = DateTimeUtils.get_current_utc_time().date()
+        date = today - timedelta(days=days_delta)
+        students = UserOrganizationLink.objects.filter(org_id=obj.org_id)
+        karma = 0
+        for student in students:
+            karma_logs = KarmaActivityLog.objects.filter(user=student.user, created_at__date=date).aggregate(
+                total_karma=Sum('karma'))
+            karma += karma_logs['total_karma'] or 0
+        return karma
+
+    def get_day_0(self, obj):
+        return self.karma_by_date(obj, 0)
+    
+    def get_day_1(self, obj):
+        return self.karma_by_date(obj, 1)
+    
+    def get_day_2(self, obj):
+        return self.karma_by_date(obj, 2)
+    
+    def get_day_3(self, obj):
+        return self.karma_by_date(obj, 3)
+    
+    def get_day_4(self, obj):
+        return self.karma_by_date(obj, 4)
+    
+    def get_day_5(self, obj):
+        return self.karma_by_date(obj, 5)
+    
+    def get_day_6(self, obj):
+        return self.karma_by_date(obj, 6)
+    
+
