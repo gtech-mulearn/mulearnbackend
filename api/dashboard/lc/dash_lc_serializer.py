@@ -205,3 +205,17 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         instance.meet_time = validated_data.get('meet_time')
         instance.meet_place = validated_data.get('meet_place')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
+
+class LearningCircleMainSerializer(serializers.ModelSerializer):
+    ig_name = serializers.SerializerMethodField()
+    member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = ['name', 'ig_name', 'member_count']
+
+    def get_ig_name(self, obj):
+        return obj.ig.name if obj.ig else None
+
+    def get_member_count(self, obj):
+        return UserCircleLink.objects.filter(circle=obj, accepted=True).count()
