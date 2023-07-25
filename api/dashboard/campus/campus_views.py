@@ -7,10 +7,6 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
 
-from django.utils import timezone
-from datetime import timedelta
-
-
 class StudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -81,6 +77,5 @@ class WeeklyKarmaAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                             org__org_type=OrganizationType.COLLEGE.value).first()
-        today = timezone.now()
         serializer = serializers.WeeklyKarmaSerializer(user_org_link)
         return CustomResponse(response=serializer.data).get_success_response()
