@@ -21,7 +21,9 @@ class InstitutionCSV(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_type):
-        org_objs = Organization.objects.filter(org_type=org_type)
+        org_objs = Organization.objects.filter(org_type=org_type).prefetch_related(
+            "affiliation", "district__zone__state__country"
+        )
         orgs_data = OrganisationSerializer(org_objs, many=True).data
         return CommonUtils.generate_csv(orgs_data, org_type)
 
