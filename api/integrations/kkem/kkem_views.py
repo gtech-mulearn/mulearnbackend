@@ -37,8 +37,8 @@ class KKEMBulkKarmaAPI(APIView):
             queryset = User.objects.filter(
                 integration_authorization_user__integration__token=token,
                 integration_authorization_user__verified=True,
-                karma_activity_log_created_by__appraiser_approved=True,
-                karma_activity_log_created_by__updated_at__gte=from_datetime,
+                karma_activity_log_user__appraiser_approved=True,
+                karma_activity_log_user__updated_at__gte=from_datetime,
             ).prefetch_related(
                 Prefetch(
                     "user_ig_link_created_by",
@@ -49,7 +49,7 @@ class KKEMBulkKarmaAPI(APIView):
             queryset = User.objects.filter(
                 integration_authorization_user__integration__token=token,
                 integration_authorization_user__verified=True,
-                karma_activity_log_created_by__appraiser_approved=True,
+                karma_activity_log_user__appraiser_approved=True,
             ).prefetch_related(
                 Prefetch(
                     "user_ig_link_created_by",

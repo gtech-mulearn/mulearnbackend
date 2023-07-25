@@ -4,7 +4,7 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink
-from db.task import KarmaActivityLog, Level,UserLvlLink
+from db.task import KarmaActivityLog, Level, UserLvlLink
 from db.user import User
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -104,7 +104,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
             return position + 1
 
     def get_zonal_lead(self, obj):
-        user_org_link = UserOrganizationLink.objects.\
+        user_org_link = UserOrganizationLink.objects. \
             filter(org__district__zone__name=obj.org.district.zone.name,
                    user__user_role_link_user__role__title=RoleType.ZONAL_CAMPUS_LEAD.value).first()
         return user_org_link.user.fullname
@@ -126,7 +126,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
         user_org_link = UserOrganizationLink.objects.filter(org__district__zone__name=obj.org.district.zone.name).all()
         active_members = []
         for data in user_org_link:
-            karma_activity_log = KarmaActivityLog.objects.filter(created_by=data.user, created_at__range=(
+            karma_activity_log = KarmaActivityLog.objects.filter(user=data.user, created_at__range=(
                 start_date, end_date)).first()
             if karma_activity_log is not None:
                 active_members.append(karma_activity_log)
@@ -134,7 +134,6 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
 
 class TopThreeDistrictSerializer(serializers.ModelSerializer):
-
     rank = serializers.SerializerMethodField()
     district = serializers.CharField(source='org.district.name')
 
@@ -143,7 +142,6 @@ class TopThreeDistrictSerializer(serializers.ModelSerializer):
         fields = ["rank", "district"]
 
     def get_rank(self, obj):
-
         rank = UserOrganizationLink.objects.filter(
             org__org_type=OrganizationType.COLLEGE.value,
             org__district__zone__name=obj.org.district.zone.name, verified=True,
@@ -155,9 +153,9 @@ class TopThreeDistrictSerializer(serializers.ModelSerializer):
 
 
 class StudentLevelStatusSerializer(serializers.ModelSerializer):
-
     college = serializers.CharField(source='org.title')
     level = serializers.SerializerMethodField()
+
     class Meta:
         model = UserOrganizationLink
         fields = ["college", "level"]

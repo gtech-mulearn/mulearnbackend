@@ -134,7 +134,7 @@ class StudentDistrictDetailsSerializer(serializers.ModelSerializer):
         user_org_link = UserOrganizationLink.objects.filter(org__district__name=obj.org.district.name).all()
         active_members = []
         for data in user_org_link:
-            karma_activity_log = KarmaActivityLog.objects.filter(created_by=data.user, created_at__range=(
+            karma_activity_log = KarmaActivityLog.objects.filter(user=data.user, created_at__range=(
                 start_date, end_date)).first()
             if karma_activity_log is not None:
                 active_members.append(karma_activity_log)
