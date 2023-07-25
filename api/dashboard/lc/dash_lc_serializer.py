@@ -159,9 +159,18 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context.get('user_id')
         circle_id = self.context.get('circle_id')
-        entry = UserCircleLink.objects.filter(circle_id=circle_id, accepted=True).count()
-        if entry >= 5:
-            raise serializers.ValidationError("Cannot send request , Maximum member count reached")
+        no_of_entry = UserCircleLink.objects.filter(circle_id=circle_id, accepted=True).count()
+        ig_id = LearningCircle.objects.get(pk=circle_id).ig_id
+        if entry := UserCircleLink.objects.filter(
+            circle_id=circle_id, user_id=user_id
+        ).first():
+            raise serializers.ValidationError("Cannot send another request at the moment")
+        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig_id,accepted=True).exists():
+            raise serializers.ValidationError("Already a member of learning circle with same interest group")
+        if no_of_entry >= 5:
+            raise serializers.ValidationError("Maximum member count reached")
+
+
         validated_data['id'] = uuid.uuid4()
         validated_data['user_id'] = user_id
         validated_data['circle_id'] = circle_id
