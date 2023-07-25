@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-from db.task import UserLvlLink, Level, KarmaActivityLog
+from db.task import UserLvlLink, Level
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse

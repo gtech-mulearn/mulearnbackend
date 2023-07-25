@@ -79,7 +79,6 @@ class CollegeSerializer(serializers.ModelSerializer):
 
 
 class StudentInEachLevelSerializer(serializers.ModelSerializer):
-
     level = serializers.ReadOnlyField(source='level_order')
     students = serializers.SerializerMethodField()
 
