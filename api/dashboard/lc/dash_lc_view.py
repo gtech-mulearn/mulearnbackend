@@ -5,7 +5,7 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
-    LearningCircleUpdateSerializer, LearningCircleJoinSerializer , LearningCircleMeetSerializer
+    LearningCircleUpdateSerializer, LearningCircleJoinSerializer , LearningCircleMeetSerializer , LearningCircleMainSerializer
 
 
 class LearningCircleAPI(APIView):
@@ -71,3 +71,25 @@ class LearningCircleHomeApi(APIView):
             serializer.save()
             return CustomResponse(general_message='Approved successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+class LearningCircleMainApi(APIView):
+    def get(self,request):
+        all_circles = LearningCircle.objects.all()
+        ig_id = request.GET.get('ig_id')
+        org_id = request.GET.get('org_id')
+        district_id = request.GET.get('district_id')
+        if ig_id:
+            all_circles = all_circles.filter(ig_id=ig_id)
+
+        if org_id:
+            all_circles = all_circles.filter(org_id=org_id)
+
+        if district_id:
+            all_circles = all_circles.filter(org__district_id=district_id)
+
+        if ig_id or org_id or district_id:
+            serializer = LearningCircleMainSerializer(all_circles, many=True)
+        else:
+            random_circles = all_circles.order_by('?')[:9]
+            serializer = LearningCircleMainSerializer(random_circles, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
