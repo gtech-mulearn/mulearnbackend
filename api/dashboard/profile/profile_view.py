@@ -68,7 +68,7 @@ class UserLogAPI(APIView):
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
         karma_activity_log = KarmaActivityLog.objects.filter(
-            created_by=user_id, appraiser_approved=True
+            user=user_id, appraiser_approved=True
         ).order_by("-created_at")
 
         if karma_activity_log is None:
