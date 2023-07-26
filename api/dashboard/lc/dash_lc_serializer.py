@@ -227,12 +227,14 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         model = LearningCircle
         fields = [
             "meet_place",
-            "meet_time"
+            "meet_time",
+            "day"
         ]
 
     def update(self, instance, validated_data):
         instance.meet_time = validated_data.get('meet_time')
         instance.meet_place = validated_data.get('meet_place')
+        instance.day = validated_data.get('date')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
