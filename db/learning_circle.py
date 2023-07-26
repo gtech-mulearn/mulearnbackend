@@ -12,6 +12,8 @@ class LearningCircle(models.Model):
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     meet_place = models.CharField(max_length=255, blank=True, null=True)
     meet_time = models.DateTimeField(blank=True, null=True)
+    day = models.CharField(max_length=20, blank=True, null=True)
+    note = models.CharField(max_length=500, blank=True, null=True)
     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by',
                                    related_name='learning_circle_updated_by')
     updated_at = models.DateTimeField()
