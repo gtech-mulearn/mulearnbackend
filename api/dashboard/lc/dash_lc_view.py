@@ -5,7 +5,7 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
-    LearningCircleUpdateSerializer, LearningCircleJoinSerializer , LearningCircleMeetSerializer , LearningCircleMainSerializer
+    LearningCircleUpdateSerializer, LearningCircleJoinSerializer , LearningCircleMeetSerializer , LearningCircleMainSerializer , LearningCircleNoteSerializer
 
 
 class LearningCircleAPI(APIView):
@@ -70,6 +70,14 @@ class LearningCircleHomeApi(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Approved successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    def put(self,request,circle_id):
+        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
+        serializer = LearningCircleNoteSerializer(learning_circle,data=request.data)
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Note updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class LearningCircleMainApi(APIView):
