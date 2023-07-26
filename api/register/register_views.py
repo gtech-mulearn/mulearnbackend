@@ -149,8 +149,6 @@ class RegisterDataAPI(APIView):
         to = [user_obj.email]
         contact_msg = strip_tags(html_message)
         subject = "YOUR TICKET TO µFAM IS HERE!"
-        # send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
-        #           decouple.config("EMAIL_HOST_USER"), [user_obj.email], fail_silently=False)
         send_mail(
             subject,
             contact_msg,
