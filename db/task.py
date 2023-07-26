@@ -23,6 +23,8 @@ class Channel(models.Model):
 class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75)
+    code = models.CharField(max_length=10)
+    icon = models.CharField(max_length=10)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='interest_group_updated_by')
     updated_at = models.DateTimeField()
