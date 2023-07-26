@@ -62,7 +62,7 @@ class UserLogAPI(APIView):
 
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile")
+                return CustomResponse(general_message="Private Profile").get_failure_response()
             user_id = user.id
         else:
             JWTUtils.is_jwt_authenticated(request)
@@ -120,7 +120,7 @@ class UserLevelsAPI(APIView):
                 ).get_failure_response()
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile")
+                return CustomResponse(general_message="Private Profile").get_failure_response()
             user_id = user.id
         else:
             JWTUtils.is_jwt_authenticated(request)
@@ -129,7 +129,7 @@ class UserLevelsAPI(APIView):
         serializer = UserLevelSerializer(
             user_levels_link_query, many=True, context={"user_id": user_id}
         )
-        
+
         return CustomResponse(response=serializer.data).get_success_response()
 
 

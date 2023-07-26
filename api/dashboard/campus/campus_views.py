@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-
+from db.task import UserLvlLink, Level
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -55,4 +55,17 @@ class CampusDetailsAPI(APIView):
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                             org__org_type=OrganizationType.COLLEGE.value).first()
         serializer = serializers.CollegeSerializer(user_org_link, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class StudentInEachLevelAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    # @role_required([RoleType.CAMPUS_LEAD.value, ])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
+        level = Level.objects.all()
+        serializer = serializers.StudentInEachLevelSerializer(level, many=True,
+                                                              context={'user_org': user_org_link.org.title})
         return CustomResponse(response=serializer.data).get_success_response()

@@ -21,7 +21,7 @@ class InstitutionCSV(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_type):
-        org_objs = Organization.objects.filter(org_type=org_type).all()
+        org_objs = Organization.objects.filter(org_type=org_type)
         orgs_data = OrganisationSerializer(org_objs, many=True).data
         return CommonUtils.generate_csv(orgs_data, org_type)
 
@@ -31,14 +31,33 @@ class InstitutionsAPI(APIView):
         clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
         cmuty_orgs = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
+        # print(clg_orgs.order_by('district__zone__name'))
 
-        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code'])
+        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code',
+                                                                                    'affiliation__title',
+                                                                                    'district__name'],
+                                                                {
+                                                                    'title': 'title',
+                                                                    'affiliation': 'affiliation',
+                                                                    'district': 'district',
+                                                                    'zone': 'district__zone__name'
+                                                                })
+
         clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
 
-        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code'])
+        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code',
+                                                                                        'district__name'],
+                                                                  {
+                                                                      'title': 'title',
+                                                                      'district': 'district'
+                                                                  })
         cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs.get("queryset"), many=True)
 
-        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['title', 'code'])
+        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['title', 'code'],
+                                                                  {
+                                                                      'title': 'title',
+                                                                      'district': 'district'
+                                                                  })
         cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs.get("queryset"), many=True)
 
         data = {
@@ -96,6 +115,7 @@ class GetInstitutionsAPI(APIView):
         # organisation_serializer = OrganisationSerializer(organisations, many=True)
         return CustomResponse().paginated_response(data=organisation_serializer.data,
                                                    pagination=paginated_organisations.get('pagination'))
+
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
@@ -306,6 +326,7 @@ class PostInstitutionAPI(APIView):
 
 
 class AffiliationAPI(APIView):
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
@@ -321,8 +342,6 @@ class AffiliationAPI(APIView):
 
         return CustomResponse().paginated_response(data=data,
                                                    pagination=paginated_queryset.get("pagination"))
-
-    authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
@@ -389,6 +408,7 @@ class AffiliationAPI(APIView):
         else:
             return CustomResponse(
                 general_message=f"Org with code {title}, does not exist").get_failure_response()
+
 
 class GetInstitutionsNamesAPI(APIView):
 

@@ -25,7 +25,7 @@ class UrlShortenerAPI(APIView):
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(url_shortener_objects, request, ['title'])
+        paginated_queryset = CommonUtils.get_paginated_queryset(url_shortener_objects, request, ['title','short_url','long_url'], {'title':'title'})
 
         if len(url_shortener_objects) == 0:
             return CustomResponse(general_message='No URL related data available').get_failure_response()

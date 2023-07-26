@@ -20,11 +20,18 @@ class TaskApi(APIView):
     def get(self, request):
         task_serializer = TaskList.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(task_serializer, request,
-                                                                ["title", "channel__name", "description", "karma",
-                                                                 "usage_count", ],
+                                                                ["title", "channel__name", "org__title", "description",
+                                                                 "karma",
+                                                                 "usage_count",
+                                                                 "updated_by__first_name",
+                                                                 "updated_by__last_name",
+                                                                 "created_by__first_name", "created_by__last_name",
+                                                                 ],
 
                                                                 {'title': 'title', 'karma': 'karma',
-                                                                 'updated_by': 'updated_by'})
+                                                                 'updated_by': 'updated_by',
+                                                                 'updated_at': 'updated_at',
+                                                                 'created_at': 'created_at'})
         task_serializer_data = TaskListSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=task_serializer_data,
@@ -100,7 +107,6 @@ class TaskApi(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Task Edited Successfully').get_success_response()
-
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])

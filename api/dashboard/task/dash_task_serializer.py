@@ -58,12 +58,12 @@ class TaskCreateSerializer(serializers.ModelSerializer):
 
 
 class TaskUpdateSerializer(serializers.ModelSerializer):
-
-    channel = serializers.CharField()
-    type = serializers.CharField()
-    org = serializers.CharField()
-    level = serializers.CharField()
-    ig = serializers.CharField()
+    channel = serializers.CharField(required=False)
+    type = serializers.CharField(required=False)
+    org = serializers.CharField(required=False)
+    level = serializers.CharField(required=False)
+    ig = serializers.CharField(required=False)
+    variable_karma = serializers.BooleanField(required=False)
 
     class Meta:
         model = TaskList
@@ -72,13 +72,17 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-
         instance.hashtag = validated_data.get('hashtag', instance.hashtag)
         instance.title = validated_data.get('title', instance.title)
         instance.karma = validated_data.get('karma', instance.karma)
         instance.active = validated_data.get('active', instance.active)
         instance.variable_karma = validated_data.get('variable_karma', instance.variable_karma)
         instance.usage_count = validated_data.get('usage_count', instance.usage_count)
+        instance.channel = validated_data.get('channel', instance.channel)
+        instance.type = validated_data.get('type', instance.type)
+        instance.org = validated_data.get('org', instance.org)
+        instance.level = validated_data.get('level', instance.level)
+        instance.ig = validated_data.get('ig', instance.ig)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -89,13 +93,13 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         channel = Channel.objects.filter(id=value).first()
         if channel is None:
             raise serializers.ValidationError("Enter a valid channel id")
-        return value
+        return channel
 
     def validate_type(self, value):
         task_type = TaskType.objects.filter(id=value).first()
         if task_type is None:
             raise serializers.ValidationError("Enter a valid task type id")
-        return value
+        return task_type
 
     def validate_org(self, value):
         org = Organization.objects.filter(id=value).first()
@@ -107,13 +111,13 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         level = Level.objects.filter(id=value).first()
         if level is None:
             raise serializers.ValidationError("Enter a valid level id")
-        return value
+        return level
 
     def validate_ig(self, value):
         ig = InterestGroup.objects.filter(id=value).first()
         if ig is None:
             raise serializers.ValidationError("Enter a valid interest group id")
-        return value
+        return ig
 
 
 class ChannelDropdownSerializer(serializers.ModelSerializer):

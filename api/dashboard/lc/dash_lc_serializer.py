@@ -1,12 +1,13 @@
-from rest_framework import serializers
 import uuid
-from db.task import InterestGroup
-from db.learning_circle import LearningCircle, UserCircleLink
-from db.organization import UserOrganizationLink
-from utils.utils import DateTimeUtils
-from utils.types import RoleType, OrganizationType
+
 from django.db.models import Sum
+from rest_framework import serializers
+
+from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
+from db.organization import UserOrganizationLink
 from db.task import TotalKarma
+from utils.types import OrganizationType
+from utils.utils import DateTimeUtils
 
 
 class LearningCircleSerializer(serializers.ModelSerializer):
@@ -57,12 +58,13 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                        org__org_type=OrganizationType.COLLEGE.value).first()
+        ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
             name=validated_data.get('name'),
             circle_code=validated_data.get('circle_code'),
-            ig=validated_data.get('ig'),
+            ig=ig,
             org=org_link.org,
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
@@ -73,7 +75,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             id=uuid.uuid4(),
             user=org_link.user,
             circle=lc,
-            lead_id=True,
+            lead=True,
             accepted=1,
             accepted_at=DateTimeUtils.get_current_utc_time(),
             created_at=DateTimeUtils.get_current_utc_time()
@@ -108,7 +110,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         ]
 
     def get_pending_members(self, obj):
-        pending_members = UserCircleLink.objects.filter(circle=obj, accepted=0)
+        pending_members = UserCircleLink.objects.filter(circle=obj, accepted=None)
         return [
             {
                 'id': member.user.id,
@@ -116,6 +118,9 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
                 if member.user.last_name
                 else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
+                'karma': TotalKarma.objects.filter(user=member.user.id)
+                .values_list('karma', flat=True)
+                .first(),
             }
             for member in pending_members
         ]
@@ -135,6 +140,22 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "total_karma"
         ]
 
+
+class LearningCircleJoinSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserCircleLink
+        fields = []
+    def create(self, validated_data):
+        user_id = self.context.get('user_id')
+        circle_id = self.context.get('circle_id')
+        validated_data['id'] = uuid.uuid4()
+        validated_data['user_id'] = user_id
+        validated_data['circle_id'] = circle_id
+        validated_data['lead'] = False
+        validated_data['accepted'] = False
+        validated_data['accepted_at'] = None
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        return UserCircleLink.objects.create(**validated_data)
 
 class LearningCircleUpdateSerializer(serializers.ModelSerializer):
     is_accepted = serializers.BooleanField()
