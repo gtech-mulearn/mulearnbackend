@@ -1,11 +1,13 @@
 from rest_framework.views import APIView
-from db.task import UserLvlLink, Level
+
 from db.organization import UserOrganizationLink
+from db.task import Level
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
+
 
 class StudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -68,7 +70,8 @@ class StudentInEachLevelAPI(APIView):
         serializer = serializers.StudentInEachLevelSerializer(level, many=True,
                                                               context={'user_org': user_org_link.org.title})
         return CustomResponse(response=serializer.data).get_success_response()
-    
+
+
 class WeeklyKarmaAPI(APIView):
     authentication_classes = [CustomizePermission]
 
