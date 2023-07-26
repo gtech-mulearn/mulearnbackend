@@ -2,7 +2,7 @@ from django.db.models import Sum, F, Q, Prefetch
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from db.task import KarmaActivityLog, TotalKarma, UserIgLink, UserLvlLink, Level, TaskList
+from db.task import KarmaActivityLog, TotalKarma, UserIgLink, Level, TaskList
 from db.user import User, UserSettings
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
@@ -75,7 +75,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_karma_distribution(self, obj):
         karma_distribution = (
             KarmaActivityLog.objects
-            .filter(created_by=obj)
+            .filter(user=obj)
             .values(task_type=F('task__type__title'))
             .annotate(karma=Sum('karma'))
             .order_by()
@@ -89,62 +89,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return user_level_link.level.name
         return None
 
-    # def get_interest_groups(self, obj):
-    #
-    #     interest_groups = (
-    #         UserIgLink.objects.filter(user=obj).annotate(
-    #             total_karma=Coalesce(
-    #                 Sum('ig__tasklist__karmaactivitylog__karma',
-    #                     filter=Q(ig__tasklist__karmaactivitylog__created_by=obj)), Value(0)
-    #             )).values(name=F('ig__name'), karma=F('total_karma'))
-    #     )
-    #
-    #     return interest_groups
-
     def get_interest_groups(self, obj):
         interest_groups = []
         for ig_link in UserIgLink.objects.filter(user=obj):
-            total_ig_karma = 0 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, created_by=obj).aggregate(
-                Sum('karma')).get(
-                'karma__sum') is None else KarmaActivityLog.objects.filter(task__ig=ig_link.ig,
-                                                                           created_by=obj).aggregate(
+            total_ig_karma = 0 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj).aggregate(
+                Sum('karma')).get('karma__sum') is None else KarmaActivityLog.objects.filter(task__ig=ig_link.ig,
+                                                                                             user=obj).aggregate(
                 Sum('karma')).get('karma__sum')
-            interest_groups.append(
-                {'name': ig_link.ig.name, 'karma': total_ig_karma})
+            interest_groups.append({'name': ig_link.ig.name, 'karma': total_ig_karma})
         return interest_groups
-
-
-class UserLevelsSerializer(ModelSerializer):
-    level_number = serializers.CharField(source='level.level_order')
-    task_names = serializers.SerializerMethodField()
-    task_completed = serializers.SerializerMethodField()
-    remaining_tasks = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserLvlLink
-        fields = ["level_number", "task_names",
-                  "task_completed", "remaining_tasks"]
-
-    def get_task_names(self, obj):
-        task_names = []
-        for data in Level.objects.filter(id=obj.level_id):
-            task_names.append(data.name)
-            return task_names
-
-    def get_task_completed(self, obj):
-        return 1
-
-    def get_remaining_tasks(self, obj):
-        return 1
-
-    def get_is_public(self, obj):
-        user_settings = UserSettings.objects.filter(user=obj).first()
-        if user_settings is not None:
-            is_public_status = user_settings.is_public
-        else:
-            # Set a default value when UserSettings is not found
-            is_public_status = False
-        return is_public_status
 
 
 class UserLevelSerializer(serializers.ModelSerializer):
@@ -154,38 +107,16 @@ class UserLevelSerializer(serializers.ModelSerializer):
         model = Level
         fields = ('name', 'tasks', 'karma')
 
-    # def get_tasks(self, obj):
-    #     data = []
-    #     user_id = self.context.get('user_id')
-    #
-    #     for task in TaskList.objects.filter(level=obj):
-    #         completed = False
-    #         karma_activity = KarmaActivityLog.objects.filter(task=task, created_by=user_id, appraiser_approved=True)
-    #
-    #         if task.active:
-    #             if karma_activity:
-    #                 completed = True
-    #         else:
-    #             if karma_activity:
-    #                 completed = True
-    #             else:
-    #                 continue
-    #
-    #         data.append({'task_name': task.title, 'hashtag': task.hashtag, 'completed': completed})
-    #
-    #     return data
-
     def get_tasks(self, obj):
         user_id = self.context.get('user_id')
         tasks = TaskList.objects.filter(level=obj).prefetch_related(
             Prefetch('karmaactivitylog_set',
-                     queryset=KarmaActivityLog.objects.filter(created_by=user_id, appraiser_approved=True))
+                     queryset=KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True))
         )
 
         data = []
         for task in tasks:
             completed = task.karmaactivitylog_set.exists()
-
             if task.active or completed:
                 data.append({
                     'task_name': task.title,

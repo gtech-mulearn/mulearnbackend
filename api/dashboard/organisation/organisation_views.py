@@ -21,7 +21,9 @@ class InstitutionCSV(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_type):
-        org_objs = Organization.objects.filter(org_type=org_type)
+        org_objs = Organization.objects.filter(org_type=org_type).prefetch_related(
+            "affiliation", "district__zone__state__country"
+        )
         orgs_data = OrganisationSerializer(org_objs, many=True).data
         return CommonUtils.generate_csv(orgs_data, org_type)
 
@@ -31,7 +33,6 @@ class InstitutionsAPI(APIView):
         clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
         cmuty_orgs = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
-        # print(clg_orgs.order_by('district__zone__name'))
 
         paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code',
                                                                                     'affiliation__title',

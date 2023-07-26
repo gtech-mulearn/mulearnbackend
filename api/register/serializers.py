@@ -7,6 +7,7 @@ from rest_framework import serializers
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
+from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink
 from utils.types import RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
@@ -140,9 +141,15 @@ class RegisterSerializer(serializers.ModelSerializer):
                                           department_id=dept,
                                           graduation_year=year_of_graduation) for org_id in organization_ids])
 
-            UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(
-            ), user=user, ig_id=ig, created_by=user, created_at=DateTimeUtils.get_current_utc_time()) for ig in
-                area_of_interests])
+            UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(), user=user, ig_id=ig, created_by=user,
+                                                       created_at=DateTimeUtils.get_current_utc_time()) for ig in
+                                            area_of_interests])
+
+            level = Level.objects.filter(level_order='1').first()
+            if level:
+                UserLvlLink.objects.create(id=uuid4(), user=user, level=level, updated_by=user,
+                                           updated_at=DateTimeUtils.get_current_utc_time(), created_by=user,
+                                           created_at=DateTimeUtils.get_current_utc_time())
 
             UserSettings.objects.create(id=uuid4(), user=user, is_public=0, created_by=user,
                                         created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
@@ -155,7 +162,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                                                 updated_by=user,
                                                 updated_at=DateTimeUtils.get_current_utc_time())
                 KarmaActivityLog.objects.create(
-                    id=uuid4(), karma=karma_amount, task=task_list, created_by=referral_provider,
+                    id=uuid4(), karma=karma_amount, task=task_list, created_by=user,
                     user=referral_provider,
                     created_at=DateTimeUtils.get_current_utc_time(), appraiser_approved=True, peer_approved=True,
                     appraiser_approved_by=user, peer_approved_by=user,

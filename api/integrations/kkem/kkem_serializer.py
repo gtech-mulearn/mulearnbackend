@@ -28,12 +28,12 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         for ig_link in UserIgLink.objects.filter(user=obj):
             total_ig_karma = (
                 0
-                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, created_by=obj)
+                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
                 .aggregate(Sum("karma"))
                 .get("karma__sum")
                 is None
                 else KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, created_by=obj
+                    task__ig=ig_link.ig, user=obj
                 )
                 .aggregate(Sum("karma"))
                 .get("karma__sum")
