@@ -147,6 +147,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         fields = [
             "name",
             "circle_code",
+            "note",
             "college",
             "members",
             "pending_members",
@@ -206,7 +207,21 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+class LearningCircleNoteSerializer(serializers.ModelSerializer):
+    note = serializers.CharField(required=True, error_messages={
+        'required': 'note field must not be left blank.'
+    })
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "note"
+        ]
 
+    def update(self,instance,validated_data):
+        instance.note = validated_data.get('note')
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        return instance
 class LearningCircleMeetSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
