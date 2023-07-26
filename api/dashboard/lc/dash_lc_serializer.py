@@ -140,7 +140,12 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         ]
 
     def get_rank(self, obj):
-        return 3
+        rank = UserCircleLink.objects.filter(user__usercirclelink__circle=obj, accepted=True,
+                                             user__total_karma_user__isnull=False).values('circle_id').annotate(
+            total_karma=Sum('user__total_karma_user__karma')
+        ).order_by('-total_karma')
+        lc_rank = {lc['circle_id']: i + 1 for i, lc in enumerate(rank)}
+        return lc_rank.get(obj.id)
 
     class Meta:
         model = LearningCircle
@@ -168,14 +173,13 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         no_of_entry = UserCircleLink.objects.filter(circle_id=circle_id, accepted=True).count()
         ig_id = LearningCircle.objects.get(pk=circle_id).ig_id
         if entry := UserCircleLink.objects.filter(
-            circle_id=circle_id, user_id=user_id
+                circle_id=circle_id, user_id=user_id
         ).first():
             raise serializers.ValidationError("Cannot send another request at the moment")
-        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig_id,accepted=True).exists():
+        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig_id, accepted=True).exists():
             raise serializers.ValidationError("Already a member of learning circle with same interest group")
         if no_of_entry >= 5:
             raise serializers.ValidationError("Maximum member count reached")
-
 
         validated_data['id'] = uuid.uuid4()
         validated_data['user_id'] = user_id
@@ -207,21 +211,25 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
 class LearningCircleNoteSerializer(serializers.ModelSerializer):
     note = serializers.CharField(required=True, error_messages={
         'required': 'note field must not be left blank.'
     })
+
     class Meta:
         model = LearningCircle
         fields = [
             "note"
         ]
 
-    def update(self,instance,validated_data):
+    def update(self, instance, validated_data):
         instance.note = validated_data.get('note')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
+
 class LearningCircleMeetSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
@@ -236,6 +244,7 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         instance.meet_place = validated_data.get('meet_place')
         instance.day = validated_data.get('date')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
+
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
