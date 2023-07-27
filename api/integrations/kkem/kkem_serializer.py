@@ -114,7 +114,13 @@ class KKEMAuthorization(serializers.ModelSerializer):
             else:
                 raise
 
-        return kkem_link
+        return {
+            "email": kkem_link.user.email,
+            "fullname": kkem_link.user.fullname,
+            "mu_id": kkem_link.user.mu_id,
+            "dwms_id": kkem_link.integration_value,
+            "link_id": kkem_link.id,
+        }
 
     class Meta:
         model = IntegrationAuthorization

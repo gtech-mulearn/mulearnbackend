@@ -1,21 +1,16 @@
-import traceback
 from datetime import datetime
 
 from django.db.models import Prefetch
-import requests
-from requests import Response
 from rest_framework.views import APIView
 
 from db.integrations import IntegrationAuthorization
 from db.task import UserIgLink
 from db.user import User
 from utils.response import CustomResponse
-from utils.utils import CommonUtils
 from utils.utils import DateTimeUtils
-from ..integrations_helper import token_required, send_kkm_mail
+
+from ..integrations_helper import get_access_token, send_kkm_mail, token_required
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
-import decouple
-from django.db.models import Q
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -102,12 +97,7 @@ class KKEMAuthorizationAPI(APIView):
                 ).get_failure_response()
 
             kkem_link = serialized_set.save()
-            if hasattr(kkem_link, "user"):
-                send_kkm_mail(kkem_link.user, kkem_link)
-            else:
-                return CustomResponse(
-                    general_message="Failed to authenticate user"
-                ).get_failure_response()
+            send_kkm_mail(user_data=kkem_link)
 
             return CustomResponse(
                 general_message="Authorization created successfully. Email sent."
@@ -132,12 +122,12 @@ class KKEMAuthorizationAPI(APIView):
             return CustomResponse(
                 general_message="User authenticated successfully", response=response
             ).get_success_response()
-            
+
         except IntegrationAuthorization.DoesNotExist:
             return CustomResponse(
                 general_message="Invalid or missing Token"
             ).get_failure_response()
-            
+
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
@@ -173,24 +163,3 @@ class KKEMIntegrationLogin(APIView):
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
-
-
-def get_access_token(email_or_muid, password):
-    auth_domain = decouple.config("AUTH_DOMAIN")
-
-    response: Response = requests.post(
-        f"{auth_domain}/api/v1/auth/user-authentication/",
-        data={"emailOrMuid": email_or_muid, "password": password},
-    )
-    response = response.json()
-    if response.get("statusCode") != 200:
-        raise ValueError(response.get("message"))
-
-    res_data = response.get("response")
-    access_token = res_data.get("accessToken")
-    refresh_token = res_data.get("refreshToken")
-
-    return {
-        "accessToken": access_token,
-        "refreshToken": refresh_token,
-    }
