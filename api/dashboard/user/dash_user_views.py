@@ -10,17 +10,18 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
+from api.dashboard.user.dash_user_helper import mulearn_mails
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
+
 from . import dash_user_serializer
-from django.template.loader import render_to_string
 
 
 class UserInfoAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
@@ -36,9 +37,9 @@ class UserInfoAPI(APIView):
 
 
 class UserEditAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value,])
+    @role_required([RoleType.ADMIN.value,])
     def get(self, request, user_id):
         user = (
             User.objects.filter(id=user_id)
@@ -48,7 +49,7 @@ class UserEditAPI(APIView):
         serializer = dash_user_serializer.UserEditSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -61,7 +62,7 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -80,9 +81,9 @@ class UserEditAPI(APIView):
 
 
 class UserAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id=None):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -157,9 +158,9 @@ class UserAPI(APIView):
 
 
 class UserManagementCSV(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
@@ -208,9 +209,9 @@ class UserManagementCSV(APIView):
 
 
 class UserVerificationAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
@@ -227,7 +228,7 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
@@ -256,7 +257,7 @@ class UserVerificationAPI(APIView):
                 response={"user_role_link": str(e)}
             ).get_failure_response()
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
@@ -450,17 +451,4 @@ class UserInviteAPI(APIView):
         ).get_success_response()
 
 
-class mulearn_mails:
-    def send_mail_mentor(self, user_data):
-        email_host_user = decouple.config("EMAIL_HOST_USER")
-        email_content = render_to_string(
-            "mails\mentor_verification.html", {"user": user_data}
-        )
 
-        send_mail(
-            subject="Mentorship request at μLearn!",
-            message=email_content,
-            from_email=email_host_user,
-            recipient_list=[user_data["email"]],
-            html_message=email_content,
-        )

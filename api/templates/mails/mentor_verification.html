@@ -9,7 +9,7 @@
       line-height: 1.1;
     "
   >
-    MENTORSHIP REQUEST FOLLOW-UP
+    {{ user.role_title|upper }} REQUEST FOLLOW-UP
   </h1>
   <p
     style="
@@ -20,8 +20,9 @@
     "
   >
     Dear {{ user.full_name }},<br />
-    Your request for the Mentor role has been verified and approved. We are
-    happy to have you amongst our talented team of Mentors.
+    Your request for the {{ user.role_title }} role has been verified and
+    approved. We are happy to have you amongst our talented team of
+    contributors.
   </p>
 
   <p
@@ -33,8 +34,18 @@
     "
   >
     We sincerely appreciate your passion and dedication in pursuing this role.
-    Looking forward to building an enhanced learning environment for our
-    students with your support.
+    Looking forward to building an enhanced learning environment with your
+    cooperation and support.
+  </p>
+  <p
+    style="
+      color: black;
+      font-family: 'Poppins';
+      line-height: 1.5;
+      font-size: 13px;
+    "
+  >
+    Thank you.
   </p>
 </center>
 {% endblock %}
