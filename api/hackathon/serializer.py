@@ -267,6 +267,12 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
         user = User.objects.filter(mu_id=value).first()
         if not user:
             raise serializers.ValidationError("User Not Exists")
+
+        if user:
+            if HackathonOrganiserLink.objects.filter(organiser=user,
+                                                     hackathon__id=self.context.get('hackathon').id).exists():
+                raise serializers.ValidationError("This User Already An Organizer in this hackathon")
+
         return user.id
 
     def create(self, validated_data):
