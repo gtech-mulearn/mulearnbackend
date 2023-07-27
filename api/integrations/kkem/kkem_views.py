@@ -112,13 +112,13 @@ class KKEMAuthorizationAPI(APIView):
 
             authorization.verified = True
             authorization.updated_at = DateTimeUtils.get_current_utc_time()
-            authorization.save()
 
             password = authorization.user.password
             mu_id = authorization.user.mu_id
 
             response = get_access_token(mu_id, password)
 
+            authorization.save()
             return CustomResponse(
                 general_message="User authenticated successfully", response=response
             ).get_success_response()

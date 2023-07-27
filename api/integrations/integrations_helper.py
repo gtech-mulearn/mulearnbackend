@@ -1,4 +1,3 @@
-from email.mime import base
 import decouple
 import requests
 from django.core.mail import send_mail
@@ -12,7 +11,7 @@ def send_kkm_mail(user_data):
     email_host_user = decouple.config("EMAIL_HOST_USER")
     base_url = decouple.config("FR_DOMAIN_NAME")
     email_content = render_to_string(
-        r"mails\KKEM\verify_integration.html", {"user": user_data, "baseurl" : base_url}
+        r"mails\KKEM\verify_integration.html", {"user": user_data, "base_url" : base_url}
     )
 
     send_mail(
