@@ -76,7 +76,7 @@ class RegisterDataAPI(APIView):
                 ).get_failure_response()
 
             serialized_set.save()
-            response["KKEM"] = serialized_set.data
+            response_dwms = serialized_set.data
 
         auth_domain = decouple.config("AUTH_DOMAIN")
 
@@ -182,6 +182,7 @@ class RegisterDataAPI(APIView):
                 "data": serializers.UserDetailSerializer(
                     user_obj, many=False
                 ).data,
+                "dwms" : response_dwms,
                 "accessToken": access_token,
                 "refreshToken": refresh_token,
             }
