@@ -43,13 +43,14 @@ class RegisterDataAPI(APIView):
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
         )
-        user_obj, password = create_user.save()
 
         if not create_user.is_valid():
             return CustomResponse(
                 message=create_user.errors, general_message="Invalid fields"
             ).get_failure_response()
             
+        user_obj, password = create_user.save()
+        
         response = requests.post(
             f"{auth_domain}/api/v1/auth/user-authentication/",
             data={"emailOrMuid": user_obj.mu_id, "password": password},
