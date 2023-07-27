@@ -247,7 +247,8 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         instance.meet_place = validated_data.get('meet_place')
         instance.day = validated_data.get('date')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-
+        instance.save()
+        return instance
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
