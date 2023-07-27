@@ -327,7 +327,7 @@ class ForgotPasswordAPI(APIView):
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
 
                     
-                        < href="{domain}/reset-password?token={forget_user.id}/" style="width:160px;height: 40px;"> 
+                        <a href="{domain}/reset-password?token={forget_user.id}/" style="width:160px;height: 40px;"> 
                             <img style="width:160px;height: 40px;" src="https://iili.io/HQFXsFp.png" alt=""></a>
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
                         <p style="color: black;font-family: 'Poppins';line-height: 1.2;font-size: 13px;">Didn't request
