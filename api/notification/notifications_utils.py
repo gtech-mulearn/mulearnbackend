@@ -26,8 +26,8 @@ class NotificationUtils:
         Returns:
             True if the notification is inserted successfully, False otherwise.
         """
-        try:
-            notification = Notification.objects.create(
+
+        notification = Notification.objects.create(
                 user_id=user_id,
                 title=title,
                 description=description,
@@ -35,8 +35,8 @@ class NotificationUtils:
                 url=url,
                 created_by=created_by,
                 )
+        if notification:
             notification.save()
             return True
-        except IntegrityError as e:
-            logger.error(e)
+        else:
             return False

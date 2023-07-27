@@ -45,3 +45,27 @@ class NotificationDeleteAPI(APIView):
 
         notification.delete()
         return CustomResponse(response='Notification deleted successfully').get_success_response()
+
+
+class NotificationDeleteAllAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def delete(self, request):
+        """
+        Delete all the notifications for a user
+        Args:
+            request:
+
+        Returns:
+            200: Notification deleted successfully
+            400: Notification not found
+
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        print(user_id)
+        notification = Notification.objects.filter(user_id=user_id)
+        if not notification:
+            return CustomResponse(response='Notifications are empty').get_failure_response()
+
+        notification.delete()
+        return CustomResponse(response='All notification deleted successfully').get_success_response()
