@@ -1,6 +1,7 @@
-from django.db import IntegrityError
-from db.notification import Notification
 import logging
+
+from db.notification import Notification
+from utils.utils import DateTimeUtils
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +29,14 @@ class NotificationUtils:
         """
 
         notification = Notification.objects.create(
-                user_id=user_id,
-                title=title,
-                description=description,
-                button=button,
-                url=url,
-                created_by=created_by,
-                )
+            user_id=user_id,
+            title=title,
+            description=description,
+            button=button,
+            url=url,
+            created_at=DateTimeUtils.get_current_utc_time(),
+            created_by=created_by,
+        )
         if notification:
             notification.save()
             return True
