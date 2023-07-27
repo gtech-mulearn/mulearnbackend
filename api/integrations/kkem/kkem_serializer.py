@@ -32,9 +32,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
                 .aggregate(Sum("karma"))
                 .get("karma__sum")
                 is None
-                else KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, user=obj
-                )
+                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
                 .aggregate(Sum("karma"))
                 .get("karma__sum")
             )
@@ -62,7 +60,6 @@ class KKEMAuthorization(serializers.ModelSerializer):
     emailOrMuid = serializers.CharField(source="user.mu_id")
     dwms_id = serializers.CharField(source="integration_value")
     integration = serializers.CharField(source="integration.name")
-    verified = serializers.BooleanField()
 
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
@@ -101,6 +98,12 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 raise ValueError(
                     "This dwms_id is already associated with another user"
                 ) from e
+            elif (
+                self.context["type"] == "login"
+                and kkem_link.integration_value == validated_data["integration_value"]
+                and kkem_link.verified == True
+            ):
+                return kkem_link
             elif kkem_link.verified:
                 raise ValueError("Authorization already exists and is verified.") from e
             elif kkem_link.user == user:

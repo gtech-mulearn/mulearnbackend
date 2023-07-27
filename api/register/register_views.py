@@ -4,6 +4,7 @@ from django.core.mail import send_mail
 from django.utils.html import strip_tags
 from django.db.models import Q
 from rest_framework.views import APIView
+from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 
 from db.organization import Country, District, Organization, Department, State, Zone
 from db.task import InterestGroup
@@ -36,18 +37,19 @@ class LearningCircleUserViewAPI(APIView):
 class RegisterDataAPI(APIView):
     def post(self, request):
         data = request.data
+        dwms_id = request.data.get("dwms_id", None)
+        integration = request.data.get("integration", None)
+        
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
         )
+        user_obj, password = create_user.save()
 
         if not create_user.is_valid():
             return CustomResponse(
                 message=create_user.errors, general_message="Invalid fields"
             ).get_failure_response()
-        user_obj, password = create_user.save()
-
-        auth_domain = decouple.config("AUTH_DOMAIN")
-
+            
         response = requests.post(
             f"{auth_domain}/api/v1/auth/user-authentication/",
             data={"emailOrMuid": user_obj.mu_id, "password": password},
@@ -60,6 +62,24 @@ class RegisterDataAPI(APIView):
         res_data = response.get("response")
         access_token = res_data.get("accessToken")
         refresh_token = res_data.get("refreshToken")
+            
+        if dwms_id and integration:
+            
+            request.data["verified"] = True
+            serialized_set = KKEMAuthorization(
+                data=request.data, context={"type": "register"}
+            )
+
+            if not serialized_set.is_valid():
+                return CustomResponse(
+                    general_message=serialized_set.errors
+                ).get_failure_response()
+
+            serialized_set.save()
+            response["KKEM"] = serialized_set.data
+
+        auth_domain = decouple.config("AUTH_DOMAIN")
+
         html_message = f"""
 <!DOCTYPE html>
 <html lang="en">

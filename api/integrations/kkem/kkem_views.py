@@ -3,6 +3,7 @@ from datetime import datetime
 
 from django.db.models import Prefetch
 import requests
+from requests import Response
 from rest_framework.views import APIView
 
 from db.integrations import IntegrationAuthorization
@@ -34,28 +35,36 @@ class KKEMBulkKarmaAPI(APIView):
                     general_message="Invalid datetime format",
                 ).get_failure_response()
 
-            queryset = User.objects.filter(
-                integration_authorization_user__integration__token=token,
-                integration_authorization_user__verified=True,
-                karma_activity_log_user__appraiser_approved=True,
-                karma_activity_log_user__updated_at__gte=from_datetime,
-            ).prefetch_related(
-                Prefetch(
-                    "user_ig_link_created_by",
-                    queryset=UserIgLink.objects.select_related("ig"),
+            queryset = (
+                User.objects.filter(
+                    integration_authorization_user__integration__token=token,
+                    integration_authorization_user__verified=True,
+                    karma_activity_log_user__appraiser_approved=True,
+                    karma_activity_log_user__updated_at__gte=from_datetime,
                 )
-            ).distinct()
+                .prefetch_related(
+                    Prefetch(
+                        "user_ig_link_created_by",
+                        queryset=UserIgLink.objects.select_related("ig"),
+                    )
+                )
+                .distinct()
+            )
         else:
-            queryset = User.objects.filter(
-                integration_authorization_user__integration__token=token,
-                integration_authorization_user__verified=True,
-                karma_activity_log_user__appraiser_approved=True,
-            ).prefetch_related(
-                Prefetch(
-                    "user_ig_link_created_by",
-                    queryset=UserIgLink.objects.select_related("ig"),
+            queryset = (
+                User.objects.filter(
+                    integration_authorization_user__integration__token=token,
+                    integration_authorization_user__verified=True,
+                    karma_activity_log_user__appraiser_approved=True,
                 )
-            ).distinct()
+                .prefetch_related(
+                    Prefetch(
+                        "user_ig_link_created_by",
+                        queryset=UserIgLink.objects.select_related("ig"),
+                    )
+                )
+                .distinct()
+            )
 
         serialized_users = KKEMUserSerializer(queryset, many=True)
 
@@ -82,7 +91,9 @@ class KKEMIndividualKarmaAPI(APIView):
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
         request.data["verified"] = False
-        serialized_set = KKEMAuthorization(data=request.data)
+        serialized_set = KKEMAuthorization(
+            data=request.data, context={"type": "register"}
+        )
 
         try:
             if not serialized_set.is_valid():
@@ -103,25 +114,32 @@ class KKEMAuthorizationAPI(APIView):
             ).get_success_response()
 
         except Exception as e:
-            # Remove this line in production
-            # traceback_info = traceback.format_exc()
-            # error_message = f"An error occurred: {traceback_info}"
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     def patch(self, request, token):
-        authorization = IntegrationAuthorization.objects.filter(id=token).first()
-        if not authorization:
+        try:
+            authorization = IntegrationAuthorization.objects.get(id=token)
+
+            authorization.verified = True
+            authorization.updated_at = DateTimeUtils.get_current_utc_time()
+            authorization.save()
+
+            password = authorization.user.password
+            mu_id = authorization.user.mu_id
+
+            response = get_access_token(mu_id, password)
+
+            return CustomResponse(
+                general_message="User authenticated successfully", response=response
+            ).get_success_response()
+            
+        except IntegrationAuthorization.DoesNotExist:
             return CustomResponse(
                 general_message="Invalid or missing Token"
             ).get_failure_response()
-
-        authorization.verified = True
-        authorization.updated_at = DateTimeUtils.get_current_utc_time()
-        authorization.save()
-
-        return CustomResponse(
-            general_message="User authenticated successfully"
-        ).get_success_response()
+            
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class KKEMIntegrationLogin(APIView):
@@ -135,30 +153,13 @@ class KKEMIntegrationLogin(APIView):
             dwms_id = request.data.get("dwms_id", None)
             integration = request.data.get("integration", None)
 
-            auth_domain = decouple.config("AUTH_DOMAIN")
-
-            response = requests.post(
-                f"{auth_domain}/api/v1/auth/user-authentication/",
-                data={"emailOrMuid": email_or_muid, "password": password},
-            )
-            response = response.json()
-            if response.get("statusCode") != 200:
-                return CustomResponse(
-                    message=response.get("message")
-                ).get_failure_response()
-
-            res_data = response.get("response")
-            access_token = res_data.get("accessToken")
-            refresh_token = res_data.get("refreshToken")
-
-            response = {
-                "accessToken": access_token,
-                "refreshToken": refresh_token,
-            }
+            response = get_access_token(email_or_muid, password)
 
             if dwms_id and integration:
                 request.data["verified"] = True
-                serialized_set = KKEMAuthorization(data=request.data)
+                serialized_set = KKEMAuthorization(
+                    data=request.data, context={"type": "login"}
+                )
 
                 if not serialized_set.is_valid():
                     return CustomResponse(
@@ -173,10 +174,23 @@ class KKEMIntegrationLogin(APIView):
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-        # send_mail(
-        #     "Congrats, You have been successfully registered in μlearn",
-        #     f" Your Muid {user_obj.mu_id}",
-        #     decouple.config("EMAIL_HOST_USER"),
-        #     [user_obj.email],
-        #     fail_silently=False,
-        # )
+
+def get_access_token(email_or_muid, password):
+    auth_domain = decouple.config("AUTH_DOMAIN")
+
+    response: Response = requests.post(
+        f"{auth_domain}/api/v1/auth/user-authentication/",
+        data={"emailOrMuid": email_or_muid, "password": password},
+    )
+    response = response.json()
+    if response.get("statusCode") != 200:
+        raise ValueError(response.get("message"))
+
+    res_data = response.get("response")
+    access_token = res_data.get("accessToken")
+    refresh_token = res_data.get("refreshToken")
+
+    return {
+        "accessToken": access_token,
+        "refreshToken": refresh_token,
+    }
