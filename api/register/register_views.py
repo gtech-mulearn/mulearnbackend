@@ -50,7 +50,7 @@ class RegisterDataAPI(APIView):
             ).get_failure_response()
 
         user_obj, password = create_user.save()
-
+        auth_domain = decouple.config("AUTH_DOMAIN")
         response = requests.post(
             f"{auth_domain}/api/v1/auth/user-authentication/",
             data={"emailOrMuid": user_obj.mu_id, "password": password},
@@ -83,7 +83,6 @@ class RegisterDataAPI(APIView):
             serialized_set.save()
             response["dwms"] = serialized_set.data
 
-        auth_domain = decouple.config("AUTH_DOMAIN")
 
         html_message = f"""
 <!DOCTYPE html>
@@ -131,7 +130,7 @@ class RegisterDataAPI(APIView):
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
                         <p style="color: black;font-family: 'Poppins';line-height: 1.3;font-size: 13px;">Stay tuned for
                             our events and notifications. Remember, you are not just any learner; you're a
-                            MuLearner😉.<br><br>Happy Learning!</p>
+                            MuLearner😉.<br><br>Happy Learning!</p>
                     </center>
                 </div>
                 <div style="background: transparent;width: 100%;height: 40px;"></div>
@@ -222,7 +221,6 @@ class CountryAPI(APIView):
 
 class StateAPI(APIView):
     def post(self, request):
-        print(request.data.get("country"))
         state = State.objects.filter(country_id=request.data.get("country"))
         serializer = serializers.StateSerializer(state, many=True)
         return CustomResponse(

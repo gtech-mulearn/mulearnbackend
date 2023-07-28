@@ -108,7 +108,8 @@ class HackathonSubmissionAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
-        serializer = HackathonUserSubmissionSerializer(data=request.data, context={'request': request})
+        user_id = JWTUtils.fetch_muid(request)
+        serializer = HackathonUserSubmissionSerializer(data=request.data, context={'request': request,'user_id':user_id})
         if serializer.is_valid():
             instance = serializer.save()
             return CustomResponse(general_message="Hackathon Submission Successfull",
