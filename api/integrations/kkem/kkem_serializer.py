@@ -118,7 +118,6 @@ class KKEMAuthorization(serializers.ModelSerializer):
             "email": kkem_link.user.email,
             "fullname": kkem_link.user.fullname,
             "mu_id": kkem_link.user.mu_id,
-            "jsid": kkem_link.integration_value,
             "link_id": kkem_link.id,
         }
 
