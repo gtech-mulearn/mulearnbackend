@@ -153,6 +153,9 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "name",
             "circle_code",
             "note",
+            "meet_time",
+            "meet_place",
+            "day",
             "college",
             "members",
             "pending_members",
@@ -244,7 +247,8 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         instance.meet_place = validated_data.get('meet_place')
         instance.day = validated_data.get('date')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-
+        instance.save()
+        return instance
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
