@@ -12,7 +12,7 @@ from django.db.models import Q
 class KKEMUserSerializer(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
-    dwms_id = serializers.SerializerMethodField()
+    jsid = serializers.SerializerMethodField()
 
     def get_total_karma(self, obj):
         karma = (
@@ -39,7 +39,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
-    def get_dwms_id(self, obj):
+    def get_jsid(self, obj):
         return (
             IntegrationAuthorization.objects.filter(user=obj, verified=True)
             .first()
@@ -50,7 +50,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "mu_id",
-            "dwms_id",
+            "jsid",
             "total_karma",
             "interest_groups",
         ]
@@ -58,7 +58,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
 class KKEMAuthorization(serializers.ModelSerializer):
     emailOrMuid = serializers.CharField(source="user.mu_id")
-    dwms_id = serializers.CharField(source="integration_value")
+    jsid = serializers.CharField(source="integration_value")
     integration = serializers.CharField(source="integration.name")
 
     def create(self, validated_data):
@@ -96,7 +96,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 ).first()
             ):
                 raise ValueError(
-                    "This dwms_id is already associated with another user"
+                    "This jsid is already associated with another user"
                 ) from e
             elif (
                 self.context["type"] == "login"
@@ -118,10 +118,10 @@ class KKEMAuthorization(serializers.ModelSerializer):
             "email": kkem_link.user.email,
             "fullname": kkem_link.user.fullname,
             "mu_id": kkem_link.user.mu_id,
-            "dwms_id": kkem_link.integration_value,
+            "jsid": kkem_link.integration_value,
             "link_id": kkem_link.id,
         }
 
     class Meta:
         model = IntegrationAuthorization
-        fields = ["emailOrMuid", "dwms_id", "integration", "verified"]
+        fields = ["emailOrMuid", "jsid", "integration", "verified"]

@@ -37,7 +37,7 @@ class LearningCircleUserViewAPI(APIView):
 class RegisterDataAPI(APIView):
     def post(self, request):
         data = request.data
-        dwms_id = request.data.get("dwms_id", None)
+        jsid = request.data.get("jsid", None)
         integration = request.data.get("integration", None)
 
         create_user = serializers.RegisterSerializer(
@@ -69,7 +69,7 @@ class RegisterDataAPI(APIView):
             "refreshToken": refresh_token,
         }
 
-        if dwms_id and integration:
+        if jsid and integration:
             request.data["verified"] = True
             serialized_set = KKEMAuthorization(
                 data=request.data, context={"type": "register"}
@@ -82,7 +82,6 @@ class RegisterDataAPI(APIView):
 
             serialized_set.save()
             response["dwms"] = serialized_set.data
-
 
         html_message = f"""
 <!DOCTYPE html>

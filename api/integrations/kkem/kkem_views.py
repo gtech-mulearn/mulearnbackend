@@ -1,12 +1,15 @@
 from datetime import datetime
 
 from django.db.models import Prefetch
+import requests
 from rest_framework.views import APIView
 
 from db.integrations import IntegrationAuthorization
 from db.task import UserIgLink
 from db.user import User
 from utils.response import CustomResponse
+import decouple
+
 from utils.utils import DateTimeUtils
 
 from ..integrations_helper import get_access_token, send_kkm_mail, token_required
@@ -140,12 +143,12 @@ class KKEMIntegrationLogin(APIView):
             )
 
             password = request.data.get("password")
-            dwms_id = request.data.get("dwms_id", None)
+            jsid = request.data.get("jsid", None)
             integration = request.data.get("integration", None)
 
             response = get_access_token(email_or_muid, password)
 
-            if dwms_id and integration:
+            if jsid and integration:
                 request.data["verified"] = True
                 serialized_set = KKEMAuthorization(
                     data=request.data, context={"type": "login"}
@@ -160,6 +163,45 @@ class KKEMIntegrationLogin(APIView):
                 response["data"] = serialized_set.data
 
             return CustomResponse(response=response).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+
+class KKEMdetailsFetchAPI(APIView):
+    def get(self, request, jsid):
+        try:
+            url = "https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details"
+
+            username = decouple.config("KKEM_USERNAME")
+            password = decouple.config("KKEM_PASSWORD")
+
+            data = f'{{"username": "{username}", "password": "{password}", "jsid": {jsid}}}'
+
+            response = requests.post(
+                url, data=data, verify=False  #! Change this to True in production
+            )
+            response_data = response.json()
+
+            if (
+                "request_status" in response_data
+                and not response_data["request_status"]
+            ):
+                error_message = response_data.get("msg", "Unknown Error")
+                return CustomResponse(
+                    general_message=error_message
+                ).get_failure_response()
+
+            elif "response" in response_data and response_data["response"].get(
+                "req_status", False
+            ):
+                result_data = response_data["response"]["data"]
+                return CustomResponse(response=result_data).get_success_response()
+
+            else:
+                return CustomResponse(
+                    general_message="Unknown Response Format"
+                ).get_failure_response()
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
