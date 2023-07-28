@@ -10,7 +10,7 @@ from db.organization import Country, District, Organization, Department, State, 
 from db.task import InterestGroup
 from db.user import Role, User
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType,TasksTypesHashtag
+from utils.types import RoleType, OrganizationType, TasksTypesHashtag
 from . import serializers
 
 
@@ -39,7 +39,7 @@ class RegisterDataAPI(APIView):
         data = request.data
         dwms_id = request.data.get("dwms_id", None)
         integration = request.data.get("integration", None)
-        
+
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
         )
@@ -48,7 +48,7 @@ class RegisterDataAPI(APIView):
             return CustomResponse(
                 message=create_user.errors, general_message="Invalid fields"
             ).get_failure_response()
-            
+
         user_obj, password = create_user.save()
         auth_domain = decouple.config("AUTH_DOMAIN")
         response = requests.post(
@@ -63,9 +63,13 @@ class RegisterDataAPI(APIView):
         res_data = response.get("response")
         access_token = res_data.get("accessToken")
         refresh_token = res_data.get("refreshToken")
-            
+
+        response = {
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+        }
+
         if dwms_id and integration:
-            
             request.data["verified"] = True
             serialized_set = KKEMAuthorization(
                 data=request.data, context={"type": "register"}
@@ -77,7 +81,7 @@ class RegisterDataAPI(APIView):
                 ).get_failure_response()
 
             serialized_set.save()
-            response_dwms = serialized_set.data
+            response["dwms"] = serialized_set.data
 
 
         html_message = f"""
@@ -177,16 +181,8 @@ class RegisterDataAPI(APIView):
             fail_silently=False,
             html_message=html_message,
         )
-        return CustomResponse(
-            response={
-                "data": serializers.UserDetailSerializer(
-                    user_obj, many=False
-                ).data,
-                "dwms" : response_dwms,
-                "accessToken": access_token,
-                "refreshToken": refresh_token,
-            }
-        ).get_success_response()
+        response["data"] = serializers.UserDetailSerializer(user_obj, many=False).data
+        return CustomResponse(response=response).get_success_response()
 
 
 class RoleAPI(APIView):
