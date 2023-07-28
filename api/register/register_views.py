@@ -226,7 +226,6 @@ class CountryAPI(APIView):
 
 class StateAPI(APIView):
     def post(self, request):
-        print(request.data.get("country"))
         state = State.objects.filter(country_id=request.data.get("country"))
         serializer = serializers.StateSerializer(state, many=True)
         return CustomResponse(

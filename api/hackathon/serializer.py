@@ -241,6 +241,10 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         hackathon = Hackathon.objects.filter(id=value).first()
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
+        existing_submission = HackathonUserSubmission.objects.filter(hackathon_id=value,
+                                                                     user_id=self.context.get('user_id')).first()
+        if existing_submission:
+            raise serializers.ValidationError("User has already submitted for this hackathon.")
         return hackathon.id
 
     def create(self, validated_data):
@@ -252,6 +256,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+
             hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
         return hackathon_submission
 
@@ -267,6 +272,12 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
         user = User.objects.filter(mu_id=value).first()
         if not user:
             raise serializers.ValidationError("User Not Exists")
+
+        if user:
+            if HackathonOrganiserLink.objects.filter(organiser=user,
+                                                     hackathon__id=self.context.get('hackathon').id).exists():
+                raise serializers.ValidationError("This User Already An Organizer in this hackathon")
+
         return user.id
 
     def create(self, validated_data):
