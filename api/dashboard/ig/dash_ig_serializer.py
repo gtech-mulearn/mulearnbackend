@@ -12,6 +12,8 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "icon",
+            "code",
             "user_ig_link_ig",
             "updated_by",
             "updated_at",
