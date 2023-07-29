@@ -6,4 +6,6 @@ urlpatterns = [
     path("student-level/", campus_views.CampusStudentInEachLevelAPI.as_view()),
     path("student-details/<str:url>/", campus_views.CampusStudentDetailsAPI.as_view()),
     path("student-details/<str:url>/csv/", campus_views.CampusStudentDetailsCSVAPI.as_view()),
+    path("student-level/", campus_views.StudentInEachLevelAPI.as_view()),
+    path("weekly-karma/", campus_views.WeeklyKarmaAPI.as_view()),
 ]

@@ -4,12 +4,13 @@ from django.core.mail import send_mail
 from django.utils.html import strip_tags
 from django.db.models import Q
 from rest_framework.views import APIView
+from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 
 from db.organization import Country, District, Organization, Department, State, Zone
 from db.task import InterestGroup
 from db.user import Role, User
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType,TasksTypesHashtag
+from utils.types import RoleType, OrganizationType, TasksTypesHashtag
 from . import serializers
 
 
@@ -36,6 +37,9 @@ class LearningCircleUserViewAPI(APIView):
 class RegisterDataAPI(APIView):
     def post(self, request):
         data = request.data
+        jsid = request.data.get("jsid", None)
+        integration = request.data.get("integration", None)
+
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
         )
@@ -44,10 +48,9 @@ class RegisterDataAPI(APIView):
             return CustomResponse(
                 message=create_user.errors, general_message="Invalid fields"
             ).get_failure_response()
+
         user_obj, password = create_user.save()
-
         auth_domain = decouple.config("AUTH_DOMAIN")
-
         response = requests.post(
             f"{auth_domain}/api/v1/auth/user-authentication/",
             data={"emailOrMuid": user_obj.mu_id, "password": password},
@@ -60,6 +63,26 @@ class RegisterDataAPI(APIView):
         res_data = response.get("response")
         access_token = res_data.get("accessToken")
         refresh_token = res_data.get("refreshToken")
+
+        response = {
+            "accessToken": access_token,
+            "refreshToken": refresh_token,
+        }
+
+        if jsid and integration:
+            request.data["verified"] = True
+            serialized_set = KKEMAuthorization(
+                data=request.data, context={"type": "register"}
+            )
+
+            if not serialized_set.is_valid():
+                return CustomResponse(
+                    general_message=serialized_set.errors
+                ).get_failure_response()
+
+            serialized_set.save()
+            response["dwms"] = serialized_set.data
+
         html_message = f"""
 <!DOCTYPE html>
 <html lang="en">
@@ -106,7 +129,7 @@ class RegisterDataAPI(APIView):
                         <div style="width: 100%;height: 10px;background: transparent;"></div>
                         <p style="color: black;font-family: 'Poppins';line-height: 1.3;font-size: 13px;">Stay tuned for
                             our events and notifications. Remember, you are not just any learner; you're a
-                            MuLearner😉.<br><br>Happy Learning!</p>
+                            MuLearner😉.<br><br>Happy Learning!</p>
                     </center>
                 </div>
                 <div style="background: transparent;width: 100%;height: 40px;"></div>
@@ -149,8 +172,6 @@ class RegisterDataAPI(APIView):
         to = [user_obj.email]
         contact_msg = strip_tags(html_message)
         subject = "YOUR TICKET TO µFAM IS HERE!"
-        # send_mail("Congrats, You have been successfully registered in μlearn", f" Your Muid {user_obj.mu_id}",
-        #           decouple.config("EMAIL_HOST_USER"), [user_obj.email], fail_silently=False)
         send_mail(
             subject,
             contact_msg,
@@ -159,15 +180,8 @@ class RegisterDataAPI(APIView):
             fail_silently=False,
             html_message=html_message,
         )
-        return CustomResponse(
-            response={
-                "data": serializers.UserDetailSerializer(
-                    user_obj, many=False
-                ).data,
-                "accessToken": access_token,
-                "refreshToken": refresh_token,
-            }
-        ).get_success_response()
+        response["data"] = serializers.UserDetailSerializer(user_obj, many=False).data
+        return CustomResponse(response=response).get_success_response()
 
 
 class RoleAPI(APIView):
@@ -206,7 +220,6 @@ class CountryAPI(APIView):
 
 class StateAPI(APIView):
     def post(self, request):
-        print(request.data.get("country"))
         state = State.objects.filter(country_id=request.data.get("country"))
         serializer = serializers.StateSerializer(state, many=True)
         return CustomResponse(

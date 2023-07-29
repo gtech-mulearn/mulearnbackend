@@ -65,6 +65,20 @@ class CampusStudentDetailsCSVAPI(APIView):
     def get(self, request, url):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
+        
         user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=url)
         serializer = serializers.CampusStudentDetailsSerializer(user_org_links, many=True)
         return CommonUtils.generate_csv(serializer.data, 'Campus Details')
+
+
+
+class WeeklyKarmaAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                            org__org_type=OrganizationType.COLLEGE.value).first()
+        serializer = serializers.WeeklyKarmaSerializer(user_org_link)
+        return CustomResponse(response=serializer.data).get_success_response()
