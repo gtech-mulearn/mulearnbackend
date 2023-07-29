@@ -29,16 +29,18 @@ class OrganizationType(Enum):
 
 
 class WebHookActions(Enum):
-    SEPERATOR = '<|=|>'
+    SEPARATOR = '<|=|>'
     CREATE = 'create'
     EDIT = 'edit'
     DELETE = 'delete'
+    UPDATE = 'update'
 
 
 class WebHookCategory(Enum):
     INTEREST_GROUP = 'ig'
     COMMUNITY = 'community'
     ROLE = 'role'
+    USER_ROLE = 'user-role'
 
 
 class TasksTypesHashtag(Enum):

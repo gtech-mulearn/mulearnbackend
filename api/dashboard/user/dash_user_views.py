@@ -14,8 +14,8 @@ from api.dashboard.user.dash_user_helper import mulearn_mails
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
 
 from . import dash_user_serializer
 
@@ -39,7 +39,7 @@ class UserInfoAPI(APIView):
 class UserEditAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value,])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
         user = (
             User.objects.filter(id=user_id)
@@ -247,6 +247,12 @@ class UserVerificationAPI(APIView):
             user_serializer.save()
             user_data = user_serializer.data
 
+            DiscordWebhooks.channelsAndCategory(
+                WebHookCategory.USER_ROLE.value,
+                WebHookActions.UPDATE.value,
+                user_data.user_id,
+            )
+
             mulearn_mails().send_mail_mentor(user_data)
 
             return CustomResponse(
@@ -449,6 +455,3 @@ class UserInviteAPI(APIView):
         return CustomResponse(
             general_message="Invitation sent successfully"
         ).get_success_response()
-
-
-

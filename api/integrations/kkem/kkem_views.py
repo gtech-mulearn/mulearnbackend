@@ -171,37 +171,52 @@ class KKEMIntegrationLogin(APIView):
 class KKEMdetailsFetchAPI(APIView):
     def get(self, request, jsid):
         try:
-            url = "https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details"
+            # url = "https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details"
 
-            username = decouple.config("KKEM_USERNAME")
-            password = decouple.config("KKEM_PASSWORD")
+            # username = decouple.config("KKEM_USERNAME")
+            # password = decouple.config("KKEM_PASSWORD")
 
-            data = f'{{"username": "{username}", "password": "{password}", "jsid": {jsid}}}'
+            # data = f'{{"username": "{username}", "password": "{password}", "jsid": {jsid}}}'
 
-            response = requests.post(
-                url, data=data, verify=False  #! Change this to True in production
-            )
-            response_data = response.json()
+            # response = requests.post(
+            #     url, data=data, verify=False  #! Change this to True in production
+            # )
+            # response_data = response.json()
 
-            if (
-                "request_status" in response_data
-                and not response_data["request_status"]
-            ):
-                error_message = response_data.get("msg", "Unknown Error")
-                return CustomResponse(
-                    general_message=error_message
-                ).get_failure_response()
+            # if (
+            #     "request_status" in response_data
+            #     and not response_data["request_status"]
+            # ):
+            #     error_message = response_data.get("msg", "Unknown Error")
+            #     return CustomResponse(
+            #         general_message=error_message
+            #     ).get_failure_response()
 
-            elif "response" in response_data and response_data["response"].get(
-                "req_status", False
-            ):
-                result_data = response_data["response"]["data"]
-                return CustomResponse(response=result_data).get_success_response()
+            # elif "response" in response_data and response_data["response"].get(
+            #     "req_status", False
+            # ):
+            #     result_data = response_data["response"]["data"]
+            result_data = {
+                "dwms_id": "KM0037037",
+                "registration": {
+                    "email_id": "lijililly1995@gmail.com",
+                    "key_skills": "java",
+                    "gender": "Female",
+                    "mu_id": None,
+                    "job_seeker_lname": "L",
+                    "dob": "1995-11-09",
+                    "mobile_no": "8129560431",
+                    "job_seeker_fname": "Liji",
+                },
+                "job_seeker_id": 37037,
+            }
+            
+            return CustomResponse(response=result_data).get_success_response()
 
-            else:
-                return CustomResponse(
-                    general_message="Unknown Response Format"
-                ).get_failure_response()
+        # else:
+        #     return CustomResponse(
+        #         general_message="Unknown Response Format"
+        #     ).get_failure_response()
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
