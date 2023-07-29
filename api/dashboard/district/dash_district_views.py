@@ -1,14 +1,10 @@
 from rest_framework.views import APIView
-
-from db.organization import Organization, UserOrganizationLink
-from db.user import User
+from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType
+from utils.types import RoleType
 from utils.utils import CommonUtils
 from . import dash_district_serializer
-from django.db.models import Count, Sum, Q
-from django.db.models.functions import Coalesce
 
 
 # class DistrictStudentsAPI(APIView):
@@ -179,34 +175,71 @@ from django.db.models.functions import Coalesce
 #         return CommonUtils.generate_csv(serializer.data, "District Campus Details")
 
 
-class StudentDistrictDetailAPI(APIView):
+class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
-        serializer = dash_district_serializer.StudentDistrictDetailsSerializer(user_org_link, many=False)
+        serializer = dash_district_serializer.DistrictDetailsSerializer(user_org_link, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
 
 
-class TopThreeCampusAPI(APIView):
+class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
         org_user_district = UserOrganizationLink.objects.filter(org__district__name=user_org_link.org.district.name)
-        serializer = dash_district_serializer.TopThreeCampusSerializer(org_user_district, many=True).data
+        serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(org_user_district, many=True).data
         sorted_serializer = sorted(serializer, key=lambda x: x['rank'])[:3]
         return CustomResponse(response=sorted_serializer).get_success_response()
 
 
-class StudentLevelStatusAPI(APIView):
+class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
         org_user_district = UserOrganizationLink.objects.filter(org__district__name=user_org_link.org.district.name)
-        serializer = dash_district_serializer.StudentLevelStatusSerializer(org_user_district, many=True)
+        serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(org_user_district, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class DistrictStudentDetailsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    def get(self, request, url):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
+        user_org_links = UserOrganizationLink.objects.filter(org__district_id=user_org_link.org.district.id,
+                                                             org__org_type=url)
+        paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'],
+                                                                {'name': 'user__full_name',
+                                                                 'muid': 'user__mu_id',
+                                                                 'karma': 'user__total_karma_user__karma',
+                                                                 'level': 'user__user_level_link_user__level__'
+                                                                          'level_order'})
+        serializer = dash_district_serializer.DistrictStudentDetailsSerializer(paginated_queryset.get('queryset'),
+                                                                               many=True).data
+        return CustomResponse(response={"data": serializer, 'pagination': paginated_queryset.get(
+            'pagination')}).get_success_response()
+
+
+class DistrictStudentDetailsCSVAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    def get(self, request, url):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
+        user_org_links = UserOrganizationLink.objects.filter(org__district_id=user_org_link.org.district.id,
+                                                             org__org_type=url)
+        serializer = dash_district_serializer.DistrictStudentDetailsSerializer(user_org_links, many=True)
+        return CommonUtils.generate_csv(serializer.data, 'District Details')

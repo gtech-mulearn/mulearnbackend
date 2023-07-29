@@ -301,7 +301,7 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
 class ListApplicantsSerializer(serializers.ModelSerializer):
     class Meta:
         model = HackathonUserSubmission
-        fields = ('id', 'data')
+        fields = ('data',)
 
 
 class HackathonInfoSerializer(serializers.ModelSerializer):
