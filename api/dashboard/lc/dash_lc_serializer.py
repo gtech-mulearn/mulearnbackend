@@ -100,13 +100,15 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         user = self.context.get('user_id')
         try:
             link = UserCircleLink.objects.get(user=user, circle=obj, lead=True)
-            return True
+            if link:
+                return True
         except UserCircleLink.DoesNotExist:
             return False
 
     def get_total_karma(self, obj):
-        return TotalKarma.objects.filter(user__usercirclelink__circle=obj,accepted=True).aggregate(total_karma=Sum('karma'))[
-            'total_karma'] or 0
+        return TotalKarma.objects.filter(user__usercirclelink__circle=obj).aggregate(
+            total_karma=Sum('karma'))[
+                   'total_karma'] or 0
 
     def get_members(self, obj):
         members = UserCircleLink.objects.filter(circle=obj, accepted=1)
@@ -249,6 +251,7 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
