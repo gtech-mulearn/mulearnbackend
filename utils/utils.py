@@ -36,7 +36,7 @@ class CommonUtils:
                     sort_field_name = '-' + sort_field_name
 
                 queryset = queryset.order_by(sort_field_name)
-
+                # print(queryset)
         paginator = Paginator(queryset, per_page)
         try:
             queryset = paginator.page(page)
