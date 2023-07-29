@@ -197,7 +197,7 @@ class KKEMdetailsFetchAPI(APIView):
             # ):
             #     result_data = response_data["response"]["data"]
             result_data = {
-                "dwms_id": "KM0037037",
+                "dwms_id": f"KM00{jsid}",
                 "registration": {
                     "email_id": "lijililly1995@gmail.com",
                     "key_skills": "java",
@@ -208,7 +208,7 @@ class KKEMdetailsFetchAPI(APIView):
                     "mobile_no": "8129560431",
                     "job_seeker_fname": "Liji",
                 },
-                "job_seeker_id": 37037,
+                "job_seeker_id": jsid,
             }
             
             return CustomResponse(response=result_data).get_success_response()

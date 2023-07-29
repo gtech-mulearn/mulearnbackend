@@ -8,9 +8,7 @@ from db.organization import Organization, District, Zone, State, OrgAffiliation
 
 class StateSerializer(serializers.ModelSerializer):
     country = serializers.SlugRelatedField(
-        many=False,
-        read_only=True,
-        slug_field='name'
+        many=False, read_only=True, slug_field="name"
     )
 
     class Meta:
@@ -35,7 +33,9 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
-    affiliation = serializers.SlugRelatedField(many=False, read_only=True, slug_field='title')
+    affiliation = serializers.SlugRelatedField(
+        many=False, read_only=True, slug_field="title"
+    )
     district = serializers.ReadOnlyField(source="district.name")
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
@@ -43,7 +43,17 @@ class OrganisationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ["title", "code", "affiliation", "org_type", "district", "zone", "state", "country"]
+        fields = [
+            "id",
+            "title",
+            "code",
+            "affiliation",
+            "org_type",
+            "district",
+            "zone",
+            "state",
+            "country",
+        ]
 
 
 class PostOrganizationSerializer(serializers.ModelSerializer):
