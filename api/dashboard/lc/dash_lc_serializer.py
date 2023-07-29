@@ -105,7 +105,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             return False
 
     def get_total_karma(self, obj):
-        return TotalKarma.objects.filter(user__usercirclelink__circle=obj).aggregate(total_karma=Sum('karma'))[
+        return TotalKarma.objects.filter(user__usercirclelink__circle=obj,accepted=True).aggregate(total_karma=Sum('karma'))[
             'total_karma'] or 0
 
     def get_members(self, obj):
