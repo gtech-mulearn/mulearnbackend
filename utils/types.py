@@ -40,7 +40,7 @@ class WebHookCategory(Enum):
     INTEREST_GROUP = 'ig'
     COMMUNITY = 'community'
     ROLE = 'role'
-    USER_ROLE = 'user_role'
+    USER_ROLE = 'user-role'
 
 
 class TasksTypesHashtag(Enum):
