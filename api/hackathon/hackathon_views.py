@@ -124,7 +124,7 @@ class ListApplicantsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, hackathon_id=None):
         if hackathon_id:
-            datas = HackathonUserSubmission.objects.filter(id=hackathon_id).first()
+            datas = HackathonUserSubmission.objects.filter(hackathon__id=hackathon_id).first()
             if not datas:
                 return CustomResponse(general_message="Hackathon Not Available").get_failure_response()
             serializer = ListApplicantsSerializer(datas, many=True)
