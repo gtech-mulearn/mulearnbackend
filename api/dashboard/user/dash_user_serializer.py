@@ -245,3 +245,32 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "role_title",
             "email"
         ]
+
+
+class UserEditDetailsSerializer(serializers.ModelSerializer):
+    organization = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "organization", "department"]
+
+    def get_organization(self, user):
+        user_org_link = user.user_organization_link_user_id.all()
+        org_dict = {}
+        for org_link in user_org_link:
+            if org_link.org.org_type in org_dict:
+                org_dict[org_link.org.org_dict].append(org_link.org_id)
+            else:
+                org_dict[org_link.org.org_type] = [org_link.org_id]
+        return org_dict
+
+    def get_department(self, obj):
+
+        department = obj.user_organization_link_user_id.first().department.title
+        print(department)
+        if department:
+            return department
+        else:
+            return None
+
