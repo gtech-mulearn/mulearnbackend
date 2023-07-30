@@ -452,6 +452,7 @@ class UserInviteAPI(APIView):
 
 
 class UserProfileEditView(APIView):
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
         try:
