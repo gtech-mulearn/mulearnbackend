@@ -16,7 +16,7 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
-
+from db.organization import UserOrganizationLink
 from . import dash_user_serializer
 
 
@@ -41,13 +41,17 @@ class UserEditAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
-        user = (
-            User.objects.filter(id=user_id)
-            .prefetch_related("user_organization_link_user_id")
-            .first()
-        )
-        serializer = dash_user_serializer.UserEditSerializer(user)
-        return CustomResponse(response=serializer.data).get_success_response()
+        # user = (
+        #     User.objects.filter(id=user_id)
+        #     .prefetch_related("user_organization_link_user_id")
+        #     .first()
+        # )
+        # serializer = dash_user_serializer.UserEditSerializer(user)
+        # return CustomResponse(response=serializer.data).get_success_response()
+        user = User.objects.get(id=user_id)
+        serializer = dash_user_serializer.UserEditDetailsSerializer(user).data
+        return CustomResponse(response=serializer).get_success_response()
+
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
