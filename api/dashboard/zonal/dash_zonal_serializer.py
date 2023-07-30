@@ -1,72 +1,72 @@
 from datetime import timedelta
 
-from django.db.models import Sum
+from django.db.models import Sum, F
 from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink
-from db.task import KarmaActivityLog, Level, UserLvlLink
+from db.task import KarmaActivityLog, Level, UserLvlLink, TotalKarma
 from db.user import User
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
-
-class ZonalStudents(serializers.ModelSerializer):
-    karma = serializers.IntegerField()
-    rank = serializers.SerializerMethodField()
-
-    def get_rank(self, obj):
-        queryset = self.context["queryset"]
-        sorted_persons = sorted(
-            queryset,
-            key=lambda x: x.karma,
-            reverse=True,
-        )
-        for i, person in enumerate(sorted_persons):
-            if person == obj:
-                return i + 1
-
-    class Meta:
-        model = User
-        fields = [
-            "first_name",
-            "last_name",
-            "email",
-            "mobile",
-            "mu_id",
-            "karma",
-            "rank",
-        ]
-
-
-class ZonalCampus(serializers.ModelSerializer):
-    total_karma = serializers.IntegerField()
-    total_members = serializers.IntegerField()
-    active_members = serializers.IntegerField()
-    rank = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Organization
-        fields = [
-            "title",
-            "code",
-            "org_type",
-            "total_karma",
-            "total_members",
-            "active_members",
-            "rank"
-        ]
-
-    def get_rank(self, obj):
-        queryset = self.context["queryset"]
-
-        sorted_campuses = sorted(
-            queryset,
-            key=lambda campus: campus.total_karma,
-            reverse=True,
-        )
-        for i, campus in enumerate(sorted_campuses):
-            if campus == obj:
-                return i + 1
+#
+# class ZonalStudents(serializers.ModelSerializer):
+#     karma = serializers.IntegerField()
+#     rank = serializers.SerializerMethodField()
+#
+#     def get_rank(self, obj):
+#         queryset = self.context["queryset"]
+#         sorted_persons = sorted(
+#             queryset,
+#             key=lambda x: x.karma,
+#             reverse=True,
+#         )
+#         for i, person in enumerate(sorted_persons):
+#             if person == obj:
+#                 return i + 1
+#
+#     class Meta:
+#         model = User
+#         fields = [
+#             "first_name",
+#             "last_name",
+#             "email",
+#             "mobile",
+#             "mu_id",
+#             "karma",
+#             "rank",
+#         ]
+#
+#
+# class ZonalCampus(serializers.ModelSerializer):
+#     total_karma = serializers.IntegerField()
+#     total_members = serializers.IntegerField()
+#     active_members = serializers.IntegerField()
+#     rank = serializers.SerializerMethodField()
+#
+#     class Meta:
+#         model = Organization
+#         fields = [
+#             "title",
+#             "code",
+#             "org_type",
+#             "total_karma",
+#             "total_members",
+#             "active_members",
+#             "rank"
+#         ]
+#
+#     def get_rank(self, obj):
+#         queryset = self.context["queryset"]
+#
+#         sorted_campuses = sorted(
+#             queryset,
+#             key=lambda campus: campus.total_karma,
+#             reverse=True,
+#         )
+#         for i, campus in enumerate(sorted_campuses):
+#             if campus == obj:
+#                 return i + 1
 
 
 class ZonalDetailsSerializer(serializers.ModelSerializer):
@@ -133,7 +133,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
         return len(active_members)
 
 
-class TopThreeDistrictSerializer(serializers.ModelSerializer):
+class ZonalTopThreeDistrictSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     district = serializers.CharField(source='org.district.name')
 
@@ -152,7 +152,7 @@ class TopThreeDistrictSerializer(serializers.ModelSerializer):
         return district_ranks.get(district_id)
 
 
-class StudentLevelStatusSerializer(serializers.ModelSerializer):
+class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title')
     level = serializers.SerializerMethodField()
 
@@ -170,3 +170,65 @@ class StudentLevelStatusSerializer(serializers.ModelSerializer):
             level_list.append(level_dict)
             level_dict = {}
         return level_list
+
+
+class UserOrgSerializer(serializers.ModelSerializer):
+    fullname = serializers.ReadOnlyField(source="user.fullname")
+    muid = serializers.ReadOnlyField(source="user.mu_id")
+    karma = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TotalKarma
+        fields = ("fullname", "karma", "muid", "rank", "level", 'created_at')
+
+    def get_karma(self, obj):
+        return obj.user.total_karma_user.karma or 0
+
+    def get_rank(self, obj):
+        rank = TotalKarma.objects.filter(
+            user__total_karma_user__isnull=False
+        ).annotate(
+            rank=F('user__total_karma_user__karma')
+        ).order_by('-rank').values_list('rank', flat=True)
+
+        ranks = {karma: i + 1 for i, karma in enumerate(rank)}
+        return ranks.get(obj.user.total_karma_user.karma, None)
+
+    def get_level(self, obj):
+        user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
+        if user_level_link:
+            return user_level_link.level.name
+        return None
+
+
+class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
+    fullname = serializers.ReadOnlyField(source="user.fullname")
+    muid = serializers.ReadOnlyField(source="user.mu_id")
+    karma = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TotalKarma
+        fields = ("fullname", "karma", "muid", "rank", "level", 'created_at')
+
+    def get_karma(self, obj):
+        return obj.user.total_karma_user.karma or 0
+
+    def get_rank(self, obj):
+        rank = TotalKarma.objects.filter(
+            user__total_karma_user__isnull=False
+        ).annotate(
+            rank=F('user__total_karma_user__karma')
+        ).order_by('-rank').values_list('rank', flat=True)
+
+        ranks = {karma: i + 1 for i, karma in enumerate(rank)}
+        return ranks.get(obj.user.total_karma_user.karma, None)
+
+    def get_level(self, obj):
+        user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
+        if user_level_link:
+            return user_level_link.level.name
+        return None
