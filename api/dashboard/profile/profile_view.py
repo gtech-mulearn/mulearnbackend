@@ -40,7 +40,7 @@ class UserProfileAPI(APIView):
                 "user_organization_link_user_id__org",
                 "user_organization_link_user_id__department",
                 "user_role_link_user__role",
-                "user_lvl_link_set__level",
+                "userlvllink_set__level",
             )
             .filter(id=user_id)
             .first()
