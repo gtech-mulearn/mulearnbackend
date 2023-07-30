@@ -170,7 +170,6 @@ def role_required(roles):
 
     return decorator
 
-
 # class RoleRequired:
 #     """
 #     Class-based view that restricts access to views based on user roles.

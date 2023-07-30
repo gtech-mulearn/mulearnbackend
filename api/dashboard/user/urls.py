@@ -24,4 +24,5 @@ urlpatterns = [
 
     path('invite/', dash_user_views.UserInviteAPI.as_view(), name='invite-user'),
     
+    path('profile/', dash_user_views.UserProfileEditView.as_view(), name='profile-user'),
 ]

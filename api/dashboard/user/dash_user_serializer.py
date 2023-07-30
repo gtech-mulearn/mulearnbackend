@@ -1,4 +1,5 @@
 import uuid
+from attr import fields
 
 from django.db import transaction
 from rest_framework import serializers
@@ -243,5 +244,27 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "verified",
             "role_id",
             "role_title",
-            "email"
+            "email",
+        ]
+
+
+class UserProfileEditSerializer(serializers.ModelSerializer):
+    community = serializers.SerializerMethodField()
+
+    def get_community(self, user):
+        communities = user.user_organization_link_user_id.filter(
+            org__org_type=OrganizationType.COMMUNITY.value
+        ).all()
+        return [community.org_id for community in communities] if communities else []
+
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "community",
+            "gender",
+            "dob",
         ]

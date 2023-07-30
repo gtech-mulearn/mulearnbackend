@@ -18,6 +18,7 @@ from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCateg
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
 
 from . import dash_user_serializer
+from .dash_user_serializer import UserProfileEditSerializer
 
 
 class UserInfoAPI(APIView):
@@ -444,3 +445,24 @@ class UserInviteAPI(APIView):
         return CustomResponse(
             general_message="Invitation sent successfully"
         ).get_success_response()
+
+
+class UserProfileEditView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = dash_user_serializer.UserProfileEditSerializer(user)
+            return CustomResponse(response=serializer.data).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+    def patch(self, request):
+        user = request.user
+        serializer = UserProfileEditSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            return Response(serializer.data)
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
