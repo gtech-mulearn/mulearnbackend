@@ -1,5 +1,5 @@
 import uuid
-from attr import fields
+
 
 from django.db import transaction
 from rest_framework import serializers
@@ -294,11 +294,12 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
     organization = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     graduation_year = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = ["first_name", "last_name", "email", "mobile", "gender", "organization", "department",
-                  "graduation_year"]
+                  "graduation_year", "role"]
 
     def get_organization(self, obj):
         user_org_link = obj.user_organization_link_user_id.all()
@@ -311,16 +312,21 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
         return org_dict
 
     def get_department(self, obj):
-
-        department = obj.user_organization_link_user_id.first().department.title
-        if department:
-            return department
+        user_org_link = obj.user_organization_link_user_id.first()
+        if user_org_link:
+            department = user_org_link.department
+            if department:
+                return department.title
         else:
             return None
 
+    def get_role(self, obj):
+        user_role_link = obj.user_role_link_user.all()
+        return [user_role.role.title for user_role in user_role_link]
+
     def get_graduation_year(self, obj):
-        graduation_year = obj.user_organization_link_user_id.first().graduation_year
-        if graduation_year:
-            return graduation_year
+        user_org_link = obj.user_organization_link_user_id.first()
+        if user_org_link:
+            return user_org_link.graduation_year
         else:
             return None
