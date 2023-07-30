@@ -250,13 +250,15 @@ class UserVerificationSerializer(serializers.ModelSerializer):
 class UserEditDetailsSerializer(serializers.ModelSerializer):
     organization = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
+    graduation_year = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "mobile", "gender", "organization", "department"]
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "organization", "department",
+                  "graduation_year"]
 
-    def get_organization(self, user):
-        user_org_link = user.user_organization_link_user_id.all()
+    def get_organization(self, obj):
+        user_org_link = obj.user_organization_link_user_id.all()
         org_dict = {}
         for org_link in user_org_link:
             if org_link.org.org_type in org_dict:
@@ -268,9 +270,14 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
     def get_department(self, obj):
 
         department = obj.user_organization_link_user_id.first().department.title
-        print(department)
         if department:
             return department
         else:
             return None
 
+    def get_graduation_year(self, obj):
+        graduation_year = obj.user_organization_link_user_id.first().graduation_year
+        if graduation_year:
+            return graduation_year
+        else:
+            return None
