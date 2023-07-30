@@ -99,44 +99,34 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     def get_is_lead(self, obj):
         user = self.context.get('user_id')
         try:
-            link = UserCircleLink.objects.get(user=user, circle=obj, lead=True)
-            return True
+            if link := UserCircleLink.objects.get(
+                user=user, circle=obj, lead=True
+            ):
+                return True
         except UserCircleLink.DoesNotExist:
             return False
 
     def get_total_karma(self, obj):
-        return TotalKarma.objects.filter(user__usercirclelink__circle=obj).aggregate(total_karma=Sum('karma'))[
-            'total_karma'] or 0
+        return TotalKarma.objects.filter(user__usercirclelink__circle=obj,user__usercirclelink__accepted=1).aggregate(
+            total_karma=Sum('karma'))[
+                   'total_karma'] or 0
 
     def get_members(self, obj):
-        members = UserCircleLink.objects.filter(circle=obj, accepted=1)
-        return [
-            {'id': member.user.id,
-             'username': f'{member.user.first_name} {member.user.last_name}'
-             if member.user.last_name
-             else member.user.first_name,
-             'profile_pic': member.user.profile_pic or None,
-             'karma': TotalKarma.objects.filter(user=member.user.id)
-             .values_list('karma', flat=True)
-             .first(),
-             }
-            for member in members
-        ]
+        return self._get_member_info(obj, accepted=1)
 
     def get_pending_members(self, obj):
-        pending_members = UserCircleLink.objects.filter(circle=obj, accepted=None)
+        return self._get_member_info(obj, accepted=None)
+
+    def _get_member_info(self, obj, accepted):
+        members = UserCircleLink.objects.filter(circle=obj, accepted=accepted)
         return [
             {
                 'id': member.user.id,
-                'username': f'{member.user.first_name} {member.user.last_name}'
-                if member.user.last_name
-                else member.user.first_name,
+                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
-                'karma': TotalKarma.objects.filter(user=member.user.id)
-                .values_list('karma', flat=True)
-                .first(),
+                'karma': TotalKarma.objects.filter(user=member.user.id).values_list('karma', flat=True).first(),
             }
-            for member in pending_members
+            for member in members
         ]
 
     def get_rank(self, obj):
@@ -249,6 +239,7 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()

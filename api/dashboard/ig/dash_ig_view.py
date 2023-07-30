@@ -40,6 +40,8 @@ class InterestGroupAPI(APIView):
         ig_data = InterestGroup.objects.create(
             id=uuid.uuid4(),
             name=request.data.get('name'),
+            code = request.data.get('code'),
+            icon = request.data.get('icon'),
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
             created_by_id=user_id,
@@ -60,6 +62,8 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         oldName = igData.name
         igData.name = request.data.get('name')
+        igData.code = request.data.get('code')
+        igData.icon = request.data.get('icon')
         igData.updated_by_id = user_id
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
