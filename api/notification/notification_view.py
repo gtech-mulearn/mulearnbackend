@@ -62,7 +62,6 @@ class NotificationDeleteAllAPI(APIView):
 
         """
         user_id = JWTUtils.fetch_user_id(request)
-        print(user_id)
         notification = Notification.objects.filter(user_id=user_id)
         if not notification:
             return CustomResponse(response='Notifications are empty').get_failure_response()
