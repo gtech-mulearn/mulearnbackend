@@ -256,6 +256,26 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             org__org_type=OrganizationType.COMMUNITY.value
         ).all()
         return [community.org_id for community in communities] if communities else []
+    
+    def update(self, instance, validated_data):
+        if "community" in validated_data:
+            community = validated_data.pop("community")
+            
+            instance.user_organization_link_user_id.filter(
+                org__org_type=OrganizationType.COMMUNITY.value
+            ).delete()
+            
+            for org_id in community:
+                UserOrganizationLink.objects.create(
+                    id=uuid.uuid4(),
+                    user=instance,
+                    org_id=org_id,
+                    created_by=instance,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                )
+                
+        return super().update(instance, validated_data)
 
     class Meta:
         model = User

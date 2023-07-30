@@ -460,9 +460,16 @@ class UserProfileEditView(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     def patch(self, request):
-        user = request.user
-        serializer = UserProfileEditSerializer(user, data=request.data, partial=True)
-        if serializer.is_valid():
-            serializer.save()
-            return Response(serializer.data)
-        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = UserProfileEditSerializer(
+                user, data=request.data, partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(response=serializer.data).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
