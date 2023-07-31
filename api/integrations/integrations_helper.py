@@ -11,7 +11,7 @@ def send_kkm_mail(user_data):
     email_host_user = decouple.config("EMAIL_HOST_USER")
     base_url = decouple.config("FR_DOMAIN_NAME")
     email_content = render_to_string(
-        r"mails\KKEM\verify_integration.html", {"user": user_data, "base_url" : base_url}
+        "mails/KKEM/verify_integration.html", {"user": user_data, "base_url": base_url}
     )
 
     send_mail(
@@ -21,7 +21,6 @@ def send_kkm_mail(user_data):
         recipient_list=[user_data["email"]],
         html_message=email_content,
     )
-
 
 
 def token_required(func):
@@ -43,6 +42,7 @@ def token_required(func):
 
     return wrapper
 
+
 def get_access_token(email_or_muid, password):
     auth_domain = decouple.config("AUTH_DOMAIN")
 
@@ -62,4 +62,3 @@ def get_access_token(email_or_muid, password):
         "accessToken": access_token,
         "refreshToken": refresh_token,
     }
-
