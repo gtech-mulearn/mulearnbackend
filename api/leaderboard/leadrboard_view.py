@@ -16,7 +16,8 @@ from .serializers import StudentLeaderboardSerializer, CollegeLeaderboardSeriali
 class StudentsLeaderboard(APIView):
 
     def get(self, request):
-        users_total_karma = TotalKarma.objects.select_related('user').order_by('-karma')[:20]
+        users_total_karma = TotalKarma.objects.filter(user__role__title='Student').select_related('user').order_by(
+            '-karma')[:20]
         if not users_total_karma:
             return CustomResponse(general_message='No Karma Related data available').get_failure_response()
         data = StudentLeaderboardSerializer(users_total_karma, many=True).data
