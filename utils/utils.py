@@ -36,7 +36,7 @@ class CommonUtils:
                     sort_field_name = '-' + sort_field_name
 
                 queryset = queryset.order_by(sort_field_name)
-
+                # print(queryset)
         paginator = Paginator(queryset, per_page)
         try:
             queryset = paginator.page(page)
@@ -123,7 +123,6 @@ class _CustomHTTPHandler:
 
 class DiscordWebhooks:
     @staticmethod
-    # for example refer api/dashboard/ig/dash_ig_view.py
     def channelsAndCategory(category, action, *values) -> str:
         """
         Modify channels and category in Discord
@@ -134,7 +133,7 @@ class DiscordWebhooks:
 		"""
         content = f"{category}<|=|>{action}"
         for value in values:
-            content = content + f"<|=|>{value}"
+            content = f"{content}<|=|>{value}"
         url = config("DISCORD_WEBHOOK_LINK")
         data = {
             "content": content

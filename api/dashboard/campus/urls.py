@@ -2,9 +2,9 @@ from django.urls import path
 from . import campus_views
 
 urlpatterns = [
-    path("student-details/", campus_views.StudentDetailsAPI.as_view()),
-    path("student-details/csv/", campus_views.StudentDetailsCSVAPI.as_view()),
     path("campus-details/", campus_views.CampusDetailsAPI.as_view()),
-    path("student-level/", campus_views.StudentInEachLevelAPI.as_view()),
+    path("student-level/", campus_views.CampusStudentInEachLevelAPI.as_view()),
+    path("student-details/<str:url>/", campus_views.CampusStudentDetailsAPI.as_view()),
+    path("student-details/<str:url>/csv/", campus_views.CampusStudentDetailsCSVAPI.as_view()),
     path("weekly-karma/", campus_views.WeeklyKarmaAPI.as_view()),
 ]

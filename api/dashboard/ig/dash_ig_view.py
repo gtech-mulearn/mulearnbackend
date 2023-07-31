@@ -25,8 +25,8 @@ class InterestGroupAPI(APIView):
             'created_by__last_name',
             'updated_by__first_name',
             'updated_by__last_name'],
-            
-            {'name': 'name'})
+
+                                                                {'name': 'name'})
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=ig_serializer_data,
@@ -40,6 +40,8 @@ class InterestGroupAPI(APIView):
         ig_data = InterestGroup.objects.create(
             id=uuid.uuid4(),
             name=request.data.get('name'),
+            code = request.data.get('code'),
+            icon = request.data.get('icon'),
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
             created_by_id=user_id,
@@ -60,6 +62,8 @@ class InterestGroupAPI(APIView):
         igData = InterestGroup.objects.get(id=pk)
         oldName = igData.name
         igData.name = request.data.get('name')
+        igData.code = request.data.get('code')
+        igData.icon = request.data.get('icon')
         igData.updated_by_id = user_id
         igData.updated_at = DateTimeUtils.get_current_utc_time()
         igData.save()
@@ -103,6 +107,8 @@ class InterestGroupGetAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, pk):
-        igData = InterestGroup.objects.get(id=pk)
-        serializer = InterestGroupSerializer(igData)
+        igData = InterestGroup.objects.filter(id=pk).first()
+        if not igData:
+            return CustomResponse(general_message='Interest Group Does Not Exist').get_failure_response()
+        serializer = InterestGroupSerializer(igData, many=False)
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()

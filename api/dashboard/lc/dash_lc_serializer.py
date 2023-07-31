@@ -50,8 +50,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         model = LearningCircle
         fields = [
             "name",
-            "ig",
-            "circle_code",
+            "ig"
         ]
 
     def create(self, validated_data):
@@ -59,11 +58,17 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                        org__org_type=OrganizationType.COLLEGE.value).first()
         ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
+        code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2]
+        existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
+        i = 1
+        while code in existing_codes:
+            code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2] + str(i)
+            i += 1
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
             name=validated_data.get('name'),
-            circle_code=validated_data.get('circle_code'),
+            circle_code=code,
             ig=ig,
             org=org_link.org,
             updated_by_id=user_id,
@@ -94,54 +99,53 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     def get_is_lead(self, obj):
         user = self.context.get('user_id')
         try:
-            link = UserCircleLink.objects.get(user=user, circle=obj, lead=True)
-            return True
+            if link := UserCircleLink.objects.get(
+                user=user, circle=obj, lead=True
+            ):
+                return True
         except UserCircleLink.DoesNotExist:
             return False
 
     def get_total_karma(self, obj):
-        return TotalKarma.objects.filter(user__usercirclelink__circle=obj).aggregate(total_karma=Sum('karma'))[
-            'total_karma'] or 0
+        return TotalKarma.objects.filter(user__usercirclelink__circle=obj,user__usercirclelink__accepted=1).aggregate(
+            total_karma=Sum('karma'))[
+                   'total_karma'] or 0
 
     def get_members(self, obj):
-        members = UserCircleLink.objects.filter(circle=obj, accepted=1)
-        return [
-            {'id': member.user.id,
-             'username': f'{member.user.first_name} {member.user.last_name}'
-             if member.user.last_name
-             else member.user.first_name,
-             'profile_pic': member.user.profile_pic or None,
-             'karma': TotalKarma.objects.filter(user=member.user.id)
-             .values_list('karma', flat=True)
-             .first(),
-             }
-            for member in members
-        ]
+        return self._get_member_info(obj, accepted=1)
 
     def get_pending_members(self, obj):
-        pending_members = UserCircleLink.objects.filter(circle=obj, accepted=None)
+        return self._get_member_info(obj, accepted=None)
+
+    def _get_member_info(self, obj, accepted):
+        members = UserCircleLink.objects.filter(circle=obj, accepted=accepted)
         return [
             {
                 'id': member.user.id,
-                'username': f'{member.user.first_name} {member.user.last_name}'
-                if member.user.last_name
-                else member.user.first_name,
+                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
-                'karma': TotalKarma.objects.filter(user=member.user.id)
-                .values_list('karma', flat=True)
-                .first(),
+                'karma': TotalKarma.objects.filter(user=member.user.id).values_list('karma', flat=True).first(),
             }
-            for member in pending_members
+            for member in members
         ]
 
     def get_rank(self, obj):
-        return 3
+        rank = UserCircleLink.objects.filter(user__usercirclelink__circle=obj, accepted=True,
+                                             user__total_karma_user__isnull=False).values('circle_id').annotate(
+            total_karma=Sum('user__total_karma_user__karma')
+        ).order_by('-total_karma')
+        lc_rank = {lc['circle_id']: i + 1 for i, lc in enumerate(rank)}
+        return lc_rank.get(obj.id)
 
     class Meta:
         model = LearningCircle
         fields = [
             "name",
             "circle_code",
+            "note",
+            "meet_time",
+            "meet_place",
+            "day",
             "college",
             "members",
             "pending_members",
@@ -162,14 +166,13 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         no_of_entry = UserCircleLink.objects.filter(circle_id=circle_id, accepted=True).count()
         ig_id = LearningCircle.objects.get(pk=circle_id).ig_id
         if entry := UserCircleLink.objects.filter(
-            circle_id=circle_id, user_id=user_id
+                circle_id=circle_id, user_id=user_id
         ).first():
             raise serializers.ValidationError("Cannot send another request at the moment")
-        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig_id,accepted=True).exists():
+        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig_id, accepted=True).exists():
             raise serializers.ValidationError("Already a member of learning circle with same interest group")
         if no_of_entry >= 5:
             raise serializers.ValidationError("Maximum member count reached")
-
 
         validated_data['id'] = uuid.uuid4()
         validated_data['user_id'] = user_id
@@ -202,18 +205,41 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+class LearningCircleNoteSerializer(serializers.ModelSerializer):
+    note = serializers.CharField(required=True, error_messages={
+        'required': 'note field must not be left blank.'
+    })
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "note"
+        ]
+
+    def update(self, instance, validated_data):
+        instance.note = validated_data.get('note')
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        return instance
+
+
 class LearningCircleMeetSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
         fields = [
             "meet_place",
-            "meet_time"
+            "meet_time",
+            "day"
         ]
 
     def update(self, instance, validated_data):
         instance.meet_time = validated_data.get('meet_time')
         instance.meet_place = validated_data.get('meet_place')
+        instance.day = validated_data.get('date')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        return instance
+
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()

@@ -12,7 +12,7 @@ from django.db.models import Q
 class KKEMUserSerializer(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
-    dwms_id = serializers.SerializerMethodField()
+    jsid = serializers.SerializerMethodField()
 
     def get_total_karma(self, obj):
         karma = (
@@ -32,16 +32,14 @@ class KKEMUserSerializer(serializers.ModelSerializer):
                 .aggregate(Sum("karma"))
                 .get("karma__sum")
                 is None
-                else KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, user=obj
-                )
+                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
                 .aggregate(Sum("karma"))
                 .get("karma__sum")
             )
             interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
-    def get_dwms_id(self, obj):
+    def get_jsid(self, obj):
         return (
             IntegrationAuthorization.objects.filter(user=obj, verified=True)
             .first()
@@ -52,7 +50,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "mu_id",
-            "dwms_id",
+            "jsid",
             "total_karma",
             "interest_groups",
         ]
@@ -60,9 +58,8 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
 class KKEMAuthorization(serializers.ModelSerializer):
     emailOrMuid = serializers.CharField(source="user.mu_id")
-    dwms_id = serializers.CharField(source="integration_value")
+    jsid = serializers.CharField(source="integration_value")
     integration = serializers.CharField(source="integration.name")
-    verified = serializers.BooleanField()
 
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
@@ -99,8 +96,14 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 ).first()
             ):
                 raise ValueError(
-                    "This dwms_id is already associated with another user"
+                    "This jsid is already associated with another user"
                 ) from e
+            elif (
+                self.context["type"] == "login"
+                and kkem_link.integration_value == validated_data["integration_value"]
+                and kkem_link.verified == True
+            ):
+                return kkem_link
             elif kkem_link.verified:
                 raise ValueError("Authorization already exists and is verified.") from e
             elif kkem_link.user == user:
@@ -111,8 +114,13 @@ class KKEMAuthorization(serializers.ModelSerializer):
             else:
                 raise
 
-        return kkem_link
+        return {
+            "email": kkem_link.user.email,
+            "fullname": kkem_link.user.fullname,
+            "mu_id": kkem_link.user.mu_id,
+            "link_id": kkem_link.id,
+        }
 
     class Meta:
         model = IntegrationAuthorization
-        fields = ["emailOrMuid", "dwms_id", "integration", "verified"]
+        fields = ["emailOrMuid", "jsid", "integration", "verified"]

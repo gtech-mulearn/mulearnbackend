@@ -229,6 +229,7 @@ class UserVerificationSerializer(serializers.ModelSerializer):
     user_id = serializers.ReadOnlyField(source="user.id")
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
     mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    email = serializers.ReadOnlyField(source="user.email")
     role_title = serializers.ReadOnlyField(source="role.title")
 
     class Meta:
@@ -242,4 +243,89 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "verified",
             "role_id",
             "role_title",
+            "email",
         ]
+
+
+class UserProfileEditSerializer(serializers.ModelSerializer):
+    community = serializers.SerializerMethodField()
+
+    def get_community(self, user):
+        communities = user.user_organization_link_user_id.filter(
+            org__org_type=OrganizationType.COMMUNITY.value
+        ).all()
+        return [community.org_id for community in communities] if communities else []
+    
+    def update(self, instance, validated_data):
+        if "community" in validated_data:
+            community = validated_data.pop("community")
+            
+            instance.user_organization_link_user_id.filter(
+                org__org_type=OrganizationType.COMMUNITY.value
+            ).delete()
+            
+            for org_id in community:
+                UserOrganizationLink.objects.create(
+                    id=uuid.uuid4(),
+                    user=instance,
+                    org_id=org_id,
+                    created_by=instance,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                )
+                
+        return super().update(instance, validated_data)
+
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "community",
+            "gender",
+            "dob",
+        ]
+
+
+class UserEditDetailsSerializer(serializers.ModelSerializer):
+    organization = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    graduation_year = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "organization", "department",
+                  "graduation_year", "role"]
+
+    def get_organization(self, obj):
+        user_org_link = obj.user_organization_link_user_id.all()
+        org_dict = {}
+        for org_link in user_org_link:
+            if org_link.org.org_type in org_dict:
+                org_dict[org_link.org.org_dict].append(org_link.org_id)
+            else:
+                org_dict[org_link.org.org_type] = [org_link.org_id]
+        return org_dict
+
+    def get_department(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        if user_org_link:
+            department = user_org_link.department
+            if department:
+                return department.title
+        else:
+            return None
+
+    def get_role(self, obj):
+        user_role_link = obj.user_role_link_user.all()
+        return [user_role.role.title for user_role in user_role_link]
+
+    def get_graduation_year(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        if user_org_link:
+            return user_org_link.graduation_year
+        else:
+            return None

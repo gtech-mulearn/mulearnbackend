@@ -1,21 +1,26 @@
 import decouple
+import requests
 from django.core.mail import send_mail
+from django.template.loader import render_to_string
 
 from db.integrations import Integration
 from utils.response import CustomResponse
 
 
-def send_kkm_mail(user, kkem_link):
+def send_kkm_mail(user_data):
     email_host_user = decouple.config("EMAIL_HOST_USER")
-    to_email = [user.email]
+    base_url = decouple.config("FR_DOMAIN_NAME")
+    email_content = render_to_string(
+        "mails/KKEM/verify_integration.html", {"user": user_data, "base_url": base_url}
+    )
 
-    domain = decouple.config("FR_DOMAIN_NAME")
-    message = f"Click here to confirm the authorization {domain}/api/v1/integrations/kkem/authorization/{kkem_link.id}/"
-    subject = "KKEM Authorization"
-
-    send_mail(subject, message, email_host_user, to_email, fail_silently=False)
-
-    return True
+    send_mail(
+        subject="KKEM integration request!",
+        message=email_content,
+        from_email=email_host_user,
+        recipient_list=[user_data["email"]],
+        html_message=email_content,
+    )
 
 
 def token_required(func):
@@ -36,3 +41,24 @@ def token_required(func):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     return wrapper
+
+
+def get_access_token(email_or_muid, password):
+    auth_domain = decouple.config("AUTH_DOMAIN")
+
+    response = requests.post(
+        f"{auth_domain}/api/v1/auth/user-authentication/",
+        data={"emailOrMuid": email_or_muid, "password": password},
+    )
+    response = response.json()
+    if response.get("statusCode") != 200:
+        raise ValueError(response.get("message"))
+
+    res_data = response.get("response")
+    access_token = res_data.get("accessToken")
+    refresh_token = res_data.get("refreshToken")
+
+    return {
+        "accessToken": access_token,
+        "refreshToken": refresh_token,
+    }

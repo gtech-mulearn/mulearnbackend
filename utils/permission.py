@@ -154,31 +154,21 @@ class JWTUtils:
             ) from e
 
 
-def is_own_profile(user_id, request):
-    user_id = JWTUtils.fetch_user_id(request)
-    return user_id == user_id
-
-
-def role_required(roles, allow_self_edit=False):
+def role_required(roles):
     def decorator(view_func):
         def wrapped_view_func(obj, request, *args, **kwargs):
-            if allow_self_edit and is_own_profile(kwargs.get('user_id'), request):
-                response = view_func(obj, request, *args, **kwargs)
-                return response
-
             for role in JWTUtils.fetch_role(request):
                 if role in roles:
                     response = view_func(obj, request, *args, **kwargs)
                     return response
-
-            return CustomResponse(
+            res = CustomResponse(
                 general_message="You do not have the required role to access this page."
             ).get_failure_response()
+            return res
 
         return wrapped_view_func
 
     return decorator
-
 
 # class RoleRequired:
 #     """
