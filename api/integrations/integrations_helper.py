@@ -10,6 +10,7 @@ from utils.response import CustomResponse
 def send_kkm_mail(user_data):
     email_host_user = decouple.config("EMAIL_HOST_USER")
     base_url = decouple.config("FR_DOMAIN_NAME")
+    
     email_content = render_to_string(
         "mails/KKEM/verify_integration.html", {"user": user_data, "base_url": base_url}
     )
