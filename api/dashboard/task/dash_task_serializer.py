@@ -105,7 +105,7 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         org = Organization.objects.filter(id=value).first()
         if org is None:
             raise serializers.ValidationError("Enter a valid organization id")
-        return value
+        return org
 
     def validate_level(self, value):
         level = Level.objects.filter(id=value).first()
