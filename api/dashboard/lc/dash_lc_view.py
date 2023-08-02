@@ -6,7 +6,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
-    LearningCircleMainSerializer, LearningCircleNoteSerializer , InterestGroupListSerializer
+    LearningCircleMainSerializer, LearningCircleNoteSerializer
 
 
 class LearningCircleAPI(APIView):
