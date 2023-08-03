@@ -40,7 +40,7 @@ class UserInfoAPI(APIView):
 class UserEditAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    # @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
         # user = (
         #     User.objects.filter(id=user_id)
