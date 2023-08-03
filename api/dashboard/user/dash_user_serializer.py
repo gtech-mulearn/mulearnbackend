@@ -315,7 +315,7 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
         if user_org_link:
             department = user_org_link.department
             if department:
-                return department.title
+                return department.id
         else:
             return None
 
