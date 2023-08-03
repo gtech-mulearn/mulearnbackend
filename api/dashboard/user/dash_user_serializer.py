@@ -6,6 +6,7 @@ from rest_framework import serializers
 from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
+from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
@@ -140,17 +141,16 @@ class UserEditSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User id is a required field")
 
         if (
-            "email" in data
-            and User.objects.filter(email=data["email"])
-            .exclude(id=data["user_id"].id)
-            .all()
+                "email" in data
+                and User.objects.filter(email=data["email"])
+                .exclude(id=data["user_id"].id)
+                .all()
         ):
             raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
 
     def update(self, instance, validated_data):
-        user_id = "51175869-241f-49c9-a028-5d0e4b869589"
-        # user_id = JWTUtils.fetch_user_id(self.context["request"])
+        user_id = JWTUtils.fetch_user_id(self.context["request"])
         admin = User.objects.get(id=user_id)
         user = User.objects.get(id=validated_data["id"])
         orgs = validated_data.get("orgs")
@@ -255,15 +255,15 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             org__org_type=OrganizationType.COMMUNITY.value
         ).all()
         return [community.org_id for community in communities] if communities else []
-    
+
     def update(self, instance, validated_data):
         if "community" in validated_data:
             community = validated_data.pop("community")
-            
+
             instance.user_organization_link_user_id.filter(
                 org__org_type=OrganizationType.COMMUNITY.value
             ).delete()
-            
+
             for org_id in community:
                 UserOrganizationLink.objects.create(
                     id=uuid.uuid4(),
@@ -273,7 +273,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                     created_at=DateTimeUtils.get_current_utc_time(),
                     verified=True,
                 )
-                
+
         return super().update(instance, validated_data)
 
     class Meta:
