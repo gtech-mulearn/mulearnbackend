@@ -42,6 +42,10 @@ class WebHookCategory(Enum):
     ROLE = 'role'
     USER_ROLE = 'user-role'
 
+    
+class IntegrationType(Enum):
+    KKEM = 'DWMS'
+
 
 class TasksTypesHashtag(Enum):
     REFERRAL = 'referral'
