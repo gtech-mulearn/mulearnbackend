@@ -4,7 +4,7 @@ from django.db.models import Prefetch
 import requests
 from rest_framework.views import APIView
 
-from db.integrations import IntegrationAuthorization
+from db.integrations import Integration, IntegrationAuthorization
 from db.task import UserIgLink
 from db.user import User
 from utils.response import CustomResponse
@@ -99,7 +99,7 @@ class KKEMAuthorizationAPI(APIView):
             confirmation_token = integrations_helper.generate_confirmation_token(
                 kkem_link["link_id"]
             )
-            
+
             integrations_helper.send_integration_mail(
                 user_data=kkem_link,
                 token=confirmation_token,
@@ -171,15 +171,13 @@ class KKEMIntegrationLogin(APIView):
 class KKEMdetailsFetchAPI(APIView):
     def get(self, request, jsid):
         try:
-            url = "https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details"
+            token = Integration.objects.get(name=IntegrationType.KKEM.value).token
 
-            data = f'{{"job_seeker_id": {jsid}}}'
-
-            headers = {
-                "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtdUxlYXJuIiwiaWF0IjoxNjkxMDc1NzE0LCJleHAiOjE3ODU3NzAxMTQsImNsaWVudC1pZCI6Im11TGVhcm4tZHdtcy1hcGkifQ.L6XdWWjur6GThkxJ6BCktC_vdmgGsLDy3d1UQV4kn5o"
-            }
-
-            response = requests.post(url, data=data, headers=headers)
+            response = requests.post(
+                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                data=f'{{"job_seeker_id": {jsid}}}',
+                headers={"Authorization": f"Bearer {token}"},
+            )
             response_data = response.json()
 
             if (
