@@ -8,22 +8,17 @@ from db.integrations import IntegrationAuthorization
 from db.task import UserIgLink
 from db.user import User
 from utils.response import CustomResponse
-import decouple
-
 from utils.utils import DateTimeUtils
+from utils.types import IntegrationType
 
-from ..integrations_helper import get_access_token, send_kkm_mail, token_required
+from .. import integrations_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 
 class KKEMBulkKarmaAPI(APIView):
-    @token_required
+    @integrations_helper.token_required(IntegrationType.KKEM.value)
     def get(self, request):
-        from_datetime_str = request.GET.get("from_datetime")
-        auth_header = request.META.get("HTTP_AUTHORIZATION")
-        token = auth_header.split(" ")[1]
-
-        if from_datetime_str:
+        if from_datetime_str := request.GET.get("from_datetime"):
             try:
                 from_datetime = datetime.strptime(
                     from_datetime_str, "%Y-%m-%dT%H:%M:%S"
@@ -35,7 +30,7 @@ class KKEMBulkKarmaAPI(APIView):
 
             queryset = (
                 User.objects.filter(
-                    integration_authorization_user__integration__token=token,
+                    integration_authorization_user__integration__name=IntegrationType.KKEM.value,
                     integration_authorization_user__verified=True,
                     karma_activity_log_user__appraiser_approved=True,
                     karma_activity_log_user__updated_at__gte=from_datetime,
@@ -51,7 +46,7 @@ class KKEMBulkKarmaAPI(APIView):
         else:
             queryset = (
                 User.objects.filter(
-                    integration_authorization_user__integration__token=token,
+                    integration_authorization_user__integration__name=IntegrationType.KKEM.value,
                     integration_authorization_user__verified=True,
                     karma_activity_log_user__appraiser_approved=True,
                 )
@@ -70,12 +65,12 @@ class KKEMBulkKarmaAPI(APIView):
 
 
 class KKEMIndividualKarmaAPI(APIView):
-    @token_required
+    @integrations_helper.token_required(IntegrationType.KKEM.value)
     def get(self, request, mu_id):
-        auth_header = request.META.get("HTTP_AUTHORIZATION")
-        token = auth_header.split(" ")[1]
         kkem_user = IntegrationAuthorization.objects.filter(
-            user__mu_id=mu_id, verified=True, integration__token=token
+            user__mu_id=mu_id,
+            verified=True,
+            integration__name=IntegrationType.KKEM.value,
         ).first()
         if not kkem_user:
             return CustomResponse(
@@ -100,7 +95,17 @@ class KKEMAuthorizationAPI(APIView):
                 ).get_failure_response()
 
             kkem_link = serialized_set.save()
-            send_kkm_mail(user_data=kkem_link)
+
+            confirmation_token = integrations_helper.generate_confirmation_token(
+                kkem_link["link_id"]
+            )
+            
+            integrations_helper.send_integration_mail(
+                user_data=kkem_link,
+                token=confirmation_token,
+                subject="KKEM integration request!",
+                address=("KKEM", "verify_integration.html"),
+            )
 
             return CustomResponse(
                 general_message="Authorization created successfully. Email sent."
@@ -111,15 +116,14 @@ class KKEMAuthorizationAPI(APIView):
 
     def patch(self, request, token):
         try:
-            authorization = IntegrationAuthorization.objects.get(id=token)
+            link_id = integrations_helper.get_authorization_id(token)
+            authorization = IntegrationAuthorization.objects.get(id=link_id)
 
             authorization.verified = True
             authorization.updated_at = DateTimeUtils.get_current_utc_time()
 
-            password = authorization.user.password
-            mu_id = authorization.user.mu_id
-
-            response = get_access_token(mu_id, password)
+            user_id = authorization.user.id
+            response = integrations_helper.get_access_token(token=user_id)
 
             authorization.save()
             return CustomResponse(
@@ -141,14 +145,10 @@ class KKEMIntegrationLogin(APIView):
             email_or_muid = request.data.get(
                 "emailOrMuid", request.data.get("mu_id", None)
             )
-
             password = request.data.get("password")
-            jsid = request.data.get("jsid", None)
-            integration = request.data.get("integration", None)
+            response = integrations_helper.get_access_token(email_or_muid, password)
 
-            response = get_access_token(email_or_muid, password)
-
-            if jsid and integration:
+            if request.data.get("jsid", None):
                 request.data["verified"] = True
                 serialized_set = KKEMAuthorization(
                     data=request.data, context={"type": "login"}
@@ -171,52 +171,32 @@ class KKEMIntegrationLogin(APIView):
 class KKEMdetailsFetchAPI(APIView):
     def get(self, request, jsid):
         try:
-            # url = "https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details"
+            url = "https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details"
 
-            # username = decouple.config("KKEM_USERNAME")
-            # password = decouple.config("KKEM_PASSWORD")
+            data = f'{{"job_seeker_id": {jsid}}}'
 
-            # data = f'{{"username": "{username}", "password": "{password}", "jsid": {jsid}}}'
-
-            # response = requests.post(
-            #     url, data=data, verify=False  #! Change this to True in production
-            # )
-            # response_data = response.json()
-
-            # if (
-            #     "request_status" in response_data
-            #     and not response_data["request_status"]
-            # ):
-            #     error_message = response_data.get("msg", "Unknown Error")
-            #     return CustomResponse(
-            #         general_message=error_message
-            #     ).get_failure_response()
-
-            # elif "response" in response_data and response_data["response"].get(
-            #     "req_status", False
-            # ):
-            #     result_data = response_data["response"]["data"]
-            result_data = {
-                "dwms_id": f"KM00{jsid}",
-                "registration": {
-                    "email_id": "lijililly1995@gmail.com",
-                    "key_skills": "java",
-                    "gender": "Female",
-                    "mu_id": None,
-                    "job_seeker_lname": "L",
-                    "dob": "1995-11-09",
-                    "mobile_no": "8129560431",
-                    "job_seeker_fname": "Liji",
-                },
-                "job_seeker_id": jsid,
+            headers = {
+                "Authorization": "Bearer eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiJtdUxlYXJuIiwiaWF0IjoxNjkxMDc1NzE0LCJleHAiOjE3ODU3NzAxMTQsImNsaWVudC1pZCI6Im11TGVhcm4tZHdtcy1hcGkifQ.L6XdWWjur6GThkxJ6BCktC_vdmgGsLDy3d1UQV4kn5o"
             }
-            
-            return CustomResponse(response=result_data).get_success_response()
 
-        # else:
-        #     return CustomResponse(
-        #         general_message="Unknown Response Format"
-        #     ).get_failure_response()
+            response = requests.post(url, data=data, headers=headers)
+            response_data = response.json()
+
+            if (
+                "request_status" in response_data
+                and not response_data["request_status"]
+            ):
+                error_message = response_data.get("msg", "Unknown Error")
+                return CustomResponse(
+                    general_message=error_message
+                ).get_failure_response()
+
+            elif "response" in response_data and response_data["response"].get(
+                "req_status", False
+            ):
+                result_data = response_data["response"]["data"]
+
+            return CustomResponse(response=result_data).get_success_response()
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
