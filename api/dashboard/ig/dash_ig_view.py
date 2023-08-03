@@ -112,3 +112,9 @@ class InterestGroupGetAPI(APIView):
             return CustomResponse(general_message='Interest Group Does Not Exist').get_failure_response()
         serializer = InterestGroupSerializer(igData, many=False)
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
+
+class InterestGroupListApi(APIView):
+    def get(self,request):
+        ig = InterestGroup.objects.all()
+        serializer = InterestGroupSerializer(ig,many=True)
+        return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
