@@ -64,6 +64,8 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         while code in existing_codes:
             code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2] + str(i)
             i += 1
+        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig, accepted=True).exists():
+            raise serializers.ValidationError("Already a member of learning circle with same interest group")
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
