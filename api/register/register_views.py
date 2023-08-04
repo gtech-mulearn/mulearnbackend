@@ -186,11 +186,8 @@ class RegisterDataAPI(APIView):
 
 class RoleAPI(APIView):
     def get(self, request):
-        roles = [RoleType.STUDENT.value, RoleType.MENTOR.value, RoleType.ENABLER.value]
-        role_serializer = Role.objects.filter(title__in=roles)
-        role_serializer_data = serializers.OrgSerializer(
-            role_serializer, many=True
-        ).data
+        role = Role.objects.all()
+        role_serializer_data = serializers.RoleSerializer(role, many=True).data
         return CustomResponse(
             response={"roles": role_serializer_data}
         ).get_success_response()
@@ -360,10 +357,3 @@ class UserZoneAPI(APIView):
 
         zone_serializer = serializers.UserZoneSerializer(zone_object, many=True).data
         return CustomResponse(response=zone_serializer).get_success_response()
-
-
-class UserRoleAPI(APIView):
-    def get(self, request):
-        role = Role.objects.all()
-        serializer = serializers.UserRoleSerializer(role, many=True).data
-        return CustomResponse(response=serializer).get_success_response()
