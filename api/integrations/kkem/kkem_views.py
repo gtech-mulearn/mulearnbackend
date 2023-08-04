@@ -1,4 +1,5 @@
 from datetime import datetime
+from django.db.utils import IntegrityError
 
 from django.db.models import Prefetch
 import requests
