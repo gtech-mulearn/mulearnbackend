@@ -471,5 +471,7 @@ class UserProfileEditView(APIView):
                 serializer.save()
                 return CustomResponse(response=serializer.data).get_success_response()
 
+            return CustomResponse(response=serializer.errors).get_failure_response()
+
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
