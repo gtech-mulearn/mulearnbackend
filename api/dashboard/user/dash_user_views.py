@@ -10,7 +10,7 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
-from api.dashboard.user import dash_user_helper
+from api.dashboard import dashboard_helper
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -239,7 +239,7 @@ class UserVerificationAPI(APIView):
                 user_data.user_id,
             )
 
-            dash_user_helper.send_user_mail(
+            dashboard_helper.send_dashboard_mail(
                 user_data=user_data,
                 subject="Role request at μLearn!",
                 address=("mentor_verification.html"),

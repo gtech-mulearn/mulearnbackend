@@ -41,8 +41,7 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ["id", "name"]
-
-
+        
 class OrgSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
@@ -204,10 +203,3 @@ class UserZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zone
         fields = ["zone_name"]
-
-
-class UserRoleSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = Role
-        fields = ["id", "title"]
