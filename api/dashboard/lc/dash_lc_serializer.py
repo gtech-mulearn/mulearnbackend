@@ -256,10 +256,3 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
     def get_member_count(self, obj):
         return UserCircleLink.objects.filter(circle=obj, accepted=True).count()
-
-class InterestGroupListSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = InterestGroup
-        fields = ['id',
-                  'name'
-                  ]
