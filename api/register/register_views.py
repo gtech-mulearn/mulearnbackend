@@ -360,3 +360,10 @@ class UserZoneAPI(APIView):
 
         zone_serializer = serializers.UserZoneSerializer(zone_object, many=True).data
         return CustomResponse(response=zone_serializer).get_success_response()
+
+
+class UserRoleAPI(APIView):
+    def get(self, request):
+        role = Role.objects.all()
+        serializer = serializers.UserRoleSerializer(role, many=True).data
+        return CustomResponse(response=serializer).get_success_response()
