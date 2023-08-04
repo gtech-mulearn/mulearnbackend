@@ -93,7 +93,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 ).first()
             ):
                 raise ValueError(
-                    "This jsid is already associated with another user"
+                    "This KKEM account is already connected to another user"
                 ) from e
             elif (
                 self.context["type"] == "login"
@@ -102,14 +102,14 @@ class KKEMAuthorization(serializers.ModelSerializer):
             ):
                 return kkem_link
             elif kkem_link.verified:
-                raise ValueError("Authorization already exists and is verified.") from e
+                raise ValueError("Your μLearn account is already connected to a KKEM account") from e
             elif kkem_link.user == user:
                 kkem_link.integration_value = validated_data["integration_value"]
                 kkem_link.updated_at = DateTimeUtils.get_current_utc_time()
                 kkem_link.verified = validated_data["verified"]
                 kkem_link.save()
             else:
-                raise
+                raise ValueError("Something went wrong") from e
 
         return {
             "email": kkem_link.user.email,

@@ -1,4 +1,5 @@
 from datetime import datetime
+from django.db.utils import IntegrityError
 
 from django.db.models import Prefetch
 import requests
@@ -146,7 +147,9 @@ class KKEMIntegrationLogin(APIView):
                 "emailOrMuid", request.data.get("mu_id", None)
             )
             password = request.data.get("password")
-            response = integrations_helper.get_access_token(email_or_muid, password)
+            response = integrations_helper.get_access_token(
+                email_or_muid=email_or_muid, password=password
+            )
 
             if request.data.get("jsid", None):
                 request.data["verified"] = True

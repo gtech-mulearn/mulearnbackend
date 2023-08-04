@@ -148,7 +148,7 @@ def get_access_token(
 
     response = response.json()
     if response.get("statusCode") != 200:
-        raise ValueError(response.get("message"))
+        raise ValueError(response.get("message").get("general")[0])
 
     res_data = response.get("response")
     access_token = res_data.get("accessToken")
