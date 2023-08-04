@@ -290,42 +290,51 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
 
 class UserEditDetailsSerializer(serializers.ModelSerializer):
+
     organization = serializers.SerializerMethodField()
+    country = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+    district = serializers.SerializerMethodField()
     department = serializers.SerializerMethodField()
     graduation_year = serializers.SerializerMethodField()
     role = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "mobile", "gender", "organization", "department",
-                  "graduation_year", "role"]
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "organization", "country", "state",
+                  "district", "department", "graduation_year", "role", "interest_groups"]
 
     def get_organization(self, obj):
         user_org_link = obj.user_organization_link_user_id.all()
-        org_dict = {}
-        for org_link in user_org_link:
-            if org_link.org.org_type in org_dict:
-                org_dict[org_link.org.org_dict].append(org_link.org_id)
-            else:
-                org_dict[org_link.org.org_type] = [org_link.org_id]
-        return org_dict
+        return [user_org.org.id for user_org in user_org_link] if user_org_link else None
+
+    def get_country(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.org.district.zone.state.country.id if user_org_link or user_org_link.org else None
+
+    def get_state(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.org.district.zone.state.id if user_org_link or user_org_link.org else None
+
+    def get_district(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.org.district.id if user_org_link or user_org_link.org else None
 
     def get_department(self, obj):
         user_org_link = obj.user_organization_link_user_id.first()
-        if user_org_link:
-            department = user_org_link.department
-            if department:
-                return department.id
-        else:
-            return None
+        return user_org_link.department.id if user_org_link or user_org_link.department else None
 
     def get_role(self, obj):
         user_role_link = obj.user_role_link_user.all()
-        return [user_role.role.title for user_role in user_role_link]
+        return [user_role.role.id for user_role in user_role_link] if user_role_link else None
 
     def get_graduation_year(self, obj):
+
         user_org_link = obj.user_organization_link_user_id.first()
-        if user_org_link:
-            return user_org_link.graduation_year
-        else:
-            return None
+        return user_org_link.graduation_year if user_org_link else None
+
+    def get_interest_groups(self, obj):
+
+        user_ig_link = obj.user_ig_link_user.all()
+        return [interest_group.ig.id for interest_group in user_ig_link] if user_ig_link else None

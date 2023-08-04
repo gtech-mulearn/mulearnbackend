@@ -16,5 +16,7 @@ urlpatterns = [
     path('email-verification/', register_views.UserEmailVerificationAPI.as_view()),
     path('user-country/', register_views.UserCountryAPI.as_view()),
     path('user-state/', register_views.UserStateAPI.as_view()),
-    path('user-zone/', register_views.UserZoneAPI.as_view())
+    path('user-zone/', register_views.UserZoneAPI.as_view()),
+    path('user-roles/', register_views.UserRoleAPI.as_view())
+
 ]
