@@ -10,7 +10,7 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
-from api.dashboard.user.dash_user_helper import mulearn_mails
+from api.dashboard import dashboard_helper
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -40,19 +40,11 @@ class UserInfoAPI(APIView):
 class UserEditAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
-        # user = (
-        #     User.objects.filter(id=user_id)
-        #     .prefetch_related("user_organization_link_user_id")
-        #     .first()
-        # )
-        # serializer = dash_user_serializer.UserEditSerializer(user)
-        # return CustomResponse(response=serializer.data).get_success_response()
         user = User.objects.get(id=user_id)
         serializer = dash_user_serializer.UserEditDetailsSerializer(user).data
         return CustomResponse(response=serializer).get_success_response()
-
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
@@ -247,7 +239,11 @@ class UserVerificationAPI(APIView):
                 user_data.user_id,
             )
 
-            mulearn_mails().send_mail_mentor(user_data)
+            dashboard_helper.send_dashboard_mail(
+                user_data=user_data,
+                subject="Role request at μLearn!",
+                address=("mentor_verification.html"),
+            )
 
             return CustomResponse(
                 response={"user_role_link": user_data}

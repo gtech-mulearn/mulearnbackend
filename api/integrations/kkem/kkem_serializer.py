@@ -5,6 +5,7 @@ from db.integrations import IntegrationAuthorization, Integration
 from db.task import KarmaActivityLog, UserIgLink
 
 from db.user import User
+from utils.types import IntegrationType
 from utils.utils import DateTimeUtils
 from django.db.models import Q
 
@@ -40,11 +41,9 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         return interest_groups
 
     def get_jsid(self, obj):
-        return (
-            IntegrationAuthorization.objects.filter(user=obj, verified=True)
-            .first()
-            .integration_value
-        )
+        return IntegrationAuthorization.objects.get(
+            user=obj, verified=True
+        ).integration_value
 
     class Meta:
         model = User
@@ -59,23 +58,17 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 class KKEMAuthorization(serializers.ModelSerializer):
     emailOrMuid = serializers.CharField(source="user.mu_id")
     jsid = serializers.CharField(source="integration_value")
-    integration = serializers.CharField(source="integration.name")
 
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
 
-        try:
-            if not (
-                user := User.objects.filter(
-                    Q(mu_id=user_mu_id) | Q(email=user_mu_id)
-                ).first()
-            ):
-                raise ValueError("User doesn't exist")
-            integration = Integration.objects.get(
-                name=validated_data["integration"]["name"]
-            )
-        except Integration.DoesNotExist as e:
-            raise ValueError("Invalid request token") from e
+        if not (
+            user := User.objects.filter(
+                Q(mu_id=user_mu_id) | Q(email=user_mu_id)
+            ).first()
+        ):
+            raise ValueError("User doesn't exist")
+        integration = Integration.objects.get(name=IntegrationType.KKEM.value)
 
         try:
             kkem_link = IntegrationAuthorization.objects.create(
@@ -88,15 +81,19 @@ class KKEMAuthorization(serializers.ModelSerializer):
             )
 
         except IntegrityError as e:
-            kkem_link = IntegrationAuthorization.objects.filter(user=user).first()
+            kkem_link = IntegrationAuthorization.objects.filter(
+                user=user, integration=integration
+            ).first()
+
             if (
                 not kkem_link
                 and IntegrationAuthorization.objects.filter(
-                    integration_value=validated_data["integration_value"]
+                    integration_value=validated_data["integration_value"],
+                    integration=integration,
                 ).first()
             ):
                 raise ValueError(
-                    "This jsid is already associated with another user"
+                    "This KKEM account is already connected to another user"
                 ) from e
             elif (
                 self.context["type"] == "login"
@@ -105,14 +102,14 @@ class KKEMAuthorization(serializers.ModelSerializer):
             ):
                 return kkem_link
             elif kkem_link.verified:
-                raise ValueError("Authorization already exists and is verified.") from e
+                raise ValueError("Your μLearn account is already connected to a KKEM account") from e
             elif kkem_link.user == user:
                 kkem_link.integration_value = validated_data["integration_value"]
                 kkem_link.updated_at = DateTimeUtils.get_current_utc_time()
                 kkem_link.verified = validated_data["verified"]
                 kkem_link.save()
             else:
-                raise
+                raise ValueError("Something went wrong") from e
 
         return {
             "email": kkem_link.user.email,
@@ -123,4 +120,4 @@ class KKEMAuthorization(serializers.ModelSerializer):
 
     class Meta:
         model = IntegrationAuthorization
-        fields = ["emailOrMuid", "jsid", "integration", "verified"]
+        fields = ["emailOrMuid", "jsid", "verified"]
