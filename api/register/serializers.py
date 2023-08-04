@@ -204,3 +204,10 @@ class UserZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zone
         fields = ["zone_name"]
+
+
+class UserRoleSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = Role
+        fields = ["id", "title"]
