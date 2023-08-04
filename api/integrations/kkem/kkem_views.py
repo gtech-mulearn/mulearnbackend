@@ -98,7 +98,7 @@ class KKEMAuthorizationAPI(APIView):
             kkem_link = serialized_set.save()
 
             confirmation_token = integrations_helper.generate_confirmation_token(
-                kkem_link["link_id"]
+                str(kkem_link["link_id"])
             )
 
             integrations_helper.send_integration_mail(
