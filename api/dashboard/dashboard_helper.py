@@ -3,11 +3,11 @@ from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
 
-def send_user_mail(self, user_data: dict, subject: str, address: list[str]):
+def send_dashboard_mail(self, user_data: dict, subject: str, address: list[str]):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
-    
+
     :param user_data: A dictionary containing user data such as name, email, and any other relevant
     information
     :param subject: The subject of the email that will be sent to the user
