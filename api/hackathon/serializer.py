@@ -1,3 +1,4 @@
+import json
 import uuid
 
 from django.conf import settings
@@ -299,9 +300,17 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
 
 
 class ListApplicantsSerializer(serializers.ModelSerializer):
+    data = serializers.SerializerMethodField()
+
     class Meta:
         model = HackathonUserSubmission
         fields = ('data',)
+
+    def get_data(self, obj):
+        try:
+            return json.loads(obj.data.replace("'", "\""))
+        except json.JSONDecodeError:
+            return {}
 
 
 class HackathonInfoSerializer(serializers.ModelSerializer):
