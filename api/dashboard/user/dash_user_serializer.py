@@ -6,6 +6,7 @@ from rest_framework import serializers
 from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
+from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
@@ -140,17 +141,16 @@ class UserEditSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User id is a required field")
 
         if (
-            "email" in data
-            and User.objects.filter(email=data["email"])
-            .exclude(id=data["user_id"].id)
-            .all()
+                "email" in data
+                and User.objects.filter(email=data["email"])
+                .exclude(id=data["user_id"].id)
+                .all()
         ):
             raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
 
     def update(self, instance, validated_data):
-        user_id = "51175869-241f-49c9-a028-5d0e4b869589"
-        # user_id = JWTUtils.fetch_user_id(self.context["request"])
+        user_id = JWTUtils.fetch_user_id(self.context["request"])
         admin = User.objects.get(id=user_id)
         user = User.objects.get(id=validated_data["id"])
         orgs = validated_data.get("orgs")
@@ -243,5 +243,98 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "verified",
             "role_id",
             "role_title",
-            "email"
+            "email",
         ]
+
+
+class UserProfileEditSerializer(serializers.ModelSerializer):
+    community = serializers.SerializerMethodField()
+
+    def get_community(self, user):
+        communities = user.user_organization_link_user_id.filter(
+            org__org_type=OrganizationType.COMMUNITY.value
+        ).all()
+        return [community.org_id for community in communities] if communities else []
+
+    def update(self, instance, validated_data):
+        if "community" in validated_data:
+            community = validated_data.pop("community")
+
+            instance.user_organization_link_user_id.filter(
+                org__org_type=OrganizationType.COMMUNITY.value
+            ).delete()
+
+            for org_id in community:
+                UserOrganizationLink.objects.create(
+                    id=uuid.uuid4(),
+                    user=instance,
+                    org_id=org_id,
+                    created_by=instance,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                )
+
+        return super().update(instance, validated_data)
+
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "community",
+            "gender",
+            "dob",
+        ]
+
+
+class UserEditDetailsSerializer(serializers.ModelSerializer):
+
+    organization = serializers.SerializerMethodField()
+    country = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+    district = serializers.SerializerMethodField()
+    department = serializers.SerializerMethodField()
+    graduation_year = serializers.SerializerMethodField()
+    role = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "organization", "country", "state",
+                  "district", "department", "graduation_year", "role", "interest_groups"]
+
+    def get_organization(self, obj):
+        user_org_link = obj.user_organization_link_user_id.all()
+        return [user_org.org.id for user_org in user_org_link] if user_org_link else None
+
+    def get_country(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.org.district.zone.state.country.id if user_org_link or user_org_link.org else None
+
+    def get_state(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.org.district.zone.state.id if user_org_link or user_org_link.org else None
+
+    def get_district(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.org.district.id if user_org_link or user_org_link.org else None
+
+    def get_department(self, obj):
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.department.id if user_org_link or user_org_link.department else None
+
+    def get_role(self, obj):
+        user_role_link = obj.user_role_link_user.all()
+        return [user_role.role.id for user_role in user_role_link] if user_role_link else None
+
+    def get_graduation_year(self, obj):
+
+        user_org_link = obj.user_organization_link_user_id.first()
+        return user_org_link.graduation_year if user_org_link else None
+
+    def get_interest_groups(self, obj):
+
+        user_ig_link = obj.user_ig_link_user.all()
+        return [interest_group.ig.id for interest_group in user_ig_link] if user_ig_link else None

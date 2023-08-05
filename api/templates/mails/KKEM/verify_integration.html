@@ -1,4 +1,4 @@
-{% extends "mails\KKEM\base_kkem.html" %} {% block content %}
+{% extends "mails/KKEM/base_kkem.html" %} {% block content %}
 <center>
   <h1
     style="
@@ -21,8 +21,8 @@
   >
     Hey {{ user.fullname }} 👋🏼, <br />
     We got your request to link your μID with your DWMS ID. So here's an email
-    to seal the deal! Please cross check your μID and click the
-    verify button to lock in your request.
+    to seal the deal! Please cross check your μID and click the verify button to
+    lock in your request.
   </p>
   <div>
     <a
@@ -41,7 +41,7 @@
   <div style="background: transparent; width: 100%; height: 17px"></div>
 
   <a
-    href="{{ base_url }}/kkem/authorization/{{ user.link_id }}/"
+    href="{{ base_url }}/kkem/authorization/{{ token }}/"
     style="width: 160px; height: 40px"
   >
     <img

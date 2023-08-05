@@ -10,14 +10,15 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
-from api.dashboard.user.dash_user_helper import mulearn_mails
+from api.dashboard import dashboard_helper
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
-
+from db.organization import UserOrganizationLink
 from . import dash_user_serializer
+from .dash_user_serializer import UserProfileEditSerializer
 
 
 class UserInfoAPI(APIView):
@@ -41,13 +42,9 @@ class UserEditAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
-        user = (
-            User.objects.filter(id=user_id)
-            .prefetch_related("user_organization_link_user_id")
-            .first()
-        )
-        serializer = dash_user_serializer.UserEditSerializer(user)
-        return CustomResponse(response=serializer.data).get_success_response()
+        user = User.objects.get(id=user_id)
+        serializer = dash_user_serializer.UserEditDetailsSerializer(user).data
+        return CustomResponse(response=serializer).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
@@ -84,7 +81,7 @@ class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request, user_id=None):
+    def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
                 When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
@@ -126,35 +123,24 @@ class UserAPI(APIView):
             ),
         )
 
-        if user_id:
-            user_data = user_queryset.filter(id=user_id)
-            if not user_data:
-                return CustomResponse(
-                    general_message="User not found"
-                ).get_failure_response()
-            serializer = dash_user_serializer.UserDashboardSerializer(
-                user_data, many=True
-            )
-            return CustomResponse(response=serializer.data).get_success_response()
-        else:
-            queryset = CommonUtils.get_paginated_queryset(
-                user_queryset,
-                request,
-                ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
-                {
-                    "first_name": "first_name",
-                    "total_karma": "total_karma",
-                    "email": "email",
-                    "created_at": "created_at",
-                },
-            )
-            serializer = dash_user_serializer.UserDashboardSerializer(
-                queryset.get("queryset"), many=True
-            )
+        queryset = CommonUtils.get_paginated_queryset(
+            user_queryset,
+            request,
+            ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
+            {
+                "first_name": "first_name",
+                "total_karma": "total_karma",
+                "email": "email",
+                "created_at": "created_at",
+            },
+        )
+        serializer = dash_user_serializer.UserDashboardSerializer(
+            queryset.get("queryset"), many=True
+        )
 
-            return CustomResponse().paginated_response(
-                data=serializer.data, pagination=queryset.get("pagination")
-            )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=queryset.get("pagination")
+        )
 
 
 class UserManagementCSV(APIView):
@@ -253,7 +239,11 @@ class UserVerificationAPI(APIView):
                 user_data.user_id,
             )
 
-            mulearn_mails().send_mail_mentor(user_data)
+            dashboard_helper.send_dashboard_mail(
+                user_data=user_data,
+                subject="Role request at μLearn!",
+                address=("mentor_verification.html"),
+            )
 
             return CustomResponse(
                 response={"user_role_link": user_data}
@@ -455,3 +445,33 @@ class UserInviteAPI(APIView):
         return CustomResponse(
             general_message="Invitation sent successfully"
         ).get_success_response()
+
+
+class UserProfileEditView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = dash_user_serializer.UserProfileEditSerializer(user)
+            return CustomResponse(response=serializer.data).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+    def patch(self, request):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = UserProfileEditSerializer(
+                user, data=request.data, partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(response=serializer.data).get_success_response()
+
+            return CustomResponse(response=serializer.errors).get_failure_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
