@@ -3,12 +3,13 @@ import uuid
 from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Organization
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+from django.contrib.auth.hashers import make_password
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -338,3 +339,53 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
 
         user_ig_link = obj.user_ig_link_user.all()
         return [interest_group.ig.id for interest_group in user_ig_link] if user_ig_link else None
+
+
+class UserDetailsUpdateSerializer(serializers.ModelSerializer):
+    password = serializers.CharField(required=False)
+    confirm_password = serializers.CharField(required=False)
+    organizations = serializers.ListField(required=False)
+    roles = serializers.ListField(required=False)
+    interest_groups = serializers.ListField(required=False)
+    department = serializers.CharField(required=False)
+    graduation_year = serializers.CharField(required=False)
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "password", "confirm_password",
+                  "organizations", "roles", "interest_groups", "department", "graduation_year"]
+
+    def update(self, instance, validated_data):
+        user = JWTUtils.fetch_user_id(self.context.get('request'))
+        graduation_year = validated_data.pop('graduation_year')
+        department = validated_data.pop("department")
+        organization_ids = validated_data.pop('organizations')
+        role_ids = validated_data.pop('roles')
+        interest_groups = validated_data.pop('interest_groups')
+        user_role_verified = True
+
+        with transaction.atomic():
+            if organization_ids:
+                UserOrganizationLink.objects.bulk_create([UserOrganizationLink(
+                    id=uuid.uuid4(), user=user, org_id=org_id, created_by=user,
+                    created_at=DateTimeUtils.get_current_utc_time(), verified=True, department_id=department,
+                    graduation_year=graduation_year) for org_id in organization_ids])
+
+            if role_ids:
+                UserRoleLink.objects.bulk_create([UserRoleLink(
+                    id=uuid.uuid4(), user=user, role_id=role_id, created_by=user,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=user_role_verified) for role_id in role_ids])
+
+            if interest_groups:
+                UserIgLink.objects.bulk_create([UserIgLink(
+                    id=uuid.uuid4(), user=user, ig_id=ig, created_by=user,
+                    created_at=DateTimeUtils.get_current_utc_time()) for ig in interest_groups])
+
+        return super().update(instance, validated_data)
+
+    def validate_password(self, value):
+        if value != self.initial_data.get('confirm_password'):
+            raise serializers.ValidationError("Password doesnt match")
+        password = make_password(value)
+        return password
