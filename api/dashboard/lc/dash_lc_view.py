@@ -87,17 +87,18 @@ class LearningCircleHomeApi(APIView):
 class LearningCircleMainApi(APIView):
     def post(self, request):
         all_circles = LearningCircle.objects.all()
-        ig_id = request.GET.get('ig_id')
-        org_id = request.GET.get('org_id')
-        district_id = request.GET.get('district_id')
-        if ig_id:
-            all_circles = all_circles.filter(ig_id=ig_id)
+        ig_id = request.data.get('ig_id')
+        org_id = request.data.get('org_id')
+        district_id = request.data.get('district_id')
+
+        if district_id:
+            all_circles = all_circles.filter(org__district_id=district_id)
 
         if org_id:
             all_circles = all_circles.filter(org_id=org_id)
 
-        if district_id:
-            all_circles = all_circles.filter(org__district_id=district_id)
+        if ig_id:
+            all_circles = all_circles.filter(ig_id=ig_id)
 
         if ig_id or org_id or district_id:
             serializer = LearningCircleMainSerializer(all_circles, many=True)

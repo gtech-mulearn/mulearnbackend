@@ -64,6 +64,8 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         while code in existing_codes:
             code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2] + str(i)
             i += 1
+        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig, accepted=True).exists():
+            raise serializers.ValidationError("Already a member of learning circle with same interest group")
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
@@ -235,7 +237,7 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         instance.meet_time = validated_data.get('meet_time')
         instance.meet_place = validated_data.get('meet_place')
-        instance.day = validated_data.get('date')
+        instance.day = validated_data.get('day')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
