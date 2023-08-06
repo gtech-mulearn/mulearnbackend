@@ -342,8 +342,7 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
 
 
 class UserDetailsUpdateSerializer(serializers.ModelSerializer):
-    password = serializers.CharField(required=False)
-    confirm_password = serializers.CharField(required=False)
+
     organizations = serializers.ListField(required=False)
     roles = serializers.ListField(required=False)
     interest_groups = serializers.ListField(required=False)
@@ -352,11 +351,13 @@ class UserDetailsUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "password", "confirm_password",
-                  "organizations", "roles", "interest_groups", "department", "graduation_year"]
+        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "organizations", "roles",
+                  "interest_groups", "department", "graduation_year"]
 
     def update(self, instance, validated_data):
-        user = JWTUtils.fetch_user_id(self.context.get('request'))
+        admin = JWTUtils.fetch_user_id(self.context.get('request'))
+        user_id = self.context.get('user_id')
+
         graduation_year = validated_data.pop('graduation_year')
         department = validated_data.pop("department")
         organization_ids = validated_data.pop('organizations')
@@ -367,25 +368,19 @@ class UserDetailsUpdateSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             if organization_ids:
                 UserOrganizationLink.objects.bulk_create([UserOrganizationLink(
-                    id=uuid.uuid4(), user=user, org_id=org_id, created_by=user,
+                    id=uuid.uuid4(), user_id=user_id, org_id=org_id, created_by_id=admin,
                     created_at=DateTimeUtils.get_current_utc_time(), verified=True, department_id=department,
                     graduation_year=graduation_year) for org_id in organization_ids])
 
             if role_ids:
                 UserRoleLink.objects.bulk_create([UserRoleLink(
-                    id=uuid.uuid4(), user=user, role_id=role_id, created_by=user,
+                    id=uuid.uuid4(), user_id=user_id, role_id=role_id, created_by_id=admin,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     verified=user_role_verified) for role_id in role_ids])
 
             if interest_groups:
                 UserIgLink.objects.bulk_create([UserIgLink(
-                    id=uuid.uuid4(), user=user, ig_id=ig, created_by=user,
+                    id=uuid.uuid4(), user_id=user_id, ig_id=ig, created_by_id=admin,
                     created_at=DateTimeUtils.get_current_utc_time()) for ig in interest_groups])
 
         return super().update(instance, validated_data)
-
-    def validate_password(self, value):
-        if value != self.initial_data.get('confirm_password'):
-            raise serializers.ValidationError("Password doesnt match")
-        password = make_password(value)
-        return password
