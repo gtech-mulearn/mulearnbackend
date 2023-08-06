@@ -40,13 +40,13 @@ class UserInfoAPI(APIView):
 class UserEditAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
         user = User.objects.get(id=user_id)
         serializer = dash_user_serializer.UserEditDetailsSerializer(user).data
         return CustomResponse(response=serializer).get_success_response()
 
-    # @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -59,8 +59,7 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    # @role_required([RoleType.ADMIN.value])
-
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
         user = User.objects.get(id=user_id)
         serializer = UserDetailsUpdateSerializer(user, data=request.data, context={'request': request,
