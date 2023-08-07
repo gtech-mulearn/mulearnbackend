@@ -8,15 +8,13 @@ from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
-from .dash_ig_serializer import InterestGroupSerializer
+from .dash_ig_serializer import InterestGroupSerializer, InterestGroupCreateSerializer, InterestGroupUpdateSerializer
 
 
 class InterestGroupAPI(APIView):
-    authentication_classes = [CustomizePermission]  # for logged in users
+    authentication_classes = [CustomizePermission]
 
-    # GET Request to show all interest groups. Params availiable:[sortBy, search, perPage, pageIndex]
-
-    @role_required([RoleType.ADMIN.value, ])  # for admin
+    @role_required([RoleType.ADMIN.value, ])
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(ig_serializer, request, [
@@ -32,56 +30,39 @@ class InterestGroupAPI(APIView):
         return CustomResponse().paginated_response(data=ig_serializer_data,
                                                    pagination=paginated_queryset.get('pagination'))
 
-    # POST Request to create a new interest group
-    # body should contain 'name': '<new name of interest group>'
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        code = request.data.get('code')
-        if InterestGroup.objects.filter(code=code).exists():
-            return CustomResponse(general_message='ig code already exists').get_failure_response()
-        ig_data = InterestGroup.objects.create(
-            id=uuid.uuid4(),
-            name=request.data.get('name'),
-            code = code,
-            icon = request.data.get('icon'),
-            updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time())
-        serializer = InterestGroupSerializer(ig_data)
-        DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.INTEREST_GROUP.value,
-            WebHookActions.CREATE.value,
-            request.data.get('name')
-        )
-        return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
+        serializer = InterestGroupCreateSerializer(data=request.data, context={'user_id': user_id})
+        if serializer.is_valid():
+            serializer.save()
+            DiscordWebhooks.channelsAndCategory(
+                WebHookCategory.INTEREST_GROUP.value,
+                WebHookActions.CREATE.value,
+                request.data.get('name')
+            )
+            return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
-    # PUT Request to edit an InterestGroup. Use endpoint + /<id>/
-    # body should contain 'name': '<new name of interst group>' for edit
     @role_required([RoleType.ADMIN.value, ])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
-        igData = InterestGroup.objects.get(id=pk)
-        oldName = igData.name
-        igData.name = request.data.get('name')
-        igData.code = request.data.get('code')
-        igData.icon = request.data.get('icon')
-        igData.updated_by_id = user_id
-        igData.updated_at = DateTimeUtils.get_current_utc_time()
-        igData.save()
-        serializer = InterestGroupSerializer(igData)
-        DiscordWebhooks.channelsAndCategory(
-            WebHookCategory.INTEREST_GROUP.value,
-            WebHookActions.EDIT.value,
-            igData.name,
-            oldName
-        )
-        return CustomResponse(
-            response={"interestGroup": serializer.data}
-        ).get_success_response()
+        ig_old_name = InterestGroup.objects.get(id=pk).name
+        serializer = InterestGroupUpdateSerializer(data=request.data,
+                                                   instance=InterestGroup.objects.get(id=pk),
+                                                   context={'user_id': user_id})
+        if serializer.is_valid():
+            serializer.save()
+            DiscordWebhooks.channelsAndCategory(
+                WebHookCategory.INTEREST_GROUP.value,
+                WebHookActions.EDIT.value,
+                InterestGroup.objects.get(id=pk).name,
+                ig_old_name
+            )
+            return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
-    # DELETE Request to delete an InterestGroup. Use endpoint + /<id>/
+
     @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, pk):
         igData = InterestGroup.objects.get(id=pk)
@@ -116,8 +97,9 @@ class InterestGroupGetAPI(APIView):
         serializer = InterestGroupSerializer(igData, many=False)
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
+
 class InterestGroupListApi(APIView):
-    def get(self,request):
+    def get(self, request):
         ig = InterestGroup.objects.all()
-        serializer = InterestGroupSerializer(ig,many=True)
+        serializer = InterestGroupSerializer(ig, many=True)
         return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
