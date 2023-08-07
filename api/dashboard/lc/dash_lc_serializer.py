@@ -18,7 +18,7 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
 
     def get_member_count(self, obj):
-        return UserCircleLink.objects.filter(circle_id=obj.id).count()
+        return UserCircleLink.objects.filter(circle_id=obj.id,accepted=1).count()
 
     class Meta:
         model = LearningCircle
@@ -255,4 +255,4 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
         return obj.ig.name if obj.ig else None
 
     def get_member_count(self, obj):
-        return UserCircleLink.objects.filter(circle=obj, accepted=True).count()
+        return UserCircleLink.objects.filter(circle=obj, accepted=1).count()
