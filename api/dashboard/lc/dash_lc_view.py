@@ -56,7 +56,7 @@ class LearningCircleJoinApi(APIView):
 class LearningCircleListApi(APIView):
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
-        learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id)
+        learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id,usercirclelink__accepted=1)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
