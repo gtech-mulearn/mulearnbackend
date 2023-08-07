@@ -4,12 +4,14 @@ from db.user import User
 from db.organization import UserOrganizationLink
 from api.notification.notifications_utils import NotificationUtils
 from utils.permission import JWTUtils
+from decouple import config
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer
 
+domain = config("FR_DOMAIN_NAME")
 
 class LearningCircleAPI(APIView):
     def get(self, request):  # lists the learning circle in the user's college
@@ -45,7 +47,7 @@ class LearningCircleJoinApi(APIView):
                                                   title="Member Request",
                                                   description=f"{full_name} has requested to join your learning circle",
                                                   button="LC",
-                                                  url='http://127.0.0.1:8000/api/v1/dashboard/lc/list/',
+                                                  url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
                                                   created_by=user)
             return CustomResponse(general_message='Request sent').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -88,13 +90,13 @@ class LearningCircleHomeApi(APIView):
                 NotificationUtils.insert_notification(member_id, title="Request approved",
                                                       description="You request to join the learning circle has been approved",
                                                       button="LC",
-                                                      url='http://127.0.0.1:8000/api/v1/dashboard/lc/list/',
+                                                      url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
                                                       created_by=User.objects.filter(id=user_id).first())
             else:
                 NotificationUtils.insert_notification(member_id, title="Request rejected",
                                                       description="You request to join the learning circle has been rejected",
                                                       button="LC",
-                                                      url='http://127.0.0.1:8000/api/v1/dashboard/lc/list/',
+                                                      url=f'{domain}/api/v1/dashboard/lc/join',
                                                       created_by=User.objects.filter(id=user_id).first())
             return CustomResponse(general_message='Approved successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
