@@ -1,13 +1,17 @@
 from rest_framework.views import APIView
-from db.learning_circle import LearningCircle, UserCircleLink
+from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
+from db.user import User
 from db.organization import UserOrganizationLink
+from api.notification.notifications_utils import NotificationUtils
 from utils.permission import JWTUtils
+from decouple import config
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer
 
+domain = config("FR_DOMAIN_NAME")
 
 class LearningCircleAPI(APIView):
     def get(self, request):  # lists the learning circle in the user's college
@@ -32,10 +36,19 @@ class LearningCircleAPI(APIView):
 class LearningCircleJoinApi(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        full_name = f'{user.first_name} {user.last_name}' if user.last_name else user.first_name
+        lc = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first()
         serializer = LearningCircleJoinSerializer(data=request.data,
                                                   context={'user_id': user_id, 'circle_id': circle_id})
         if serializer.is_valid():
             serializer.save()
+            NotificationUtils.insert_notification(user_id=lc.user_id,
+                                                  title="Member Request",
+                                                  description=f"{full_name} has requested to join your learning circle",
+                                                  button="LC",
+                                                  url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
+                                                  created_by=user)
             return CustomResponse(general_message='Request sent').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
@@ -69,9 +82,22 @@ class LearningCircleHomeApi(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
-                                                    context={'user_id': user_id})
+                                                                 context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
+            is_accepted = request.data.get('is_accepted')
+            if is_accepted == '1':
+                NotificationUtils.insert_notification(member_id, title="Request approved",
+                                                      description="You request to join the learning circle has been approved",
+                                                      button="LC",
+                                                      url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
+                                                      created_by=User.objects.filter(id=user_id).first())
+            else:
+                NotificationUtils.insert_notification(member_id, title="Request rejected",
+                                                      description="You request to join the learning circle has been rejected",
+                                                      button="LC",
+                                                      url=f'{domain}/api/v1/dashboard/lc/join',
+                                                      created_by=User.objects.filter(id=user_id).first())
             return CustomResponse(general_message='Approved successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
