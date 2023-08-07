@@ -7,9 +7,7 @@ from db.organization import Organization, District, Zone, State, OrgAffiliation
 
 
 class StateSerializer(serializers.ModelSerializer):
-    country = serializers.SlugRelatedField(
-        many=False, read_only=True, slug_field="name"
-    )
+    country = serializers.SlugRelatedField(many=False, read_only=True, slug_field="name")
 
     class Meta:
         model = State
