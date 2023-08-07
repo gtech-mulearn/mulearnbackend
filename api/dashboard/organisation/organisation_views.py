@@ -30,50 +30,46 @@ class InstitutionCSV(APIView):
 
 class InstitutionsAPI(APIView):
     def get(self, request):
-        clg_orgs = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
-        cmpny_orgs = Organization.objects.filter(org_type=OrganizationType.COMPANY.value)
-        cmuty_orgs = Organization.objects.filter(org_type=OrganizationType.COMMUNITY.value)
+        colleges = self.get_organizations_by_type(OrganizationType.COLLEGE.value, request)
+        companies = self.get_organizations_by_type(OrganizationType.COMPANY.value, request)
+        communities = self.get_organizations_by_type(OrganizationType.COMMUNITY.value, request)
 
-        paginated_clg_orgs = CommonUtils.get_paginated_queryset(clg_orgs, request, ['title', 'code',
-                                                                                    'affiliation__title',
-                                                                                    'district__name'],
-                                                                {
-                                                                    'title': 'title',
-                                                                    'affiliation': 'affiliation',
-                                                                    'district': 'district',
-                                                                    'zone': 'district__zone__name'
-                                                                })
-
-        clg_orgs_serializer = OrganisationSerializer(paginated_clg_orgs.get("queryset"), many=True)
-
-        paginated_cmpny_orgs = CommonUtils.get_paginated_queryset(cmpny_orgs, request, ['title', 'code',
-                                                                                        'district__name'],
-                                                                  {
-                                                                      'title': 'title',
-                                                                      'district': 'district'
-                                                                  })
-        cmpny_orgs_serializer = OrganisationSerializer(paginated_cmpny_orgs.get("queryset"), many=True)
-
-        paginated_cmuty_orgs = CommonUtils.get_paginated_queryset(cmuty_orgs, request, ['title', 'code'],
-                                                                  {
-                                                                      'title': 'title',
-                                                                      'district': 'district'
-                                                                  })
-        cmuty_orgs_serializer = OrganisationSerializer(paginated_cmuty_orgs.get("queryset"), many=True)
+        college_data = self.serialize_and_paginate(colleges)
+        company_data = self.serialize_and_paginate(companies)
+        community_data = self.serialize_and_paginate(communities)
 
         data = {
-            'colleges': clg_orgs_serializer.data,
-            'companies': cmpny_orgs_serializer.data,
-            'communities': cmuty_orgs_serializer.data
+            'colleges': college_data['data'],
+            'companies': company_data['data'],
+            'communities': community_data['data']
         }
 
         pagination = {
-            'colleges': paginated_clg_orgs.get("pagination"),
-            'companies': paginated_cmpny_orgs.get("pagination"),
-            'communities': paginated_cmuty_orgs.get("pagination")
+            'colleges': college_data['pagination'],
+            'companies': company_data['pagination'],
+            'communities': community_data['pagination']
         }
 
         return CustomResponse().paginated_response(data=data, pagination=pagination)
+
+    def get_organizations_by_type(self, org_type, request):
+        organizations = Organization.objects.filter(org_type=org_type)
+        return CommonUtils.get_paginated_queryset(organizations, request,
+                                                  ['title', 'code', 'affiliation__title', 'district__name'],
+                                                  {
+                                                      'title': 'title',
+                                                      'affiliation': 'affiliation',
+                                                      'district': 'district',
+                                                      'zone': 'district__zone__name'
+                                                  })
+
+    def serialize_and_paginate(self, organizations):
+        paginated_organizations = organizations.get("queryset")
+        serializer = OrganisationSerializer(paginated_organizations, many=True)
+        return {
+            'data': serializer.data,
+            'pagination': organizations.get("pagination")
+        }
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request, org_code):
