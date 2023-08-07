@@ -37,10 +37,13 @@ class InterestGroupAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        code = request.data.get('code')
+        if InterestGroup.objects.filter(code=code).exists():
+            return CustomResponse(general_message='ig code already exists').get_failure_response()
         ig_data = InterestGroup.objects.create(
             id=uuid.uuid4(),
             name=request.data.get('name'),
-            code = request.data.get('code'),
+            code = code,
             icon = request.data.get('icon'),
             updated_by_id=user_id,
             updated_at=DateTimeUtils.get_current_utc_time(),
