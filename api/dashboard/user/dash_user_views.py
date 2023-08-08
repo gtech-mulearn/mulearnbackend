@@ -16,9 +16,8 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
-from db.organization import UserOrganizationLink
+
 from . import dash_user_serializer
-from .dash_user_serializer import UserProfileEditSerializer, UserDetailsUpdateSerializer
 
 
 class UserInfoAPI(APIView):
@@ -43,7 +42,7 @@ class UserEditAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
         user = User.objects.get(id=user_id)
-        serializer = dash_user_serializer.UserEditDetailsSerializer(user).data
+        serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
         return CustomResponse(response=serializer).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -59,15 +58,22 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
-        user = User.objects.get(id=user_id)
-        serializer = UserDetailsUpdateSerializer(user, data=request.data, context={'request': request,
-                                                                                   'user_id': user_id})
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(general_message='User Edit Successfully').get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+        try:
+            user = User.objects.get(id=user_id)
+            admin_id = JWTUtils.fetch_user_id(request)
+            admin = User.objects.get(id=admin_id)
+            serializer = dash_user_serializer.UserDetailsEditSerializer(
+                user, data=request.data, partial=True, context={"admin": admin}
+            )
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(
+                    general_message=serializer.data
+                ).get_success_response()
+            return CustomResponse(message=serializer.errors).get_failure_response()
+        except Exception as e:
+            return CustomResponse(message=str(e)).get_failure_response()
 
 
 class UserAPI(APIView):
@@ -456,7 +462,7 @@ class UserProfileEditView(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             user = User.objects.get(id=user_id)
-            serializer = UserProfileEditSerializer(
+            serializer = dash_user_serializer.UserProfileEditSerializer(
                 user, data=request.data, partial=True
             )
 
