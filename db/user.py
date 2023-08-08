@@ -1,4 +1,5 @@
 from django.db import models
+import uuid
 
 
 class User(models.Model):
@@ -64,7 +65,7 @@ class Role(models.Model):
 
 
 class UserRoleLink(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_role_link_user')
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
     verified = models.BooleanField()

@@ -1,3 +1,4 @@
+from tkinter import N
 import uuid
 
 from django.db import transaction
@@ -11,6 +12,7 @@ from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 from django.contrib.auth.hashers import make_password
+from django.db import IntegrityError
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -335,79 +337,84 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         ):
             data.update(
                 {
-                    "country": college.district.zone.state.country.id,
-                    "state": college.district.zone.state.id,
-                    "district": college.district.id,
-                    "department": college.department.id,
+                    "country": getattr(college.district.zone.state.country, "id", None),
+                    "state": getattr(college.district.zone.state, "id", None),
+                    "district": getattr(college.district, "id", None),
+                    "department": getattr(college.department, "id", None),
                     "graduation_year": college.graduation_year,
                 }
             )
 
-        data["organizations"] = list(
-            instance.user_organization_link_user_id.all().values_list("id", flat=True)
-        )
-        data["roles"] = list(
-            instance.user_role_link_user.all().values_list("id", flat=True)
-        )
-        data["interest_groups"] = list(
-            instance.user_ig_link_user.all().values_list("id", flat=True)
+        data.update(
+            {
+                "organizations": list(
+                    instance.user_organization_link_user_id.all().values_list(
+                        "org_id", flat=True
+                    )
+                ),
+                "roles": list(
+                    instance.user_role_link_user.all().values_list("role_id", flat=True)
+                ),
+                "interest_groups": list(
+                    instance.user_ig_link_user.all().values_list("ig_id", flat=True)
+                ),
+            }
         )
 
         return data
 
     def update(self, instance, validated_data):
         admin = self.context.get("admin")
-
-        graduation_year = validated_data.pop("graduation_year")
-        department = validated_data.pop("department")
-        organization_ids = validated_data.pop("organizations")
-        role_ids = validated_data.pop("roles")
-        interest_groups = validated_data.pop("interest_groups")
+        current_time = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
-            if organization_ids:
+            if isinstance(
+                organization_ids := validated_data.pop("organizations", None), list
+            ):
+                instance.user_organization_link_user_id.all().delete()
                 UserOrganizationLink.objects.bulk_create(
                     [
                         UserOrganizationLink(
-                            id=uuid.uuid4(),
                             user=instance,
                             org_id=org_id,
                             created_by=admin,
-                            created_at=DateTimeUtils.get_current_utc_time(),
+                            created_at=current_time,
                             verified=True,
-                            department_id=department,
-                            graduation_year=graduation_year,
+                            department_id=validated_data.get("department", None),
+                            graduation_year=validated_data.get("graduation_year", None),
                         )
                         for org_id in organization_ids
                     ]
                 )
 
-            if role_ids:
+            if isinstance(role_ids := validated_data.pop("roles", None), list):
+                instance.user_role_link_user.all().delete()
                 UserRoleLink.objects.bulk_create(
                     [
                         UserRoleLink(
-                            id=uuid.uuid4(),
                             user=instance,
                             role_id=role_id,
                             created_by=admin,
-                            created_at=DateTimeUtils.get_current_utc_time(),
+                            created_at=current_time,
                             verified=True,
                         )
                         for role_id in role_ids
                     ]
                 )
 
-            if interest_groups:
+            if isinstance(
+                interest_group_ids := validated_data.pop("interest_groups", None), list
+            ):
+                instance.user_ig_link_user.all().delete()
                 UserIgLink.objects.bulk_create(
                     [
                         UserIgLink(
-                            id=uuid.uuid4(),
                             user=instance,
                             ig_id=ig,
                             created_by=admin,
-                            created_at=DateTimeUtils.get_current_utc_time(),
+                            created_at=current_time,
                         )
-                        for ig in interest_groups
+                        for ig in interest_group_ids
                     ]
                 )
 

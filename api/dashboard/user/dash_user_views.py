@@ -71,9 +71,9 @@ class UserEditAPI(APIView):
                 return CustomResponse(
                     general_message=serializer.data
                 ).get_success_response()
-            return CustomResponse(message=serializer.errors).get_failure_response()
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
         except Exception as e:
-            return CustomResponse(message=str(e)).get_failure_response()
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserAPI(APIView):
