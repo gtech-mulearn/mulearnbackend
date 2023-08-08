@@ -18,7 +18,7 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
 
     def get_member_count(self, obj):
-        return UserCircleLink.objects.filter(circle_id=obj.id,accepted=1).count()
+        return UserCircleLink.objects.filter(circle_id=obj.id, accepted=1).count()
 
     class Meta:
         model = LearningCircle
@@ -102,16 +102,16 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         user = self.context.get('user_id')
         try:
             if link := UserCircleLink.objects.get(
-                user=user, circle=obj, lead=True
+                    user=user, circle=obj, lead=True
             ):
                 return True
         except UserCircleLink.DoesNotExist:
             return False
 
     def get_total_karma(self, obj):
-        return TotalKarma.objects.filter(user__usercirclelink__circle=obj,user__usercirclelink__accepted=1).aggregate(
+        return TotalKarma.objects.filter(user__usercirclelink__circle=obj, user__usercirclelink__accepted=1).aggregate(
             total_karma=Sum('karma'))[
-                   'total_karma'] or 0
+            'total_karma'] or 0
 
     def get_members(self, obj):
         return self._get_member_info(obj, accepted=1)

@@ -1,0 +1,43 @@
+from datetime import datetime, timedelta
+
+import jwt
+import pytz
+from django.core.mail import send_mail
+from rest_framework.views import APIView
+
+from utils.permission import CustomizePermission, JWTUtils
+from utils.response import CustomResponse
+
+import decouple
+
+from mulearnbackend.settings import SECRET_KEY
+
+
+class Referral(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        receiver_email = request.data.get('email')
+        receiver_name = request.data.get('name')
+        user_id = JWTUtils.fetch_user_id(request)
+        domain = decouple.config("DOMAIN_NAME")
+        expiration_time = datetime.now(pytz.utc) + timedelta(hours=1)
+
+        payload = {
+            "user_id": user_id,
+            "user_email": decouple.config('EMAIL_HOST_USER'),
+            "exp": expiration_time,
+        }
+
+        token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
+
+
+        send_mail(
+            subject='YOUR INVITED TO JOIN µFAM !',
+            message=str(f"Hi {receiver_name} Your referral code for join Mulearn is \n "
+                        f"{domain}/api/v1/register/{token}"),
+            from_email=decouple.config('EMAIL_HOST_USER'),
+            recipient_list=[receiver_email],
+            fail_silently=False)
+
+        return CustomResponse(general_message='Invited successfully').get_success_response()
