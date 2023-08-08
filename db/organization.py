@@ -147,16 +147,16 @@ class UserOrganizationLink(models.Model):
 
     @property
     def country(self):
-        return self.org.district.zone.state.country.name
+        return self.org.district.zone.state.country
 
     @property
     def state(self):
-        return self.org.district.zone.state.name
+        return self.org.district.zone.state
 
     @property
     def district(self):
-        return self.org.district.name
+        return self.org.district
 
     @property
     def zone(self):
-        return self.org.district.zone.name
+        return self.org.district.zone

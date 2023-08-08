@@ -1,16 +1,50 @@
 from rest_framework.views import APIView
+from utils.types import WebHookActions, WebHookCategory
 
-from api.dashboard.profile.serializers import (
-    UserLogSerializer,
-    UserProfileSerializer,
-    UserLevelSerializer,
-    UserRankSerializer,
-    ShareUserProfileUpdateSerializer,
-)
+from utils.utils import DiscordWebhooks
+
+from . import profile_serializer
 from db.task import KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+
+
+class UserProfileEditView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = profile_serializer.UserProfileEditSerializer(user)
+            return CustomResponse(response=serializer.data).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+    def patch(self, request):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = profile_serializer.UserProfileEditSerializer(
+                user, data=request.data, partial=True
+            )
+
+            if serializer.is_valid():
+                serializer.save()
+
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER.value,
+                    WebHookActions.UPDATE.value,
+                    user_id,
+                )
+
+                return CustomResponse(response=serializer.data).get_success_response()
+
+            return CustomResponse(response=serializer.errors).get_failure_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserProfileAPI(APIView):
@@ -46,7 +80,9 @@ class UserProfileAPI(APIView):
             .first()
         )
 
-        serializer = UserProfileSerializer(user, many=False, context={"roles": roles})
+        serializer = profile_serializer.UserProfileSerializer(
+            user, many=False, context={"roles": roles}
+        )
 
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -62,7 +98,9 @@ class UserLogAPI(APIView):
 
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile").get_failure_response()
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
             user_id = user.id
         else:
             JWTUtils.is_jwt_authenticated(request)
@@ -76,7 +114,9 @@ class UserLogAPI(APIView):
                 general_message="No karma details available for user"
             ).get_success_response()
 
-        serializer = UserLogSerializer(karma_activity_log, many=True).data
+        serializer = profile_serializer.UserLogSerializer(
+            karma_activity_log, many=True
+        ).data
 
         return CustomResponse(response=serializer).get_success_response()
 
@@ -92,7 +132,7 @@ class ShareUserProfileAPI(APIView):
                 general_message="No data available "
             ).get_failure_response()
 
-        serializer = ShareUserProfileUpdateSerializer(
+        serializer = profile_serializer.ShareUserProfileUpdateSerializer(
             user_settings, data=request.data, context={"request": request}
         )
 
@@ -120,13 +160,15 @@ class UserLevelsAPI(APIView):
                 ).get_failure_response()
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile").get_failure_response()
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
             user_id = user.id
         else:
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
         user_levels_link_query = Level.objects.all().order_by("level_order")
-        serializer = UserLevelSerializer(
+        serializer = profile_serializer.UserLevelSerializer(
             user_levels_link_query, many=True, context={"user_id": user_id}
         )
 
@@ -139,5 +181,7 @@ class UserRankAPI(APIView):
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
         roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
-        serializer = UserRankSerializer(user, many=False, context={"roles": roles})
+        serializer = profile_serializer.UserRankSerializer(
+            user, many=False, context={"roles": roles}
+        )
         return CustomResponse(response=serializer.data).get_success_response()

@@ -36,7 +36,7 @@ class InterestGroupAPI(APIView):
         serializer = InterestGroupCreateSerializer(data=request.data, context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
-            DiscordWebhooks.channelsAndCategory(
+            DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,
                 WebHookActions.CREATE.value,
                 request.data.get('name')
@@ -53,7 +53,7 @@ class InterestGroupAPI(APIView):
                                                    context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
-            DiscordWebhooks.channelsAndCategory(
+            DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,
                 WebHookActions.EDIT.value,
                 InterestGroup.objects.get(id=pk).name,
@@ -67,7 +67,7 @@ class InterestGroupAPI(APIView):
     def delete(self, request, pk):
         igData = InterestGroup.objects.get(id=pk)
         igData.delete()
-        DiscordWebhooks.channelsAndCategory(
+        DiscordWebhooks.general_updates(
             WebHookCategory.INTEREST_GROUP.value,
             WebHookActions.DELETE.value,
             igData.name

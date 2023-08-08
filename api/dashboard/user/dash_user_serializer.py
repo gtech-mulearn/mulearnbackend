@@ -3,13 +3,12 @@ import uuid
 from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import UserOrganizationLink, Organization
+from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
-from django.contrib.auth.hashers import make_password
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -248,181 +247,121 @@ class UserVerificationSerializer(serializers.ModelSerializer):
         ]
 
 
-class UserProfileEditSerializer(serializers.ModelSerializer):
-    communities = serializers.ListField(write_only=True)
+class UserDetailsEditSerializer(serializers.ModelSerializer):
+    organizations = serializers.ListField(write_only=True)
+    roles = serializers.ListField(write_only=True)
+    interest_groups = serializers.ListField(write_only=True)
+    department = serializers.CharField(write_only=True)
+    graduation_year = serializers.CharField(write_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "id",
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "gender",
+            "dob",
+            "organizations",
+            "roles",
+            "interest_groups",
+            "department",
+            "graduation_year",
+        ]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        communities = instance.user_organization_link_user_id.filter(
-            org__org_type=OrganizationType.COMMUNITY.value
-        ).all()
-        data["communities"] = (
-            [community.org_id for community in communities] if communities else []
+
+        if (
+            college := instance.user_organization_link_user_id.filter(
+                org__org_type=OrganizationType.COLLEGE.value
+            )
+            .select_related("org__district__zone__state__country", "department")
+            .first()
+        ):
+            data.update(
+                {
+                    "country": getattr(college.district.zone.state.country, "id", None),
+                    "state": getattr(college.district.zone.state, "id", None),
+                    "district": getattr(college.district, "id", None),
+                    "department": getattr(college.department, "id", None),
+                    "graduation_year": college.graduation_year,
+                }
+            )
+
+        data.update(
+            {
+                "organizations": list(
+                    instance.user_organization_link_user_id.all().values_list(
+                        "org_id", flat=True
+                    )
+                ),
+                "roles": list(
+                    instance.user_role_link_user.all().values_list("role_id", flat=True)
+                ),
+                "interest_groups": list(
+                    instance.user_ig_link_user.all().values_list("ig_id", flat=True)
+                ),
+            }
         )
+
         return data
 
     def update(self, instance, validated_data):
+        admin = self.context.get("admin")
+        current_time = DateTimeUtils.get_current_utc_time()
+
         with transaction.atomic():
-            if "communities" in validated_data:
-                community_data = validated_data.pop("communities", [])
-                instance.user_organization_link_user_id.filter(
-                    org__org_type=OrganizationType.COMMUNITY.value
-                ).delete()
+            if isinstance(
+                organization_ids := validated_data.pop("organizations", None), list
+            ):
+                instance.user_organization_link_user_id.all().delete()
+                UserOrganizationLink.objects.bulk_create(
+                    [
+                        UserOrganizationLink(
+                            user=instance,
+                            org_id=org_id,
+                            created_by=admin,
+                            created_at=current_time,
+                            verified=True,
+                            department_id=validated_data.get("department", None),
+                            graduation_year=validated_data.get("graduation_year", None),
+                        )
+                        for org_id in organization_ids
+                    ]
+                )
 
-                user_organization_links = [
-                    UserOrganizationLink(
-                        id=uuid.uuid4(),
-                        user=instance,
-                        org_id=org_data,
-                        created_by=instance,
-                        created_at=DateTimeUtils.get_current_utc_time(),
-                        verified=True,
-                    )
-                    for org_data in community_data
-                ]
+            if isinstance(role_ids := validated_data.pop("roles", None), list):
+                instance.user_role_link_user.all().delete()
+                UserRoleLink.objects.bulk_create(
+                    [
+                        UserRoleLink(
+                            user=instance,
+                            role_id=role_id,
+                            created_by=admin,
+                            created_at=current_time,
+                            verified=True,
+                        )
+                        for role_id in role_ids
+                    ]
+                )
 
-                UserOrganizationLink.objects.bulk_create(user_organization_links)
+            if isinstance(
+                interest_group_ids := validated_data.pop("interest_groups", None), list
+            ):
+                instance.user_ig_link_user.all().delete()
+                UserIgLink.objects.bulk_create(
+                    [
+                        UserIgLink(
+                            user=instance,
+                            ig_id=ig,
+                            created_by=admin,
+                            created_at=current_time,
+                        )
+                        for ig in interest_group_ids
+                    ]
+                )
 
             return super().update(instance, validated_data)
-
-    class Meta:
-        model = User
-        fields = [
-            "first_name",
-            "last_name",
-            "email",
-            "mobile",
-            "communities",
-            "gender",
-            "dob",
-        ]
-
-
-class UserEditDetailsSerializer(serializers.ModelSerializer):
-    organization = serializers.SerializerMethodField()
-    country = serializers.SerializerMethodField()
-    state = serializers.SerializerMethodField()
-    district = serializers.SerializerMethodField()
-    department = serializers.SerializerMethodField()
-    graduation_year = serializers.SerializerMethodField()
-    role = serializers.SerializerMethodField()
-    interest_groups = serializers.SerializerMethodField()
-
-    class Meta:
-        model = User
-        fields = [
-            "first_name",
-            "last_name",
-            "email",
-            "mobile",
-            "gender",
-            "dob",
-            "organization",
-            "country",
-            "state",
-            "district",
-            "department",
-            "graduation_year",
-            "role",
-            "interest_groups",
-        ]
-
-    def get_organization(self, obj):
-        user_org_link = obj.user_organization_link_user_id.all()
-        return (
-            [user_org.org.id for user_org in user_org_link] if user_org_link else None
-        )
-
-    def get_country(self, obj):
-        user_org_link = obj.user_organization_link_user_id.first()
-        print(user_org_link)
-        return (
-            user_org_link.org.district.zone.state.country.id
-            if user_org_link and user_org_link.org
-            else None
-        )
-
-    def get_state(self, obj):
-        user_org_link = obj.user_organization_link_user_id.first()
-        return (
-            user_org_link.org.district.zone.state.id
-            if user_org_link and user_org_link.org
-            else None
-        )
-
-    def get_district(self, obj):
-        user_org_link = obj.user_organization_link_user_id.first()
-        return (
-            user_org_link.org.district.id
-            if user_org_link and user_org_link.org
-            else None
-        )
-
-    def get_department(self, obj):
-        user_org_link = obj.user_organization_link_user_id.first()
-        return (
-            user_org_link.department.id
-            if user_org_link and user_org_link.department
-            else None
-        )
-
-    def get_role(self, obj):
-        user_role_link = obj.user_role_link_user.all()
-        return (
-            [user_role.role.id for user_role in user_role_link]
-            if user_role_link
-            else None
-        )
-
-    def get_graduation_year(self, obj):
-        user_org_link = obj.user_organization_link_user_id.first()
-        return user_org_link.graduation_year if user_org_link else None
-
-    def get_interest_groups(self, obj):
-        user_ig_link = obj.user_ig_link_user.all()
-        return [interest_group.ig.id for interest_group in user_ig_link] if user_ig_link else None
-
-
-class UserDetailsUpdateSerializer(serializers.ModelSerializer):
-
-    organizations = serializers.ListField(required=False)
-    roles = serializers.ListField(required=False)
-    interest_groups = serializers.ListField(required=False)
-    department = serializers.CharField(required=False)
-    graduation_year = serializers.CharField(required=False)
-
-    class Meta:
-        model = User
-        fields = ["first_name", "last_name", "email", "mobile", "gender", "dob", "organizations", "roles",
-                  "interest_groups", "department", "graduation_year"]
-
-    def update(self, instance, validated_data):
-        admin = JWTUtils.fetch_user_id(self.context.get('request'))
-        user_id = self.context.get('user_id')
-
-        graduation_year = validated_data.pop('graduation_year')
-        department = validated_data.pop("department")
-        organization_ids = validated_data.pop('organizations')
-        role_ids = validated_data.pop('roles')
-        interest_groups = validated_data.pop('interest_groups')
-        user_role_verified = True
-
-        with transaction.atomic():
-            if organization_ids:
-                UserOrganizationLink.objects.bulk_create([UserOrganizationLink(
-                    id=uuid.uuid4(), user_id=user_id, org_id=org_id, created_by_id=admin,
-                    created_at=DateTimeUtils.get_current_utc_time(), verified=True, department_id=department,
-                    graduation_year=graduation_year) for org_id in organization_ids])
-
-            if role_ids:
-                UserRoleLink.objects.bulk_create([UserRoleLink(
-                    id=uuid.uuid4(), user_id=user_id, role_id=role_id, created_by_id=admin,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    verified=user_role_verified) for role_id in role_ids])
-
-            if interest_groups:
-                UserIgLink.objects.bulk_create([UserIgLink(
-                    id=uuid.uuid4(), user_id=user_id, ig_id=ig, created_by_id=admin,
-                    created_at=DateTimeUtils.get_current_utc_time()) for ig in interest_groups])
-
-        return super().update(instance, validated_data)
