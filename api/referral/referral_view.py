@@ -1,22 +1,23 @@
 from datetime import datetime, timedelta
-
 import jwt
 import pytz
+import decouple
+
 from django.core.mail import send_mail
 from rest_framework.views import APIView
 
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-
-import decouple
-
 from mulearnbackend.settings import SECRET_KEY
+
+from db.user import UserReferralLink
+from .serializer import ReferralListSerializer
 
 
 class Referral(APIView):
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
+    def post(self, request):
         receiver_email = request.data.get('email')
         receiver_name = request.data.get('name')
         user_id = JWTUtils.fetch_user_id(request)
@@ -31,7 +32,6 @@ class Referral(APIView):
 
         token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
-
         send_mail(
             subject='YOUR INVITED TO JOIN µFAM !',
             message=str(f"Hi {receiver_name} Your referral code for join Mulearn is \n "
@@ -41,3 +41,15 @@ class Referral(APIView):
             fail_silently=False)
 
         return CustomResponse(general_message='Invited successfully').get_success_response()
+
+
+class ReferralListAPI(APIView):
+
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_referral_link = UserReferralLink.objects.filter(user_id=user_id).all()
+        print(user_referral_link)
+        serializer = ReferralListSerializer(user_referral_link, many=True).data
+        return CustomResponse(response=serializer).get_success_response()
