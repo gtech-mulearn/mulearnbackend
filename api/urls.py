@@ -12,6 +12,7 @@ urlpatterns = [
     path('protected/', include('api.protected.urls')),
     path('hackathon/', include('api.hackathon.urls')),
     path('notification/', include('api.notification.urls')),
+    path('referral/', include('api.referral.urls')),
 
     path("__debug__/", include(debug_toolbar.urls)),
 ]

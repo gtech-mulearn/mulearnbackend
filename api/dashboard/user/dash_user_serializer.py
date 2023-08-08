@@ -335,9 +335,10 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
 
     def get_country(self, obj):
         user_org_link = obj.user_organization_link_user_id.first()
+        print(user_org_link)
         return (
             user_org_link.org.district.zone.state.country.id
-            if user_org_link or user_org_link.org
+            if user_org_link and user_org_link.org
             else None
         )
 
@@ -345,7 +346,7 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
         user_org_link = obj.user_organization_link_user_id.first()
         return (
             user_org_link.org.district.zone.state.id
-            if user_org_link or user_org_link.org
+            if user_org_link and user_org_link.org
             else None
         )
 
@@ -353,7 +354,7 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
         user_org_link = obj.user_organization_link_user_id.first()
         return (
             user_org_link.org.district.id
-            if user_org_link or user_org_link.org
+            if user_org_link and user_org_link.org
             else None
         )
 
@@ -361,7 +362,7 @@ class UserEditDetailsSerializer(serializers.ModelSerializer):
         user_org_link = obj.user_organization_link_user_id.first()
         return (
             user_org_link.department.id
-            if user_org_link or user_org_link.department
+            if user_org_link and user_org_link.department
             else None
         )
 
