@@ -13,15 +13,24 @@ from . import dash_roles_serializer
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def get(self, request):
         roles_queryset = Role.objects.all()
         queryset = CommonUtils.get_paginated_queryset(
-            roles_queryset, request, ["id", "title", "description", "updated_by__first_name","updated_by__last_name"],
-            {
-                'updated_by': 'updated_by',
-                'created_at': 'created_at'
-            }
+            roles_queryset,
+            request,
+            [
+                "id",
+                "title",
+                "description",
+                "updated_by__first_name",
+                "updated_by__last_name",
+            ],
+            {"updated_by": "updated_by", "created_at": "created_at"},
         )
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             queryset.get("queryset"), many=True
@@ -31,13 +40,19 @@ class RoleAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def patch(self, request, roles_id):
         try:
             role = Role.objects.filter(id=roles_id).first()
             oldName = role.title
         except AttributeError as e:
-            return CustomResponse(general_message="Role doesn't exist").get_failure_response()
+            return CustomResponse(
+                general_message="Role doesn't exist"
+            ).get_failure_response()
 
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             role, data=request.data, partial=True, context={"request": request}
@@ -49,15 +64,11 @@ class RoleAPI(APIView):
             ).get_failure_response()
 
         try:
-
             serializer.save()
             newname = role.title
 
-            DiscordWebhooks.channelsAndCategory(
-                WebHookCategory.ROLE.value,
-                WebHookActions.EDIT.value,
-                newname,
-                oldName
+            DiscordWebhooks.general_updates(
+                WebHookCategory.ROLE.value, WebHookActions.EDIT.value, newname, oldName
             )
 
             return CustomResponse(
@@ -69,16 +80,18 @@ class RoleAPI(APIView):
                 general_message="Database integrity error",
             ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def delete(self, request, roles_id):
         try:
             role = Role.objects.get(id=roles_id)
             role.delete()
 
-            DiscordWebhooks.channelsAndCategory(
-                WebHookCategory.ROLE.value,
-                WebHookActions.DELETE.value,
-                role.title
+            DiscordWebhooks.general_updates(
+                WebHookCategory.ROLE.value, WebHookActions.DELETE.value, role.title
             )
             return CustomResponse(
                 general_message=["Role deleted successfully"]
@@ -87,7 +100,11 @@ class RoleAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def post(self, request):
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             data=request.data, partial=True, context={"request": request}
@@ -96,7 +113,7 @@ class RoleAPI(APIView):
         if serializer.is_valid():
             serializer.save()
 
-            DiscordWebhooks.channelsAndCategory(
+            DiscordWebhooks.general_updates(
                 WebHookCategory.ROLE.value,
                 WebHookActions.CREATE.value,
                 request.data.get("title"),
@@ -114,7 +131,11 @@ class RoleAPI(APIView):
 class RoleManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def get(self, request):
         role = Role.objects.all()
         role_serializer_data = dash_roles_serializer.RoleDashboardSerializer(

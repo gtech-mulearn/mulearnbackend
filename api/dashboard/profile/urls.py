@@ -3,6 +3,8 @@ from django.urls import path
 from . import profile_view
 
 urlpatterns = [
+    path('', profile_view.UserProfileEditView.as_view()),
+    
     path('user-profile/', profile_view.UserProfileAPI.as_view()),
     path('user-profile/<str:muid>/', profile_view.UserProfileAPI.as_view()),
     # path('edit-user-profile/', profile_view.UserProfileAPI.as_view()),

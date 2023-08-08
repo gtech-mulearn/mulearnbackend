@@ -16,9 +16,8 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
-from db.organization import UserOrganizationLink
+
 from . import dash_user_serializer
-from .dash_user_serializer import UserProfileEditSerializer, UserDetailsUpdateSerializer
 
 
 class UserInfoAPI(APIView):
@@ -43,7 +42,7 @@ class UserEditAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
         user = User.objects.get(id=user_id)
-        serializer = dash_user_serializer.UserEditDetailsSerializer(user).data
+        serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
         return CustomResponse(response=serializer).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -61,13 +60,29 @@ class UserEditAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
-        user = User.objects.get(id=user_id)
-        serializer = UserDetailsUpdateSerializer(user, data=request.data, context={'request': request,
-                                                                                   'user_id': user_id})
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(general_message='User Edit Successfully').get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+        try:
+            user = User.objects.get(id=user_id)
+            admin_id = JWTUtils.fetch_user_id(request)
+            admin = User.objects.get(id=admin_id)
+            serializer = dash_user_serializer.UserDetailsEditSerializer(
+                user, data=request.data, partial=True, context={"admin": admin}
+            )
+            if serializer.is_valid():
+                serializer.save()
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER.value,
+                    WebHookActions.EDIT.value,
+                    user_id,
+                )
+
+                return CustomResponse(
+                    general_message=serializer.data
+                ).get_success_response()
+            return CustomResponse(
+                general_message=serializer.errors
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserAPI(APIView):
@@ -226,7 +241,7 @@ class UserVerificationAPI(APIView):
             user_serializer.save()
             user_data = user_serializer.data
 
-            DiscordWebhooks.channelsAndCategory(
+            DiscordWebhooks.general_updates(
                 WebHookCategory.USER_ROLE.value,
                 WebHookActions.UPDATE.value,
                 user_data.user_id,
@@ -438,33 +453,3 @@ class UserInviteAPI(APIView):
         return CustomResponse(
             general_message="Invitation sent successfully"
         ).get_success_response()
-
-
-class UserProfileEditView(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            user = User.objects.get(id=user_id)
-            serializer = dash_user_serializer.UserProfileEditSerializer(user)
-            return CustomResponse(response=serializer.data).get_success_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-    def patch(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            user = User.objects.get(id=user_id)
-            serializer = UserProfileEditSerializer(
-                user, data=request.data, partial=True
-            )
-
-            if serializer.is_valid():
-                serializer.save()
-                return CustomResponse(response=serializer.data).get_success_response()
-
-            return CustomResponse(response=serializer.errors).get_failure_response()
-
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
