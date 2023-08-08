@@ -58,6 +58,7 @@ class UserEditAPI(APIView):
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
@@ -68,10 +69,18 @@ class UserEditAPI(APIView):
             )
             if serializer.is_valid():
                 serializer.save()
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER.value,
+                    WebHookActions.EDIT.value,
+                    user_id,
+                )
+
                 return CustomResponse(
                     general_message=serializer.data
                 ).get_success_response()
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+            return CustomResponse(
+                general_message=serializer.errors
+            ).get_failure_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
@@ -232,7 +241,7 @@ class UserVerificationAPI(APIView):
             user_serializer.save()
             user_data = user_serializer.data
 
-            DiscordWebhooks.channelsAndCategory(
+            DiscordWebhooks.general_updates(
                 WebHookCategory.USER_ROLE.value,
                 WebHookActions.UPDATE.value,
                 user_data.user_id,
@@ -444,33 +453,3 @@ class UserInviteAPI(APIView):
         return CustomResponse(
             general_message="Invitation sent successfully"
         ).get_success_response()
-
-
-class UserProfileEditView(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            user = User.objects.get(id=user_id)
-            serializer = dash_user_serializer.UserProfileEditSerializer(user)
-            return CustomResponse(response=serializer.data).get_success_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-    def patch(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            user = User.objects.get(id=user_id)
-            serializer = dash_user_serializer.UserProfileEditSerializer(
-                user, data=request.data, partial=True
-            )
-
-            if serializer.is_valid():
-                serializer.save()
-                return CustomResponse(response=serializer.data).get_success_response()
-
-            return CustomResponse(response=serializer.errors).get_failure_response()
-
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()

@@ -123,7 +123,7 @@ class _CustomHTTPHandler:
 
 class DiscordWebhooks:
     @staticmethod
-    def channelsAndCategory(category, action, *values) -> str:
+    def general_updates(category, action, *values) -> str:
         """
         Modify channels and category in Discord
 		Args:

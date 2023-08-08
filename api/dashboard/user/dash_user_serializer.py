@@ -1,18 +1,14 @@
-from tkinter import N
 import uuid
 
 from django.db import transaction
 from rest_framework import serializers
-from db import organization
 
-from db.organization import UserOrganizationLink, Organization
+from db.organization import UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
-from django.contrib.auth.hashers import make_password
-from django.db import IntegrityError
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -248,56 +244,6 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "role_id",
             "role_title",
             "email",
-        ]
-
-
-class UserProfileEditSerializer(serializers.ModelSerializer):
-    communities = serializers.ListField(write_only=True)
-
-    def to_representation(self, instance):
-        data = super().to_representation(instance)
-        communities = instance.user_organization_link_user_id.filter(
-            org__org_type=OrganizationType.COMMUNITY.value
-        ).all()
-        data["communities"] = (
-            [community.org_id for community in communities] if communities else []
-        )
-        return data
-
-    def update(self, instance, validated_data):
-        with transaction.atomic():
-            if "communities" in validated_data:
-                community_data = validated_data.pop("communities", [])
-                instance.user_organization_link_user_id.filter(
-                    org__org_type=OrganizationType.COMMUNITY.value
-                ).delete()
-
-                user_organization_links = [
-                    UserOrganizationLink(
-                        id=uuid.uuid4(),
-                        user=instance,
-                        org_id=org_data,
-                        created_by=instance,
-                        created_at=DateTimeUtils.get_current_utc_time(),
-                        verified=True,
-                    )
-                    for org_data in community_data
-                ]
-
-                UserOrganizationLink.objects.bulk_create(user_organization_links)
-
-            return super().update(instance, validated_data)
-
-    class Meta:
-        model = User
-        fields = [
-            "first_name",
-            "last_name",
-            "email",
-            "mobile",
-            "communities",
-            "gender",
-            "dob",
         ]
 
 
