@@ -19,7 +19,9 @@ class LearningCircleAPI(APIView):
         org_id = UserOrganizationLink.objects.filter(user_id=user_id,
                                                      org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
                                                                                                                flat=True).first()
-        learning_queryset = LearningCircle.objects.filter(org=org_id)
+        learning_queryset = LearningCircle.objects.filter(org=org_id).exclude(
+            usercirclelink__accepted=1
+        )
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
@@ -56,7 +58,7 @@ class LearningCircleJoinApi(APIView):
 class LearningCircleListApi(APIView):
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
-        learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id,usercirclelink__accepted=1)
+        learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id, usercirclelink__accepted=1)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
@@ -82,7 +84,7 @@ class LearningCircleHomeApi(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
-                                                                 context={'user_id': user_id})
+                                                    context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
             is_accepted = request.data.get('is_accepted')

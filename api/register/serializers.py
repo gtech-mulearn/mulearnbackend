@@ -90,7 +90,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             full_name = validated_data["first_name"]
         else:
             full_name = validated_data["first_name"] + \
-                        validated_data["last_name"]
+                            validated_data["last_name"]
         full_name = full_name.replace(" ", "").lower()[:85]
         mu_id = f"{full_name}@mulearn"
         counter = 0
@@ -113,11 +113,12 @@ class RegisterSerializer(serializers.ModelSerializer):
             user_role_verified = role.title == RoleType.STUDENT.value
 
         if referral_id:
-            if User.objects.filter(mu_id=referral_id).exists():
-                referral_provider = User.objects.get(mu_id=referral_id)
-                task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
-                karma_amount = task_list.karma
+            if not User.objects.filter(mu_id=referral_id).exists():
+                raise serializers.ValidationError("Muid does not exist")
 
+            referral_provider = User.objects.get(mu_id=referral_id)
+            task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
+            karma_amount = task_list.karma
         with transaction.atomic():
 
             user = User.objects.create(
