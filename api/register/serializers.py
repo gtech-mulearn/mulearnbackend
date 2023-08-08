@@ -85,12 +85,17 @@ class RegisterSerializer(serializers.ModelSerializer):
         required=True, max_length=200)
     referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
 
+    def validate_referral_id(self, value):
+        if not User.objects.filter(mu_id=value).exists():
+            raise serializers.ValidationError("Muid does not exist")
+        return value
+
     def create(self, validated_data):
         if validated_data["last_name"] is None:
             full_name = validated_data["first_name"]
         else:
             full_name = validated_data["first_name"] + \
-                            validated_data["last_name"]
+                        validated_data["last_name"]
         full_name = full_name.replace(" ", "").lower()[:85]
         mu_id = f"{full_name}@mulearn"
         counter = 0
@@ -113,9 +118,6 @@ class RegisterSerializer(serializers.ModelSerializer):
             user_role_verified = role.title == RoleType.STUDENT.value
 
         if referral_id:
-            if not User.objects.filter(mu_id=referral_id).exists():
-                raise serializers.ValidationError("Muid does not exist")
-
             referral_provider = User.objects.get(mu_id=referral_id)
             task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
             karma_amount = task_list.karma
