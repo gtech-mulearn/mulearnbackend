@@ -20,7 +20,7 @@ class LearningCircleAPI(APIView):
                                                      org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
                                                                                                                flat=True).first()
         learning_queryset = LearningCircle.objects.filter(org=org_id).exclude(
-            usercirclelink__accepted=1
+            usercirclelink__accepted=1,usercirclelink__user_id=user_id
         )
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
