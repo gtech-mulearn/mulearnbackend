@@ -234,12 +234,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        communities = instance.user_organization_link_user_id.filter(
-            org__org_type=OrganizationType.COMMUNITY.value
-        ).all()
-        data["communities"] = (
-            [community.org_id for community in communities] if communities else []
-        )
+        communities = instance.user_organization_link_user_id.filter(org__org_type=OrganizationType.COMMUNITY.value).all()
+        data["communities"] = ([community.org_id for community in communities] if communities else [])
         return data
 
     def update(self, instance, validated_data):
