@@ -58,7 +58,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return UserSettings.objects.filter(user=obj).first().is_public
 
     def get_roles(self, obj):
-        return list(obj.user_role_link_user.values_list("role__title", flat=True))
+        return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user_id.filter(

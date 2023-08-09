@@ -32,7 +32,7 @@ class UserProfileEditView(APIView):
                 serializer.save()
 
                 DiscordWebhooks.general_updates(
-                    WebHookCategory.USER.value,
+                    WebHookCategory.USER_NAME.value,
                     WebHookActions.UPDATE.value,
                     user_id,
                 )

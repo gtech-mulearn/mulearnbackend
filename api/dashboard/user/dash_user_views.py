@@ -71,7 +71,7 @@ class UserEditAPI(APIView):
                 serializer.save()
                 DiscordWebhooks.general_updates(
                     WebHookCategory.USER.value,
-                    WebHookActions.EDIT.value,
+                    WebHookActions.UPDATE.value,
                     user_id,
                 )
 
