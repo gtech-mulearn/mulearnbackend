@@ -1,26 +1,24 @@
 from rest_framework.views import APIView
-from utils.types import WebHookActions, WebHookCategory
 
-from utils.utils import DiscordWebhooks
-
-from . import profile_serializer
 from db.task import KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from utils.types import WebHookActions, WebHookCategory
+from utils.utils import DiscordWebhooks
+from . import profile_serializer
 
 
 class UserProfileEditView(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            user = User.objects.get(id=user_id)
-            serializer = profile_serializer.UserProfileEditSerializer(user)
-            return CustomResponse(response=serializer.data).get_success_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return CustomResponse(general_message='User Not Exists').get_failure_response()
+        serializer = profile_serializer.UserProfileEditSerializer(user, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
         try:
