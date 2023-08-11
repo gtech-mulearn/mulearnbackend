@@ -242,7 +242,7 @@ class UserVerificationAPI(APIView):
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER_ROLE.value,
                 WebHookActions.UPDATE.value,
-                user_data.user_id,
+                user_data["user_id"]
             )
 
             dashboard_helper.send_dashboard_mail(
