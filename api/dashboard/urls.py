@@ -11,4 +11,5 @@ urlpatterns = [
     path('task/', include('api.dashboard.task.urls')),
     path('profile/', include('api.dashboard.profile.urls')),
     path('lc/', include('api.dashboard.lc.urls')),
+    path('referral/', include('api.dashboard.referral.urls')),
 ]
