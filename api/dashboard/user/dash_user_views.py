@@ -226,18 +226,16 @@ class UserVerificationAPI(APIView):
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-        user_serializer = dash_user_serializer.UserVerificationSerializer(
+        
+            user_serializer = dash_user_serializer.UserVerificationSerializer(
             user, data=request.data, partial=True
         )
 
-        if not user_serializer.is_valid():
-            return CustomResponse(
-                response={"user_role_link": user_serializer.errors}
+            if not user_serializer.is_valid():
+                return CustomResponse(
+                general_message=user_serializer.errors
             ).get_failure_response()
-        try:
+       
             user_serializer.save()
             user_data = user_serializer.data
 
@@ -256,10 +254,8 @@ class UserVerificationAPI(APIView):
             return CustomResponse(
                 response={"user_role_link": user_data}
             ).get_success_response()
-        except IntegrityError as e:
-            return CustomResponse(
-                response={"user_role_link": str(e)}
-            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, link_id):
