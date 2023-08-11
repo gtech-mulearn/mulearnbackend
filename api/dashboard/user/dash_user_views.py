@@ -90,7 +90,7 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = User.objects.annotate(
+        user_queryset = User.objects.filter(active=True).annotate(
             total_karma=Case(
                 When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
                 default=Value(0),
