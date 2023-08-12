@@ -58,7 +58,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return UserSettings.objects.filter(user=obj).first().is_public
 
     def get_roles(self, obj):
-        return list(obj.user_role_link_user.values_list("role__title", flat=True))
+        return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user_id.filter(
@@ -100,7 +100,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_karma_distribution(self, obj):
         return (
-            KarmaActivityLog.objects.filter(user=obj)
+            KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
             .values(task_type=F("task__type__title"))
             .annotate(karma=Sum("karma"))
             .order_by()
@@ -116,11 +116,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         for ig_link in UserIgLink.objects.filter(user=obj):
             total_ig_karma = (
                 0
-                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
+                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
                    .aggregate(Sum("karma"))
                    .get("karma__sum")
                    is None
-                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
+                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
                    .aggregate(Sum("karma"))
                    .get("karma__sum")
             )

@@ -10,6 +10,9 @@ from db.user import UserReferralLink
 from mulearnbackend.settings import SECRET_KEY
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from mulearnbackend.settings import SECRET_KEY
+
+from db.user import UserReferralLink, User
 from .serializer import ReferralListSerializer
 
 
@@ -32,9 +35,8 @@ class Referral(APIView):
         token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
         send_mail(
-            subject='YOUR INVITED TO JOIN µFAM !',
-            message=str(f"Hi {receiver_name} Your referral code for join Mulearn is \n "
-                        f"{domain}/api/v1/register/{token}"),
+            subject='AN INVITE TO INSPIRE✨',
+            message=f"{domain}/api/v1/register/{token}/",
             from_email=decouple.config('EMAIL_HOST_USER'),
             recipient_list=[receiver_email],
             fail_silently=False)

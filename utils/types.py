@@ -42,6 +42,8 @@ class WebHookCategory(Enum):
     ROLE = 'role'
     USER_ROLE = 'user-role'
     USER = 'user'
+    USER_NAME = 'user-name'
+    
 
     
 class IntegrationType(Enum):

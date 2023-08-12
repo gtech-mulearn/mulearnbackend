@@ -70,7 +70,7 @@ class UserEditAPI(APIView):
                 serializer.save()
                 DiscordWebhooks.general_updates(
                     WebHookCategory.USER.value,
-                    WebHookActions.EDIT.value,
+                    WebHookActions.UPDATE.value,
                     user_id,
                 )
 
@@ -89,7 +89,7 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = User.objects.annotate(
+        user_queryset = User.objects.filter(active=True).annotate(
             total_karma=Case(
                 When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
                 default=Value(0),
@@ -225,25 +225,23 @@ class UserVerificationAPI(APIView):
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-        user_serializer = dash_user_serializer.UserVerificationSerializer(
+        
+            user_serializer = dash_user_serializer.UserVerificationSerializer(
             user, data=request.data, partial=True
         )
 
-        if not user_serializer.is_valid():
-            return CustomResponse(
-                response={"user_role_link": user_serializer.errors}
+            if not user_serializer.is_valid():
+                return CustomResponse(
+                general_message=user_serializer.errors
             ).get_failure_response()
-        try:
+       
             user_serializer.save()
             user_data = user_serializer.data
 
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER_ROLE.value,
                 WebHookActions.UPDATE.value,
-                user_data.user_id,
+                user_data["user_id"]
             )
 
             dashboard_helper.send_dashboard_mail(
@@ -255,10 +253,8 @@ class UserVerificationAPI(APIView):
             return CustomResponse(
                 response={"user_role_link": user_data}
             ).get_success_response()
-        except IntegrityError as e:
-            return CustomResponse(
-                response={"user_role_link": str(e)}
-            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, link_id):
