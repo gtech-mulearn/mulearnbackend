@@ -3,11 +3,11 @@ from datetime import timedelta
 from django.db.models import Sum, F
 from rest_framework import serializers
 
-from db.organization import Organization, UserOrganizationLink
+from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog, Level, UserLvlLink, TotalKarma
-from db.user import User
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+
 
 #
 # class ZonalStudents(serializers.ModelSerializer):

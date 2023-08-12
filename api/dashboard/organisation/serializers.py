@@ -3,9 +3,6 @@ from rest_framework import serializers
 from db.organization import Organization, District, Zone, State, OrgAffiliation
 
 
-# from organization.models import Organization, District, Zone, State, Country, OrgAffiliation
-
-
 class StateSerializer(serializers.ModelSerializer):
     country = serializers.SlugRelatedField(many=False, read_only=True, slug_field="name")
 

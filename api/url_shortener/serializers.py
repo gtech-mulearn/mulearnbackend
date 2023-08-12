@@ -1,5 +1,5 @@
-import uuid
 import re
+import uuid
 
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
@@ -10,7 +10,6 @@ from utils.utils import DateTimeUtils
 
 
 class ShowShortenUrlsSerializer(ModelSerializer):
-
     class Meta:
         model = UrlShortener
 

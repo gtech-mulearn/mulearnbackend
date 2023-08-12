@@ -1,7 +1,9 @@
+import uuid
+
 from rest_framework import serializers
+
 from db.task import InterestGroup
 from db.user import User
-import uuid
 from utils.utils import DateTimeUtils
 
 

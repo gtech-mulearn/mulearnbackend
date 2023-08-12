@@ -1,13 +1,14 @@
 from datetime import datetime, timedelta
-import pytz
+
 import decouple
 import jwt
-from mulearnbackend.settings import SECRET_KEY
+import pytz
 import requests
 from django.core.mail import send_mail
 from django.template.loader import render_to_string
 
 from db.integrations import Integration
+from mulearnbackend.settings import SECRET_KEY
 from utils.response import CustomResponse
 
 
@@ -27,7 +28,7 @@ def get_authorization_id(token: str) -> str | None:
     exp_timestamp = payload.get("exp", 0)
 
     if exp_timestamp and datetime.now(pytz.utc) < datetime.fromtimestamp(
-        exp_timestamp, tz=pytz.utc
+            exp_timestamp, tz=pytz.utc
     ):
         return authorization_id
     else:
@@ -54,7 +55,7 @@ def generate_confirmation_token(authorization_id: str) -> str:
 
 
 def send_integration_mail(
-    user_data: dict, token: str, subject: str, address: list[str]
+        user_data: dict, token: str, subject: str, address: list[str]
 ) -> None:
     """
     Send an integration-related email to the user.
@@ -105,7 +106,7 @@ def token_required(integration_name: str):
                 token = auth_header.split(" ")[1]
 
                 if not Integration.objects.filter(
-                    token=token, name=integration_name
+                        token=token, name=integration_name
                 ).first():
                     raise ValueError("Invalid Authorization header")
                 else:
@@ -120,7 +121,7 @@ def token_required(integration_name: str):
 
 
 def get_access_token(
-    email_or_muid: str = None, password: str = None, token: str = None
+        email_or_muid: str = None, password: str = None, token: str = None
 ) -> dict | None:
     """
     The `get_access_token` function is used to authenticate a user and retrieve an access token and

@@ -113,7 +113,7 @@ class JWTUtils:
             if not auth_header or not auth_header.startswith(token_prefix):
                 raise CustomException("Invalid token header")
 
-            token = auth_header[len(token_prefix) :].strip()
+            token = auth_header[len(token_prefix):].strip()
             if not token:
                 raise CustomException("Empty Token")
 

@@ -1,13 +1,9 @@
-from django.db.models import Count, Q
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
-from db.organization import Organization, UserOrganizationLink
-from db.user import User
+from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType
+from utils.types import RoleType
 from utils.utils import CommonUtils
 from . import dash_zonal_serializer
 

@@ -1,8 +1,9 @@
 from datetime import timedelta
+
 from django.db.models import Sum, F
 from rest_framework import serializers
-from db.organization import Organization, UserOrganizationLink
-from db.user import User
+
+from db.organization import UserOrganizationLink
 from db.task import TotalKarma, KarmaActivityLog, Level, UserLvlLink
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
@@ -75,7 +76,6 @@ from utils.utils import DateTimeUtils
 
 
 class DistrictDetailsSerializer(serializers.ModelSerializer):
-
     district = serializers.CharField(source="org.district.name")
     zone = serializers.CharField(source="org.district.zone.name")
     rank = serializers.SerializerMethodField()
@@ -110,7 +110,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
             return position + 1
 
     def get_district_lead(self, obj):
-        user_org_link = UserOrganizationLink.objects.\
+        user_org_link = UserOrganizationLink.objects. \
             filter(org__district__name=obj.org.district.name,
                    user__user_role_link_user__role__title='District Campus Lead').first()
         return user_org_link.user.fullname
@@ -140,7 +140,6 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
 
 class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
-
     rank = serializers.SerializerMethodField()
     campus = serializers.CharField(source='org.code')
 
@@ -159,9 +158,9 @@ class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
 
 
 class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
-
     college = serializers.CharField(source='org.title')
     level = serializers.SerializerMethodField()
+
     class Meta:
         model = UserOrganizationLink
         fields = ["college", "level"]
