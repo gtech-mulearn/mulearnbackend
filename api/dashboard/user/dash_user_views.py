@@ -5,9 +5,7 @@ import decouple
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
-from django.db import IntegrityError
 from django.db.models import Case, CharField, F, Q, Value, When
-from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
 from api.dashboard import dashboard_helper
@@ -15,9 +13,7 @@ from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
-
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_dashboard_mail
-
 from . import dash_user_serializer
 
 
@@ -227,16 +223,16 @@ class UserVerificationAPI(APIView):
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
-        
+
             user_serializer = dash_user_serializer.UserVerificationSerializer(
-            user, data=request.data, partial=True
-        )
+                user, data=request.data, partial=True
+            )
 
             if not user_serializer.is_valid():
                 return CustomResponse(
-                general_message=user_serializer.errors
-            ).get_failure_response()
-       
+                    general_message=user_serializer.errors
+                ).get_failure_response()
+
             user_serializer.save()
             user_data = user_serializer.data
 
@@ -283,7 +279,7 @@ class ForgotPasswordAPI(APIView):
             return CustomResponse(
                 general_message="User not exist"
             ).get_failure_response()
-          
+
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
         forget_user = ForgotPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at)
@@ -294,11 +290,13 @@ class ForgotPasswordAPI(APIView):
         user_data = {'email': receiver_mail,
                      'redirect': f'{domain}/reset-password?token={forget_user.id}/'}
         # domain = f'{domain}/api/v1/dashboard/user/reset-password/{forget_user.id}/'
+        
         send_dashboard_mail(
             user_data=user_data,
             subject='Password Reset Requested',
             address=html_address
         )
+
         return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
 
 
