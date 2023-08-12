@@ -23,7 +23,7 @@ class Referral(APIView):
 
         user = User.objects.filter(id=user_id).first()
         user_data = {'full_name': user.fullname, 'email': receiver_email, 'muid': user.mu_id,
-                     'redirect': f'{domain}/api/v1/register/{user.mu_id}'}
+                     'redirect': f'{domain}/api/v1/register/{user.mu_id}/'}
 
         send_dashboard_mail(
             self,
