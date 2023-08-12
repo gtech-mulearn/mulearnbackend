@@ -27,4 +27,5 @@ def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
         from_email=email_host_user,
         recipient_list=[user_data["email"]],
         html_message=email_content,
+        fail_silently=False,
     )
