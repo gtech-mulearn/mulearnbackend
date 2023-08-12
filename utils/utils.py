@@ -160,7 +160,7 @@ class ImportCSV:
         return rows
 
 
-def send_dashboard_mail(self, user_data: dict, subject: str, address: list[str]):
+def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
@@ -184,4 +184,5 @@ def send_dashboard_mail(self, user_data: dict, subject: str, address: list[str])
         from_email=email_host_user,
         recipient_list=[user_data["email"]],
         html_message=email_content,
+        fail_silently=False,
     )

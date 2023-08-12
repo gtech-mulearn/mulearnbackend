@@ -290,11 +290,13 @@ class ForgotPasswordAPI(APIView):
         user_data = {'email': receiver_mail,
                      'redirect': f'{domain}/reset-password?token={forget_user.id}/'}
         # domain = f'{domain}/api/v1/dashboard/user/reset-password/{forget_user.id}/'
-        send_dashboard_mail(self,
-                            user_data=user_data,
-                            subject='Password Reset Requestedz',
-                            address=html_address
-                            )
+        
+        send_dashboard_mail(
+            user_data=user_data,
+            subject='Password Reset Requested',
+            address=html_address
+        )
+
         return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
 
 
