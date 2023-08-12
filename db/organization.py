@@ -1,4 +1,8 @@
+import uuid
+
 from django.db import models
+
+from utils.utils import DateTimeUtils
 
 from .user import User
 
@@ -88,7 +92,7 @@ class Organization(models.Model):
     org_type = models.CharField(max_length=25)
     affiliation = models.ForeignKey(
         OrgAffiliation, on_delete=models.CASCADE, blank=True, null=True)
-    district = models.ForeignKey(District, on_delete=models.CASCADE)
+    district = models.ForeignKey(District, on_delete=models.CASCADE, related_name='organization_district')
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='organization_updated_by')
     updated_at = models.DateTimeField()
@@ -117,7 +121,7 @@ class Department(models.Model):
 
 
 class UserOrganizationLink(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE,
                              related_name='user_organization_link_user_id')
     org = models.ForeignKey(Organization, on_delete=models.CASCADE,
@@ -140,3 +144,19 @@ class UserOrganizationLink(models.Model):
             return self.user.total_karma_user.karma
         except Exception as e:
             return 0
+
+    @property
+    def country(self):
+        return self.org.district.zone.state.country
+
+    @property
+    def state(self):
+        return self.org.district.zone.state
+
+    @property
+    def district(self):
+        return self.org.district
+
+    @property
+    def zone(self):
+        return self.org.district.zone

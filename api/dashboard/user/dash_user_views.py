@@ -1,4 +1,3 @@
-import contextlib
 import uuid
 from datetime import timedelta
 
@@ -6,18 +5,15 @@ import decouple
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
-from django.db import IntegrityError
-from django.db.models import Q
+from django.db.models import Case, CharField, F, Q, Value, When
 from rest_framework.views import APIView
-from django.db.models import Count, Case, When, F, Value, CharField
 
-
-from db.organization import UserOrganizationLink
+from api.dashboard import dashboard_helper
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_dashboard_mail
 from . import dash_user_serializer
 
 
@@ -37,57 +33,111 @@ class UserInfoAPI(APIView):
         return CustomResponse(response=response).get_success_response()
 
 
+class UserEditAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request, user_id):
+        user = User.objects.get(id=user_id)
+        serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
+        return CustomResponse(response=serializer).get_success_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def delete(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            user.active = False
+            user.save()
+            return CustomResponse(
+                general_message="User deleted successfully"
+            ).get_success_response()
+
+        except ObjectDoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, user_id):
+        try:
+            user = User.objects.get(id=user_id)
+            admin_id = JWTUtils.fetch_user_id(request)
+            admin = User.objects.get(id=admin_id)
+            serializer = dash_user_serializer.UserDetailsEditSerializer(
+                user, data=request.data, partial=True, context={"admin": admin}
+            )
+            if serializer.is_valid():
+                serializer.save()
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER.value,
+                    WebHookActions.UPDATE.value,
+                    user_id,
+                )
+
+                return CustomResponse(
+                    general_message=serializer.data
+                ).get_success_response()
+            return CustomResponse(
+                general_message=serializer.errors
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = User.objects.annotate(
+        user_queryset = User.objects.filter(active=True).annotate(
             total_karma=Case(
-                When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
-                default=Value(0)
+                When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
+                default=Value(0),
             ),
             company=Case(
                 When(
                     user_organization_link_user_id__verified=True,
                     user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
-                    then=F('user_organization_link_user_id__org__title'),
+                    then=F("user_organization_link_user_id__org__title"),
                 ),
                 default=Value(None),
-                output_field=CharField()
+                output_field=CharField(),
             ),
             department=Case(
                 When(
                     user_organization_link_user_id__verified=True,
-                    then=F('user_organization_link_user_id__department__title'),
+                    then=F("user_organization_link_user_id__department__title"),
                 ),
-                default=Value(''),
-                output_field=CharField()
-                
+                default=Value(""),
+                output_field=CharField(),
             ),
             graduation_year=Case(
                 When(
                     user_organization_link_user_id__verified=True,
-                    then=F('user_organization_link_user_id__graduation_year'),
+                    then=F("user_organization_link_user_id__graduation_year"),
                 ),
-                default=Value(''),
-                output_field=CharField()
+                default=Value(""),
+                output_field=CharField(),
             ),
             college=Case(
                 When(
                     user_organization_link_user_id__verified=True,
                     user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F('user_organization_link_user_id__org__title'),
+                    then=F("user_organization_link_user_id__org__title"),
                 ),
                 default=Value(None),
-                output_field=CharField()
+                output_field=CharField(),
             ),
         )
 
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["mu_id", "first_name", "last_name", "email", "mobile"],
+            ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
+            {
+                "first_name": "first_name",
+                "total_karma": "total_karma",
+                "email": "email",
+                "created_at": "created_at",
+            },
         )
         serializer = dash_user_serializer.UserDashboardSerializer(
             queryset.get("queryset"), many=True
@@ -97,115 +147,50 @@ class UserAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
-    def patch(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-        admin_id = JWTUtils.fetch_user_id(request)
-        admin = User.objects.get(id=admin_id)
-
-        existing_link = UserOrganizationLink.objects.filter(
-            Q(user=user)
-            & (
-                    Q(org__org_type=OrganizationType.COMPANY.value)
-                    | Q(org__org_type=OrganizationType.COLLEGE.value)
-            )
-        )
-        existing_link.delete()
-
-        try:
-            if organization_id := request.data.get("organization"):
-                UserOrganizationLink.objects.create(
-                    id=uuid.uuid4(),
-                    user=user,
-                    org_id=organization_id,
-                    department_id=request.data.get("department", None),
-                    graduation_year=request.data.get("graduation_year", None),
-                    verified=True,
-                    created_by=admin,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                )
-
-            serializer = dash_user_serializer.UserDashboardSerializer(
-                user, data=request.data, partial=True
-            )
-
-            if not serializer.is_valid():
-                return CustomResponse(
-                    general_message=serializer.errors
-                ).get_failure_response()
-
-            serializer.save()
-            return CustomResponse(
-                response={"users": serializer.data}
-            ).get_success_response()
-
-
-        except IntegrityError as e:
-            return CustomResponse(
-                general_message="Database integrity error",
-            ).get_failure_response()
-
-    @role_required([RoleType.ADMIN.value, ])
-    def delete(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            user.delete()
-            return CustomResponse(
-                general_message="User deleted successfully"
-            ).get_success_response()
-
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
 
 class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = User.objects.annotate(
             total_karma=Case(
-                When(total_karma_user__isnull=False, then=F('total_karma_user__karma')),
-                default=Value(0)
+                When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
+                default=Value(0),
             ),
             company=Case(
                 When(
                     user_organization_link_user_id__verified=True,
                     user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
-                    then=F('user_organization_link_user_id__org__title'),
+                    then=F("user_organization_link_user_id__org__title"),
                 ),
                 default=Value(None),
-                output_field=CharField()
+                output_field=CharField(),
             ),
             department=Case(
                 When(
                     user_organization_link_user_id__verified=True,
-                    then=F('user_organization_link_user_id__department__title'),
+                    then=F("user_organization_link_user_id__department__title"),
                 ),
-                default=Value(''),
-                output_field=CharField()
-                
+                default=Value(""),
+                output_field=CharField(),
             ),
             graduation_year=Case(
                 When(
                     user_organization_link_user_id__verified=True,
-                    then=F('user_organization_link_user_id__graduation_year'),
+                    then=F("user_organization_link_user_id__graduation_year"),
                 ),
-                default=Value(''),
-                output_field=CharField()
+                default=Value(""),
+                output_field=CharField(),
             ),
             college=Case(
                 When(
                     user_organization_link_user_id__verified=True,
                     user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F('user_organization_link_user_id__org__title'),
+                    then=F("user_organization_link_user_id__org__title"),
                 ),
                 default=Value(None),
-                output_field=CharField()
+                output_field=CharField(),
             ),
         )
         user_serializer_data = dash_user_serializer.UserDashboardSerializer(
@@ -217,13 +202,14 @@ class UserManagementCSV(APIView):
 class UserVerificationAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["first_name", "last_name", "role_title"],
+            ["user__first_name", "user__last_name", "role__title"],
+            {"fullname": "fullname"},
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
             queryset.get("queryset"), many=True
@@ -233,33 +219,42 @@ class UserVerificationAPI(APIView):
             data=serializer.data, pagination=queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, link_id):
         try:
             user = UserRoleLink.objects.get(id=link_id)
-        except ObjectDoesNotExist as e:
+
+            user_serializer = dash_user_serializer.UserVerificationSerializer(
+                user, data=request.data, partial=True
+            )
+
+            if not user_serializer.is_valid():
+                return CustomResponse(
+                    general_message=user_serializer.errors
+                ).get_failure_response()
+
+            user_serializer.save()
+            user_data = user_serializer.data
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_ROLE.value,
+                WebHookActions.UPDATE.value,
+                user_data["user_id"]
+            )
+
+            dashboard_helper.send_dashboard_mail(
+                user_data=user_data,
+                subject="Role request at μLearn!",
+                address=("mentor_verification.html"),
+            )
+
+            return CustomResponse(
+                response={"user_role_link": user_data}
+            ).get_success_response()
+        except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
-        serializer = dash_user_serializer.UserVerificationSerializer(
-            user, data=request.data, partial=True
-        )
-
-        if not serializer.is_valid():
-            return CustomResponse(
-                response={"user_role_link": serializer.errors}
-            ).get_failure_response()
-        try:
-            serializer.save()
-            return CustomResponse(
-                response={"user_role_link": serializer.data}
-            ).get_success_response()
-
-        except IntegrityError as e:
-            return CustomResponse(
-                response={"user_role_link": str(e)}
-            ).get_failure_response()
-
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, link_id):
         try:
             link = UserRoleLink.objects.get(id=link_id)
@@ -284,21 +279,25 @@ class ForgotPasswordAPI(APIView):
             return CustomResponse(
                 general_message="User not exist"
             ).get_failure_response()
+
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
-        forget_user = ForgotPassword.objects.create(  #
-            id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
-        )
-        email_host_user = decouple.config("EMAIL_HOST_USER")
-        to = [user.email]
+        forget_user = ForgotPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at)
 
+        receiver_mail = user.email
         domain = decouple.config("FR_DOMAIN_NAME")
-        message = f"Reset your password with this link {domain}/reset-password?token={forget_user.id}"
-        subject = "Password Reset Requested"
-        send_mail(subject, message, email_host_user, to, fail_silently=False)
-        return CustomResponse(
-            general_message="Forgot Password Email Send Successfully"
-        ).get_success_response()
+        html_address = ["forgot_password.html"]
+        user_data = {'email': receiver_mail,
+                     'redirect': f'{domain}/reset-password?token={forget_user.id}/'}
+        # domain = f'{domain}/api/v1/dashboard/user/reset-password/{forget_user.id}/'
+        
+        send_dashboard_mail(
+            user_data=user_data,
+            subject='Password Reset Requested',
+            address=html_address
+        )
+
+        return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
 
 
 class ResetPasswordVerifyTokenAPI(APIView):
@@ -339,4 +338,28 @@ class ResetPasswordConfirmAPI(APIView):
         forget_user.delete()
         return CustomResponse(
             general_message="New Password Saved Successfully"
+        ).get_success_response()
+
+
+class UserInviteAPI(APIView):
+    def post(self, request):
+        email = request.data.get("email")
+        if User.objects.filter(email=email).exists():
+            return CustomResponse(
+                general_message="User already exist"
+            ).get_failure_response()
+
+        email_host_user = decouple.config("EMAIL_HOST_USER")
+        to = [email]
+        domain = decouple.config("FR_DOMAIN_NAME")
+        message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
+        send_mail(
+            "Invitation to join MuLearn",
+            message,
+            email_host_user,
+            to,
+            fail_silently=False,
+        )
+        return CustomResponse(
+            general_message="Invitation sent successfully"
         ).get_success_response()

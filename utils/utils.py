@@ -1,15 +1,19 @@
 import csv
 import datetime
+import gzip
 import io
 
+import decouple
 import openpyxl
 import pytz
 import requests
 from decouple import config
+from django.core.mail import send_mail
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
+from django.template.loader import render_to_string
 
 
 class CommonUtils:
@@ -28,10 +32,12 @@ class CommonUtils:
             queryset = queryset.filter(query)
 
         if sort_by:
-            sort_field_name = sort_fields.get(sort_by)
+            sort = sort_by[1:] if sort_by.startswith('-') else sort_by
+            sort_field_name = sort_fields.get(sort)
             if sort_field_name:
                 if sort_by.startswith('-'):
                     sort_field_name = '-' + sort_field_name
+
                 queryset = queryset.order_by(sort_field_name)
 
         paginator = Paginator(queryset, per_page)
@@ -64,7 +70,14 @@ class CommonUtils:
         writer.writeheader()
         writer.writerows(queryset)
 
-        return response
+        compressed_response = HttpResponse(
+            gzip.compress(response.content),
+            content_type='text/csv',
+        )
+        compressed_response['Content-Disposition'] = f'attachment; filename="{csv_name}.csv"'
+        compressed_response['Content-Encoding'] = 'gzip'
+
+        return compressed_response
 
 
 class DateTimeUtils:
@@ -113,8 +126,7 @@ class _CustomHTTPHandler:
 
 class DiscordWebhooks:
     @staticmethod
-    # for example refer api/dashboard/ig/dash_ig_view.py
-    def channelsAndCategory(category, action, *values) -> str:
+    def general_updates(category, action, *values) -> str:
         """
         Modify channels and category in Discord
 		Args:
@@ -124,7 +136,7 @@ class DiscordWebhooks:
 		"""
         content = f"{category}<|=|>{action}"
         for value in values:
-            content = content + f"<|=|>{value}"
+            content = f"{content}<|=|>{value}"
         url = config("DISCORD_WEBHOOK_LINK")
         data = {
             "content": content
@@ -146,3 +158,31 @@ class ImportCSV:
         workbook.close()
 
         return rows
+
+
+def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
+    """
+    The function `send_user_mail` sends an email to a user with the provided user data, subject, and
+    address.
+
+    :param user_data: A dictionary containing user data such as name, email, and any other relevant
+    information
+    :param subject: The subject of the email that will be sent to the user
+    :param address: The `address` parameter is a list of strings that represents the path to the email
+    template file. It is used to specify the location of the email template file that will be rendered
+    and used as the content of the email
+    """
+
+    email_host_user = decouple.config("EMAIL_HOST_USER")
+    email_content = render_to_string(
+        f"mails/{'/'.join(map(str, address))}", {"user": user_data}
+    )
+
+    send_mail(
+        subject=subject,
+        message=email_content,
+        from_email=email_host_user,
+        recipient_list=[user_data["email"]],
+        html_message=email_content,
+        fail_silently=False,
+    )

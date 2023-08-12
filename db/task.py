@@ -1,3 +1,4 @@
+import uuid
 from django.db import models
 
 from db.organization import Organization
@@ -21,8 +22,10 @@ class Channel(models.Model):
 
 
 class InterestGroup(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
+    code = models.CharField(max_length=10,unique=True)
+    icon = models.CharField(max_length=10,unique=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='interest_group_updated_by')
     updated_at = models.DateTimeField()
@@ -143,6 +146,8 @@ class KarmaActivityLog(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='karma_activity_log_created_by')
     created_at = models.DateTimeField()
+    user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True,
+                             related_name='karma_activity_log_user')
 
     class Meta:
         managed = False
@@ -150,8 +155,8 @@ class KarmaActivityLog(models.Model):
 
 
 class UserIgLink(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_ig_link_user')
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name='user_ig_link_ig')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='user_ig_link_created_by')

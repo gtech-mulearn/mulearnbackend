@@ -1,11 +1,13 @@
+import json
 import uuid
 
-from django.core.files.storage import default_storage
+from django.conf import settings
 from django.db import transaction
 from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
 from db.organization import Organization, District
+from db.user import User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -13,6 +15,12 @@ from utils.utils import DateTimeUtils
 class HackathonRetrivalSerializer(serializers.ModelSerializer):
     organisation = serializers.CharField(source='org.title', allow_null=True)
     district = serializers.CharField(source='district.name', allow_null=True)
+    org_id = serializers.CharField(source='org.id', allow_null=True)
+    district_id = serializers.CharField(source='district.id', allow_null=True)
+    editable = serializers.SerializerMethodField()
+
+    banner = serializers.SerializerMethodField()
+    event_logo = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -20,7 +28,23 @@ class HackathonRetrivalSerializer(serializers.ModelSerializer):
                   'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
-                  'banner', 'event_logo', 'type', 'website')
+                  'banner', 'event_logo', 'type', 'website', 'editable', 'org_id', 'district_id')
+
+    def get_banner(self, obj):
+        media = obj.banner
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
+
+    def get_event_logo(self, obj):
+        media = obj.event_logo
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
+
+    def get_editable(self, obj):
+        user_id = self.context.get('user_id')
+        return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
 
 
 class UpcomingHackathonRetrivalSerializer(serializers.ModelSerializer):
@@ -36,21 +60,26 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
         ("Published", "Published"),
         ("Deleted", "Deleted"),
     )
+    TYPE_CHOICES = (
+        ("offline", "offline"),
+        ("online", "online"),
+    )
     title = serializers.CharField(required=True)
     status = serializers.ChoiceField(choices=STATUS_CHOICES, required=False)
     form_fields = serializers.JSONField(required=False)
-    event_logo = serializers.ImageField(required=False)
-    banner = serializers.ImageField(required=False)
+    event_logo = serializers.ImageField(required=False, allow_null=True)
+    banner = serializers.ImageField(required=False, allow_null=True)
     org_id = serializers.CharField(required=False)
     district_id = serializers.CharField(required=False)
-    website = serializers.CharField(required=False)
+    website = serializers.CharField(required=False, allow_null=True)
+    type = serializers.ChoiceField(choices=TYPE_CHOICES, required=False)
 
     class Meta:
         model = Hackathon
         fields = (
             'title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
             'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
-            'form_fields',
+            'form_fields', 'type',
             'event_logo', 'banner', 'event_logo', 'website')
 
     def validate_org_id(self, value):
@@ -78,11 +107,10 @@ class HackathonCreateUpdateDeleteSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-            if 'event_logo' in validated_data:
-                default_storage.save(validated_data.get('event_logo').name, validated_data.get('event_logo'))
 
-            if 'banner' in validated_data:
-                default_storage.save(validated_data.get('banner').name, validated_data.get('banner'))
+            validated_data['org'] = validated_data.pop('org_id') if validated_data.get('org_id', None) else None
+            validated_data['district'] = validated_data.pop('district_id') if validated_data.get('district_id',
+                                                                                                 None) else None
 
             hackathon = Hackathon.objects.create(**validated_data)
 
@@ -108,23 +136,27 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
     STATUS_CHOICES = (
         ("Draft", "Draft"),
         ("Completed", "Completed"),
-        ("Published", "Published"),
         ("Deleted", "Deleted"),
+    )
+    TYPE_CHOICES = (
+        ("offline", "offline"),
+        ("online", "online"),
     )
     title = serializers.CharField(required=False)
     status = serializers.ChoiceField(choices=STATUS_CHOICES, required=False)
     form_fields = serializers.JSONField(required=False)
-    event_logo = serializers.ImageField(required=False)
-    banner = serializers.ImageField(required=False)
+    event_logo = serializers.ImageField(required=False, allow_null=True)
+    banner = serializers.ImageField(required=False, allow_null=True)
     org_id = serializers.CharField(required=False)
     district_id = serializers.CharField(required=False)
-    website = serializers.CharField(required=False)
+    website = serializers.CharField(required=False, allow_null=True)
+    type = serializers.ChoiceField(choices=TYPE_CHOICES, required=False)
 
     class Meta:
         model = Hackathon
         fields = ('title', 'tagline', 'description', 'participant_count', 'org_id', 'district_id', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end', 'status',
-                  'form_fields',
+                  'form_fields', 'type',
                   'event_logo', 'banner', 'event_logo', 'website')
 
     def validate_org_id(self, value):
@@ -154,7 +186,10 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         instance.event_start = validated_data.get('event_start', instance.event_start)
         instance.event_end = validated_data.get('event_end', instance.event_end)
         instance.status = validated_data.get('status', instance.status)
-        instance.status = validated_data.get('website', instance.website)
+        instance.website = validated_data.get('website', instance.website)
+        instance.type = validated_data.get('type', instance.type)
+        instance.event_logo = validated_data.get('event_logo', instance.event_logo)
+        instance.banner = validated_data.get('banner', instance.banner)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
@@ -173,6 +208,28 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         return instance
 
 
+class HackathonPublishingSerializer(serializers.ModelSerializer):
+    STATUS_CHOICES = (
+        ("Published", "Published"),
+        ("Draft", "Draft"),
+    )
+
+    status = serializers.ChoiceField(choices=STATUS_CHOICES, required=True)
+
+    class Meta:
+        model = Hackathon
+        fields = ('status',)
+
+    def update(self, instance, validated_data):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        instance.status = validated_data.get('status', instance.status)
+        instance.updated_by_id = user_id
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+
+        instance.save()
+        return instance
+
+
 class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
     hackathon_id = serializers.CharField(required=False)
     data = serializers.JSONField(required=False)
@@ -185,6 +242,10 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         hackathon = Hackathon.objects.filter(id=value).first()
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
+        existing_submission = HackathonUserSubmission.objects.filter(hackathon_id=value,
+                                                                     user_id=self.context.get('user_id')).first()
+        if existing_submission:
+            raise serializers.ValidationError("User has already submitted for this hackathon.")
         return hackathon.id
 
     def create(self, validated_data):
@@ -196,5 +257,115 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data['updated_by_id'] = user_id
             validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
             validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+
             hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
         return hackathon_submission
+
+
+class HackathonOrganiserSerializer(serializers.ModelSerializer):
+    mu_id = serializers.CharField(required=False)
+
+    class Meta:
+        model = HackathonOrganiserLink
+        fields = ('mu_id',)
+
+    def validate_mu_id(self, value):
+        user = User.objects.filter(mu_id=value).first()
+        if not user:
+            raise serializers.ValidationError("User Not Exists")
+
+        if user:
+            if HackathonOrganiserLink.objects.filter(organiser=user,
+                                                     hackathon__id=self.context.get('hackathon').id).exists():
+                raise serializers.ValidationError("This User Already An Organizer in this hackathon")
+
+        return user.id
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            organizer_id = validated_data.pop('mu_id')
+            user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+            validated_data['id'] = uuid.uuid4()
+            validated_data['hackathon_id'] = self.context.get('hackathon').id
+            validated_data['organiser_id'] = organizer_id
+            validated_data['created_by_id'] = user_id
+            validated_data['updated_by_id'] = user_id
+            validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+            validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+            organiser = HackathonOrganiserLink.objects.create(**validated_data)
+        return organiser
+
+    def destroy(self, obj):
+        obj.delete()
+
+
+class ListApplicantsSerializer(serializers.ModelSerializer):
+    data = serializers.SerializerMethodField()
+
+    class Meta:
+        model = HackathonUserSubmission
+        fields = ('data',)
+
+    def get_data(self, obj):
+        try:
+            return json.loads(obj.data.replace("'", "\""))
+        except json.JSONDecodeError:
+            return {}
+
+
+class HackathonInfoSerializer(serializers.ModelSerializer):
+    banner = serializers.SerializerMethodField()
+    event_logo = serializers.SerializerMethodField()
+    organisation = serializers.CharField(source='org.title', allow_null=True)
+    district = serializers.CharField(source='district.name', allow_null=True)
+    org_id = serializers.CharField(source='org.id', allow_null=True)
+    district_id = serializers.CharField(source='district.id', allow_null=True)
+
+    class Meta:
+        model = Hackathon
+        fields = ('id',
+                  'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
+                  'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
+                  'status',
+                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id')
+
+    def get_banner(self, obj):
+        media = obj.banner
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
+
+    def get_event_logo(self, obj):
+        media = obj.event_logo
+        if media:
+            return f"{settings.MEDIA_URL}{media}"
+        return None
+
+
+class OrganisationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ('id', 'title')
+
+
+class DistrictSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = District
+        fields = ('id', 'name')
+
+
+class HackathonFormSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = HackathonForm
+        fields = ('field_name', 'field_type', 'is_required')
+
+
+class HackathonOrganiserSerializerRetrival(serializers.ModelSerializer):
+    full_name = serializers.CharField(source='organiser.fullname')
+    email = serializers.CharField(source='organiser.email')
+    muid = serializers.CharField(source='organiser.mu_id')
+    profile_pic = serializers.CharField(source='organiser.profile_pic')
+
+    class Meta:
+        model = HackathonOrganiserLink
+        fields = ('id', 'full_name', 'email', 'muid', 'profile_pic')

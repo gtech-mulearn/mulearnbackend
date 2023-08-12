@@ -1,3 +1,4 @@
+import debug_toolbar
 from django.urls import path, include
 
 # app_name will help us do a reverse look-up latter.
@@ -11,4 +12,7 @@ urlpatterns = [
     path('location/', include('api.dashboard.location.urls')),
     path('protected/', include('api.protected.urls')),
     path('hackathon/', include('api.hackathon.urls')),
+    path('notification/', include('api.notification.urls')),
+    
+    path("__debug__/", include(debug_toolbar.urls)),
 ]

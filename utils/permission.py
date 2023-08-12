@@ -20,8 +20,8 @@ from .response import CustomResponse
 
 
 def format_time(date_time):
-    formated_time = date_time.strftime("%Y-%m-%d %H:%M:%S%z")
-    return datetime.strptime(formated_time, "%Y-%m-%d %H:%M:%S%z")
+    formatted_time = date_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    return datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S%z")
 
 
 class CustomizePermission(BasePermission):
@@ -61,35 +61,47 @@ class CustomizePermission(BasePermission):
         Returns:
             str: The value for the WWW-Authenticate header.
         """
-        return self.token_prefix + " realm=\"api\""
+        return f'{self.token_prefix} realm="api"'
 
 
 class JWTUtils:
     @staticmethod
     def fetch_role(request):
         token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True)
+        payload = jwt.decode(
+            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
+        )
         roles = payload.get("roles")
         if roles is None:
-            raise Exception("The corresponding JWT token does not contain the 'roles' key")
+            raise Exception(
+                "The corresponding JWT token does not contain the 'roles' key"
+            )
         return roles
 
     @staticmethod
     def fetch_user_id(request):
         token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True)
+        payload = jwt.decode(
+            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
+        )
         user_id = payload.get("id")
         if user_id is None:
-            raise Exception("The corresponding JWT token does not contain the 'user_id' key")
+            raise Exception(
+                "The corresponding JWT token does not contain the 'user_id' key"
+            )
         return user_id
 
     @staticmethod
     def fetch_muid(request):
         token = authentication.get_authorization_header(request).decode("utf-8").split()
-        payload = jwt.decode(token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True)
+        payload = jwt.decode(
+            token[1], settings.SECRET_KEY, algorithms=["HS256"], verify=True
+        )
         muid = payload.get("muid")
         if muid is None:
-            raise Exception("The corresponding JWT token does not contain the 'muid' key")
+            raise Exception(
+                "The corresponding JWT token does not contain the 'muid' key"
+            )
         return muid
 
     @staticmethod
@@ -115,19 +127,23 @@ class JWTUtils:
 
             return None, payload
         except jwt.exceptions.InvalidSignatureError as e:
-            raise CustomException({
-                "hasError": True,
-                "message": {"general": [str(e)]},
-                "statusCode": 1000,
-            })
+            raise CustomException(
+                {
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                }
+            ) from e
         except jwt.exceptions.DecodeError as e:
-            raise CustomException({
-                "hasError": True,
-                "message": {"general": [str(e)]},
-                "statusCode": 1000,
-            })
+            raise CustomException(
+                {
+                    "hasError": True,
+                    "message": {"general": [str(e)]},
+                    "statusCode": 1000,
+                }
+            ) from e
         except AuthenticationFailed as e:
-            raise CustomException(str(e))
+            raise CustomException(str(e)) from e
         except Exception as e:
             raise CustomException(
                 {
@@ -135,8 +151,24 @@ class JWTUtils:
                     "message": {"general": [str(e)]},
                     "statusCode": 1000,
                 }
-            )
+            ) from e
 
+
+def role_required(roles):
+    def decorator(view_func):
+        def wrapped_view_func(obj, request, *args, **kwargs):
+            for role in JWTUtils.fetch_role(request):
+                if role in roles:
+                    response = view_func(obj, request, *args, **kwargs)
+                    return response
+            res = CustomResponse(
+                general_message="You do not have the required role to access this page."
+            ).get_failure_response()
+            return res
+
+        return wrapped_view_func
+
+    return decorator
 
 # class RoleRequired:
 #     """
@@ -170,20 +202,3 @@ class JWTUtils:
 #             ).get_failure_response()
 #
 #         return wrapped_view_func
-
-
-def role_required(roles):
-    def decorator(view_func):
-        def wrapped_view_func(obj, request, *args, **kwargs):
-            for role in JWTUtils.fetch_role(request):
-                if role in roles:
-                    response = view_func(obj, request, *args, **kwargs)
-                    return response
-            res = CustomResponse(
-                general_message="You do not have the required role to access this page."
-            ).get_failure_response()
-            return res
-
-        return wrapped_view_func
-
-    return decorator

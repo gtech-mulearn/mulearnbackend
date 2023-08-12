@@ -16,7 +16,8 @@ from .serializers import StudentLeaderboardSerializer, CollegeLeaderboardSeriali
 class StudentsLeaderboard(APIView):
 
     def get(self, request):
-        users_total_karma = TotalKarma.objects.select_related('user').order_by('-karma')[:20]
+        users_total_karma = TotalKarma.objects.filter(user__role__title='Student').select_related('user').order_by(
+            '-karma')[:20]
         if not users_total_karma:
             return CustomResponse(general_message='No Karma Related data available').get_failure_response()
         data = StudentLeaderboardSerializer(users_total_karma, many=True).data
@@ -38,8 +39,8 @@ class StudentsMonthlyLeaderboard(APIView):
                 'user__last_name',
             )
             .annotate(
-                total_karma=Sum('user__karma_activity_log_created_by__karma',
-                                filter=Q(user__karma_activity_log_created_by__created_at__range=(start_date, end_date)))
+                total_karma=Sum('user__karma_activity_log_user__karma',
+                                filter=Q(user__karma_activity_log_user__created_at__range=(start_date, end_date)))
             )
             .order_by('-total_karma')[:20]
         )
@@ -50,8 +51,8 @@ class StudentsMonthlyLeaderboard(APIView):
         student_monthly_leaderboard = [
             {
                 'id': student['user__id'],
-                'fullName': f"{student['user__first_name']} {student['user__last_name']}",
-                'totalKarma': student['total_karma']
+                'full_name': f"{student['user__first_name']} {student['user__last_name']}",
+                'total_karma': student['total_karma']
             }
             for student in student_monthly_leaderboard
         ]
@@ -64,7 +65,7 @@ class CollegeLeaderboard(APIView):
     def get(self, request):
         organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         college_monthly_leaderboard = CollegeLeaderboardSerializer(organizations, many=True).data
-        college_monthly_leaderboard.sort(key=lambda x: x['totalKarma'], reverse=True)
+        college_monthly_leaderboard.sort(key=lambda x: x['total_karma'], reverse=True)
         college_monthly_leaderboard = college_monthly_leaderboard[:20]
         return CustomResponse(response=college_monthly_leaderboard).get_success_response()
 
@@ -76,11 +77,11 @@ class CollegeMonthlyLeaderboard(APIView):
         end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - timedelta(days=1)
 
         organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value).annotate(
-            totalKarma=Sum('user_organization_link_org_id__user__karma_activity_log_created_by__karma',
-                           filter=Q(
-                               user_organization_link_org_id__user__karma_activity_log_created_by__created_at__range=(
-                                   start_date, end_date)))
-        ).order_by('-totalKarma')[:20]
+            total_karma=Sum('user_organization_link_org_id__user__karma_activity_log_user__karma',
+                            filter=Q(
+                                user_organization_link_org_id__user__karma_activity_log_user__created_at__range=(
+                                    start_date, end_date)))
+        ).order_by('-total_karma')[:20]
 
         serializer = CollegeMonthlyLeaderboardSerializer(organizations, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

@@ -1,5 +1,6 @@
 import uuid
 
+from django.db.models import F
 from rest_framework.views import APIView
 
 from db.organization import Organization
@@ -9,25 +10,33 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
-from .dash_task_serializer import TaskListSerializer
+from .dash_task_serializer import TaskListSerializer, TaskUpdateSerializer, TaskCreateSerializer, \
+    ChannelDropdownSerializer, IGDropdownSerializer, OrganizationDropdownSerialize, LevelDropdownSerialize, \
+    TaskTypeDropdownSerializer
 
 
 class TaskApi(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        task_serializer = TaskList.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(task_serializer, request, ["id",
-                                                                                           "hashtag",
-                                                                                           "title",
-                                                                                           "karma",
-                                                                                           "channel",
-                                                                                           "type",
-                                                                                           "active",
-                                                                                           "variable_karma",
-                                                                                           "usage_count",
-                                                                                           "created_by",
-                                                                                           "created_at"])
+        task_queryset = TaskList.objects.annotate(
+            channel_name=F('channel__name'),
+            org_title=F('org__title'),
+            updated_by_first_name=F('updated_by__first_name'),
+            updated_by_last_name=F('updated_by__last_name'),
+            created_by_first_name=F('created_by__first_name'),
+            created_by_last_name=F('created_by__last_name')
+        )
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset, request,
+            search_fields=["title", "channel_name", "org_title", "description", "karma", "usage_count",
+                           "updated_by_first_name", "updated_by_last_name",
+                           "created_by_first_name", "created_by_last_name"],
+            sort_fields={'title': 'title', 'karma': 'karma', 'updated_by': 'updated_by',
+                         'updated_at': 'updated_at', 'created_at': 'created_at'}
+        )
+
         task_serializer_data = TaskListSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=task_serializer_data,
@@ -35,47 +44,31 @@ class TaskApi(APIView):
 
     @role_required([RoleType.ADMIN.value, ])
     def post(self, request):  # create
+
         user_id = JWTUtils.fetch_user_id(request)
-        task_data = TaskList.objects.create(
-            id=uuid.uuid4(),
-            hashtag=request.data.get('hashtag'),
-            title=request.data.get('title'),
-            description=request.data.get('description'),
-            karma=request.data.get('karma'),
-            channel_id=request.data.get('channel_id'),
-            type_id=request.data.get('type_id'),
-            active=request.data.get('active'),
-            variable_karma=request.data.get('variable_karma'),
-            usage_count=request.data.get('usage_count'),
-            level_id=request.data.get('level_id'),
-            ig_id=request.data.get('ig_id'),
-            updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time())
-        serializer = TaskListSerializer(task_data)
-        return CustomResponse(response={"taskList": serializer.data}).get_success_response()
+
+        serializer = TaskCreateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Task Created Successfully').get_success_response()
+
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])
-    def put(self, request, pk):  # edit
+    def put(self, request, task_id):  # edit
+
         user_id = JWTUtils.fetch_user_id(request)
-        taskData = TaskList.objects.filter(id=pk).first()
-        fields_to_update = ["hashtag",
-                            "title",
-                            "karma",
-                            "active",
-                            "variable_karma",
-                            "usage_count"]
-        for field in fields_to_update:
-            if field in request.data:
-                setattr(taskData, field, request.data[field])
-        taskData.updated_by = User.objects.filter(id=user_id).first()
-        taskData.updated_at = DateTimeUtils.get_current_utc_time()
-        taskData.save()
-        serializer = TaskListSerializer(taskData)
-        return CustomResponse(
-            response={"taskList": serializer.data}
-        ).get_success_response()
+        task_list = TaskList.objects.filter(id=task_id).first()
+
+        if TaskList is None:
+            return CustomResponse(general_message='Invalid task id').get_failure_response()
+
+        serializer = TaskUpdateSerializer(task_list, data=request.data,
+                                          context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Task Edited Successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value, ])
     def patch(self, request, pk):  # delete
@@ -181,20 +174,6 @@ class ImportTaskListCSV(APIView):
                 valid_rows.append(row)
 
         return CustomResponse(response={"Success": valid_rows, "Failed": error_rows}).get_success_response()
-        # workbook = Workbook()
-        # valid_sheet = workbook.active
-        # valid_headers = list(valid_rows[0].keys())
-        # valid_sheet.append(valid_headers)
-        #
-        # error_sheet = workbook.create_sheet(title='Invalid Rows')
-        # error_headers = list(error_rows[0].keys())
-        # error_sheet.append(error_headers)
-
-        # for row in valid_rows:
-        #     valid_sheet.append([row.get(header, '') for header in valid_headers])
-        #
-        # for row in error_rows:
-        #     error_sheet.append([row.get(header, '') for header in error_headers])
 
 
 class TaskGetAPI(APIView):
@@ -205,3 +184,53 @@ class TaskGetAPI(APIView):
         task_serializer = TaskList.objects.get(id=pk)
         serializer = TaskListSerializer(task_serializer)
         return CustomResponse(response={"Task": serializer.data}).get_success_response()
+
+
+class ChannelDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        channel = Channel.objects.all()
+        serializer = ChannelDropdownSerializer(channel, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class IGDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        ig = InterestGroup.objects.all()
+        serializer = IGDropdownSerializer(ig, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class OrganizationDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        organization = Organization.objects.all()
+        serializer = OrganizationDropdownSerialize(organization, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LevelDropdownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        level = Level.objects.all()
+        serializer = LevelDropdownSerialize(level, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class TaskTypesDropDownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        task_types = TaskType.objects.all()
+        serializer = TaskTypeDropdownSerializer(task_types, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
