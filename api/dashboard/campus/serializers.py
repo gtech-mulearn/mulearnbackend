@@ -1,6 +1,8 @@
 from datetime import timedelta
+
 from django.db.models import Sum, F
 from rest_framework import serializers
+
 from db.organization import UserOrganizationLink
 from db.task import UserLvlLink, TotalKarma, KarmaActivityLog, Level
 from utils.types import OrganizationType
@@ -30,13 +32,13 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         karma = obj.org.user_organization_link_org_id.filter(org__org_type=OrganizationType.COLLEGE.value,
-                                                             verified=True, user__total_karma_user__isnull=False)\
+                                                             verified=True, user__total_karma_user__isnull=False) \
             .aggregate(total_karma=Sum('user__total_karma_user__karma'))
         return karma['total_karma'] or 0
 
     def get_rank(self, obj):
         rank = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value, verified=True, user__total_karma_user__isnull=False)\
+            org__org_type=OrganizationType.COLLEGE.value, verified=True, user__total_karma_user__isnull=False) \
             .values('org').annotate(total_karma=Sum('user__total_karma_user__karma')).order_by('-total_karma')
 
         college_ranks = {college['org']: i + 1 for i, college in enumerate(rank)}
@@ -57,7 +59,6 @@ class CampusStudentInEachLevelSerializer(serializers.ModelSerializer):
         user_level_link = UserLvlLink.objects.filter(level__level_order=obj.level_order,
                                                      user__user_organization_link_user_id__org__title=user_org).all()
         return len(user_level_link)
-
 
 
 class CampusStudentDetailsSerializer(serializers.ModelSerializer):
@@ -91,9 +92,6 @@ class CampusStudentDetailsSerializer(serializers.ModelSerializer):
         return None
 
 
-    
-
-
 class WeeklyKarmaSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="org.title")
     day_0 = serializers.SerializerMethodField()
@@ -105,7 +103,6 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
     day_6 = serializers.SerializerMethodField()
 
     days = 7
-    
 
     class Meta:
         model = UserOrganizationLink
@@ -124,21 +121,21 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
 
     def get_day_0(self, obj):
         return self.karma_by_date(obj, 0)
-    
+
     def get_day_1(self, obj):
         return self.karma_by_date(obj, 1)
-    
+
     def get_day_2(self, obj):
         return self.karma_by_date(obj, 2)
-    
+
     def get_day_3(self, obj):
         return self.karma_by_date(obj, 3)
-    
+
     def get_day_4(self, obj):
         return self.karma_by_date(obj, 4)
-    
+
     def get_day_5(self, obj):
         return self.karma_by_date(obj, 5)
-    
+
     def get_day_6(self, obj):
         return self.karma_by_date(obj, 6)

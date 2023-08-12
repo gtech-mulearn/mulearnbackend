@@ -6,8 +6,6 @@ from db.organization import Organization
 from db.task import TotalKarma
 
 
-# serializers.py
-
 class StudentLeaderboardSerializer(serializers.ModelSerializer):
     total_karma = serializers.IntegerField(source="karma")
     full_name = serializers.ReadOnlyField(source="user.fullname")

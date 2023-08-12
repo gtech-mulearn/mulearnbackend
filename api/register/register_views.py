@@ -1,16 +1,16 @@
 import decouple
 import requests
 from django.core.mail import send_mail
-from django.utils.html import strip_tags
 from django.db.models import Q
+from django.utils.html import strip_tags
 from rest_framework.views import APIView
-from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 
+from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 from db.organization import Country, District, Organization, Department, State, Zone
 from db.task import InterestGroup
 from db.user import Role, User
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType, TasksTypesHashtag
+from utils.types import OrganizationType
 from . import serializers
 
 

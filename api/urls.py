@@ -1,5 +1,6 @@
-from django.urls import path, include
 import debug_toolbar
+from django.urls import path, include
+
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
     path('register/', include('api.register.urls')),
