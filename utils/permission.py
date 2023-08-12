@@ -113,7 +113,7 @@ class JWTUtils:
             if not auth_header or not auth_header.startswith(token_prefix):
                 raise CustomException("Invalid token header")
 
-            token = auth_header[len(token_prefix) :].strip()
+            token = auth_header[len(token_prefix):].strip()
             if not token:
                 raise CustomException("Empty Token")
 
@@ -121,7 +121,6 @@ class JWTUtils:
 
             user_id = payload.get("id")
             expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
-            print(expiry,DateTimeUtils.get_current_utc_time())
 
             if not user_id or expiry < DateTimeUtils.get_current_utc_time():
                 raise CustomException("Token Expired or Invalid")
