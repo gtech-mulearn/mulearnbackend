@@ -1,5 +1,5 @@
 from datetime import datetime
-from django.db.utils import IntegrityError
+
 
 from django.db.models import Prefetch
 import requests
@@ -9,7 +9,7 @@ from db.integrations import Integration, IntegrationAuthorization
 from db.task import UserIgLink
 from db.user import User
 from utils.response import CustomResponse
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, send_template_mail
 from utils.types import IntegrationType
 
 from .. import integrations_helper
@@ -95,15 +95,14 @@ class KKEMAuthorizationAPI(APIView):
 
             kkem_link = serialized_set.save()
 
-            confirmation_token = integrations_helper.generate_confirmation_token(
+            kkem_link["token"] = integrations_helper.generate_confirmation_token(
                 str(kkem_link["link_id"])
             )
-
-            integrations_helper.send_integration_mail(
-                user_data=kkem_link,
-                token=confirmation_token,
+            
+            send_template_mail(
+                context=kkem_link,
                 subject="KKEM integration request!",
-                address=("KKEM", "verify_integration.html"),
+                address=["KKEM", "verify_integration.html"],
             )
 
             return CustomResponse(
