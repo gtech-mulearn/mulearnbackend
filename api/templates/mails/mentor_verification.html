@@ -1,51 +1,53 @@
 {% extends "mails/base_mail.html" %} {% block content %}
-<center>
-  <h1
-    style="
-      color: black;
-      font-family: 'Poppins';
-      font-weight: 600;
-      font-size: 30px;
-      line-height: 1.1;
-    "
-  >
-    {{ user.role_title|upper }} REQUEST FOLLOW-UP
-  </h1>
-  <p
-    style="
-      color: rgb(65, 64, 64);
-      font-family: 'Poppins';
-      line-height: 1.5;
-      font-size: 13px;
-    "
-  >
-    Dear {{ user.full_name }},<br />
-    Your request for the {{ user.role_title }} role has been verified and
-    approved. We are happy to have you amongst our talented team of
-    contributors.
-  </p>
+<div style="background: transparent; width: 100%; height: 150px">
+  <center>
+    <h1
+      style="
+        color: black;
+        font-family: 'Poppins';
+        font-weight: 600;
+        font-size: 30px;
+        line-height: 1.1;
+      "
+    >
+      {{ user.role_title|upper }} REQUEST FOLLOW-UP
+    </h1>
+    <p
+      style="
+        color: rgb(65, 64, 64);
+        font-family: 'Poppins';
+        line-height: 1.5;
+        font-size: 13px;
+      "
+    >
+      Dear {{ user.full_name }},<br />
+      Your request for the {{ user.role_title }} role has been verified and
+      approved. We are happy to have you amongst our talented team of
+      contributors.
+    </p>
 
-  <p
-    style="
-      color: black;
-      font-family: 'Poppins';
-      line-height: 1.5;
-      font-size: 13px;
-    "
-  >
-    We sincerely appreciate your passion and dedication in pursuing this role.
-    Looking forward to building an enhanced learning environment with your
-    cooperation and support.
-  </p>
-  <p
-    style="
-      color: black;
-      font-family: 'Poppins';
-      line-height: 1.5;
-      font-size: 13px;
-    "
-  >
-    Thank you.
-  </p>
-</center>
+    <p
+      style="
+        color: black;
+        font-family: 'Poppins';
+        line-height: 1.5;
+        font-size: 13px;
+      "
+    >
+      We sincerely appreciate your passion and dedication in pursuing this role.
+      Looking forward to building an enhanced learning environment with your
+      cooperation and support.
+    </p>
+    <p
+      style="
+        color: black;
+        font-family: 'Poppins';
+        line-height: 1.5;
+        font-size: 13px;
+      "
+    >
+      Thank you.
+    </p>
+  </center>
+</div>
 {% endblock %}
