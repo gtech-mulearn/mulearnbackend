@@ -1,5 +1,7 @@
 import uuid
+
 from rest_framework import serializers
+
 from db.user import Role, User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
@@ -34,8 +36,8 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context["request"])
         user = User.objects.get(id=user_id)
-        
-        validated_data["id"] = uuid.uuid4() 
+
+        validated_data["id"] = uuid.uuid4()
         validated_data["created_by"] = user
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
         validated_data["updated_by"] = user

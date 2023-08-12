@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+
 from db.organization import UserOrganizationLink
 from db.task import Level
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -65,11 +66,10 @@ class CampusStudentDetailsCSVAPI(APIView):
     def get(self, request, url):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
-        
+
         user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=url)
         serializer = serializers.CampusStudentDetailsSerializer(user_org_links, many=True)
         return CommonUtils.generate_csv(serializer.data, 'Campus Details')
-
 
 
 class WeeklyKarmaAPI(APIView):

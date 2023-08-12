@@ -41,7 +41,8 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ["id", "name"]
-        
+
+
 class OrgSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
@@ -86,9 +87,11 @@ class RegisterSerializer(serializers.ModelSerializer):
     referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
 
     def validate_referral_id(self, value):
-        if not User.objects.filter(mu_id=value).exists():
-            raise serializers.ValidationError("Muid does not exist")
-        return value
+        if value:
+            if not User.objects.filter(mu_id=value).exists():
+                raise serializers.ValidationError("Muid does not exist")
+            return value
+        return None
 
     def create(self, validated_data):
         if validated_data["last_name"] is None:

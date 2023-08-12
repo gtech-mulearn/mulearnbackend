@@ -15,6 +15,7 @@ from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_dashboard_mail
 
 from . import dash_user_serializer
@@ -274,9 +275,15 @@ class ForgotPasswordAPI(APIView):
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
 
-        if not (user := User.objects.filter(Q(mu_id=email_muid) | Q(email=email_muid)).first()):
-            return CustomResponse(general_message="User not exist").get_failure_response()
-
+        if not (
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
+        ):
+            return CustomResponse(
+                general_message="User not exist"
+            ).get_failure_response()
+          
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
         forget_user = ForgotPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at)

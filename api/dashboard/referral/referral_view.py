@@ -1,12 +1,11 @@
 import decouple
 from rest_framework.views import APIView
 
+from db.user import UserReferralLink, User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-
-from db.user import UserReferralLink, User
-from .serializer import ReferralListSerializer
 from utils.utils import send_dashboard_mail
+from .serializer import ReferralListSerializer
 
 
 class Referral(APIView):
@@ -26,7 +25,6 @@ class Referral(APIView):
                      'redirect': f'{domain}/api/v1/register/{user.mu_id}/'}
 
         send_dashboard_mail(
-            self,
             user_data=user_data,
             subject="AN INVITE TO INSPIRE✨",
             address=[html_address]
@@ -36,12 +34,10 @@ class Referral(APIView):
 
 
 class ReferralListAPI(APIView):
-
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_referral_link = UserReferralLink.objects.filter(user_id=user_id).all()
-        print(user_referral_link)
         serializer = ReferralListSerializer(user_referral_link, many=True).data
         return CustomResponse(response=serializer).get_success_response()

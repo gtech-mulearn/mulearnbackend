@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import dash_zonal_views
 
 urlpatterns = [

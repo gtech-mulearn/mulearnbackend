@@ -93,11 +93,7 @@ class InstitutionsAPI(APIView):
         serializer = OrganisationSerializer(paginated_organizations, many=True)
         return {"data": serializer.data, "pagination": organizations.get("pagination")}
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value,])
     def post(self, request, org_code):
         org_obj = Organization.objects.filter(code=org_code).first()
         if org_obj is None:

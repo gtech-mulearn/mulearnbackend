@@ -1,5 +1,3 @@
-import uuid
-
 from rest_framework.views import APIView
 
 from db.task import InterestGroup
@@ -7,7 +5,7 @@ from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
-from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
+from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import InterestGroupSerializer, InterestGroupCreateSerializer, InterestGroupUpdateSerializer
 
 
@@ -61,7 +59,6 @@ class InterestGroupAPI(APIView):
             )
             return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
-
 
     @role_required([RoleType.ADMIN.value, ])
     def delete(self, request, pk):

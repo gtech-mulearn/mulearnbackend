@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from db.organization import District, Zone, State, Country
 
 
@@ -24,4 +25,3 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ["id", "name", "zone", "updated_at", "created_at", "updated_by", "created_by"]
-
