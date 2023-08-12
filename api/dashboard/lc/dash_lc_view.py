@@ -1,17 +1,19 @@
-from rest_framework.views import APIView
-from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
-from db.user import User
-from db.organization import UserOrganizationLink
-from api.notification.notifications_utils import NotificationUtils
-from utils.permission import JWTUtils
 from decouple import config
+from rest_framework.views import APIView
+
+from api.notification.notifications_utils import NotificationUtils
+from db.learning_circle import LearningCircle, UserCircleLink
+from db.organization import UserOrganizationLink
+from db.user import User
+from utils.permission import JWTUtils
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType
+from utils.types import OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer
 
 domain = config("FR_DOMAIN_NAME")
+
 
 class LearningCircleAPI(APIView):
     def get(self, request):  # lists the learning circle in the user's college
@@ -20,7 +22,7 @@ class LearningCircleAPI(APIView):
                                                      org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
                                                                                                                flat=True).first()
         learning_queryset = LearningCircle.objects.filter(org=org_id).exclude(
-            usercirclelink__accepted=1,usercirclelink__user_id=user_id
+            usercirclelink__accepted=1, usercirclelink__user_id=user_id
         )
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()

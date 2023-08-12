@@ -62,7 +62,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user_id.filter(
-            org__org_type=OrganizationType.COLLEGE.value
+                org__org_type=OrganizationType.COLLEGE.value
         ).first():
             return user_org_link.org.code
         return None
@@ -117,12 +117,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
             total_ig_karma = (
                 0
                 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
+                   .aggregate(Sum("karma"))
+                   .get("karma__sum")
+                   is None
                 else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
+                   .aggregate(Sum("karma"))
+                   .get("karma__sum")
             )
             interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
@@ -234,7 +234,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        communities = instance.user_organization_link_user_id.filter(org__org_type=OrganizationType.COMMUNITY.value).all()
+        communities = instance.user_organization_link_user_id.filter(
+            org__org_type=OrganizationType.COMMUNITY.value).all()
         data["communities"] = ([community.org_id for community in communities] if communities else [])
         return data
 

@@ -85,9 +85,7 @@ class KKEMIndividualKarmaAPI(APIView):
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
         request.data["verified"] = False
-        serialized_set = KKEMAuthorization(
-            data=request.data, context={"type": "register"}
-        )
+        serialized_set = KKEMAuthorization(data=request.data, context={"type": "register"})
 
         try:
             if not serialized_set.is_valid():

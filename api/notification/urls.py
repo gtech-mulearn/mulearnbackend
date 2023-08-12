@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import notification_view
 
 urlpatterns = [
@@ -6,4 +7,4 @@ urlpatterns = [
     path('delete/id/<str:notification_id>/', notification_view.NotificationDeleteAPI.as_view(),
          name='delete-notification'),
     path('delete/all/', notification_view.NotificationDeleteAllAPI.as_view(), name='delete-all-notification'),
-    ]
+]

@@ -28,7 +28,6 @@ class TaskApi(APIView):
             created_by_last_name=F('created_by__last_name')
         )
 
-
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset, request,
             search_fields=["title", "channel_name", "org_title", "description", "karma", "usage_count",
@@ -175,20 +174,6 @@ class ImportTaskListCSV(APIView):
                 valid_rows.append(row)
 
         return CustomResponse(response={"Success": valid_rows, "Failed": error_rows}).get_success_response()
-        # workbook = Workbook()
-        # valid_sheet = workbook.active
-        # valid_headers = list(valid_rows[0].keys())
-        # valid_sheet.append(valid_headers)
-        #
-        # error_sheet = workbook.create_sheet(title='Invalid Rows')
-        # error_headers = list(error_rows[0].keys())
-        # error_sheet.append(error_headers)
-
-        # for row in valid_rows:
-        #     valid_sheet.append([row.get(header, '') for header in valid_headers])
-        #
-        # for row in error_rows:
-        #     error_sheet.append([row.get(header, '') for header in error_headers])
 
 
 class TaskGetAPI(APIView):

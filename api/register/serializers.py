@@ -41,7 +41,8 @@ class DistrictSerializer(serializers.ModelSerializer):
     class Meta:
         model = District
         fields = ["id", "name"]
-        
+
+
 class OrgSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization

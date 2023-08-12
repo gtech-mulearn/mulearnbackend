@@ -121,6 +121,7 @@ class JWTUtils:
 
             user_id = payload.get("id")
             expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
+            print(expiry,DateTimeUtils.get_current_utc_time())
 
             if not user_id or expiry < DateTimeUtils.get_current_utc_time():
                 raise CustomException("Token Expired or Invalid")
