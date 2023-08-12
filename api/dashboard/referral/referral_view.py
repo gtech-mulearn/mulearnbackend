@@ -1,16 +1,14 @@
-from datetime import datetime, timedelta
-
 import decouple
-import jwt
-import pytz
-from django.core.mail import send_mail
 from rest_framework.views import APIView
 
 from db.user import UserReferralLink
 from mulearnbackend.settings import SECRET_KEY
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+
+from db.user import UserReferralLink, User
 from .serializer import ReferralListSerializer
+from .. import dashboard_helper
 
 
 class Referral(APIView):
@@ -18,25 +16,23 @@ class Referral(APIView):
 
     def post(self, request):
         receiver_email = request.data.get('email')
-        receiver_name = request.data.get('name')
+        if User.objects.filter(email=receiver_email).exists():
+            return CustomResponse(general_message="User already exist").get_failure_response()
+
         user_id = JWTUtils.fetch_user_id(request)
+        html_address = "user_email_referral.html"
         domain = decouple.config("DOMAIN_NAME")
-        expiration_time = datetime.now(pytz.utc) + timedelta(hours=1)
 
-        payload = {
-            "user_id": user_id,
-            "user_email": decouple.config('EMAIL_HOST_USER'),
-            "exp": expiration_time,
-        }
+        user = User.objects.filter(id=user_id).first()
+        user_data = {'full_name': user.fullname, 'email': receiver_email, 'muid': user.mu_id,
+                     'redirect': f'{domain}/api/v1/register/{user.mu_id}'}
 
-        token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
-
-        send_mail(
-            subject='AN INVITE TO INSPIRE✨',
-            message=f"{domain}/api/v1/register/{token}/",
-            from_email=decouple.config('EMAIL_HOST_USER'),
-            recipient_list=[receiver_email],
-            fail_silently=False)
+        dashboard_helper.send_dashboard_mail(
+            self,
+            user_data=user_data,
+            subject="AN INVITE TO INSPIRE✨",
+            address=[html_address]
+        )
 
         return CustomResponse(general_message='Invited successfully').get_success_response()
 
