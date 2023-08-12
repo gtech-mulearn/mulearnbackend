@@ -4,7 +4,8 @@ from db.user import UserReferralLink
 
 
 class ReferralListSerializer(serializers.ModelSerializer):
-    full_name = serializers.CharField(source='user.full_name')
+    id = serializers.CharField(source='referral.id')
+    full_name = serializers.CharField(source='referral.fullname')
 
     class Meta:
         model = UserReferralLink

@@ -1,5 +1,6 @@
 import csv
 import datetime
+from email.mime import base
 import gzip
 import io
 
@@ -18,25 +19,27 @@ from django.template.loader import render_to_string
 
 class CommonUtils:
     @staticmethod
-    def get_paginated_queryset(queryset: QuerySet, request, search_fields, sort_fields={}) -> QuerySet:
+    def get_paginated_queryset(
+        queryset: QuerySet, request, search_fields, sort_fields={}
+    ) -> QuerySet:
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage", 10))
-        search_query = request.query_params.get('search')
-        sort_by = request.query_params.get('sortBy')
+        search_query = request.query_params.get("search")
+        sort_by = request.query_params.get("sortBy")
 
         if search_query:
             query = Q()
             for field in search_fields:
-                query |= Q(**{f'{field}__icontains': search_query})
+                query |= Q(**{f"{field}__icontains": search_query})
 
             queryset = queryset.filter(query)
 
         if sort_by:
-            sort = sort_by[1:] if sort_by.startswith('-') else sort_by
+            sort = sort_by[1:] if sort_by.startswith("-") else sort_by
             sort_field_name = sort_fields.get(sort)
             if sort_field_name:
-                if sort_by.startswith('-'):
-                    sort_field_name = '-' + sort_field_name
+                if sort_by.startswith("-"):
+                    sort_field_name = "-" + sort_field_name
 
                 queryset = queryset.order_by(sort_field_name)
 
@@ -55,16 +58,18 @@ class CommonUtils:
                 "totalPages": paginator.num_pages,
                 "isNext": queryset.has_next(),
                 "isPrev": queryset.has_previous(),
-                "nextPage": queryset.next_page_number() if queryset.has_next() else None
-            }
+                "nextPage": queryset.next_page_number()
+                if queryset.has_next()
+                else None,
+            },
         }
 
         return return_data
 
     @staticmethod
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
-        response = HttpResponse(content_type='text/csv')
-        response['Content-Disposition'] = f'attachment; filename="{csv_name}.csv"'
+        response = HttpResponse(content_type="text/csv")
+        response["Content-Disposition"] = f'attachment; filename="{csv_name}.csv"'
         fieldnames = list(queryset[0].keys())
         writer = csv.DictWriter(response, fieldnames=fieldnames)
         writer.writeheader()
@@ -72,10 +77,12 @@ class CommonUtils:
 
         compressed_response = HttpResponse(
             gzip.compress(response.content),
-            content_type='text/csv',
+            content_type="text/csv",
         )
-        compressed_response['Content-Disposition'] = f'attachment; filename="{csv_name}.csv"'
-        compressed_response['Content-Encoding'] = 'gzip'
+        compressed_response[
+            "Content-Disposition"
+        ] = f'attachment; filename="{csv_name}.csv"'
+        compressed_response["Content-Encoding"] = "gzip"
 
         return compressed_response
 
@@ -129,18 +136,16 @@ class DiscordWebhooks:
     def general_updates(category, action, *values) -> str:
         """
         Modify channels and category in Discord
-		Args:
+                Args:
         category(str): Category of webhook
         action(str): action of webhook
         values(str): values of webhook
-		"""
+        """
         content = f"{category}<|=|>{action}"
         for value in values:
             content = f"{content}<|=|>{value}"
         url = config("DISCORD_WEBHOOK_LINK")
-        data = {
-            "content": content
-        }
+        data = {"content": content}
         requests.post(url, json=data)
 
 
@@ -160,7 +165,7 @@ class ImportCSV:
         return rows
 
 
-def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
+def send_template_mail(context: dict, subject: str, address: list[str]):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
@@ -174,15 +179,17 @@ def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
     """
 
     email_host_user = decouple.config("EMAIL_HOST_USER")
+    base_url = decouple.config("FR_DOMAIN_NAME")
+    
     email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}", {"user": user_data}
+        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url" : base_url}
     )
 
     send_mail(
         subject=subject,
         message=email_content,
         from_email=email_host_user,
-        recipient_list=[user_data["email"]],
+        recipient_list=[context["email"]],
         html_message=email_content,
         fail_silently=False,
     )
