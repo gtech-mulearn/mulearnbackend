@@ -295,7 +295,6 @@ class ForgotPasswordAPI(APIView):
                      'redirect': f'{domain}/reset-password?token={forget_user.id}/'}
         # domain = f'{domain}/api/v1/dashboard/user/reset-password/{forget_user.id}/'
         send_dashboard_mail(
-            self,
             user_data=user_data,
             subject='Password Reset Requested',
             address=html_address
