@@ -8,7 +8,7 @@ from utils.response import CustomResponse
 
 from db.user import UserReferralLink, User
 from .serializer import ReferralListSerializer
-from .. import dashboard_helper
+from utils.utils import send_dashboard_mail
 
 
 class Referral(APIView):
@@ -27,7 +27,7 @@ class Referral(APIView):
         user_data = {'full_name': user.fullname, 'email': receiver_email, 'muid': user.mu_id,
                      'redirect': f'{domain}/api/v1/register/{user.mu_id}'}
 
-        dashboard_helper.send_dashboard_mail(
+        send_dashboard_mail(
             self,
             user_data=user_data,
             subject="AN INVITE TO INSPIRE✨",
