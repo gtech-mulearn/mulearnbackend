@@ -10,9 +10,6 @@ from db.user import UserReferralLink
 from mulearnbackend.settings import SECRET_KEY
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from mulearnbackend.settings import SECRET_KEY
-
-from db.user import UserReferralLink, User
 from .serializer import ReferralListSerializer
 
 
