@@ -13,8 +13,8 @@ class Referral(APIView):
 
     def post(self, request):
         receiver_email = request.data.get('email')
-        # if User.objects.filter(email=receiver_email).exists():
-        #     return CustomResponse(general_message="User already exist").get_failure_response()
+        if User.objects.filter(email=receiver_email).exists():
+            return CustomResponse(general_message="User already exist").get_failure_response()
 
         user_id = JWTUtils.fetch_user_id(request)
         html_address = "user_email_referral.html"
