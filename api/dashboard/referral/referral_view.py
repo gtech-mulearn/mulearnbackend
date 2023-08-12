@@ -1,14 +1,11 @@
 import decouple
 from rest_framework.views import APIView
 
-from db.user import UserReferralLink
-from mulearnbackend.settings import SECRET_KEY
+from db.user import UserReferralLink, User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-
-from db.user import UserReferralLink, User
-from .serializer import ReferralListSerializer
 from utils.utils import send_dashboard_mail
+from .serializer import ReferralListSerializer
 
 
 class Referral(APIView):
@@ -28,7 +25,6 @@ class Referral(APIView):
                      'redirect': f'{domain}/api/v1/register/{user.mu_id}'}
 
         send_dashboard_mail(
-            self,
             user_data=user_data,
             subject="AN INVITE TO INSPIRE✨",
             address=[html_address]
