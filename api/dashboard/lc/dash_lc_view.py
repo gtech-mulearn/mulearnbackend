@@ -51,7 +51,7 @@ class LearningCircleJoinApi(APIView):
                                                   title="Member Request",
                                                   description=f"{full_name} has requested to join your learning circle",
                                                   button="LC",
-                                                  url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
+                                                  url=f'{domain}/api/v1/dashboard/lc/{circle_id}/{user_id}/',
                                                   created_by=user)
             return CustomResponse(general_message='Request sent').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
