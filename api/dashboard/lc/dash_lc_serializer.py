@@ -57,6 +57,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                        org__org_type=OrganizationType.COLLEGE.value).first()
+
         ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
         code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2]
         existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
@@ -111,7 +112,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     def get_total_karma(self, obj):
         return TotalKarma.objects.filter(user__usercirclelink__circle=obj, user__usercirclelink__accepted=1).aggregate(
             total_karma=Sum('karma'))[
-            'total_karma'] or 0
+                   'total_karma'] or 0
 
     def get_members(self, obj):
         return self._get_member_info(obj, accepted=1)
@@ -132,6 +133,16 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         ]
 
     def get_rank(self, obj):
+        # print(obj.ig)
+        for i in UserCircleLink.objects.filter(user__usercirclelink__circle__ig=obj.ig, accepted=True):
+            print(i)
+        #
+        # total_karma_sum = LearningCircle.objects.filter(ig=obj.ig).aggregate(
+        #     total_karma_sum=Sum('usercirclelink__user__total_karma_user__karma')
+        # )['total_karma_sum'] or 0
+        # print(total_karma_sum)
+
+
         rank = UserCircleLink.objects.filter(user__usercirclelink__circle=obj, accepted=True,
                                              user__total_karma_user__isnull=False).values('circle_id').annotate(
             total_karma=Sum('user__total_karma_user__karma')

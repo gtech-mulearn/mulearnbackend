@@ -1,6 +1,8 @@
 import decouple
 from rest_framework.views import APIView
 
+from db.user import UserReferralLink
+from mulearnbackend.settings import SECRET_KEY
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 
@@ -36,12 +38,10 @@ class Referral(APIView):
 
 
 class ReferralListAPI(APIView):
-
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_referral_link = UserReferralLink.objects.filter(user_id=user_id).all()
-        print(user_referral_link)
         serializer = ReferralListSerializer(user_referral_link, many=True).data
         return CustomResponse(response=serializer).get_success_response()

@@ -16,7 +16,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks
-
 from . import dash_user_serializer
 
 
@@ -275,9 +274,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

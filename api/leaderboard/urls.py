@@ -1,4 +1,5 @@
 from django.urls import path
+
 from . import leadrboard_view
 
 urlpatterns = [
