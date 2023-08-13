@@ -4,8 +4,6 @@ import decouple
 import jwt
 import pytz
 import requests
-from django.core.mail import send_mail
-from django.template.loader import render_to_string
 
 from db.integrations import Integration
 from mulearnbackend.settings import SECRET_KEY
