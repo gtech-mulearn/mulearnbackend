@@ -113,7 +113,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
         user_org_link = UserOrganizationLink.objects. \
             filter(org__district__name=obj.org.district.name,
                    user__user_role_link_user__role__title='District Campus Lead').first()
-        return user_org_link.user.fullname
+        return user_org_link.user.fullname if user_org_link else None
 
     def get_karma(self, obj):
         user_org_link = UserOrganizationLink.objects.filter(org__district__name=obj.org.district.name).aggregate(

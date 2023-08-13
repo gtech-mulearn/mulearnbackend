@@ -170,7 +170,7 @@ def send_template_mail(context: dict, subject: str, address: list[str]):
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
 
-    :param user_data: A dictionary containing user data such as name, email, and any other relevant
+    :param context: A dictionary containing user data such as name, email, and any other relevant
     information
     :param subject: The subject of the email that will be sent to the user
     :param address: The `address` parameter is a list of strings that represents the path to the email
@@ -182,7 +182,7 @@ def send_template_mail(context: dict, subject: str, address: list[str]):
     base_url = decouple.config("FR_DOMAIN_NAME")
     
     email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url" : base_url}
+        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
     )
 
     send_mail(
