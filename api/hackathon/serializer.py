@@ -6,9 +6,10 @@ from django.db import transaction
 from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
-from db.organization import Organization, District
+from db.organization import Organization, District, UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
 
@@ -320,6 +321,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source='district.name', allow_null=True)
     org_id = serializers.CharField(source='org.id', allow_null=True)
     district_id = serializers.CharField(source='district.id', allow_null=True)
+    user_info = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -327,7 +329,10 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
                   'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
-                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id')
+                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id'
+                                                                       'user_info'
+
+                  )
 
     def get_banner(self, obj):
         media = obj.banner
@@ -340,6 +345,14 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
         if media:
             return f"{settings.MEDIA_URL}{media}"
         return None
+
+    def get_user_info(self, obj):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        user = User.objects.filter(id=user_id).first()
+        user_org_link = UserOrganizationLink.objects.filter(user=user,
+                                                            org__org_type=OrganizationType.COLLEGE.value).first()
+        return {'name': user.fullname, 'gender': user.gender, 'email': user.email, 'mobile': user.mobile,
+                'college': user_org_link.org.title}
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
