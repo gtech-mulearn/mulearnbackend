@@ -107,7 +107,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
         user_org_link = UserOrganizationLink.objects. \
             filter(org__district__zone__name=obj.org.district.zone.name,
                    user__user_role_link_user__role__title=RoleType.ZONAL_CAMPUS_LEAD.value).first()
-        return user_org_link.user.fullname
+        return user_org_link.user.fullname if user_org_link else None
 
     def get_karma(self, obj):
         user_org_link = UserOrganizationLink.objects.filter(

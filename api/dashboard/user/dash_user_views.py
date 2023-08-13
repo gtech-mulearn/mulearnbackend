@@ -290,16 +290,14 @@ class ForgotPasswordAPI(APIView):
         )
 
         receiver_mail = user.email
-        domain = decouple.config("FR_DOMAIN_NAME")
         html_address = ["forgot_password.html"]
-        user_data = {
+        context = {
             "email": receiver_mail,
-            "redirect": f"{domain}/reset-password?token={forget_user.id}/",
+            "token": forget_user.id,
         }
-        # domain = f'{domain}/api/v1/dashboard/user/reset-password/{forget_user.id}/'
-
+        
         send_template_mail(
-            context=user_data,
+            context=context,
             subject="Password Reset Requested",
             address=html_address,
         )
