@@ -17,6 +17,7 @@ def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
     """
 
     email_host_user = decouple.config("EMAIL_HOST_USER")
+    from_mail = decouple.config('FROM_MAIL')
     email_content = render_to_string(
         f"mails/{'/'.join(map(str, address))}", {"user": user_data}
     )
@@ -24,7 +25,7 @@ def send_dashboard_mail(user_data: dict, subject: str, address: list[str]):
     send_mail(
         subject=subject,
         message=email_content,
-        from_email=email_host_user,
+        from_email=from_mail,
         recipient_list=[user_data["email"]],
         html_message=email_content,
         fail_silently=False,
