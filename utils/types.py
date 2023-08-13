@@ -59,9 +59,9 @@ DEFAULT_HACKATHON_FORM_FIELDS = {
     'gender': 'system',
     'email': 'system',
     'mobile': 'system',
-    'bio': 'system',
     'college': 'system',
     'experience': 'input',
     'github': 'input',
     'linkedin': 'input',
+    'bio': 'input',
 }
