@@ -13,7 +13,7 @@ from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
-from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_dashboard_mail
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 
 
@@ -38,9 +38,12 @@ class UserEditAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
-        user = User.objects.get(id=user_id)
-        serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
-        return CustomResponse(response=serializer).get_success_response()
+        try:
+            user = User.objects.get(id=user_id)
+            serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
+            return CustomResponse(response=serializer).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
@@ -52,7 +55,7 @@ class UserEditAPI(APIView):
                 general_message="User deleted successfully"
             ).get_success_response()
 
-        except ObjectDoesNotExist as e:
+        except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -239,7 +242,7 @@ class UserVerificationAPI(APIView):
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER_ROLE.value,
                 WebHookActions.UPDATE.value,
-                user_data["user_id"]
+                user_data["user_id"],
             )
 
             dashboard_helper.send_dashboard_mail(
@@ -272,9 +275,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(mu_id=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -282,22 +285,26 @@ class ForgotPasswordAPI(APIView):
 
         created_at = DateTimeUtils.get_current_utc_time()
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
-        forget_user = ForgotPassword.objects.create(id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at)
-
-        receiver_mail = user.email
-        domain = decouple.config("FR_DOMAIN_NAME")
-        html_address = ["forgot_password.html"]
-        user_data = {'email': receiver_mail,
-                     'redirect': f'{domain}/reset-password?token={forget_user.id}/'}
-        # domain = f'{domain}/api/v1/dashboard/user/reset-password/{forget_user.id}/'
-        
-        send_dashboard_mail(
-            user_data=user_data,
-            subject='Password Reset Requested',
-            address=html_address
+        forget_user = ForgotPassword.objects.create(
+            id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )
 
-        return CustomResponse(general_message="Forgot Password Email Send Successfully").get_success_response()
+        receiver_mail = user.email
+        html_address = ["forgot_password.html"]
+        context = {
+            "email": receiver_mail,
+            "token": forget_user.id,
+        }
+        
+        send_template_mail(
+            context=context,
+            subject="Password Reset Requested",
+            address=html_address,
+        )
+
+        return CustomResponse(
+            general_message="Forgot Password Email Send Successfully"
+        ).get_success_response()
 
 
 class ResetPasswordVerifyTokenAPI(APIView):

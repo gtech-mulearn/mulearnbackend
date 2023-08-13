@@ -38,10 +38,10 @@ class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, ])
-    def get(self, request, url):
+    def get(self, request, org_type):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
-        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=url)
+        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=org_type)
         paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'],
                                                                 {'name': 'user__full_name',
                                                                  'muid': 'user__mu_id',
@@ -63,11 +63,11 @@ class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, ])
-    def get(self, request, url):
+    def get(self, request, org_type):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
 
-        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=url)
+        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=org_type)
         serializer = serializers.CampusStudentDetailsSerializer(user_org_links, many=True)
         return CommonUtils.generate_csv(serializer.data, 'Campus Details')
 

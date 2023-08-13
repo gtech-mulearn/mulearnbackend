@@ -54,37 +54,6 @@ def generate_confirmation_token(authorization_id: str) -> str:
     return jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
 
-def send_integration_mail(
-        user_data: dict, token: str, subject: str, address: list[str]
-) -> None:
-    """
-    Send an integration-related email to the user.
-
-    This function composes and sends an integration-related email to the specified user.
-
-    :param user_data: A dictionary containing user data, such as 'username', 'email', etc.
-    :param token: The integration token used for identification or authorization.
-    :param subject: The subject of the email.
-    :param address: The address of the email template within the 'mails' folder.
-                    This should be a list of strings representing the path segments.
-    """
-    email_host_user = decouple.config("EMAIL_HOST_USER")
-    base_url = decouple.config("FR_DOMAIN_NAME")
-
-    email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}",
-        {"user": user_data, "base_url": base_url, "token": token},
-    )
-
-    send_mail(
-        subject=subject,
-        message=email_content,
-        from_email=email_host_user,
-        recipient_list=[user_data["email"]],
-        html_message=email_content,
-    )
-
-
 def token_required(integration_name: str):
     """
     The `token_required` function is a decorator that checks if a valid token is present in the
