@@ -329,8 +329,8 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
                   'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
-                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id'
-                                                                       'user_info'
+                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id',
+                  'user_info'
 
                   )
 
