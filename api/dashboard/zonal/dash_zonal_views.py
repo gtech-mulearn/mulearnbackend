@@ -192,6 +192,7 @@ class ZonalStudentDetailsAPI(APIView):
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
         user_org_links = UserOrganizationLink.objects.filter(org__district__zone_id=user_org_link.org.district.zone.id,
                                                              org__org_type=url)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'],
                                                                 {'name': 'user__full_name',
                                                                  'muid': 'user__mu_id',
