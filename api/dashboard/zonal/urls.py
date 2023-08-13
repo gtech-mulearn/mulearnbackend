@@ -10,6 +10,6 @@ urlpatterns = [
     path("zonal-details/", dash_zonal_views.ZonalDetailsAPI.as_view()),
     path("top-districts/", dash_zonal_views.ZonalTopThreeDistrictAPI.as_view()),
     path("student-level/", dash_zonal_views.ZonalStudentLevelStatusAPI.as_view()),
-    path("student-details/<str:url>/", dash_zonal_views.ZonalStudentDetailsAPI.as_view()),
-    path("student-details/<str:url>/csv/", dash_zonal_views.ZonalStudentDetailsCSVAPI.as_view()),
+    path("student-details/<str:org_type>/", dash_zonal_views.ZonalStudentDetailsAPI.as_view()),
+    path("student-details/<str:org_type>/csv/", dash_zonal_views.ZonalStudentDetailsCSVAPI.as_view()),
 ]
