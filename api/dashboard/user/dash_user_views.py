@@ -275,9 +275,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -295,7 +295,7 @@ class ForgotPasswordAPI(APIView):
             "email": receiver_mail,
             "token": forget_user.id,
         }
-        
+
         send_template_mail(
             context=context,
             subject="Password Reset Requested",
@@ -357,13 +357,14 @@ class UserInviteAPI(APIView):
             ).get_failure_response()
 
         email_host_user = decouple.config("EMAIL_HOST_USER")
+        domain = decouple.config('FR_DOMAIN_NAME')
+        from_mail = decouple.config('FROM_MAIL')
         to = [email]
-        domain = decouple.config("FR_DOMAIN_NAME")
         message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
         send_mail(
             "Invitation to join MuLearn",
             message,
-            email_host_user,
+            from_mail,
             to,
             fail_silently=False,
         )
