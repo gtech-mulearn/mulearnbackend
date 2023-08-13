@@ -193,6 +193,8 @@ class KKEMdetailsFetchAPI(APIView):
                 "req_status", False
             ):
                 result_data = response_data["response"]["data"]
+            else:
+                raise ValueError("Something went wrong!")
 
             return CustomResponse(response=result_data).get_success_response()
 
