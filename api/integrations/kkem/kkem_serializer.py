@@ -1,6 +1,7 @@
 from django.db.models import Q
 from django.db.models import Sum
 from django.db.utils import IntegrityError
+import requests
 from rest_framework import serializers
 
 from db.integrations import IntegrationAuthorization, Integration
@@ -19,7 +20,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         karma = (
             obj.total_karma_user.karma
             if hasattr(obj, "total_karma_user")
-               and hasattr(obj.total_karma_user, "karma")
+            and hasattr(obj.total_karma_user, "karma")
             else 0
         )
         return karma
@@ -30,12 +31,12 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             total_ig_karma = (
                 0
                 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
-                   is None
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
+                is None
                 else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
             )
             interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
@@ -63,14 +64,27 @@ class KKEMAuthorization(serializers.ModelSerializer):
         user_mu_id = validated_data["user"]["mu_id"]
 
         if not (
-                user := User.objects.filter(
-                    Q(mu_id=user_mu_id) | Q(email=user_mu_id)
-                ).first()
+            user := User.objects.filter(
+                Q(mu_id=user_mu_id) | Q(email=user_mu_id)
+            ).first()
         ):
             raise ValueError("User doesn't exist")
         integration = Integration.objects.get(name=IntegrationType.KKEM.value)
 
         try:
+            response = requests.post(
+                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                data=f'{{"job_seeker_id": {validated_data["integration_value"]}}}',
+                headers={"Authorization": f"Bearer {integration.token}"},
+            )
+            response_data = response.json()
+
+            if (
+                "response" not in response_data
+                or not response_data["response"].get("req_status", False)
+            ):
+                raise ValueError("Invalid jsid")
+
             kkem_link = IntegrationAuthorization.objects.create(
                 integration=integration,
                 user=user,
@@ -86,23 +100,25 @@ class KKEMAuthorization(serializers.ModelSerializer):
             ).first()
 
             if (
-                    not kkem_link
-                    and IntegrationAuthorization.objects.filter(
-                integration_value=validated_data["integration_value"],
-                integration=integration,
-            ).first()
+                not kkem_link
+                and IntegrationAuthorization.objects.filter(
+                    integration_value=validated_data["integration_value"],
+                    integration=integration,
+                ).first()
             ):
                 raise ValueError(
                     "This KKEM account is already connected to another user"
                 ) from e
             elif (
-                    self.context["type"] == "login"
-                    and kkem_link.integration_value == validated_data["integration_value"]
-                    and kkem_link.verified == True
+                self.context["type"] == "login"
+                and kkem_link.integration_value == validated_data["integration_value"]
+                and kkem_link.verified == True
             ):
                 return kkem_link
             elif kkem_link.verified:
-                raise ValueError("Your μLearn account is already connected to a KKEM account") from e
+                raise ValueError(
+                    "Your μLearn account is already connected to a KKEM account"
+                ) from e
             elif kkem_link.user == user:
                 kkem_link.integration_value = validated_data["integration_value"]
                 kkem_link.updated_at = DateTimeUtils.get_current_utc_time()

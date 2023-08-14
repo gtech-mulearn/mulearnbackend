@@ -38,10 +38,11 @@ class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, ])
-    def get(self, request, org_type):
+    def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
-        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=org_type)
+        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id,
+                                                             org__org_type=OrganizationType.COLLEGE.value)
         paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'],
                                                                 {'name': 'user__full_name',
                                                                  'muid': 'user__mu_id',
@@ -49,12 +50,6 @@ class CampusStudentDetailsAPI(APIView):
                                                                  'level': 'user__user_level_link_user__level__'
                                                                           'level_order'})
         serializer = serializers.CampusStudentDetailsSerializer(paginated_queryset.get('queryset'), many=True).data
-
-        # sorted_persons = sorted(serializer, key=lambda x: x['karma'], reverse=True)
-        # for i, person in enumerate(sorted_persons):
-        #     person['rank'] = i + 1
-        # sorted_data = sorted(serializer, key=lambda x: x["fullname"], reverse=True)
-
         return CustomResponse(response={"data": serializer, 'pagination': paginated_queryset.get(
             'pagination')}).get_success_response()
 
@@ -63,11 +58,12 @@ class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, ])
-    def get(self, request, org_type):
+    def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
 
-        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id, org__org_type=org_type)
+        user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id,
+                                                             org__org_type=OrganizationType.COLLEGE.value)
         serializer = serializers.CampusStudentDetailsSerializer(user_org_links, many=True)
         return CommonUtils.generate_csv(serializer.data, 'Campus Details')
 
