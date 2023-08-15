@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Organization
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -194,8 +194,10 @@ class DistrictTopThreeCampusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
-        org_user_district = UserOrganizationLink.objects.filter(org__district__name=user_org_link.org.district.name)
-        serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(org_user_district, many=True).data
+        user_organizations = Organization.objects.filter(
+            district__name=user_org_link.org.district.name,
+            user_organization_link_org_id__user__total_karma_user__isnull=False).distinct()
+        serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(user_organizations, many=True).data
         sorted_serializer = sorted(serializer, key=lambda x: x['rank'])[:3]
         return CustomResponse(response=sorted_serializer).get_success_response()
 
