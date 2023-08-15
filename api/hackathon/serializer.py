@@ -414,10 +414,9 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
         try:
             data = json.loads(obj.data.replace("'", "\""))
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
-                if value == 'system':
-                    if not data.get(field):
-                        print(User.objects.filter(id=obj.user.id).first())
-                        data[field] = 'system'
+                if value == 'system' and not data.get(field):
+                    print(User.objects.filter(id=obj.user.id).first())
+                    data[field] = 'system'
             return data
         except json.JSONDecodeError:
             return {}
@@ -466,10 +465,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
 
     def get_form_fields(self, obj):
         hackathon = HackathonForm.objects.filter(hackathon=obj)
-        fields = []
-        for i in hackathon:
-            fields.append(i.field_name)
-        return fields
+        return [i.field_name for i in hackathon]
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
