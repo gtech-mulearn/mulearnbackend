@@ -6,10 +6,10 @@ from django.db import transaction
 from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
-from db.organization import Organization, District, UserOrganizationLink
+from db.organization import Organization, District
 from db.user import User
 from utils.permission import JWTUtils
-from utils.types import OrganizationType
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.utils import DateTimeUtils
 
 
@@ -243,6 +243,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         hackathon = Hackathon.objects.filter(id=value).first()
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
+
         existing_submission = HackathonUserSubmission.objects.filter(hackathon_id=value,
                                                                      user_id=self.context.get('user_id')).first()
         if existing_submission:
@@ -309,7 +310,13 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
 
     def get_data(self, obj):
         try:
-            return json.loads(obj.data.replace("'", "\""))
+            data = json.loads(obj.data.replace("'", "\""))
+            for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
+                if value == 'system':
+                    if not data.get(field):
+                        print(User.objects.filter(id=obj.user.id).first())
+                        data[field] = 'system'
+            return data
         except json.JSONDecodeError:
             return {}
 
@@ -321,7 +328,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source='district.name', allow_null=True)
     org_id = serializers.CharField(source='org.id', allow_null=True)
     district_id = serializers.CharField(source='district.id', allow_null=True)
-    user_info = serializers.SerializerMethodField()
+    form_fields = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -329,8 +336,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
                   'title', 'tagline', 'description', 'participant_count', 'organisation', 'district', 'place',
                   'is_open_to_all', 'application_start', 'application_ends', 'event_start', 'event_end',
                   'status',
-                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id',
-                  'user_info'
+                  'banner', 'event_logo', 'type', 'website', 'org_id', 'district_id', 'form_fields'
 
                   )
 
@@ -346,13 +352,12 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
             return f"{settings.MEDIA_URL}{media}"
         return None
 
-    def get_user_info(self, obj):
-        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        user = User.objects.filter(id=user_id).first()
-        user_org_link = UserOrganizationLink.objects.filter(user=user,
-                                                            org__org_type=OrganizationType.COLLEGE.value).first()
-        return {'name': user.fullname, 'gender': user.gender, 'email': user.email, 'mobile': user.mobile,
-                'college': user_org_link.org.title}
+    def get_form_fields(self, obj):
+        hackathon = HackathonForm.objects.filter(hackathon=obj)
+        fields = []
+        for i in hackathon:
+            fields.append(i.field_name)
+        return fields
 
 
 class OrganisationSerializer(serializers.ModelSerializer):
