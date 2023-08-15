@@ -31,11 +31,7 @@ from .serializers import (
 class InstitutionCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, org_type):
         org_objs = Organization.objects.filter(org_type=org_type).prefetch_related(
             "affiliation", "district__zone__state__country"
@@ -162,11 +158,7 @@ class GetInstitutionsAPI(APIView):
             pagination=paginated_organisations.get("pagination"),
         )
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def post(self, request, organisation_type):
         district_name = request.data.get("district")
         district = District.objects.filter(name=district_name).first()
@@ -188,11 +180,7 @@ class GetInstitutionsAPI(APIView):
 class PostInstitutionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -279,11 +267,7 @@ class PostInstitutionAPI(APIView):
             general_message=organisation_serializer.errors
         ).get_failure_response()
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def put(self, request, org_code):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -420,11 +404,7 @@ class PostInstitutionAPI(APIView):
             general_message=organisation_serializer.errors
         ).get_failure_response()
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, org_code):
         organisation = Organization.objects.filter(code=org_code).first()
         org_type = organisation.org_type
@@ -470,11 +450,7 @@ class AffiliationAPI(APIView):
             data=data, pagination=paginated_queryset.get("pagination")
         )
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -512,11 +488,7 @@ class AffiliationAPI(APIView):
             general_message=affiliation_serializer.errors
         ).get_failure_response()
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -551,11 +523,7 @@ class AffiliationAPI(APIView):
             general_message=affiliation_serializer.errors
         ).get_failure_response()
 
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request):
         title = request.data.get("title")
         affiliation = OrgAffiliation.objects.filter(title=title).first()
