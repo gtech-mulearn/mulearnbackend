@@ -1,32 +1,27 @@
-from multiprocessing import context
 import uuid
 
 from rest_framework.views import APIView
 
-from db.organization import Country, State, District, Zone
-from utils.permission import CustomizePermission, JWTUtils, DateTimeUtils, role_required
+from db.organization import Country, District, State, Zone
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from .location_serializer import (
-    CountrySerializer,
-    StateSerializer,
-    DistrictSerializer,
-    ZoneSerializer,
-)
+
+from .location_serializer import CountrySerializer
 
 
 class CountryDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request, country_id = None):
+    def get(self, request, country_id=None):
         try:
             if country_id:
                 countries = Country.objects.filter(id=country_id)
             else:
                 countries = Country.objects.all()
-                
+
             paginated_queryset = CommonUtils.get_paginated_queryset(
                 countries, request, ["name"], {"name": "name"}
             )
