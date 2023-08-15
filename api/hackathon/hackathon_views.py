@@ -13,7 +13,7 @@ from db.organization import District, Organization
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, RoleType
-from . import hackathon_serializer
+from . import serializer
 
 
 class HackathonManagementAPI(APIView):
@@ -26,7 +26,7 @@ class HackathonManagementAPI(APIView):
             hackathons_queryset = Hackathon.objects.filter(
                 event_start__gt=datetime.now()
             ).all()
-            serializer = hackathon_serializer.UpcomingHackathonRetrievalSerializer(
+            serializer = serializer.UpcomingHackathonRetrievalSerializer(
                 hackathons_queryset, many=True
             )
         elif hackathon_id:
@@ -36,21 +36,21 @@ class HackathonManagementAPI(APIView):
                 return CustomResponse(
                     general_message="Hackathon Does Not Exist"
                 ).get_failure_response()
-            serializer = hackathon_serializer.HackathonRetrievalSerializer(
+            serializer = serializer.HackathonRetrievalSerializer(
                 hackathons_queryset
             )
         else:
             hackathons_queryset = Hackathon.objects.filter(
                 Q(status="Published") | Q(hackathonorganiserlink__organiser_id=user_id)
             )
-            serializer = hackathon_serializer.HackathonRetrievalSerializer(
+            serializer = serializer.HackathonRetrievalSerializer(
                 hackathons_queryset, many=True, context={"user_id": user_id}
             )
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        serializer = hackathon_serializer.HackathonCreateUpdateDeleteSerializer(
+        serializer = serializer.HackathonCreateUpdateDeleteSerializer(
             data=request.data, context={"request": request}
         )
         if serializer.is_valid():
@@ -68,7 +68,7 @@ class HackathonManagementAPI(APIView):
             return CustomResponse(
                 general_message="Hackathon Does Not Exist"
             ).get_failure_response()
-        serializer = hackathon_serializer.HackathonUpdateSerializer(
+        serializer = serializer.HackathonUpdateSerializer(
             hackathon, data=request.data, context={"request": request}
         )
         if serializer.is_valid():
@@ -85,7 +85,7 @@ class HackathonManagementAPI(APIView):
             return CustomResponse(
                 general_message="Hackathon Does Not Exist"
             ).get_failure_response()
-        serializer = hackathon_serializer.HackathonCreateUpdateDeleteSerializer()
+        serializer = serializer.HackathonCreateUpdateDeleteSerializer()
         serializer.destroy(hackathon)
         return CustomResponse(
             general_message="Hackathon Deleted"
@@ -102,7 +102,7 @@ class HackathonPublishingAPI(APIView):
             return CustomResponse(
                 general_message="Hackathon Does Not Exist"
             ).get_failure_response()
-        serializer = hackathon_serializer.HackathonPublishingSerializer(
+        serializer = serializer.HackathonPublishingSerializer(
             hackathon, data=request.data, context={"request": request}
         )
         if serializer.is_valid():
@@ -119,7 +119,7 @@ class HackathonInfoAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
-        serializer = hackathon_serializer.HackathonInfoSerializer(
+        serializer = serializer.HackathonInfoSerializer(
             hackathon, many=False, context={"request": request}
         )
         return CustomResponse(response=serializer.data).get_success_response()
@@ -141,7 +141,7 @@ class HackathonSubmissionAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        serializer = hackathon_serializer.HackathonUserSubmissionSerializer(
+        serializer = serializer.HackathonUserSubmissionSerializer(
             data=request.data, context={"request": request, "user_id": user_id}
         )
         if serializer.is_valid():
@@ -167,7 +167,7 @@ class ListApplicantsAPI(APIView):
         else:
             data = HackathonUserSubmission.objects.all()
 
-        serializer = hackathon_serializer.ListApplicantsSerializer(data, many=True)
+        serializer = serializer.ListApplicantsSerializer(data, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -179,7 +179,7 @@ class HackathonOrganiserAPI(APIView):
         hackathon_ids = HackathonOrganiserLink.objects.filter(
             hackathon__id=hackathon_id
         )
-        serializer = hackathon_serializer.HackathonOrganiserSerializerRetrieval(
+        serializer = serializer.HackathonOrganiserSerializerRetrieval(
             hackathon_ids, many=True
         )
         return CustomResponse(response=serializer.data).get_success_response()
@@ -191,7 +191,7 @@ class HackathonOrganiserAPI(APIView):
             return CustomResponse(
                 general_message="Hackathon Does Not Exist"
             ).get_failure_response()
-        serializer = hackathon_serializer.HackathonOrganiserSerializer(
+        serializer = serializer.HackathonOrganiserSerializer(
             data=request.data, context={"request": request, "hackathon": hackathon}
         )
         if serializer.is_valid():
@@ -209,7 +209,7 @@ class HackathonOrganiserAPI(APIView):
             return CustomResponse(
                 general_message="Organiser Does Not Exist"
             ).get_failure_response()
-        serializer = hackathon_serializer.HackathonOrganiserSerializer()
+        serializer = serializer.HackathonOrganiserSerializer()
         serializer.destroy(organiser)
         return CustomResponse(
             general_message="Organiser Deleted"
@@ -222,7 +222,7 @@ class ListOrganisations(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         organisations = Organization.objects.all()
-        serializer = hackathon_serializer.OrganisationSerializer(
+        serializer = serializer.OrganisationSerializer(
             organisations, many=True
         )
         return CustomResponse(response=serializer.data).get_success_response()
@@ -234,7 +234,7 @@ class ListDistricts(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         districts = District.objects.all()
-        serializer = hackathon_serializer.DistrictSerializer(districts, many=True)
+        serializer = serializer.DistrictSerializer(districts, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -249,7 +249,7 @@ class ListHackathonFormAPI(APIView):
                 general_message="Hackathon Does Not Exist"
             ).get_failure_response()
         hackathon_form = HackathonForm.objects.filter(hackathon=hackathon)
-        serializer = hackathon_serializer.HackathonFormSerializer(
+        serializer = serializer.HackathonFormSerializer(
             hackathon_form, many=True
         )
         return CustomResponse(response=serializer.data).get_success_response()

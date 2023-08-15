@@ -304,6 +304,22 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
         model = Hackathon
         fields = ("status",)
 
+    def validate(self, attrs):
+        fields = Hackathon._meta.get_fields()
+        null_instances = [
+            field.attname
+            for field in fields
+            if field.get_internal_type() not in ("ForeignKey", "OneToOneField")
+            and getattr(self.instance, field.attname) is None
+        ]
+        if not null_instances:
+            return super().validate(attrs)
+
+        null_field_names = ", ".join(null_instances)
+        raise serializers.ValidationError(
+            f"The following fields are empty: {null_field_names}"
+        )
+
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.status = validated_data.get("status", instance.status)
