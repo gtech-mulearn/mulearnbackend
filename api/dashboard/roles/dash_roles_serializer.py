@@ -47,3 +47,10 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
 
     def get_users_with_role(self, obj):
         return len(UserRoleLink.objects.filter(role_id=obj.id, verified=True))
+
+
+class UserRoleSearchSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = User
+        fields = ["id", "fullname", "mu_id"]
