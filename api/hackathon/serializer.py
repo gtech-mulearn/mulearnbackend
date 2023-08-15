@@ -5,16 +5,11 @@ from django.conf import settings
 from django.db import transaction
 from rest_framework import serializers
 
-from db.hackathon import (
-    Hackathon,
-    HackathonForm,
-    HackathonOrganiserLink,
-    HackathonUserSubmission,
-)
-from db.organization import District, Organization, UserOrganizationLink
+from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
+from db.organization import Organization, District
 from db.user import User
 from utils.permission import JWTUtils
-from utils.types import OrganizationType
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.utils import DateTimeUtils
 
 
@@ -417,7 +412,13 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
 
     def get_data(self, obj):
         try:
-            return json.loads(obj.data.replace("'", '"'))
+            data = json.loads(obj.data.replace("'", "\""))
+            for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
+                if value == 'system':
+                    if not data.get(field):
+                        print(User.objects.filter(id=obj.user.id).first())
+                        data[field] = 'system'
+            return data
         except json.JSONDecodeError:
             return {}
 
@@ -463,19 +464,12 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     def get_event_logo(self, obj):
         return f"{settings.MEDIA_URL}{media}" if (media := obj.event_logo) else None
 
-    def get_user_info(self, obj):
-        user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        user = User.objects.filter(id=user_id).first()
-        user_org_link = UserOrganizationLink.objects.filter(
-            user=user, org__org_type=OrganizationType.COLLEGE.value
-        ).first()
-        return {
-            "name": user.fullname,
-            "gender": user.gender,
-            "email": user.email,
-            "mobile": user.mobile,
-            "college": user_org_link.org.title,
-        }
+    def get_form_fields(self, obj):
+        hackathon = HackathonForm.objects.filter(hackathon=obj)
+        fields = []
+        for i in hackathon:
+            fields.append(i.field_name)
+        return fields
 
 
 class OrganisationSerializer(serializers.ModelSerializer):

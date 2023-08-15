@@ -2,7 +2,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from rest_framework.views import APIView
 
-from db.user import Role
+from db.user import Role, User
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
@@ -142,3 +142,19 @@ class RoleManagementCSV(APIView):
             role, many=True
         ).data
         return CommonUtils.generate_csv(role_serializer_data, "Roles")
+
+
+class UserRoleSearchAPI(APIView):
+    def get(self, request):
+        user = User.objects.all()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            user, request,
+            ['mu_id', 'first_name', 'user_role_link_user__role__title'],
+            {'muid': 'mu_id', 'name': 'first_name'})
+
+        serializer = dash_roles_serializer.UserRoleSearchSerializer(
+            paginated_queryset.get('queryset'), many=True).data
+
+        return CustomResponse(
+            response={"data": serializer, 'pagination': paginated_queryset.get(
+                'pagination')}).get_success_response()

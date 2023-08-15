@@ -169,13 +169,14 @@ class RegisterDataAPI(APIView):
 </html>
                         """
         email_host_user = decouple.config("EMAIL_HOST_USER")
+        from_mail = decouple.config('FROM_MAIL')
         to = [user_obj.email]
         contact_msg = strip_tags(html_message)
         subject = "YOUR TICKET TO µFAM IS HERE!"
         send_mail(
             subject,
             contact_msg,
-            email_host_user,
+            from_mail,
             to,
             fail_silently=False,
             html_message=html_message,

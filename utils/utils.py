@@ -1,6 +1,5 @@
 import csv
 import datetime
-from email.mime import base
 import gzip
 import io
 
@@ -20,7 +19,7 @@ from django.template.loader import render_to_string
 class CommonUtils:
     @staticmethod
     def get_paginated_queryset(
-        queryset: QuerySet, request, search_fields, sort_fields={}
+            queryset: QuerySet, request, search_fields, sort_fields={}
     ) -> QuerySet:
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage", 10))
@@ -179,8 +178,10 @@ def send_template_mail(context: dict, subject: str, address: list[str]):
     """
 
     email_host_user = decouple.config("EMAIL_HOST_USER")
+    from_mail = decouple.config('FROM_MAIL')
+
     base_url = decouple.config("FR_DOMAIN_NAME")
-    
+
     email_content = render_to_string(
         f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
     )
@@ -188,7 +189,7 @@ def send_template_mail(context: dict, subject: str, address: list[str]):
     send_mail(
         subject=subject,
         message=email_content,
-        from_email=email_host_user,
+        from_email=from_mail,
         recipient_list=[context["email"]],
         html_message=email_content,
         fail_silently=False,

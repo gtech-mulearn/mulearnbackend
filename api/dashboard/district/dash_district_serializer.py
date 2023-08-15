@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.db.models import Sum, F
 from rest_framework import serializers
 
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Organization
 from db.task import TotalKarma, KarmaActivityLog, Level, UserLvlLink
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
@@ -141,19 +141,19 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
 class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
-    campus = serializers.CharField(source='org.code')
+    campus_code = serializers.CharField(source='code')
 
     class Meta:
-        model = UserOrganizationLink
-        fields = ["rank", "campus"]
+        model = Organization
+        fields = ["rank", "campus_code"]
 
     def get_rank(self, obj):
         rank = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value, org__district__name=obj.org.district.name, verified=True,
+            org__org_type=OrganizationType.COLLEGE.value, org__district__name=obj.district.name, verified=True,
             user__total_karma_user__isnull=False).values('org').annotate(
             total_karma=Sum('user__total_karma_user__karma')).order_by('-total_karma')
         college_ranks = {college['org']: i + 1 for i, college in enumerate(rank)}
-        college_id = obj.org.id
+        college_id = obj.id
         return college_ranks.get(college_id)
 
 
