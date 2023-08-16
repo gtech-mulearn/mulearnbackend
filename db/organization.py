@@ -8,13 +8,11 @@ from .user import User
 
 
 class Country(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
-    name = models.CharField(max_length=75)
-    updated_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, db_column='updated_by', related_name='country_updated_by')
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    name = models.CharField(max_length=75, null=False, unique=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='country_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, db_column='created_by', related_name='country_created_by')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='country_created_by')
     created_at = models.DateTimeField()
 
     class Meta:

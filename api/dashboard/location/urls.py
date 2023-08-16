@@ -4,8 +4,16 @@ from . import location_views
 
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
-    path('country', location_views.CountryDataAPI.as_view()),
-    path('<str:country>/states', location_views.StateDataAPI.as_view()),
-    path('<str:country>/<str:state>/zone', location_views.ZoneDataAPI.as_view()),
-    path('<str:country>/<str:state>/<str:zone>/district', location_views.DistrictDataAPI.as_view()),
+    path('country/', location_views.CountryDataAPI.as_view()),
+    path('country/<str:country_id>/', location_views.CountryDataAPI.as_view()),
+    
+    # TODO: Uncomment the following lines when the APIs are ready
+    # path('state/', location_views.StateDataAPI.as_view()),
+    # path('state/<str:country>/', location_views.StateDataAPI.as_view()),
+    
+    # path('zone/', location_views.ZoneDataAPI.as_view()),
+    # path('zone/<str:state>/', location_views.ZoneDataAPI.as_view()),
+    
+    # path('district/', location_views.DistrictDataAPI.as_view()),
+    # path('district/<str:zone>/', location_views.DistrictDataAPI.as_view()),
 ]
