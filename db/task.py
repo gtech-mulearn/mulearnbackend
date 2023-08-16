@@ -100,6 +100,7 @@ class TaskList(models.Model):
     active = models.BooleanField()
     variable_karma = models.BooleanField()
     usage_count = models.IntegerField(blank=True, null=True)
+    voucher = models.BooleanField()
     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='task_list_updated_by')
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='task_list_created_by')
@@ -165,3 +166,20 @@ class UserIgLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_ig_link'
+
+class VoucherLog(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    code = models.CharField(unique=True, max_length=255)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='voucher_log_user')
+    task = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name='voucher_log_task')
+    karma = models.IntegerField()
+    mail = models.CharField(max_length=255)
+    claimed = models.BooleanField(blank=True, null=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='voucher_log_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='voucher_log_created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'voucher_log'
