@@ -10,14 +10,14 @@ from db.hackathon import (
     HackathonUserSubmission,
 )
 from db.organization import District, Organization
-from utils.permission import CustomizePermission, JWTUtils, role_required
-from utils.response import CustomResponse
-from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, RoleType
 from serializer import HackathonRetrievalSerializer, UpcomingHackathonRetrievalSerializer, \
     HackathonCreateUpdateDeleteSerializer, HackathonUpdateSerializer, HackathonPublishingSerializer, \
     HackathonInfoSerializer, HackathonUserSubmissionSerializer, ListApplicantsSerializer, \
     HackathonOrganiserSerializerRetrieval, HackathonOrganiserSerializer, HackathonFormSerializer, DistrictSerializer, \
     OrganisationSerializer
+from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.response import CustomResponse
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, RoleType
 
 
 class HackathonManagementAPI(APIView):

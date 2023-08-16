@@ -38,10 +38,8 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
         user = User.objects.get(id=user_id)
 
         validated_data["id"] = uuid.uuid4()
-        validated_data["created_by"] = user
-        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by"] = user
-        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
+        validated_data["created_by"] = validated_data["updated_by"] = user
+        validated_data["created_at"] = validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
 
         return super().create(validated_data)
 

@@ -19,8 +19,11 @@ from django.template.loader import render_to_string
 class CommonUtils:
     @staticmethod
     def get_paginated_queryset(
-            queryset: QuerySet, request, search_fields, sort_fields={}
+        queryset: QuerySet, request, search_fields, sort_fields: dict = None
     ) -> QuerySet:
+        if sort_fields is None:
+            sort_fields = {}
+
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage", 10))
         search_query = request.query_params.get("search")
@@ -35,10 +38,9 @@ class CommonUtils:
 
         if sort_by:
             sort = sort_by[1:] if sort_by.startswith("-") else sort_by
-            sort_field_name = sort_fields.get(sort)
-            if sort_field_name:
+            if sort_field_name := sort_fields.get(sort):
                 if sort_by.startswith("-"):
-                    sort_field_name = "-" + sort_field_name
+                    sort_field_name = f"-{sort_field_name}"
 
                 queryset = queryset.order_by(sort_field_name)
 
@@ -50,7 +52,7 @@ class CommonUtils:
         except EmptyPage:
             queryset = paginator.page(paginator.num_pages)
 
-        return_data = {
+        return {
             "queryset": queryset,
             "pagination": {
                 "count": paginator.count,
@@ -62,8 +64,6 @@ class CommonUtils:
                 else None,
             },
         }
-
-        return return_data
 
     @staticmethod
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
@@ -122,12 +122,11 @@ class _CustomHTTPHandler:
     @staticmethod
     def get_client_ip_address(request):
         req_headers = request.META
-        x_forwarded_for_value = req_headers.get("HTTP_X_FORWARDED_FOR")
-        if x_forwarded_for_value:
-            ip_addr = x_forwarded_for_value.split(",")[-1].strip()
-        else:
-            ip_addr = req_headers.get("REMOTE_ADDR")
-        return ip_addr
+        return (
+            x_forwarded_for_value.split(",")[-1].strip()
+            if (x_forwarded_for_value := req_headers.get("HTTP_X_FORWARDED_FOR"))
+            else req_headers.get("REMOTE_ADDR")
+        )
 
 
 class DiscordWebhooks:
@@ -149,15 +148,15 @@ class DiscordWebhooks:
 
 
 class ImportCSV:
-    def read_excel_file(file_obj):
+    def read_excel_file(self, file_obj):
         workbook = openpyxl.load_workbook(filename=io.BytesIO(file_obj.read()))
         sheet = workbook.active
 
         rows = []
         for row in sheet.iter_rows(values_only=True):
-            row_dict = {}
-            for header, cell_value in zip(sheet[1], row):
-                row_dict[header.value] = cell_value
+            row_dict = {
+                header.value: cell_value for header, cell_value in zip(sheet[1], row)
+            }
             rows.append(row_dict)
         workbook.close()
 
@@ -178,7 +177,7 @@ def send_template_mail(context: dict, subject: str, address: list[str]):
     """
 
     email_host_user = decouple.config("EMAIL_HOST_USER")
-    from_mail = decouple.config('FROM_MAIL')
+    from_mail = decouple.config("FROM_MAIL")
 
     base_url = decouple.config("FR_DOMAIN_NAME")
 
