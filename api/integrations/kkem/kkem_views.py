@@ -85,7 +85,6 @@ class KKEMIndividualKarmaAPI(APIView):
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
         request.data["verified"] = False
-        request.data["integration_value"] = request.data["jsid"]
         serialized_set = KKEMAuthorization(data=request.data, context={"type": "register"})
 
         try:
@@ -151,7 +150,6 @@ class KKEMIntegrationLogin(APIView):
 
             if request.data.get("jsid", None):
                 request.data["verified"] = True
-                request.data["integration_value"] = request.data["jsid"]
                 serialized_set = KKEMAuthorization(
                     data=request.data, context={"type": "login"}
                 )

@@ -15,8 +15,6 @@ from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 
-from mulearnbackend import settings
-
 
 class CommonUtils:
     @staticmethod
@@ -178,14 +176,19 @@ def send_template_mail(context: dict, subject: str, address: list[str]):
     and used as the content of the email
     """
 
+    email_host_user = decouple.config("EMAIL_HOST_USER")
+    from_mail = decouple.config("FROM_MAIL")
+
+    base_url = decouple.config("FR_DOMAIN_NAME")
+
     email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": settings.FR_DOMAIN_NAME}
+        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
     )
 
     send_mail(
         subject=subject,
         message=email_content,
-        from_email=settings.FROM_MAIL,
+        from_email=from_mail,
         recipient_list=[context["email"]],
         html_message=email_content,
         fail_silently=False,
