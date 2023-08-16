@@ -5,7 +5,6 @@ from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
 from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog, UserIgLink
 from db.task import TotalKarma
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
@@ -134,66 +133,39 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         ]
 
     def get_rank(self, obj):
-        user_interest_groups = UserIgLink.objects.filter(user__usercirclelink__circle=obj,
-                                                         user__usercirclelink__accepted=True)
-        user_karma_mapping = {}  # Dictionary to store user_id as key and total karma as value
+        datas = {}
+        usr_circle_link = UserCircleLink.objects.filter(circle=obj, accepted=True).first()
+        total_karma = TotalKarma.objects.filter(
+            user__usercirclelink__circle=obj,
+            user__usercirclelink__accepted=True,
+            user__usercirclelink__circle__ig=usr_circle_link.circle.ig
+        ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
 
-        for user_ig_link in user_interest_groups:
-            total_ig_karma = (
-                0
-                if KarmaActivityLog.objects.filter(task__ig=user_ig_link.ig, user=user_ig_link.user,
-                                                   appraiser_approved=True)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum") is None
-                else KarmaActivityLog.objects.filter(task__ig=user_ig_link.ig, user=user_ig_link.user,
-                                                     appraiser_approved=True)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
-            )
+        circle_name = usr_circle_link.circle.name
 
-            user_id = user_ig_link.user.id
-            if user_id not in user_karma_mapping:
-                user_karma_mapping[user_id] = total_ig_karma
-            else:
-                user_karma_mapping[user_id] += total_ig_karma
+        if circle_name not in datas:
+            datas[circle_name] = {
+                'total_karma': total_karma
+            }
+        else:
+            datas[circle_name]['total_karma'] = total_karma
 
-        rank_info = []
+        # Calculate total karma and rank for other learning circles
+        all_learning_circles = LearningCircle.objects.exclude(id=obj.id)
+        for lc in all_learning_circles:
+            total_karma_lc = TotalKarma.objects.filter(
+                user__usercirclelink__circle=lc,
+                user__usercirclelink__accepted=True,
+                user__usercirclelink__circle__ig=lc.ig
+            ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
+            datas[lc.name] = {
+                'total_karma': total_karma_lc,
+            }
+        sorted_ranks = sorted(datas.items(), key=lambda x: x[1]['total_karma'], reverse=True)
+        for i, (circle_name, data) in enumerate(sorted_ranks):
+            data['rank'] = i + 1
 
-        for user_ig_link in user_interest_groups:
-            user_id = user_ig_link.user.id
-            rank_info.append({
-                "user_id": user_id,
-                "username": f'{user_ig_link.user.first_name} {user_ig_link.user.last_name}' if user_ig_link.user.last_name else user_ig_link.user.first_name,
-                "interest_group": user_ig_link.ig.name,
-                "karma": user_karma_mapping.get(user_id, 0)
-            })
-
-        rank_info.sort(key=lambda x: x['karma'], reverse=True)
-        user_rank = {}
-        for i, entry in enumerate(rank_info):
-            user_rank[entry['user_id']] = i + 1
-
-        total_karma = sum(user_karma_mapping.values())  # Sum of karma for all users
-
-        # Compare total karma with other learning circles and assign rank
-        learning_circles = LearningCircle.objects.all()
-        learning_circle_karma_mapping = {}
-
-        for learning_circle in learning_circles:
-            circle_total_karma = sum(
-                [user_karma_mapping[user_ig_link.user.id] for user_ig_link in
-                 UserIgLink.objects.filter(user__usercirclelink__circle=learning_circle,
-                                           user__usercirclelink__accepted=True)]
-            )
-            learning_circle_karma_mapping[learning_circle.id] = circle_total_karma
-
-        learning_circle_rank = sorted(learning_circle_karma_mapping.items(), key=lambda x: x[1], reverse=True)
-        learning_circle_rank = {circle_id: rank + 1 for rank, (circle_id, _) in enumerate(learning_circle_rank)}
-
-        # Get rank for the current learning circle
-        current_circle_rank = learning_circle_rank.get(obj.id)
-
-        return current_circle_rank
+        return datas[obj.name].get('rank')
 
     class Meta:
         model = LearningCircle
