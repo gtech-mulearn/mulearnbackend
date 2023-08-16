@@ -1,8 +1,8 @@
 from rest_framework import serializers
 
 from db.task import TotalKarma
-from db.user import UserReferralLink
 from db.task import UserLvlLink
+from db.user import UserReferralLink
 
 
 class ReferralListSerializer(serializers.ModelSerializer):
