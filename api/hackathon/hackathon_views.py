@@ -10,7 +10,7 @@ from db.hackathon import (
     HackathonUserSubmission,
 )
 from db.organization import District, Organization
-from serializer import HackathonRetrievalSerializer, UpcomingHackathonRetrievalSerializer, \
+from .serializer import HackathonRetrievalSerializer, UpcomingHackathonRetrievalSerializer, \
     HackathonCreateUpdateDeleteSerializer, HackathonUpdateSerializer, HackathonPublishingSerializer, \
     HackathonInfoSerializer, HackathonUserSubmissionSerializer, ListApplicantsSerializer, \
     HackathonOrganiserSerializerRetrieval, HackathonOrganiserSerializer, HackathonFormSerializer, DistrictSerializer, \
