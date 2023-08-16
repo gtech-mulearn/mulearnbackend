@@ -1,66 +1,67 @@
 {% extends "mails/base_mail.html" %} {% block content %}
 <div style="background: transparent; width: 100%; height: 150px">
-<center>
-  <h1
-    style="
-      color: black;
-      font-family: 'Poppins';
-      font-weight: 600;
-      font-size: 26px;
-    "
-  >
-    YOUR TICKET TO µFAM IS HERE!
-  </h1>
-  <p
-    style="
-      color: rgb(65, 64, 64);
-      font-family: 'Poppins';
-      line-height: 1.3;
-      font-size: 13px;
-    "
-  >
-    Hey there! A hearty welcome to the MuLearn Family.<br />
-    We are delighted to have you on board and we hereby acknowledge as well as
-    appreciate your interest to join our community and to take part in our
-    initiatives.<br />
-
-    Your personal µid is provided below:
-  </p>
-  <div style="width: 100%; height: 10px; background: transparent"></div>
-
-  <a
-    style="
-      display: flex;
-      background-color: #eadcff;
-      border-radius: 28px;
-      width: fit-content;
-    "
-  >
+  <center>
+    <h1
+      style="
+        color: black;
+        font-family: 'Poppins';
+        font-weight: 600;
+        font-size: 26px;
+      "
+    >
+      YOUR TICKET TO µFAM IS HERE!
+    </h1>
     <p
       style="
-        padding-left: 20px;
-        padding-right: 20px;
+        color: rgb(65, 64, 64);
         font-family: 'Poppins';
-        line-height: 1.2;
+        line-height: 1.3;
         font-size: 13px;
       "
     >
-      {user_obj.mu_id}
-    </p>
-  </a>
+      Hey there {{user_obj.fullname}}! A hearty welcome to the MuLearn
+      Family.<br />
+      We are delighted to have you on board and we hereby acknowledge as well as
+      appreciate your interest to join our community and to take part in our
+      initiatives.<br />
 
-  <div style="width: 100%; height: 10px; background: transparent"></div>
-  <p
-    style="
-      color: black;
-      font-family: 'Poppins';
-      line-height: 1.3;
-      font-size: 13px;
-    "
-  >
-    Stay tuned for our events and notifications. Remember, you are not just any
-    learner; you're a MuLearner😉.<br /><br />Happy Learning!
-  </p>
-</center>
+      Your personal µid is provided below:
+    </p>
+    <div style="width: 100%; height: 10px; background: transparent"></div>
+
+    <a
+      style="
+        display: flex;
+        background-color: #eadcff;
+        border-radius: 28px;
+        width: fit-content;
+      "
+    >
+      <p
+        style="
+          padding-left: 20px;
+          padding-right: 20px;
+          font-family: 'Poppins';
+          line-height: 1.2;
+          font-size: 13px;
+        "
+      >
+        {{user_obj.mu_id}}
+      </p>
+    </a>
+
+    <div style="width: 100%; height: 10px; background: transparent"></div>
+    <p
+      style="
+        color: black;
+        font-family: 'Poppins';
+        line-height: 1.3;
+        font-size: 13px;
+      "
+    >
+      Stay tuned for our events and notifications. Remember, you are not just
+      any learner; you're a MuLearner😉.<br /><br />Happy Learning!
+    </p>
+  </center>
 </div>
 {% endblock %}

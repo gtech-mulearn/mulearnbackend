@@ -58,10 +58,22 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
 class KKEMAuthorization(serializers.ModelSerializer):
     emailOrMuid = serializers.CharField(source="user.mu_id")
-    jsid = serializers.CharField(source="integration_value")
 
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
+
+        integration = Integration.objects.get(name=IntegrationType.KKEM.value)
+        self.integration = integration
+
+        response = requests.post(
+            url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+            data=f'{{"job_seeker_id": {validated_data["integration_value"]}}}',
+            headers={"Authorization": f"Bearer {self.integration.token}"},
+        )
+        response_data = response.json()
+
+        if "response" not in response_data or not response_data["response"].get("req_status", False):
+            raise ValueError("Provided jsid is invalid")
 
         if not (
             user := User.objects.filter(
@@ -69,24 +81,10 @@ class KKEMAuthorization(serializers.ModelSerializer):
             ).first()
         ):
             raise ValueError("User doesn't exist")
-        integration = Integration.objects.get(name=IntegrationType.KKEM.value)
 
         try:
-            response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
-                data=f'{{"job_seeker_id": {validated_data["integration_value"]}}}',
-                headers={"Authorization": f"Bearer {integration.token}"},
-            )
-            response_data = response.json()
-
-            if (
-                "response" not in response_data
-                or not response_data["response"].get("req_status", False)
-            ):
-                raise ValueError("Invalid jsid")
-
             kkem_link = IntegrationAuthorization.objects.create(
-                integration=integration,
+                integration=self.integration,
                 user=user,
                 verified=validated_data["verified"],
                 integration_value=validated_data["integration_value"],
@@ -96,14 +94,14 @@ class KKEMAuthorization(serializers.ModelSerializer):
 
         except IntegrityError as e:
             kkem_link = IntegrationAuthorization.objects.filter(
-                user=user, integration=integration
+                user=user, integration=self.integration
             ).first()
 
             if (
                 not kkem_link
                 and IntegrationAuthorization.objects.filter(
                     integration_value=validated_data["integration_value"],
-                    integration=integration,
+                    integration=self.integration,
                 ).first()
             ):
                 raise ValueError(
@@ -136,4 +134,4 @@ class KKEMAuthorization(serializers.ModelSerializer):
 
     class Meta:
         model = IntegrationAuthorization
-        fields = ["emailOrMuid", "jsid", "verified"]
+        fields = ["emailOrMuid", "integration_value", "verified"]
