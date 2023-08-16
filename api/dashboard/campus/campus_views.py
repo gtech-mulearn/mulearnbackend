@@ -43,12 +43,14 @@ class CampusStudentDetailsAPI(APIView):
         user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
         user_org_links = UserOrganizationLink.objects.filter(org_id=user_org_link.org_id,
                                                              org__org_type=OrganizationType.COLLEGE.value)
-        paginated_queryset = CommonUtils.get_paginated_queryset(user_org_links, request, ['user__first_name'],
-                                                                {'name': 'user__full_name',
-                                                                 'muid': 'user__mu_id',
-                                                                 'karma': 'user__total_karma_user__karma',
-                                                                 'level': 'user__user_level_link_user__level__'
-                                                                          'level_order'})
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            user_org_links, request,
+            ['user__first_name',
+             'user__mu_id',
+             'user__total_karma_user__karma'],
+            {'name': 'user__first_name',
+             'muid': 'user__mu_id',
+             'karma': 'user__total_karma_user__karma'})
         serializer = serializers.CampusStudentDetailsSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse(response={"data": serializer, 'pagination': paginated_queryset.get(
             'pagination')}).get_success_response()

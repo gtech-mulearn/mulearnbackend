@@ -3,7 +3,7 @@ from datetime import timedelta
 from django.db.models import Sum, F
 from rest_framework import serializers
 
-from db.organization import UserOrganizationLink, District
+from db.organization import UserOrganizationLink, District, Organization
 from db.task import KarmaActivityLog, Level, UserLvlLink, TotalKarma
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -231,3 +231,24 @@ class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
         if user_level_link:
             return user_level_link.level.name
         return None
+
+
+class ListAllDistrictsSerializer(serializers.ModelSerializer):
+    lead = serializers.SerializerMethodField()
+    lead_number = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = ('title', 'code', 'lead', 'lead_number')
+
+    def get_lead(self, obj):
+        user_org_link = obj.user_organization_link_org_id.filter(
+            org__title=obj.title,
+            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value).first()
+        return user_org_link.user.fullname if user_org_link else None
+
+    def get_lead_number(self, obj):
+        user_org_link = obj.user_organization_link_org_id.filter(
+            org__title=obj.title,
+            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value).first()
+        return user_org_link.user.mobile if user_org_link else None
