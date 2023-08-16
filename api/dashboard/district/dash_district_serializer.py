@@ -215,7 +215,7 @@ class ListAllDistrictsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Organization
-        fields = ('title', 'code', 'level', 'lead', 'lead_number')
+        fields = ('title', 'code', 'lead', 'lead_number')
 
     def get_level(self, obj):
         college = College.objects.filter(org=obj).first()
