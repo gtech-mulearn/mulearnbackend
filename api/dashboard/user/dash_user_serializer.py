@@ -141,10 +141,10 @@ class UserEditSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User id is a required field")
 
         if (
-                "email" in data
-                and User.objects.filter(email=data["email"])
-                .exclude(id=data["user_id"].id)
-                .all()
+            "email" in data
+            and User.objects.filter(email=data["email"])
+            .exclude(id=data["user_id"].id)
+            .all()
         ):
             raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
@@ -275,11 +275,11 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
 
         if (
-                college := instance.user_organization_link_user_id.filter(
-                    org__org_type=OrganizationType.COLLEGE.value
-                )
-                        .select_related("org__district__zone__state__country", "department")
-                        .first()
+            college := instance.user_organization_link_user_id.filter(
+                org__org_type=OrganizationType.COLLEGE.value
+            )
+            .select_related("org__district__zone__state__country", "department")
+            .first()
         ):
             data.update(
                 {
@@ -315,7 +315,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             if isinstance(
-                    organization_ids := validated_data.pop("organizations", None), list
+                organization_ids := validated_data.pop("organizations", None), list
             ):
                 instance.user_organization_link_user_id.all().delete()
                 UserOrganizationLink.objects.bulk_create(
@@ -349,7 +349,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             if isinstance(
-                    interest_group_ids := validated_data.pop("interest_groups", None), list
+                interest_group_ids := validated_data.pop("interest_groups", None), list
             ):
                 instance.user_ig_link_user.all().delete()
                 UserIgLink.objects.bulk_create(
