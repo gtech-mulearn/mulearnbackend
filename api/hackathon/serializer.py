@@ -6,10 +6,10 @@ from django.db import transaction
 from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
-from db.organization import Organization, District
+from db.organization import Organization, District, UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
-from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, OrganizationType
 from utils.utils import DateTimeUtils
 
 
@@ -305,7 +305,7 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
             field.attname
             for field in fields
             if field.get_internal_type() not in ("ForeignKey", "OneToOneField")
-            and getattr(self.instance, field.attname) is None
+               and getattr(self.instance, field.attname) is None
         ]
         if not null_instances:
             return super().validate(attrs)
@@ -338,7 +338,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
         if HackathonUserSubmission.objects.filter(
-            hackathon_id=value, user_id=self.context.get("user_id")
+                hackathon_id=value, user_id=self.context.get("user_id")
         ).first():
             raise serializers.ValidationError(
                 "User has already submitted for this hackathon."
@@ -374,10 +374,10 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User Not Exists")
 
         if (
-            user
-            and HackathonOrganiserLink.objects.filter(
-                organiser=user, hackathon__id=self.context.get("hackathon").id
-            ).exists()
+                user
+                and HackathonOrganiserLink.objects.filter(
+            organiser=user, hackathon__id=self.context.get("hackathon").id
+        ).exists()
         ):
             raise serializers.ValidationError(
                 "This User Already An Organizer in this hackathon"
@@ -415,8 +415,18 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
             data = json.loads(obj.data.replace("'", "\""))
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
                 if value == 'system' and not data.get(field):
-                    print(User.objects.filter(id=obj.user.id).first())
-                    data[field] = 'system'
+                    user = User.objects.filter(id=obj.user.id).first()
+                    if field == 'gender':
+                        data[field] = user.gender
+                    elif field == 'email':
+                        data[field] = user.email
+                    elif field == 'mobile':
+                        data[field] = user.mobile
+                    elif field == 'name':
+                        data[field] = user.fullname
+                    elif field == 'college':
+                        data[field] = UserOrganizationLink.objects.filter(user_id=user.id,
+                                                                          org__org_type=OrganizationType.COLLEGE.value).first().org.title
             return data
         except json.JSONDecodeError:
             return {}
