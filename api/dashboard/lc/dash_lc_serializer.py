@@ -154,7 +154,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
         circle_ranks[obj.name] = {'total_karma': total_karma}
 
-        all_learning_circles = LearningCircle.objects.exclude(id=obj.id)
+        all_learning_circles = LearningCircle.objects.filter(ig=obj.ig).exclude(id=obj.id)
 
         for lc in all_learning_circles:
             total_karma_lc = KarmaActivityLog.objects.filter(
