@@ -113,6 +113,13 @@ class LearningCircleHomeApi(APIView):
             return CustomResponse(general_message='Note updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    def delete(self, request, circle_id, member_id):
+        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=member_id).first()
+        if usr_circle_link:
+            usr_circle_link.delete()
+            return CustomResponse(general_message='Leaved').get_success_response()
+        return CustomResponse(general_message='Learning Circle Not Available For This User').get_failure_response()
+
 
 class LearningCircleMainApi(APIView):
     def post(self, request):
