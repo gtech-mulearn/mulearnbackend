@@ -209,8 +209,10 @@ class DistrictStudentLevelStatusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
-        org_user_district = UserOrganizationLink.objects.filter(org__district__name=user_org_link.org.district.name)
-        serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(org_user_district, many=True)
+        organizations = Organization.objects.filter(
+            district__name=user_org_link.org.district.name,
+            org_type=OrganizationType.COLLEGE.value)
+        serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(organizations, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
 

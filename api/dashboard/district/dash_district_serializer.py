@@ -158,12 +158,13 @@ class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
 
 
 class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
-    college = serializers.CharField(source='org.title')
+    college_name = serializers.CharField(source='title')
+    college_code = serializers.CharField(source='code')
     level = serializers.SerializerMethodField()
 
     class Meta:
-        model = UserOrganizationLink
-        fields = ["college", "level"]
+        model = Organization
+        fields = ["college_name", "college_code", "level"]
 
     def get_level(self, obj):
         level = Level.objects.all()
@@ -171,7 +172,9 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
         level_list = []
         for levels in level:
             level_dict['level'] = levels.level_order
-            level_dict['students_count'] = len(UserLvlLink.objects.filter(level=levels, user=obj.user).all())
+            level_dict['students_count'] = len(UserLvlLink.objects.filter(
+                level=levels,
+                user__user_organization_link_user_id=obj.user_organization_link_org_id).all())
             level_list.append(level_dict)
             level_dict = {}
         return level_list
