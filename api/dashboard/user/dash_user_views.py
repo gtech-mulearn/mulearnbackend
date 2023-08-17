@@ -248,7 +248,7 @@ class UserVerificationAPI(APIView):
             dashboard_helper.send_dashboard_mail(
                 user_data=user_data,
                 subject="Role request at μLearn!",
-                address=("mentor_verification.html"),
+                address=["mentor_verification.html"],
             )
 
             return CustomResponse(
