@@ -21,7 +21,7 @@ class Country(models.Model):
 
 
 class State(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
     country = models.ForeignKey(Country, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
@@ -37,7 +37,7 @@ class State(models.Model):
 
 
 class Zone(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
     state = models.ForeignKey(State, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
@@ -53,7 +53,7 @@ class Zone(models.Model):
 
 
 class District(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
     zone = models.ForeignKey(Zone, on_delete=models.CASCADE)
     updated_by = models.ForeignKey(
