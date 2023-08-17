@@ -1,4 +1,4 @@
-name: Prod Django CI
+name: Prod CI
 
 on:
   push:

@@ -2,17 +2,17 @@ import uuid
 
 from django.db import models
 
-from utils.utils import DateTimeUtils
-
 from .user import User
 
 
 class Country(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75, null=False, unique=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='country_updated_by')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='country_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='country_created_by')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='country_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
@@ -116,6 +116,22 @@ class Department(models.Model):
     class Meta:
         managed = False
         db_table = 'department'
+
+
+class College(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    level = models.IntegerField()
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='college_org')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='college_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='college_created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'college'
 
 
 class UserOrganizationLink(models.Model):

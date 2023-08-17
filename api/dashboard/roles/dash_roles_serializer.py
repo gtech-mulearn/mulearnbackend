@@ -52,3 +52,24 @@ class UserRoleSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "fullname", "mu_id"]
+
+
+class UserRoleCreateSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField()
+    role_id = serializers.CharField()
+
+    class Meta:
+        model = UserRoleLink
+        fields = ("user_id", "role_id")
+
+    def create(self, validated_data):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        validated_data['id'] = uuid.uuid4()
+        validated_data['user_id'] = self.data.get('user_id')
+        validated_data['role_id'] = self.data.get('role_id')
+        validated_data['verified'] = True
+        validated_data['created_by_id'] = user_id
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+
+        return UserRoleLink.objects.create(**validated_data)
+
