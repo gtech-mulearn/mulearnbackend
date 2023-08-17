@@ -5,7 +5,7 @@ from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
 from db.organization import UserOrganizationLink
-from db.task import TotalKarma
+from db.task import KarmaActivityLog
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
@@ -53,6 +53,26 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             "ig"
         ]
 
+    def validate(self, data):
+        user_id = self.context.get('user_id')
+
+        # Validate interest group (ig)
+        ig_id = data.get('ig')
+        if not InterestGroup.objects.filter(id=ig_id).exists():
+            raise serializers.ValidationError("Invalid interest group")
+
+        # Validate user's organization link
+        org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                       org__org_type=OrganizationType.COLLEGE.value).first()
+        if not org_link:
+            raise serializers.ValidationError("User must be associated with a college organization")
+
+        # Check if the user is already a member of a learning circle with the same interest group
+        if UserCircleLink.objects.filter(user_id=user_id, circle__ig_id=ig_id, accepted=True).exists():
+            raise serializers.ValidationError("Already a member of a learning circle with the same interest group")
+
+        return data
+
     def create(self, validated_data):
         user_id = self.context.get('user_id')
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -65,8 +85,6 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         while code in existing_codes:
             code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2] + str(i)
             i += 1
-        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig, accepted=True).exists():
-            raise serializers.ValidationError("Already a member of learning circle with same interest group")
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
@@ -102,17 +120,20 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     def get_is_lead(self, obj):
         user = self.context.get('user_id')
         try:
-            if link := UserCircleLink.objects.get(
-                    user=user, circle=obj, lead=True
-            ):
+            if link := UserCircleLink.objects.get(user=user, circle=obj, lead=True):
                 return True
         except UserCircleLink.DoesNotExist:
             return False
 
     def get_total_karma(self, obj):
-        return TotalKarma.objects.filter(user__usercirclelink__circle=obj, user__usercirclelink__accepted=1).aggregate(
-            total_karma=Sum('karma'))[
-                   'total_karma'] or 0
+        total_karma = KarmaActivityLog.objects.filter(
+            user__usercirclelink__circle=obj,
+            user__usercirclelink__accepted=True,
+            task__ig=obj.ig,
+            appraiser_approved=True
+        ).aggregate(total_karma=Sum('karma'))[
+                          'total_karma'] or 0
+        return total_karma
 
     def get_members(self, obj):
         return self._get_member_info(obj, accepted=1)
@@ -122,50 +143,56 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
 
     def _get_member_info(self, obj, accepted):
         members = UserCircleLink.objects.filter(circle=obj, accepted=accepted)
-        return [
-            {
+        member_info = []
+
+        for member in members:
+            total_ig_karma = KarmaActivityLog.objects.filter(
+                task__ig=member.circle.ig,
+                user=member.user,
+                appraiser_approved=True
+            ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
+
+            member_info.append({
                 'id': member.user.id,
                 'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
-                'karma': TotalKarma.objects.filter(user=member.user.id).values_list('karma', flat=True).first(),
-            }
-            for member in members
-        ]
+                'karma': total_ig_karma,
+            })
+
+        return member_info
 
     def get_rank(self, obj):
-        datas = {}
-        usr_circle_link = UserCircleLink.objects.filter(circle=obj, accepted=True).first()
-        total_karma = TotalKarma.objects.filter(
+        circle_ranks = {}
+
+        total_karma = KarmaActivityLog.objects.filter(
             user__usercirclelink__circle=obj,
             user__usercirclelink__accepted=True,
-            user__usercirclelink__circle__ig=usr_circle_link.circle.ig
+            task__ig=obj.ig,
+            appraiser_approved=True
         ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
+        circle_ranks[obj.name] = {'total_karma': total_karma}
 
-        circle_name = usr_circle_link.circle.name
+        all_learning_circles = LearningCircle.objects.filter(ig=obj.ig).exclude(id=obj.id)
 
-        if circle_name not in datas:
-            datas[circle_name] = {
-                'total_karma': total_karma
-            }
-        else:
-            datas[circle_name]['total_karma'] = total_karma
-
-        # Calculate total karma and rank for other learning circles
-        all_learning_circles = LearningCircle.objects.exclude(id=obj.id)
         for lc in all_learning_circles:
-            total_karma_lc = TotalKarma.objects.filter(
+            total_karma_lc = KarmaActivityLog.objects.filter(
                 user__usercirclelink__circle=lc,
                 user__usercirclelink__accepted=True,
-                user__usercirclelink__circle__ig=lc.ig
+                task__ig=lc.ig,
+                appraiser_approved=True
             ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
-            datas[lc.name] = {
-                'total_karma': total_karma_lc,
-            }
-        sorted_ranks = sorted(datas.items(), key=lambda x: x[1]['total_karma'], reverse=True)
-        for i, (circle_name, data) in enumerate(sorted_ranks):
-            data['rank'] = i + 1
 
-        return datas[obj.name].get('rank')
+            circle_ranks[lc.name] = {'total_karma': total_karma_lc}
+
+        sorted_ranks = sorted(circle_ranks.items(), key=lambda x: x[1]['total_karma'], reverse=True)
+
+        current_circle_rank = None
+        for i, (circle_name, data) in enumerate(sorted_ranks):
+            if circle_name == obj.name:
+                current_circle_rank = i + 1
+                break
+
+        return current_circle_rank
 
     class Meta:
         model = LearningCircle
