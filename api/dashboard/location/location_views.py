@@ -8,7 +8,13 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 
-from .location_serializer import CountrySerializer, StateSerializer, ZoneSerializer, DistrictSerializer
+from .location_serializer import (
+    CountrySerializer,
+    StateSerializer,
+    ZoneSerializer,
+    DistrictSerializer,
+)
+from django.db.models import Q
 
 
 class CountryDataAPI(APIView):
@@ -92,20 +98,21 @@ class StateDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request, country_id=None):
+    def get(self, request, state_id=None):
         try:
-            if country_id:
-                states = State.objects.filter(country_id=country_id)
-            else:
+            if state_id is None:
                 states = State.objects.all()
+            else:
+                states = State.objects.filter(
+                    Q(pk=state_id) | Q(country__pk=state_id)
+                ).all()
 
             paginated_queryset = CommonUtils.get_paginated_queryset(
                 states, request, ["name"], {"name": "name"}
             )
 
-            serializer = StateSerializer(
-                paginated_queryset.get("queryset"), many=True
-            )
+            serializer = StateSerializer(paginated_queryset.get("queryset"), many=True)
+
             return CustomResponse().paginated_response(
                 data=serializer.data, pagination=paginated_queryset.get("pagination")
             )
@@ -179,9 +186,7 @@ class ZoneDataAPI(APIView):
                 zones, request, ["name"], {"name": "name"}
             )
 
-            serializer = ZoneSerializer(
-                paginated_queryset.get("queryset"), many=True
-            )
+            serializer = ZoneSerializer(paginated_queryset.get("queryset"), many=True)
             return CustomResponse().paginated_response(
                 data=serializer.data, pagination=paginated_queryset.get("pagination")
             )
@@ -192,9 +197,7 @@ class ZoneDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = ZoneSerializer(
-                data=request.data, context={"user_id": user_id}
-            )
+            serializer = ZoneSerializer(data=request.data, context={"user_id": user_id})
             print(request.data)
             if serializer.is_valid():
                 serializer.save()
@@ -239,6 +242,7 @@ class ZoneDataAPI(APIView):
             ).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
+
 
 class DistrictDataAPI(APIView):
     permission_classes = [CustomizePermission]
