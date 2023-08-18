@@ -13,12 +13,13 @@ urlpatterns = [
     path('reset-password/verify-token/<str:token>/', dash_user_views.ResetPasswordVerifyTokenAPI.as_view()),
     path('reset-password/<str:token>/', dash_user_views.ResetPasswordConfirmAPI.as_view()),
 
+    path('csv/', dash_user_views.UserManagementCSV.as_view(), name="csv-user"),
+    path('invite/', dash_user_views.UserInviteAPI.as_view(), name='invite-user'),
+    path('', dash_user_views.UserAPI.as_view(), name='list-user'),
+    
     path('<str:user_id>/', dash_user_views.UserEditAPI.as_view(), name="detail-user"),
     path('<str:user_id>/', dash_user_views.UserEditAPI.as_view(), name="edit-user"),
     path('<str:user_id>/', dash_user_views.UserEditAPI.as_view(), name="delete-user"),
 
-    path('csv/', dash_user_views.UserManagementCSV.as_view(), name="csv-user"),
-    path('', dash_user_views.UserAPI.as_view(), name='list-user'),
 
-    path('invite/', dash_user_views.UserInviteAPI.as_view(), name='invite-user'),
 ]

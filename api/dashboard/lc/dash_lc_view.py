@@ -82,6 +82,13 @@ class LearningCircleHomeApi(APIView):
         serializer = LearningCircleHomeSerializer(learning_circle, many=False, context={"user_id": user_id})
         return CustomResponse(response=serializer.data).get_success_response()
 
+    def post(self, request, member_id, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        serializer = LearningCircleUpdateSerializer()
+        serializer.destroy(learning_circle_link)
+        return CustomResponse(general_message='Removed successfully').get_success_response()
+
     def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
@@ -113,8 +120,9 @@ class LearningCircleHomeApi(APIView):
             return CustomResponse(general_message='Note updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    def delete(self, request, circle_id, member_id):
-        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=member_id).first()
+    def delete(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=user_id).first()
         if usr_circle_link:
             usr_circle_link.delete()
             return CustomResponse(general_message='Leaved').get_success_response()

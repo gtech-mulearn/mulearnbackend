@@ -261,6 +261,9 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+    def destroy(self, obj):
+        obj.delete()
+
 
 class LearningCircleNoteSerializer(serializers.ModelSerializer):
     note = serializers.CharField(required=True, error_messages={
@@ -301,13 +304,23 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     class Meta:
         model = LearningCircle
-        fields = ['name', 'ig_name', 'member_count']
+        fields = ['name', 'ig_name', 'member_count', 'members']
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
 
     def get_member_count(self, obj):
         return UserCircleLink.objects.filter(circle=obj, accepted=1).count()
+
+    def get_members(self, obj):
+        members = UserCircleLink.objects.filter(circle=obj, accepted=1)
+        member_info = []
+        for member in members:
+            member_info.append({
+                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
+            })
+        return member_info

@@ -1,14 +1,13 @@
 from rest_framework import serializers
 
-from db.task import TotalKarma
-from db.task import UserLvlLink
+from db.task import TotalKarma, UserLvlLink
 from db.user import UserReferralLink
 
 
 class ReferralListSerializer(serializers.ModelSerializer):
-    id = serializers.CharField(source='referral.id')
-    full_name = serializers.CharField(source='referral.fullname')
-    muid = serializers.CharField(source='referral.mu_id')
+    id = serializers.CharField(source="referral.id")
+    full_name = serializers.CharField(source="referral.fullname")
+    muid = serializers.CharField(source="referral.mu_id")
     karma = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
 
