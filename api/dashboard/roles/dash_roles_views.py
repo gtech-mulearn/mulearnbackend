@@ -128,13 +128,13 @@ class UserRoleSearchAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request):
-        user = User.objects.all()
+    def get(self, request, role_id):
+        user = User.objects.filter(user_role_link_user__role_id=role_id).distinct()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user,
             request,
-            ["mu_id", "first_name", "user_role_link_user__role__title"],
-            {"muid": "mu_id", "name": "first_name"},
+            ["mu_id", "first_name", "last_name"],
+            {"mu_id": "mu_id", "first_name": "first_name", "last_name": "last_name"},
         )
 
         serializer = dash_roles_serializer.UserRoleSearchSerializer(
