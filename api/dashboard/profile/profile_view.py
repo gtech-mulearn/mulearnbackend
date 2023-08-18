@@ -53,7 +53,7 @@ class UserIgEditView(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_ig = InterestGroup.objects.filter(
             user_ig_link_ig__user_id=user_id).all()
-        serializer = profile_serializer.UserIgEditSerializer(
+        serializer = profile_serializer.UserIgListSerializer(
             user_ig, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -62,11 +62,13 @@ class UserIgEditView(APIView):
             user_id = JWTUtils.fetch_user_id(request)
             user = User.objects.get(id=user_id)
             serializer = profile_serializer.UserIgEditSerializer(
-                user, data=request.data
+                user, data=request.data, partial=True
             )
             if serializer.is_valid():
                 serializer.save()
-            return CustomResponse(response=serializer.data).get_success_response()
+            else:
+                return CustomResponse(response=serializer.errors).get_failure_response()
+            return CustomResponse(general_message="Interest Group edited successfully").get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 

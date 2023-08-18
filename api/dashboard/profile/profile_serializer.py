@@ -281,14 +281,23 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         ]
 
 
+class UserIgListSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = InterestGroup
+        fields = [
+            "id",
+            "name",
+        ]
+
+
 class UserIgEditSerializer(serializers.ModelSerializer):
     interest_group = serializers.ListField(write_only=True)
 
     def update(self, instance, validated_data):
         with transaction.atomic():
-            instance.useriglink_set.all().delete()
-            ig_details = validated_data.pop("interest_group", [])
-
+            instance.user_ig_link_user.all().delete()
+            ig_details = set(validated_data.pop("interest_group", []))
             user_ig_links = [
                 UserIgLink(
                     id=uuid.uuid4(),
@@ -296,18 +305,18 @@ class UserIgEditSerializer(serializers.ModelSerializer):
                     ig_id=ig_data,
                     created_by=instance,
                     created_at=DateTimeUtils.get_current_utc_time(),
-                    verified=True,
                 )
                 for ig_data in ig_details
             ]
-
+            if len(user_ig_links) > 3:
+                raise ValueError(
+                    "Cannot add more than 3 interest groups")
             UserIgLink.objects.bulk_create(
                 user_ig_links)
+            return super().update(instance, validated_data)
 
     class Meta:
-        model = InterestGroup
+        model = User
         fields = [
-            "id",
-            "name",
             "interest_group",
         ]
