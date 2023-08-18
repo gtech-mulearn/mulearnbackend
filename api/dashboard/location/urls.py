@@ -11,8 +11,8 @@ urlpatterns = [
     path('states/<str:state_id>/', location_views.StateDataAPI.as_view()),
     
     path('zones/', location_views.ZoneDataAPI.as_view()),
-    path('zones/<str:state_id>/', location_views.ZoneDataAPI.as_view()),
+    path('zones/<str:zone_id>/', location_views.ZoneDataAPI.as_view()),
     
     path('districts/', location_views.DistrictDataAPI.as_view()),
-    path('districts/<str:zone_id>/', location_views.DistrictDataAPI.as_view()),
+    path('districts/<str:district_id>/', location_views.DistrictDataAPI.as_view()),
 ]

@@ -72,17 +72,9 @@ class ZoneSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Zone
-        fields = ["id", "name", "state", "state__country"]
+        fields = ["id", "name", "state"]
 
 class DistrictSerializer(serializers.ModelSerializer):
-
-    zone_id = serializers.CharField(required=False)
-        
-    def validate_zone_id(self, value):
-        if zone := Zone.objects.filter(id=value).first():
-            return zone.id
-        else:
-            raise serializers.ValidationError("Zone Does Not Exists")
 
     def update(self, instance, validated_data):
         validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
@@ -104,4 +96,4 @@ class DistrictSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["id", "name", "zone_id"]
+        fields = ["id", "name", "zone"]
