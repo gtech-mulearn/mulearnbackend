@@ -2,7 +2,7 @@ from django.core.exceptions import ObjectDoesNotExist
 from django.db import IntegrityError
 from rest_framework.views import APIView
 
-from db.user import Role, User
+from db.user import Role, User, UserRoleLink
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
@@ -125,6 +125,9 @@ class RoleManagementCSV(APIView):
 
 
 class UserRoleSearchAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user = User.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -144,3 +147,41 @@ class UserRoleSearchAPI(APIView):
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
+
+
+class UserRole(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        try:
+            serializer = dash_roles_serializer.UserRoleCreateSerializer(data=request.data, context={'request': request})
+            if serializer.is_valid():
+                serializer.save()
+
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER_ROLE.value,
+                    WebHookActions.UPDATE.value,
+                    request.data.get("user_id"),
+                )
+                return CustomResponse(general_message=['Role Added Successfully']).get_success_response()
+        except ObjectDoesNotExist as e:
+            return CustomResponse(general_message=[str(e)]).get_failure_response()
+
+    def delete(self, request):
+        user_id = request.data.get('user_id')
+        role_id = request.data.get('role_id')
+        try:
+            user_role_link = UserRoleLink.objects.get(role_id=role_id, user_id=user_id)
+            user_role_link.delete()
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_ROLE.value,
+                WebHookActions.DELETE.value,
+                user_role_link.id
+            )
+            return CustomResponse(general_message=["User Role deleted successfully"]).get_success_response()
+
+        except ObjectDoesNotExist as e:
+            return CustomResponse(general_message=[str(e)]).get_failure_response()
+
