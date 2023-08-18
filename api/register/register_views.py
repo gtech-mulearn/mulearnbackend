@@ -6,11 +6,12 @@ from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
 from api.integrations.kkem.kkem_serializer import KKEMAuthorization
-from db.organization import Country, District, Organization, Department, State, Zone
+from db.organization import Country, Department, District, Organization, State, Zone
 from db.task import InterestGroup
 from db.user import Role, User
 from utils.response import CustomResponse
 from utils.types import OrganizationType
+
 from . import serializers
 
 
@@ -169,7 +170,7 @@ class RegisterDataAPI(APIView):
 </html>
                         """
         email_host_user = decouple.config("EMAIL_HOST_USER")
-        from_mail = decouple.config('FROM_MAIL')
+        from_mail = decouple.config("FROM_MAIL")
         to = [user_obj.email]
         contact_msg = strip_tags(html_message)
         subject = "YOUR TICKET TO µFAM IS HERE!"
