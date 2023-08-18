@@ -261,6 +261,9 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+    def destroy(self, obj):
+        obj.delete()
+
 
 class LearningCircleNoteSerializer(serializers.ModelSerializer):
     note = serializers.CharField(required=True, error_messages={
