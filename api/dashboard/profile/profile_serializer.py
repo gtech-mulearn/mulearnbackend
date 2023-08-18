@@ -6,7 +6,7 @@ from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
 from db.user import User, UserSettings
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
@@ -117,14 +117,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             total_ig_karma = (
                 0
                 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
-                   is None
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
+                is None
                 else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
             )
-            interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
+            interest_groups.append(
+                {"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
 
@@ -171,7 +172,8 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role", "rank", "karma", "interest_groups")
+        fields = ("first_name", "last_name", "role",
+                  "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
         roles = self.context.get("roles")
@@ -222,7 +224,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        instance.is_public = validated_data.get("is_public", instance.is_public)
+        instance.is_public = validated_data.get(
+            "is_public", instance.is_public)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -236,7 +239,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         communities = instance.user_organization_link_user_id.filter(
             org__org_type=OrganizationType.COMMUNITY.value).all()
-        data["communities"] = ([community.org_id for community in communities] if communities else [])
+        data["communities"] = (
+            [community.org_id for community in communities] if communities else [])
         return data
 
     def update(self, instance, validated_data):
@@ -259,7 +263,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                     for org_data in community_data
                 ]
 
-                UserOrganizationLink.objects.bulk_create(user_organization_links)
+                UserOrganizationLink.objects.bulk_create(
+                    user_organization_links)
 
             return super().update(instance, validated_data)
 
@@ -273,4 +278,36 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "communities",
             "gender",
             "dob",
+        ]
+
+
+class UserIgEditSerializer(serializers.ModelSerializer):
+    interest_group = serializers.ListField(write_only=True)
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            instance.useriglink_set.all().delete()
+            ig_details = validated_data.pop("interest_group", [])
+
+            user_ig_links = [
+                UserIgLink(
+                    id=uuid.uuid4(),
+                    user=instance,
+                    ig_id=ig_data,
+                    created_by=instance,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                )
+                for ig_data in ig_details
+            ]
+
+            UserIgLink.objects.bulk_create(
+                user_ig_links)
+
+    class Meta:
+        model = InterestGroup
+        fields = [
+            "id",
+            "name",
+            "interest_group",
         ]
