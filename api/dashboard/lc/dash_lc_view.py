@@ -82,6 +82,13 @@ class LearningCircleHomeApi(APIView):
         serializer = LearningCircleHomeSerializer(learning_circle, many=False, context={"user_id": user_id})
         return CustomResponse(response=serializer.data).get_success_response()
 
+    def post(self, request, member_id, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        serializer = LearningCircleUpdateSerializer()
+        serializer.destroy(learning_circle_link)
+        return CustomResponse(general_message='Removed successfully').get_success_response()
+
     def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()

@@ -6,6 +6,7 @@ urlpatterns = [
     path('', profile_view.UserProfileEditView.as_view()),
 
     path('user-profile/', profile_view.UserProfileAPI.as_view()),
+    path('ig-edit/', profile_view.UserIgEditView.as_view()),
     path('user-profile/<str:muid>/', profile_view.UserProfileAPI.as_view()),
     # path('edit-user-profile/', profile_view.UserProfileAPI.as_view()),
     path('user-log/', profile_view.UserLogAPI.as_view()),

@@ -164,7 +164,9 @@ class ImportCSV:
         return rows
 
 
-def send_template_mail(context: dict, subject: str, address: list[str], attachment_address: str=None):
+def send_template_mail(
+    context: dict, subject: str, address: list[str], attachment_address: str = None
+):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
@@ -181,7 +183,6 @@ def send_template_mail(context: dict, subject: str, address: list[str], attachme
         attachments: A string that contain the path of the attachment
     """
 
-    email_host_user = decouple.config("EMAIL_HOST_USER")
     from_mail = decouple.config("FROM_MAIL")
 
     base_url = decouple.config("FR_DOMAIN_NAME")
@@ -205,8 +206,8 @@ def send_template_mail(context: dict, subject: str, address: list[str], attachme
             subject=subject,
             body=email_content,
             from_email=from_mail,
-            to=[context["email"]])
+            to=[context["email"]],
+        )
         email.attach_file(attachment_address)
-        email.content_subtype = 'html'
+        email.content_subtype = "html"
         email.send()
-

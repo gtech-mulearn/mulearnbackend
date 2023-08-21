@@ -23,7 +23,7 @@ class Country(models.Model):
 class State(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
-    country = models.ForeignKey(Country, on_delete=models.CASCADE)
+    country = models.ForeignKey(Country, on_delete=models.CASCADE, related_name='state_country')
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='state_updated_by')
     updated_at = models.DateTimeField()
@@ -39,7 +39,7 @@ class State(models.Model):
 class Zone(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
-    state = models.ForeignKey(State, on_delete=models.CASCADE)
+    state = models.ForeignKey(State, on_delete=models.CASCADE, related_name='zone_state')
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='zone_updated_by')
     updated_at = models.DateTimeField()
@@ -55,7 +55,7 @@ class Zone(models.Model):
 class District(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
-    zone = models.ForeignKey(Zone, on_delete=models.CASCADE)
+    zone = models.ForeignKey(Zone, on_delete=models.CASCADE, related_name="district_zone")
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='district_updated_by')
     updated_at = models.DateTimeField()

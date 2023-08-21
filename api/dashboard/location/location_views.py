@@ -8,7 +8,13 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 
-from .location_serializer import CountrySerializer, StateSerializer, ZoneSerializer, DistrictSerializer
+from .location_serializer import (
+    CountrySerializer,
+    StateSerializer,
+    ZoneSerializer,
+    DistrictSerializer,
+)
+from django.db.models import Q
 
 
 class CountryDataAPI(APIView):
@@ -92,10 +98,12 @@ class StateDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request, country_id=None):
+    def get(self, request, state_id=None):
         try:
-            if country_id:
-                states = State.objects.filter(country_id=country_id)
+            if state_id:
+                states = State.objects.filter(
+                    Q(pk=state_id) | Q(country__pk=state_id)
+                ).all()
             else:
                 states = State.objects.all()
 
@@ -103,9 +111,8 @@ class StateDataAPI(APIView):
                 states, request, ["name"], {"name": "name"}
             )
 
-            serializer = StateSerializer(
-                paginated_queryset.get("queryset"), many=True
-            )
+            serializer = StateSerializer(paginated_queryset.get("queryset"), many=True)
+
             return CustomResponse().paginated_response(
                 data=serializer.data, pagination=paginated_queryset.get("pagination")
             )
@@ -132,10 +139,10 @@ class StateDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request, country_id):
+    def patch(self, request, state_id):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            state = State.objects.get(id=country_id)
+            state = State.objects.get(id=state_id)
             serializer = StateSerializer(
                 state, data=request.data, context={"user_id": user_id}
             )
@@ -153,9 +160,9 @@ class StateDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request, country_id):
+    def delete(self, request, state_id):
         try:
-            state = State.objects.get(id=country_id)
+            state = State.objects.get(id=state_id)
             state.delete()
             return CustomResponse(
                 general_message="State deleted successfully"
@@ -168,10 +175,12 @@ class ZoneDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request, state_id=None):
+    def get(self, request, zone_id=None):
         try:
-            if state_id:
-                zones = Zone.objects.filter(state_id=state_id)
+            if zone_id:
+                zones = Zone.objects.filter(
+                    Q(pk=zone_id) | Q(state__pk=zone_id) | Q(state__country__pk=zone_id)
+                ).all()
             else:
                 zones = Zone.objects.all()
 
@@ -179,9 +188,7 @@ class ZoneDataAPI(APIView):
                 zones, request, ["name"], {"name": "name"}
             )
 
-            serializer = ZoneSerializer(
-                paginated_queryset.get("queryset"), many=True
-            )
+            serializer = ZoneSerializer(paginated_queryset.get("queryset"), many=True)
             return CustomResponse().paginated_response(
                 data=serializer.data, pagination=paginated_queryset.get("pagination")
             )
@@ -192,10 +199,7 @@ class ZoneDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = ZoneSerializer(
-                data=request.data, context={"user_id": user_id}
-            )
-            print(request.data)
+            serializer = ZoneSerializer(data=request.data, context={"user_id": user_id})
             if serializer.is_valid():
                 serializer.save()
                 return CustomResponse(
@@ -209,10 +213,10 @@ class ZoneDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request, state_id):
+    def patch(self, request, zone_id):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            zone = Zone.objects.get(id=state_id)
+            zone = Zone.objects.get(id=zone_id)
             serializer = ZoneSerializer(
                 zone, data=request.data, context={"user_id": user_id}
             )
@@ -230,9 +234,9 @@ class ZoneDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request, state_id):
+    def delete(self, request, zone_id):
         try:
-            zone = Zone.objects.get(id=state_id)
+            zone = Zone.objects.get(id=zone_id)
             zone.delete()
             return CustomResponse(
                 general_message="Zone deleted successfully"
@@ -240,14 +244,20 @@ class ZoneDataAPI(APIView):
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
+
 class DistrictDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request, zone_id=None):
+    def get(self, request, district_id=None):
         try:
-            if zone_id:
-                districts = District.objects.filter(zone_id=zone_id)
+            if district_id:
+                districts = District.objects.filter(
+                    Q(pk=district_id)
+                    | Q(zone__pk=district_id)
+                    | Q(zone__state__pk=district_id)
+                    | Q(zone__state__country__pk=district_id)
+                ).all()
             else:
                 districts = District.objects.all()
 
@@ -271,7 +281,6 @@ class DistrictDataAPI(APIView):
             serializer = DistrictSerializer(
                 data=request.data, context={"user_id": user_id}
             )
-            print(request.data)
             if serializer.is_valid():
                 serializer.save()
                 return CustomResponse(
