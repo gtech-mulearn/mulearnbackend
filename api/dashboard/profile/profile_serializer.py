@@ -7,7 +7,7 @@ from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
-from db.user import User, UserSettings
+from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -320,3 +320,44 @@ class UserIgEditSerializer(serializers.ModelSerializer):
         fields = [
             "interest_group",
         ]
+
+
+class LinkSocials(ModelSerializer):
+    github = serializers.CharField(required=False)
+    facebook = serializers.CharField(required=False)
+    instagram = serializers.CharField(required=False)
+    linkedin = serializers.CharField(required=False)
+    dribble = serializers.CharField(required=False)
+    behance = serializers.CharField(required=False)
+    stackoverflow = serializers.CharField(required=False)
+    medium = serializers.CharField(required=False)
+
+    class Meta:
+        model = Socials
+        fields = [
+            "github",
+            "facebook",
+            "instagram",
+            "linkedin",
+            "dribble",
+            "behance",
+            "stackoverflow",
+            "medium",
+        ]
+
+    def create(self, validated_data):
+        validated_data['user_id'] = JWTUtils.fetch_user_id(self.context.get('request'))
+        validated_data['id'] = str(uuid.uuid4())
+        # validated_data['updated_by_id'] = JWTUtils.fetch_user_id(self.context.get('request'))
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['github'] = self.data.get('github')
+        validated_data['facebook'] = self.data.get('facebook')
+        validated_data['instagram'] = self.data.get('instagram')
+        validated_data['linkedin'] = self.data.get('linkedin')
+        validated_data['dribble'] = self.data.get('dribble')
+        validated_data['behance'] = self.data.get('behance')
+        validated_data['stackoverflow'] = self.data.get('stackoverflow')
+        validated_data['medium'] = self.data.get('medium')
+        print(validated_data)
+
+        return Socials.objects.create(**validated_data)

@@ -78,16 +78,23 @@ class UserRoleLink(models.Model):
         db_table = 'user_role_link'
 
 
-class Github(models.Model):
+class Socials(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
-    username = models.CharField(max_length=100)
-    updated_by = models.CharField(max_length=36)
+    github = models.CharField(max_length=60)
+    facebook = models.CharField(max_length=60)
+    instagram = models.CharField(max_length=60)
+    linkedin = models.CharField(max_length=60)
+    dribble = models.CharField(max_length=60)
+    behance = models.CharField(max_length=60)
+    stackoverflow = models.CharField(max_length=60)
+    medium = models.CharField(max_length=60)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = 'github'
+        db_table = 'socials'
 
 
 class ForgotPassword(models.Model):
