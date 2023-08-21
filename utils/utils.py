@@ -165,7 +165,7 @@ class ImportCSV:
 
 
 def send_template_mail(
-    context: dict, subject: str, address: list[str], attachment_address: str = None
+    context: dict, subject: str, address: list[str], attachment: str = None
 ):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
@@ -177,10 +177,7 @@ def send_template_mail(
     :param address: The `address` parameter is a list of strings that represents the path to the email
     template file. It is used to specify the location of the email template file that will be rendered
     and used as the content of the email
-
-    Args:
-        attachments:
-        attachments: A string that contain the path of the attachment
+    attachment: The Attachment That send to the user
     """
 
     from_mail = decouple.config("FROM_MAIL")
@@ -191,7 +188,7 @@ def send_template_mail(
         f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
     )
 
-    if attachment_address is None:
+    if attachment is None:
         send_mail(
             subject=subject,
             message=email_content,
@@ -208,6 +205,6 @@ def send_template_mail(
             from_email=from_mail,
             to=[context["email"]],
         )
-        email.attach_file(attachment_address)
+        email.attach(attachment)
         email.content_subtype = "html"
         email.send()
