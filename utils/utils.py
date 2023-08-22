@@ -193,7 +193,7 @@ def send_template_mail(
             subject=subject,
             message=email_content,
             from_email=from_mail,
-            recipient_list=[context["email"]],
+            recipient_list=[getattr(context, "email")],
             html_message=email_content,
             fail_silently=False,
         )
