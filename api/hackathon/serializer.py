@@ -439,7 +439,6 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source="district.name", allow_null=True)
     org_id = serializers.CharField(source="org.id", allow_null=True)
     district_id = serializers.CharField(source="district.id", allow_null=True)
-    user_info = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -464,7 +463,6 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
             "website",
             "org_id",
             "district_id",
-            "user_info",
         )
 
     def get_banner(self, obj):

@@ -53,6 +53,26 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             "ig"
         ]
 
+    def validate(self, data):
+        user_id = self.context.get('user_id')
+
+        # Validate interest group (ig)
+        ig_id = data.get('ig')
+        if not InterestGroup.objects.filter(id=ig_id).exists():
+            raise serializers.ValidationError("Invalid interest group")
+
+        # Validate user's organization link
+        org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+                                                       org__org_type=OrganizationType.COLLEGE.value).first()
+        if not org_link:
+            raise serializers.ValidationError("User must be associated with a college organization")
+
+        # Check if the user is already a member of a learning circle with the same interest group
+        if UserCircleLink.objects.filter(user_id=user_id, circle__ig_id=ig_id, accepted=True).exists():
+            raise serializers.ValidationError("Already a member of a learning circle with the same interest group")
+
+        return data
+
     def create(self, validated_data):
         user_id = self.context.get('user_id')
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
@@ -65,8 +85,6 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         while code in existing_codes:
             code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2] + str(i)
             i += 1
-        if UserCircleLink.objects.filter(user_id=user_id, circle_id__ig_id=ig, accepted=True).exists():
-            raise serializers.ValidationError("Already a member of learning circle with same interest group")
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
@@ -113,8 +131,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             user__usercirclelink__accepted=True,
             task__ig=obj.ig,
             appraiser_approved=True
-        ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
-
+        ).aggregate(total_karma=Sum('karma'))[
+                          'total_karma'] or 0
         return total_karma
 
     def get_members(self, obj):
@@ -243,6 +261,9 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+    def destroy(self, obj):
+        obj.delete()
+
 
 class LearningCircleNoteSerializer(serializers.ModelSerializer):
     note = serializers.CharField(required=True, error_messages={
@@ -283,13 +304,23 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     class Meta:
         model = LearningCircle
-        fields = ['name', 'ig_name', 'member_count']
+        fields = ['name', 'ig_name', 'member_count', 'members']
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
 
     def get_member_count(self, obj):
         return UserCircleLink.objects.filter(circle=obj, accepted=1).count()
+
+    def get_members(self, obj):
+        members = UserCircleLink.objects.filter(circle=obj, accepted=1)
+        member_info = []
+        for member in members:
+            member_info.append({
+                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
+            })
+        return member_info
