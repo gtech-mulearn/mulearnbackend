@@ -126,14 +126,15 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             return False
 
     def get_total_karma(self, obj):
-        total_karma = KarmaActivityLog.objects.filter(
-            user__usercirclelink__circle=obj,
-            user__usercirclelink__accepted=True,
-            task__ig=obj.ig,
-            appraiser_approved=True
-        ).aggregate(total_karma=Sum('karma'))[
-                          'total_karma'] or 0
-        return total_karma
+        return (
+            KarmaActivityLog.objects.filter(
+                user__usercirclelink__circle=obj,
+                user__usercirclelink__accepted=True,
+                task__ig=obj.ig,
+                appraiser_approved=True,
+            ).aggregate(total_karma=Sum('karma'))['total_karma']
+            or 0
+        )
 
     def get_members(self, obj):
         return self._get_member_info(obj, accepted=1)
@@ -162,16 +163,13 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         return member_info
 
     def get_rank(self, obj):
-        circle_ranks = {}
-
         total_karma = KarmaActivityLog.objects.filter(
             user__usercirclelink__circle=obj,
             user__usercirclelink__accepted=True,
             task__ig=obj.ig,
             appraiser_approved=True
         ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
-        circle_ranks[obj.name] = {'total_karma': total_karma}
-
+        circle_ranks = {obj.name: {'total_karma': total_karma}}
         all_learning_circles = LearningCircle.objects.filter(ig=obj.ig).exclude(id=obj.id)
 
         for lc in all_learning_circles:
@@ -186,13 +184,14 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
 
         sorted_ranks = sorted(circle_ranks.items(), key=lambda x: x[1]['total_karma'], reverse=True)
 
-        current_circle_rank = None
-        for i, (circle_name, data) in enumerate(sorted_ranks):
-            if circle_name == obj.name:
-                current_circle_rank = i + 1
-                break
-
-        return current_circle_rank
+        return next(
+            (
+                i + 1
+                for i, (circle_name, data) in enumerate(sorted_ranks)
+                if circle_name == obj.name
+            ),
+            None,
+        )
 
     class Meta:
         model = LearningCircle
@@ -318,9 +317,11 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
     def get_members(self, obj):
         members = UserCircleLink.objects.filter(circle=obj, accepted=1)
-        member_info = []
-        for member in members:
-            member_info.append({
-                'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
-            })
-        return member_info
+        return [
+            {
+                'username': f'{member.user.first_name} {member.user.last_name}'
+                if member.user.last_name
+                else member.user.first_name,
+            }
+            for member in members
+        ]

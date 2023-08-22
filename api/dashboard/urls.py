@@ -12,4 +12,5 @@ urlpatterns = [
     path('profile/', include('api.dashboard.profile.urls')),
     path('lc/', include('api.dashboard.lc.urls')),
     path('referral/', include('api.dashboard.referral.urls')),
+    path('college/', include('api.dashboard.college.urls'))
 ]
