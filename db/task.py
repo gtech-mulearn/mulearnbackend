@@ -144,7 +144,6 @@ class TaskList(models.Model):
     )
     active = models.BooleanField()
     variable_karma = models.BooleanField()
-    voucher = models.BooleanField()
     usage_count = models.IntegerField(blank=True, null=True)
     updated_by = models.ForeignKey(
         User,
