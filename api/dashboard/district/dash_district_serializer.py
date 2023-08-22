@@ -4,7 +4,7 @@ from django.db.models import Sum, F
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink, Organization, College
-from db.task import TotalKarma, KarmaActivityLog, Level, UserLvlLink
+from db.task import TotalKarma, KarmaActivityLog, UserLvlLink, Level
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
@@ -167,8 +167,6 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
         fields = ["college_name", "college_code", "level"]
 
     def get_level(self, obj):
-        print(obj.user_organization_link_org_id.filter(org__org_type='College'))
-        # print(obj.user_organization_link_org_id)
         level = Level.objects.all()
         level_dict = {}
         level_list = []
@@ -177,10 +175,11 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
             level_dict['students_count'] = len(UserLvlLink.objects.filter(
                 level=levels,
                 user=obj.user_organization_link_org_id))
-                # user__user_organization_link_user_id=obj.user_organization_link_org_id).all())
             level_list.append(level_dict)
             level_dict = {}
         return level_list
+
+
 # {
 #     "hasError": false,
 #     "statusCode": 200,
