@@ -167,6 +167,8 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
         fields = ["college_name", "college_code", "level"]
 
     def get_level(self, obj):
+        print(obj.user_organization_link_org_id.filter(org__org_type='College'))
+        # print(obj.user_organization_link_org_id)
         level = Level.objects.all()
         level_dict = {}
         level_list = []
@@ -174,11 +176,54 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
             level_dict['level'] = levels.level_order
             level_dict['students_count'] = len(UserLvlLink.objects.filter(
                 level=levels,
-                user__user_organization_link_user_id=obj.user_organization_link_org_id).all())
+                user=obj.user_organization_link_org_id))
+                # user__user_organization_link_user_id=obj.user_organization_link_org_id).all())
             level_list.append(level_dict)
             level_dict = {}
         return level_list
-
+# {
+#     "hasError": false,
+#     "statusCode": 200,
+#     "message": {
+#         "general": []
+#     },
+#     "response": [
+#         {
+#             "college_name": "SREENARAYAGURU COLLEGE OF ARTS AND SCIENCE",
+#             "college_code": "SNTCSS",
+#             "level": [
+#                 {
+#                     "level": 5,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 3,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 1,
+#                     "students_count": 0
+#                 }
+#             ]
+#         },
+#         {
+#             "college_name": "CO-OPERATIVE ARTS & SCIENCE COLLEGE,MADAI, PAZHAYANGADI",
+#             "college_code": "CAS",
+#             "level": [
+#                 {
+#                     "level": 5,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 3,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 1,
+#                     "students_count": 0
+#                 }
+#             ]
+#         },
 
 class DistrictStudentDetailsSerializer(serializers.ModelSerializer):
     fullname = serializers.ReadOnlyField(source="user.fullname")
