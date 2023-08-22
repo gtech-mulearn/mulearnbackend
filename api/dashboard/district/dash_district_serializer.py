@@ -4,7 +4,7 @@ from django.db.models import Sum, F
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink, Organization, College
-from db.task import TotalKarma, KarmaActivityLog, Level, UserLvlLink
+from db.task import TotalKarma, KarmaActivityLog, UserLvlLink, Level
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
@@ -174,11 +174,55 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
             level_dict['level'] = levels.level_order
             level_dict['students_count'] = len(UserLvlLink.objects.filter(
                 level=levels,
-                user__user_organization_link_user_id=obj.user_organization_link_org_id).all())
+                user=obj.user_organization_link_org_id))
             level_list.append(level_dict)
             level_dict = {}
         return level_list
 
+
+# {
+#     "hasError": false,
+#     "statusCode": 200,
+#     "message": {
+#         "general": []
+#     },
+#     "response": [
+#         {
+#             "college_name": "SREENARAYAGURU COLLEGE OF ARTS AND SCIENCE",
+#             "college_code": "SNTCSS",
+#             "level": [
+#                 {
+#                     "level": 5,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 3,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 1,
+#                     "students_count": 0
+#                 }
+#             ]
+#         },
+#         {
+#             "college_name": "CO-OPERATIVE ARTS & SCIENCE COLLEGE,MADAI, PAZHAYANGADI",
+#             "college_code": "CAS",
+#             "level": [
+#                 {
+#                     "level": 5,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 3,
+#                     "students_count": 0
+#                 },
+#                 {
+#                     "level": 1,
+#                     "students_count": 0
+#                 }
+#             ]
+#         },
 
 class DistrictStudentDetailsSerializer(serializers.ModelSerializer):
     fullname = serializers.ReadOnlyField(source="user.fullname")
