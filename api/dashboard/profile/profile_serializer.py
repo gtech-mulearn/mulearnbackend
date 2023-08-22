@@ -282,12 +282,26 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
 
 class UserIgListSerializer(serializers.ModelSerializer):
+    karma = serializers.SerializerMethodField()
+
+    def get_karma(self, obj):
+        return (
+            0
+            if KarmaActivityLog.objects.filter(task__ig=obj, user=self.context.get("user_id"), appraiser_approved=True)
+            .aggregate(Sum("karma"))
+            .get("karma__sum")
+            is None
+            else KarmaActivityLog.objects.filter(task__ig=obj, user=self.context.get("user_id"), appraiser_approved=True)
+            .aggregate(Sum("karma"))
+            .get("karma__sum")
+        )
 
     class Meta:
         model = InterestGroup
         fields = [
             "id",
             "name",
+            "karma"
         ]
 
 
