@@ -1,14 +1,15 @@
 from rest_framework.views import APIView
 
-from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DiscordWebhooks
 from . import profile_serializer
-# from .profile_serializer import LinkSocials
 
+
+# from .profile_serializer import LinkSocials
 
 
 class UserProfileEditView(APIView):
@@ -215,7 +216,6 @@ class UserRankAPI(APIView):
             user, many=False, context={"roles": roles}
         )
         return CustomResponse(response=serializer.data).get_success_response()
-
 
 # class Socials(APIView):
 #     authentication_classes = [CustomizePermission]
