@@ -127,13 +127,13 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         return (
-            KarmaActivityLog.objects.filter(
-                user__usercirclelink__circle=obj,
-                user__usercirclelink__accepted=True,
-                task__ig=obj.ig,
-                appraiser_approved=True,
-            ).aggregate(total_karma=Sum('karma'))['total_karma']
-            or 0
+                KarmaActivityLog.objects.filter(
+                    user__usercirclelink__circle=obj,
+                    user__usercirclelink__accepted=True,
+                    task__ig=obj.ig,
+                    appraiser_approved=True,
+                ).aggregate(total_karma=Sum('karma'))['total_karma']
+                or 0
         )
 
     def get_members(self, obj):
@@ -292,9 +292,9 @@ class LearningCircleMeetSerializer(serializers.ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
-        instance.meet_time = validated_data.get('meet_time')
-        instance.meet_place = validated_data.get('meet_place')
-        instance.day = validated_data.get('day')
+        instance.meet_time = validated_data.get('meet_time', instance.meet_time)
+        instance.meet_place = validated_data.get('meet_place', instance.meet_place)
+        instance.day = validated_data.get('day', instance.day)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
