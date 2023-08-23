@@ -7,6 +7,7 @@ from db.organization import UserOrganizationLink
 from db.task import UserLvlLink, TotalKarma, KarmaActivityLog, Level
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
+from django.db.models import Sum, F, Case, When, Value, IntegerField
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
@@ -21,8 +22,16 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["college_name", "campus_lead", "campus_code", "campus_zone", "total_karma", "total_members",
-                  "active_members", "rank"]
+        fields = [
+            "college_name",
+            "campus_lead",
+            "campus_code",
+            "campus_zone",
+            "total_karma",
+            "total_members",
+            "active_members",
+            "rank",
+        ]
 
     def get_total_members(self, obj):
         return obj.org.user_organization_link_org_id.count()
@@ -33,28 +42,37 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             verified=True,
             user__active=True,
             user__total_karma_user__isnull=False,
-            user__total_karma_user__created_at__gte=last_month
+            user__total_karma_user__created_at__gte=last_month,
         ).count()
         return active_members_count
 
     def get_total_karma(self, obj):
-        karma = obj.org.user_organization_link_org_id.filter(org__org_type=OrganizationType.COLLEGE.value,
-                                                             verified=True, user__total_karma_user__isnull=False) \
-            .aggregate(total_karma=Sum('user__total_karma_user__karma'))
-        return karma['total_karma'] or 0
+        karma = obj.org.user_organization_link_org_id.filter(
+            org__org_type=OrganizationType.COLLEGE.value,
+            verified=True,
+            user__total_karma_user__isnull=False,
+        ).aggregate(total_karma=Sum("user__total_karma_user__karma"))
+        return karma["total_karma"] or 0
 
     def get_rank(self, obj):
-        rank = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value, verified=True, user__total_karma_user__isnull=False) \
-            .values('org').annotate(total_karma=Sum('user__total_karma_user__karma')).order_by('-total_karma')
+        rank = (
+            UserOrganizationLink.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
+                user__total_karma_user__isnull=False,
+            )
+            .values("org")
+            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+            .order_by("-total_karma")
+        )
 
-        college_ranks = {college['org']: i + 1 for i, college in enumerate(rank)}
+        college_ranks = {college["org"]: i + 1 for i, college in enumerate(rank)}
         college_id = obj.org.id
         return college_ranks.get(college_id)
 
 
 class CampusStudentInEachLevelSerializer(serializers.ModelSerializer):
-    level = serializers.ReadOnlyField(source='level_order')
+    level = serializers.ReadOnlyField(source="level_order")
     students = serializers.SerializerMethodField()
 
     class Meta:
@@ -62,9 +80,11 @@ class CampusStudentInEachLevelSerializer(serializers.ModelSerializer):
         fields = ["level", "students"]
 
     def get_students(self, obj):
-        user_org = self.context.get('user_org')
-        user_level_link = UserLvlLink.objects.filter(level__level_order=obj.level_order,
-                                                     user__user_organization_link_user_id__org__title=user_org).all()
+        user_org = self.context.get("user_org")
+        user_level_link = UserLvlLink.objects.filter(
+            level__level_order=obj.level_order,
+            user__user_organization_link_user_id__org__title=user_org,
+        ).all()
         return len(user_level_link)
 
 
@@ -77,17 +97,18 @@ class CampusStudentDetailsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TotalKarma
-        fields = ("fullname", "karma", "muid", "rank", "level", 'created_at')
+        fields = ("fullname", "karma", "muid", "rank", "level", "created_at")
 
     def get_karma(self, obj):
         return obj.user.total_karma_user.karma or 0
 
     def get_rank(self, obj):
-        rank = TotalKarma.objects.filter(
-            user__total_karma_user__isnull=False
-        ).annotate(
-            rank=F('user__total_karma_user__karma')
-        ).order_by('-rank').values_list('rank', flat=True)
+        rank = (
+            TotalKarma.objects.filter(user__total_karma_user__isnull=False)
+            .annotate(rank=F("user__total_karma_user__karma"))
+            .order_by("-rank")
+            .values_list("rank", flat=True)
+        )
 
         ranks = {karma: i + 1 for i, karma in enumerate(rank)}
         return ranks.get(obj.user.total_karma_user.karma, None)
@@ -101,48 +122,39 @@ class CampusStudentDetailsSerializer(serializers.ModelSerializer):
 
 class WeeklyKarmaSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="org.title")
-    day_0 = serializers.SerializerMethodField()
-    day_1 = serializers.SerializerMethodField()
-    day_2 = serializers.SerializerMethodField()
-    day_3 = serializers.SerializerMethodField()
-    day_4 = serializers.SerializerMethodField()
-    day_5 = serializers.SerializerMethodField()
-    day_6 = serializers.SerializerMethodField()
-
-    days = 7
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["college_name", "day_0", "day_1", "day_2", "day_3", "day_4", "day_5", "day_6"]
+        fields = ["college_name"]
 
-    def karma_by_date(self, obj, days_delta):
+    def to_representation(self, instance):
+        response = super().to_representation(instance)
+
         today = DateTimeUtils.get_current_utc_time().date()
-        date = today - timedelta(days=days_delta)
-        students = UserOrganizationLink.objects.filter(org_id=obj.org_id)
-        karma = 0
-        for student in students:
-            karma_logs = KarmaActivityLog.objects.filter(user=student.user, created_at__date=date).aggregate(
-                total_karma=Sum('karma'))
-            karma += karma_logs['total_karma'] or 0
-        return karma
+        date_range = [today - timedelta(days=i) for i in range(7)]
 
-    def get_day_0(self, obj):
-        return self.karma_by_date(obj, 0)
+        if karma_logs := (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user_id__org=instance.org,
+                created_at__date__in=date_range,
+            )
+            .annotate(
+                date_index=Case(
+                    *[
+                        When(created_at__date=date, then=Value(i))
+                        for i, date in enumerate(date_range)
+                    ],
+                    output_field=IntegerField(),
+                )
+            )
+            .values("date_index")
+            .annotate(total_karma=Sum("karma"))
+            .values_list("total_karma", flat=True)
+        ):
+            karma_data = {
+                i + 1: karma_logs[i] if i < len(karma_logs) else 0
+                for i in range(len(date_range))
+            }
+            response["karma"] = karma_data
 
-    def get_day_1(self, obj):
-        return self.karma_by_date(obj, 1)
-
-    def get_day_2(self, obj):
-        return self.karma_by_date(obj, 2)
-
-    def get_day_3(self, obj):
-        return self.karma_by_date(obj, 3)
-
-    def get_day_4(self, obj):
-        return self.karma_by_date(obj, 4)
-
-    def get_day_5(self, obj):
-        return self.karma_by_date(obj, 5)
-
-    def get_day_6(self, obj):
-        return self.karma_by_date(obj, 6)
+        return response
