@@ -7,6 +7,7 @@ from db.organization import UserOrganizationLink
 from db.task import UserLvlLink, TotalKarma, KarmaActivityLog, Level
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
+from django.db.models import Sum, F, Case, When, Value, IntegerField
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
@@ -121,37 +122,39 @@ class CampusStudentDetailsSerializer(serializers.ModelSerializer):
 
 class WeeklyKarmaSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="org.title")
-    day_0 = serializers.SerializerMethodField()
-    day_1 = serializers.SerializerMethodField()
-    day_2 = serializers.SerializerMethodField()
-    day_3 = serializers.SerializerMethodField()
-    day_4 = serializers.SerializerMethodField()
-    day_5 = serializers.SerializerMethodField()
-    day_6 = serializers.SerializerMethodField()
-    days = 7
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["college_name"] + [f"day_{i}" for i in range(7)]
-
-    def karma_by_date(self, obj, days_delta, today, students):
-        date = today - timedelta(days=days_delta)
-        karma = 0
-        for student in students:
-            karma_logs = KarmaActivityLog.objects.filter(
-                user=student.user, created_at__date=date
-            ).aggregate(total_karma=Sum("karma"))
-
-            karma += karma_logs["total_karma"] or 0
-        return karma
-
-    def get_day(self, obj, days_delta):
-        return self.karma_by_date(obj, days_delta)
+        fields = ["college_name"]
 
     def to_representation(self, instance):
-        data = super().to_representation(instance)
+        response = super().to_representation(instance)
+
         today = DateTimeUtils.get_current_utc_time().date()
-        students = UserOrganizationLink.objects.filter(org_id=instance.org_id)
-        for i in range(7):
-            data[f"day_{i}"] = self.get_day(instance, i, today, students)
-        return data
+        date_range = [today - timedelta(days=i) for i in range(7)]
+
+        if karma_logs := (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user_id__org=instance.org,
+                created_at__date__in=date_range,
+            )
+            .annotate(
+                date_index=Case(
+                    *[
+                        When(created_at__date=date, then=Value(i))
+                        for i, date in enumerate(date_range)
+                    ],
+                    output_field=IntegerField(),
+                )
+            )
+            .values("date_index")
+            .annotate(total_karma=Sum("karma"))
+            .values_list("total_karma", flat=True)
+        ):
+            karma_data = {
+                i + 1: karma_logs[i] if i < len(karma_logs) else 0
+                for i in range(len(date_range))
+            }
+            response["karma"] = karma_data
+
+        return response
