@@ -1,5 +1,5 @@
 {% extends "mails/base_mail.html" %} {% block content %}
-<div style="background: transparent; width: 100%; height: 150px">
+<div style="background: transparent; width: 100%; height: auto">
   <center>
     <h1
       style="
@@ -19,10 +19,10 @@
         font-size: 13px;
       "
     >
-      Hey there {{user_obj.fullname }}! A hearty welcome to the MuLearn Family.<br />
+      Hey there {{user.fullname }}! A hearty welcome to the MuLearn Family.<br />
       We are delighted to have you on board and we hereby acknowledge as well as
       appreciate your interest to join our community and to take part in our
-      initiatives.<br />
+      initiatives.<br /><br />
 
       Your personal µid is provided below:
     </p>
@@ -45,7 +45,7 @@
           font-size: 13px;
         "
       >
-        {{user_obj.mu_id}}
+        {{ user.mu_id }}
       </p>
     </a>
 
@@ -59,7 +59,7 @@
       "
     >
       Stay tuned for our events and notifications. Remember, you are not just
-      any learner; you're a MuLearner😉.<br /><br />Happy Learning!
+      any learner; you're a μLearner 😉.<br /><br />Happy Learning!
     </p>
   </center>
 </div>
