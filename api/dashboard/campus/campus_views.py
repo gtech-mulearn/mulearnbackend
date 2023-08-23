@@ -1,14 +1,13 @@
-from datetime import timedelta
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog, Level
+from db.task import Level
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import CommonUtils
+
 from . import serializers
-from django.db.models import Sum
 
 
 class CampusDetailsAPI(APIView):
@@ -86,7 +85,6 @@ class CampusStudentDetailsCSVAPI(APIView):
         return CommonUtils.generate_csv(serializer.data, "Campus Details")
 
 
-# views.py
 class WeeklyKarmaAPI(APIView):
     authentication_classes = [CustomizePermission]
 
