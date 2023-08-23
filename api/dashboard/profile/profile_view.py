@@ -1,12 +1,14 @@
 from rest_framework.views import APIView
 
-from db.task import KarmaActivityLog, Level
+from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
 from db.user import User, UserSettings, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DiscordWebhooks
 from . import profile_serializer
+from .profile_serializer import LinkSocials
+
 
 
 class UserProfileEditView(APIView):
@@ -17,7 +19,8 @@ class UserProfileEditView(APIView):
         user = User.objects.filter(id=user_id).first()
         if not user:
             return CustomResponse(general_message='User Not Exists').get_failure_response()
-        serializer = profile_serializer.UserProfileEditSerializer(user, many=False)
+        serializer = profile_serializer.UserProfileEditSerializer(
+            user, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
@@ -45,6 +48,33 @@ class UserProfileEditView(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
+class UserIgEditView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_ig = InterestGroup.objects.filter(
+            user_ig_link_ig__user_id=user_id).all()
+        serializer = profile_serializer.UserIgListSerializer(
+            user_ig, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    def patch(self, request):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            user = User.objects.get(id=user_id)
+            serializer = profile_serializer.UserIgEditSerializer(
+                user, data=request.data, partial=True
+            )
+            if serializer.is_valid():
+                serializer.save()
+            else:
+                return CustomResponse(response=serializer.errors).get_failure_response()
+            return CustomResponse(general_message="Interest Group edited successfully").get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
@@ -60,7 +90,8 @@ class UserProfileAPI(APIView):
                     general_message="Private Profile"
                 ).get_failure_response()
             user_id = user.id
-            roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
+            roles = [
+                role.role.title for role in UserRoleLink.objects.filter(user=user)]
         else:
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
@@ -178,8 +209,25 @@ class UserRankAPI(APIView):
         user = User.objects.filter(mu_id=muid).first()
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
-        roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
+        roles = [
+            role.role.title for role in UserRoleLink.objects.filter(user=user)]
         serializer = profile_serializer.UserRankSerializer(
             user, many=False, context={"roles": roles}
         )
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class Socials(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+        # print(request.data)
+        serializer = LinkSocials(data=request.data, context={"request": request})
+        # print(serializer)
+        if serializer.is_valid():
+            # print(serializer.data)
+            serializer.save()
+
+            return CustomResponse(general_message="Socials Added").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
+

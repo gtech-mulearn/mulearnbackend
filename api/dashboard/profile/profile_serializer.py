@@ -6,8 +6,8 @@ from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
-from db.user import User, UserSettings
+from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
+from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -117,14 +117,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
             total_ig_karma = (
                 0
                 if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
-                   is None
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
+                is None
                 else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
             )
-            interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
+            interest_groups.append(
+                {"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
 
@@ -171,7 +172,8 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role", "rank", "karma", "interest_groups")
+        fields = ("first_name", "last_name", "role",
+                  "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
         roles = self.context.get("roles")
@@ -222,7 +224,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        instance.is_public = validated_data.get("is_public", instance.is_public)
+        instance.is_public = validated_data.get(
+            "is_public", instance.is_public)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -236,7 +239,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         communities = instance.user_organization_link_user_id.filter(
             org__org_type=OrganizationType.COMMUNITY.value).all()
-        data["communities"] = ([community.org_id for community in communities] if communities else [])
+        data["communities"] = (
+            [community.org_id for community in communities] if communities else [])
         return data
 
     def update(self, instance, validated_data):
@@ -259,7 +263,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                     for org_data in community_data
                 ]
 
-                UserOrganizationLink.objects.bulk_create(user_organization_links)
+                UserOrganizationLink.objects.bulk_create(
+                    user_organization_links)
 
             return super().update(instance, validated_data)
 
@@ -274,3 +279,99 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "gender",
             "dob",
         ]
+
+
+class UserIgListSerializer(serializers.ModelSerializer):
+    karma = serializers.SerializerMethodField()
+
+    def get_karma(self, obj):
+        return (
+            0
+            if KarmaActivityLog.objects.filter(task__ig=obj, user=self.context.get("user_id"), appraiser_approved=True)
+            .aggregate(Sum("karma"))
+            .get("karma__sum")
+            is None
+            else KarmaActivityLog.objects.filter(task__ig=obj, user=self.context.get("user_id"), appraiser_approved=True)
+            .aggregate(Sum("karma"))
+            .get("karma__sum")
+        )
+
+    class Meta:
+        model = InterestGroup
+        fields = [
+            "id",
+            "name",
+            "karma"
+        ]
+
+
+class UserIgEditSerializer(serializers.ModelSerializer):
+    interest_group = serializers.ListField(write_only=True)
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            instance.user_ig_link_user.all().delete()
+            ig_details = set(validated_data.pop("interest_group", []))
+            user_ig_links = [
+                UserIgLink(
+                    id=uuid.uuid4(),
+                    user=instance,
+                    ig_id=ig_data,
+                    created_by=instance,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                )
+                for ig_data in ig_details
+            ]
+            if len(user_ig_links) > 3:
+                raise ValueError(
+                    "Cannot add more than 3 interest groups")
+            UserIgLink.objects.bulk_create(
+                user_ig_links)
+            return super().update(instance, validated_data)
+
+    class Meta:
+        model = User
+        fields = [
+            "interest_group",
+        ]
+
+
+class LinkSocials(ModelSerializer):
+    github = serializers.CharField(required=False)
+    facebook = serializers.CharField(required=False)
+    instagram = serializers.CharField(required=False)
+    linkedin = serializers.CharField(required=False)
+    dribble = serializers.CharField(required=False)
+    behance = serializers.CharField(required=False)
+    stackoverflow = serializers.CharField(required=False)
+    medium = serializers.CharField(required=False)
+
+    class Meta:
+        model = Socials
+        fields = [
+            "github",
+            "facebook",
+            "instagram",
+            "linkedin",
+            "dribble",
+            "behance",
+            "stackoverflow",
+            "medium",
+        ]
+
+    def create(self, validated_data):
+        validated_data['user_id'] = JWTUtils.fetch_user_id(self.context.get('request'))
+        validated_data['id'] = str(uuid.uuid4())
+        # validated_data['updated_by_id'] = JWTUtils.fetch_user_id(self.context.get('request'))
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['github'] = self.data.get('github')
+        validated_data['facebook'] = self.data.get('facebook')
+        validated_data['instagram'] = self.data.get('instagram')
+        validated_data['linkedin'] = self.data.get('linkedin')
+        validated_data['dribble'] = self.data.get('dribble')
+        validated_data['behance'] = self.data.get('behance')
+        validated_data['stackoverflow'] = self.data.get('stackoverflow')
+        validated_data['medium'] = self.data.get('medium')
+        print(validated_data)
+
+        return Socials.objects.create(**validated_data)
