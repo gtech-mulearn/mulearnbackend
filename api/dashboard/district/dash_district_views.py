@@ -205,7 +205,7 @@ class DistrictTopThreeCampusAPI(APIView):
 class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = UserOrganizationLink.objects.filter(user=user_id).first()
