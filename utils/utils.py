@@ -187,13 +187,15 @@ def send_template_mail(
     email_content = render_to_string(
         f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
     )
+    if not (mail := getattr(context, "email", None)):
+        mail = context["email"]
 
     if attachment is None:
         send_mail(
             subject=subject,
             message=email_content,
             from_email=from_mail,
-            recipient_list=[getattr(context, "email")],
+            recipient_list=[mail],
             html_message=email_content,
             fail_silently=False,
         )
