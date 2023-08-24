@@ -20,6 +20,11 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     def get_member_count(self, obj):
         return UserCircleLink.objects.filter(circle_id=obj.id, accepted=1).count()
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        member_count = representation.get('member_count', 0)
+        return None if member_count <= 0 else representation
+
     class Meta:
         model = LearningCircle
         fields = [
@@ -127,13 +132,13 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         return (
-            KarmaActivityLog.objects.filter(
-                user__usercirclelink__circle=obj,
-                user__usercirclelink__accepted=True,
-                task__ig=obj.ig,
-                appraiser_approved=True,
-            ).aggregate(total_karma=Sum('karma'))['total_karma']
-            or 0
+                KarmaActivityLog.objects.filter(
+                    user__usercirclelink__circle=obj,
+                    user__usercirclelink__accepted=True,
+                    task__ig=obj.ig,
+                    appraiser_approved=True,
+                ).aggregate(total_karma=Sum('karma'))['total_karma']
+                or 0
         )
 
     def get_members(self, obj):
