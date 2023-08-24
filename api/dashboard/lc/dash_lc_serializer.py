@@ -20,6 +20,11 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     def get_member_count(self, obj):
         return UserCircleLink.objects.filter(circle_id=obj.id, accepted=1).count()
 
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+        member_count = representation.get('member_count', 0)
+        return None if member_count <= 0 else representation
+
     class Meta:
         model = LearningCircle
         fields = [

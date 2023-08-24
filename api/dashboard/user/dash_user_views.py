@@ -245,7 +245,7 @@ class UserVerificationAPI(APIView):
             )
 
             send_template_mail(
-                user_data=user_data,
+                context=user_data,
                 subject="Role request at μLearn!",
                 address=["mentor_verification.html"],
             )
