@@ -1,6 +1,5 @@
 from django.db.models import Sum
 from rest_framework import serializers
-from rest_framework.serializers import ModelSerializer
 
 from db.organization import Organization
 from db.task import TotalKarma
@@ -49,7 +48,7 @@ class CollegeLeaderboardSerializer(serializers.ModelSerializer):
             return 0
 
 
-class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
+class CollegeMonthlyLeaderboardSerializer(serializers.ModelSerializer):
     institution = serializers.CharField(source="title")
     total_karma = serializers.SerializerMethodField()
 
