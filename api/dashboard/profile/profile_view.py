@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 
 from db.task import InterestGroup, KarmaActivityLog, Level
-from db.user import User, UserSettings, UserRoleLink
+from db.user import User, UserSettings, UserRoleLink, Socials
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
@@ -216,17 +216,15 @@ class UserRankAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 
-class Socials(APIView):
+class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def post(self, request):
-        # print(request.data)
+        user_id = JWTUtils.fetch_user_id(request)
+        if Socials.objects.filter(user_id=user_id).exists():
+            return CustomResponse(general_message='This User Have Already Have Socials').get_failure_response()
         serializer = LinkSocials(data=request.data, context={"request": request})
-        # print(serializer)
         if serializer.is_valid():
-            # print(serializer.data)
             serializer.save()
-
-            return CustomResponse(general_message="Socials Added").get_success_response()
+            return CustomResponse(general_message="Socials Linked").get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
-
