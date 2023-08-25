@@ -91,27 +91,27 @@ class Github(models.Model):
         db_table = 'github'
 
 
-# class Socials(models.Model):
-#     id = models.CharField(primary_key=True, max_length=36)
-#     user = models.ForeignKey(User, on_delete=models.CASCADE)
-#     github = models.CharField(max_length=60, blank=True, null=True)
-#     facebook = models.CharField(max_length=60, blank=True, null=True)
-#     instagram = models.CharField(max_length=60, blank=True, null=True)
-#     linkedin = models.CharField(max_length=60, blank=True, null=True)
-#     dribble = models.CharField(max_length=60, blank=True, null=True)
-#     behance = models.CharField(max_length=60, blank=True, null=True)
-#     stackoverflow = models.CharField(max_length=60, blank=True, null=True)
-#     medium = models.CharField(max_length=60, blank=True, null=True)
-#     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
-#                                    related_name='socials_created_by')
-#     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
-#                                    related_name='socials_updated_by')
-#     created_at = models.DateTimeField()
-#     updated_at = models.DateTimeField(blank=True, null=True)
-#
-#     class Meta:
-#         managed = False
-#         db_table = 'socials'
+class Socials(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    github = models.CharField(max_length=60, blank=True, null=True)
+    facebook = models.CharField(max_length=60, blank=True, null=True)
+    instagram = models.CharField(max_length=60, blank=True, null=True)
+    linkedin = models.CharField(max_length=60, blank=True, null=True)
+    dribble = models.CharField(max_length=60, blank=True, null=True)
+    behance = models.CharField(max_length=60, blank=True, null=True)
+    stackoverflow = models.CharField(max_length=60, blank=True, null=True)
+    medium = models.CharField(max_length=60, blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='socials_created_by')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='socials_updated_by')
+    created_at = models.DateTimeField()
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'socials'
 
 
 class ForgotPassword(models.Model):

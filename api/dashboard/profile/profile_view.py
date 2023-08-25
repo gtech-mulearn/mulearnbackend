@@ -7,9 +7,7 @@ from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DiscordWebhooks
 from . import profile_serializer
-
-
-# from .profile_serializer import LinkSocials
+from .profile_serializer import LinkSocials
 
 
 class UserProfileEditView(APIView):
@@ -217,17 +215,18 @@ class UserRankAPI(APIView):
         )
         return CustomResponse(response=serializer.data).get_success_response()
 
-# class Socials(APIView):
-#     authentication_classes = [CustomizePermission]
-#
-#     def post(self, request):
-#         # print(request.data)
-#         serializer = LinkSocials(data=request.data, context={"request": request})
-#         # print(serializer)
-#         if serializer.is_valid():
-#             # print(serializer.data)
-#             serializer.save()
-#
-#             return CustomResponse(general_message="Socials Added").get_success_response()
-#         return CustomResponse(response=serializer.errors).get_failure_response()
-#
+
+class Socials(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+        # print(request.data)
+        serializer = LinkSocials(data=request.data, context={"request": request})
+        # print(serializer)
+        if serializer.is_valid():
+            # print(serializer.data)
+            serializer.save()
+
+            return CustomResponse(general_message="Socials Added").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
