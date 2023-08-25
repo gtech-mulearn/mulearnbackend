@@ -125,7 +125,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                    .get("karma__sum")
             )
             interest_groups.append(
-                {"name": ig_link.ig.name, "karma": total_ig_karma})
+                {"id":ig_link.ig.id,"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
 
@@ -282,28 +282,12 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
 
 class UserIgListSerializer(serializers.ModelSerializer):
-    karma = serializers.SerializerMethodField()
-
-    def get_karma(self, obj):
-        for ig_link in UserIgLink.objects.filter(user=obj):
-            total_ig_karma = (
-                0
-                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
-                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-            )
-        return total_ig_karma    
 
     class Meta:
         model = InterestGroup
         fields = [
             "id",
             "name",
-            "karma"
         ]
 
 
