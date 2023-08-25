@@ -79,18 +79,6 @@ class UserRoleLink(models.Model):
         db_table = 'user_role_link'
 
 
-class Github(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
-    username = models.CharField(max_length=100)
-    updated_by = models.CharField(max_length=36)
-    created_at = models.DateTimeField()
-
-    class Meta:
-        managed = False
-        db_table = 'github'
-
-
 class Socials(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
