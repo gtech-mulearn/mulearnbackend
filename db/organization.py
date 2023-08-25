@@ -88,8 +88,7 @@ class Organization(models.Model):
     title = models.CharField(max_length=100)
     code = models.CharField(unique=True, max_length=12)
     org_type = models.CharField(max_length=25)
-    affiliation = models.ForeignKey(
-        OrgAffiliation, on_delete=models.CASCADE, blank=True, null=True)
+    affiliation = models.ForeignKey(OrgAffiliation, on_delete=models.CASCADE, blank=True, null=True)
     district = models.ForeignKey(District, on_delete=models.CASCADE, related_name='organization_district')
     updated_by = models.ForeignKey(
         User, on_delete=models.CASCADE, db_column='updated_by', related_name='organization_updated_by')
@@ -132,6 +131,23 @@ class College(models.Model):
     class Meta:
         managed = False
         db_table = 'college'
+
+
+class OrgDiscordLink(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    discord_id = models.CharField(unique=True, max_length=36)
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE,
+                            related_name='org_discord_link_org_id')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='org_discord_link_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='org_discord_link_created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'org_discord_link'
 
 
 class UserOrganizationLink(models.Model):

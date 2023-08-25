@@ -53,8 +53,11 @@ class ReferralListAPI(APIView):
     def get(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            user_referral_link = UserReferralLink.objects.filter(user_id=user_id).all()
-            serializer = ReferralListSerializer(user_referral_link, many=True).data
-            return CustomResponse(response=serializer).get_success_response()
+            user_referral_link = UserReferralLink.objects.filter(
+                referral_id=user_id
+            ).all()
+            serializer = ReferralListSerializer(user_referral_link, many=True)
+            serializer.data
+            return CustomResponse(response=serializer.data).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()

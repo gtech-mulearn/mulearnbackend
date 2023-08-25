@@ -174,7 +174,7 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
             level_dict['level'] = levels.level_order
             level_dict['students_count'] = len(UserLvlLink.objects.filter(
                 level=levels,
-                user__user_organization_link_user_id=obj.user_organization_link_org_id).all())
+                user__user_organization_link_user_id__org=obj))
             level_list.append(level_dict)
             level_dict = {}
         return level_list

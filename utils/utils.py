@@ -164,7 +164,9 @@ class ImportCSV:
         return rows
 
 
-def send_template_mail(context: dict, subject: str, address: list[str], attachment_address: str=None):
+def send_template_mail(
+    context: dict, subject: str, address: list[str], attachment: str = None
+):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
@@ -175,13 +177,9 @@ def send_template_mail(context: dict, subject: str, address: list[str], attachme
     :param address: The `address` parameter is a list of strings that represents the path to the email
     template file. It is used to specify the location of the email template file that will be rendered
     and used as the content of the email
-
-    Args:
-        attachments:
-        attachments: A string that contain the path of the attachment
+    attachment: The Attachment That send to the user
     """
 
-    email_host_user = decouple.config("EMAIL_HOST_USER")
     from_mail = decouple.config("FROM_MAIL")
 
     base_url = decouple.config("FR_DOMAIN_NAME")
@@ -189,13 +187,15 @@ def send_template_mail(context: dict, subject: str, address: list[str], attachme
     email_content = render_to_string(
         f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
     )
+    if not (mail := getattr(context, "email", None)):
+        mail = context["email"]
 
-    if attachment_address is None:
+    if attachment is None:
         send_mail(
             subject=subject,
             message=email_content,
             from_email=from_mail,
-            recipient_list=[context["email"]],
+            recipient_list=[mail],
             html_message=email_content,
             fail_silently=False,
         )
@@ -205,8 +205,8 @@ def send_template_mail(context: dict, subject: str, address: list[str], attachme
             subject=subject,
             body=email_content,
             from_email=from_mail,
-            to=[context["email"]])
-        email.attach_file(attachment_address)
-        email.content_subtype = 'html'
+            to=[context["email"]],
+        )
+        email.attach(attachment)
+        email.content_subtype = "html"
         email.send()
-

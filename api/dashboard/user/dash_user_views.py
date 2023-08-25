@@ -8,7 +8,6 @@ from django.core.mail import send_mail
 from django.db.models import Case, CharField, F, Q, Value, When
 from rest_framework.views import APIView
 
-from api.dashboard import dashboard_helper
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -245,8 +244,8 @@ class UserVerificationAPI(APIView):
                 user_data["user_id"],
             )
 
-            dashboard_helper.send_dashboard_mail(
-                user_data=user_data,
+            send_template_mail(
+                context=user_data,
                 subject="Role request at μLearn!",
                 address=["mentor_verification.html"],
             )

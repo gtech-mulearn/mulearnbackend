@@ -76,14 +76,12 @@ class RegisterSerializer(serializers.ModelSerializer):
     organizations = serializers.ListField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
     year_of_graduation = serializers.CharField(
-        required=False, allow_null=True, max_length=4)
+        required=False, allow_null=True, max_length=4
+    )
     area_of_interests = serializers.ListField(required=True, max_length=3)
-    first_name = serializers.CharField(
-        required=True, max_length=75)
-    last_name = serializers.CharField(
-        required=False, allow_null=True, max_length=75)
-    password = serializers.CharField(
-        required=True, max_length=200)
+    first_name = serializers.CharField(required=True, max_length=75)
+    last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
+    password = serializers.CharField(required=True, max_length=200)
     referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
 
     def validate_referral_id(self, value):
@@ -97,22 +95,21 @@ class RegisterSerializer(serializers.ModelSerializer):
         if validated_data["last_name"] is None:
             full_name = validated_data["first_name"]
         else:
-            full_name = validated_data["first_name"] + \
-                        validated_data["last_name"]
+            full_name = validated_data["first_name"] + validated_data["last_name"]
         full_name = full_name.replace(" ", "").lower()[:85]
         mu_id = f"{full_name}@mulearn"
         counter = 0
         while User.objects.filter(mu_id=mu_id).exists():
             counter += 1
             mu_id = f"{full_name}-{counter}@mulearn"
-        role_id = validated_data.pop('role')
-        organization_ids = validated_data.pop('organizations')
-        dept = validated_data.pop('dept')
-        year_of_graduation = validated_data.pop('year_of_graduation')
-        area_of_interests = validated_data.pop('area_of_interests')
-        password = validated_data.pop('password')
+        role_id = validated_data.pop("role")
+        organization_ids = validated_data.pop("organizations")
+        dept = validated_data.pop("dept")
+        year_of_graduation = validated_data.pop("year_of_graduation")
+        area_of_interests = validated_data.pop("area_of_interests")
+        password = validated_data.pop("password")
         hashed_password = make_password(password)
-        referral_id = validated_data.pop('referral_id')
+        referral_id = validated_data.pop("referral_id")
         referral_provider = None
 
         user_role_verified = True
@@ -122,59 +119,121 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         if referral_id:
             referral_provider = User.objects.get(mu_id=referral_id)
-            task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
-            karma_amount = task_list.karma
+            task_list = TaskList.objects.filter(
+                hashtag=TasksTypesHashtag.REFERRAL.value
+            ).first()
+            karma_amount = getattr(task_list, "karma", 0)
         with transaction.atomic():
-
             user = User.objects.create(
-                **validated_data, id=uuid4(), mu_id=mu_id, password=hashed_password,
-                created_at=DateTimeUtils.get_current_utc_time())
+                **validated_data,
+                id=uuid4(),
+                mu_id=mu_id,
+                password=hashed_password,
+                created_at=DateTimeUtils.get_current_utc_time(),
+            )
 
-            TotalKarma.objects.create(id=uuid4(), user=user, karma=0, created_by=user,
-                                      created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
-                                      updated_at=DateTimeUtils.get_current_utc_time())
+            TotalKarma.objects.create(
+                id=uuid4(),
+                user=user,
+                karma=0,
+                created_by=user,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
 
             if role_id:
-                UserRoleLink.objects.create(id=uuid4(
-                ), user=user, role_id=role_id, created_by=user, created_at=DateTimeUtils.get_current_utc_time(),
-                    verified=user_role_verified)
+                UserRoleLink.objects.create(
+                    id=uuid4(),
+                    user=user,
+                    role_id=role_id,
+                    created_by=user,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=user_role_verified,
+                )
 
             if organization_ids is not None:
                 UserOrganizationLink.objects.bulk_create(
-                    [UserOrganizationLink(id=uuid4(), user=user, org_id=org_id, created_by=user,
-                                          created_at=DateTimeUtils.get_current_utc_time(), verified=True,
-                                          department_id=dept,
-                                          graduation_year=year_of_graduation) for org_id in organization_ids])
+                    [
+                        UserOrganizationLink(
+                            id=uuid4(),
+                            user=user,
+                            org_id=org_id,
+                            created_by=user,
+                            created_at=DateTimeUtils.get_current_utc_time(),
+                            verified=True,
+                            department_id=dept,
+                            graduation_year=year_of_graduation,
+                        )
+                        for org_id in organization_ids
+                    ]
+                )
 
-            UserIgLink.objects.bulk_create([UserIgLink(id=uuid4(), user=user, ig_id=ig, created_by=user,
-                                                       created_at=DateTimeUtils.get_current_utc_time()) for ig in
-                                            area_of_interests])
+            UserIgLink.objects.bulk_create(
+                [
+                    UserIgLink(
+                        id=uuid4(),
+                        user=user,
+                        ig_id=ig,
+                        created_by=user,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                    )
+                    for ig in area_of_interests
+                ]
+            )
 
-            level = Level.objects.filter(level_order='1').first()
+            level = Level.objects.filter(level_order="1").first()
             if level:
-                UserLvlLink.objects.create(id=uuid4(), user=user, level=level, updated_by=user,
-                                           updated_at=DateTimeUtils.get_current_utc_time(), created_by=user,
-                                           created_at=DateTimeUtils.get_current_utc_time())
+                UserLvlLink.objects.create(
+                    id=uuid4(),
+                    user=user,
+                    level=level,
+                    updated_by=user,
+                    updated_at=DateTimeUtils.get_current_utc_time(),
+                    created_by=user,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                )
 
-            UserSettings.objects.create(id=uuid4(), user=user, is_public=0, created_by=user,
-                                        created_at=DateTimeUtils.get_current_utc_time(), updated_by=user,
-                                        updated_at=DateTimeUtils.get_current_utc_time())
+            UserSettings.objects.create(
+                id=uuid4(),
+                user=user,
+                is_public=0,
+                created_by=user,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
 
             if referral_id:
-                UserReferralLink.objects.create(id=uuid4(), referral=referral_provider, user=user,
-                                                created_by=user,
-                                                created_at=DateTimeUtils.get_current_utc_time(),
-                                                updated_by=user,
-                                                updated_at=DateTimeUtils.get_current_utc_time())
+                UserReferralLink.objects.create(
+                    id=uuid4(),
+                    referral=referral_provider,
+                    user=user,
+                    created_by=user,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    updated_by=user,
+                    updated_at=DateTimeUtils.get_current_utc_time(),
+                )
                 KarmaActivityLog.objects.create(
-                    id=uuid4(), karma=karma_amount, task=task_list, created_by=user,
+                    id=uuid4(),
+                    karma=karma_amount,
+                    task=task_list,
+                    created_by=user,
                     user=referral_provider,
-                    created_at=DateTimeUtils.get_current_utc_time(), appraiser_approved=True, peer_approved=True,
-                    appraiser_approved_by=user, peer_approved_by=user,
-                    updated_by=user, updated_at=DateTimeUtils.get_current_utc_time())
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    appraiser_approved=True,
+                    peer_approved=True,
+                    appraiser_approved_by=user,
+                    peer_approved_by=user,
+                    updated_by=user,
+                    updated_at=DateTimeUtils.get_current_utc_time(),
+                )
 
-                referrer_karma = TotalKarma.objects.filter(user=referral_provider).first()
-                referrer_karma.karma = referrer_karma.karma + karma_amount
+                referrer_karma = TotalKarma.objects.filter(
+                    user=referral_provider
+                ).first()
+                
+                referrer_karma.karma += karma_amount
                 referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
                 referrer_karma.updated_by = user
                 referrer_karma.save()
@@ -183,12 +242,25 @@ class RegisterSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ['first_name', 'last_name', 'email', 'mobile', 'gender', 'dob', 'role', 'organizations', 'dept',
-                  'year_of_graduation', 'area_of_interests', 'password', 'referral_id']
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "gender",
+            "dob",
+            "role",
+            "organizations",
+            "dept",
+            "year_of_graduation",
+            "area_of_interests",
+            "password",
+            "referral_id",
+        ]
 
 
 class UserCountrySerializer(serializers.ModelSerializer):
-    country_name = serializers.CharField(source='name')
+    country_name = serializers.CharField(source="name")
 
     class Meta:
         model = Country
@@ -196,7 +268,7 @@ class UserCountrySerializer(serializers.ModelSerializer):
 
 
 class UserStateSerializer(serializers.ModelSerializer):
-    state_name = serializers.CharField(source='name')
+    state_name = serializers.CharField(source="name")
 
     class Meta:
         model = State
@@ -204,7 +276,7 @@ class UserStateSerializer(serializers.ModelSerializer):
 
 
 class UserZoneSerializer(serializers.ModelSerializer):
-    zone_name = serializers.CharField(source='name')
+    zone_name = serializers.CharField(source="name")
 
     class Meta:
         model = Zone

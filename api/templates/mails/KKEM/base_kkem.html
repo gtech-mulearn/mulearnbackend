@@ -14,10 +14,19 @@
     <title></title>
   </head>
 
-  <body style="width: 100%; height: 100%; font-family: 'Georgia'">
+  <body
+    style="width: 100%; height: 100%; font-family: 'Poppins'; line-height: 1.5"
+  >
     <center>
       <div style="width: 400px; height: 800px">
-        <center>
+        <center
+          style="
+            color: rgb(65, 64, 64);
+            font-family: 'Poppins';
+            line-height: 1.5;
+            font-size: 13px;
+          "
+        >
           <img
             style="width: 400px; height: 220px"
             src="https://iili.io/HQFW5rB.png"
@@ -25,12 +34,15 @@
             border="0"
           />
           {% block content %}{% endblock %}
-          <div
-            style="background: transparent; width: 100%; height: 100px"
-          ></div>
+          <div style="background: transparent; width: 100%; height: 17px"></div>
+          <p>
+            If this request wasn't initiated by you, kindly ignore this
+            message.For any related queries, 
+            <a href="mailto:info@mulearn.org"> contact us</a>
+          </p>
           <div style="background: transparent; width: 100%; height: 160px">
             <center>
-              <div style="width: 280px; display: flex">
+              <div style="width: 280px; display: flex; font-family: 'Poppins'">
                 <a
                   href="https://mulearn.org/"
                   style="width: 120px; height: 30px"
@@ -51,6 +63,7 @@
                     border="0"
                 /></a>
               </div>
+
               <div
                 style="background: transparent; width: 370px; height: 10px"
               ></div>
@@ -98,7 +111,7 @@
                     border="0"
                 /></a>
               </div>
-              <p style="color: black; line-height: 1.2; font-size: 12px">
+              <p style="font-size: 12px">
                 µLearn Foundation | Copyright © 2023. All rights reserved.
               </p>
             </center>

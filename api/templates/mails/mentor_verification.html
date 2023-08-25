@@ -1,5 +1,5 @@
 {% extends "mails/base_mail.html" %} {% block content %}
-<div style="background: transparent; width: 100%; height: 150px">
+<div style="background: transparent; width: 100%; height: auto">
   <center>
     <h1
       style="
@@ -12,42 +12,19 @@
     >
       {{ user.role_title|upper }} REQUEST FOLLOW-UP
     </h1>
-    <p
-      style="
-        color: rgb(65, 64, 64);
-        font-family: 'Poppins';
-        line-height: 1.5;
-        font-size: 13px;
-      "
-    >
+    <p>
       Dear {{ user.full_name }},<br />
       Your request for the {{ user.role_title }} role has been verified and
       approved. We are happy to have you amongst our talented team of
       contributors.
     </p>
 
-    <p
-      style="
-        color: black;
-        font-family: 'Poppins';
-        line-height: 1.5;
-        font-size: 13px;
-      "
-    >
+    <p>
       We sincerely appreciate your passion and dedication in pursuing this role.
       Looking forward to building an enhanced learning environment with your
       cooperation and support.
     </p>
-    <p
-      style="
-        color: black;
-        font-family: 'Poppins';
-        line-height: 1.5;
-        font-size: 13px;
-      "
-    >
-      Thank you.
-    </p>
+    <p>Thank you.</p>
   </center>
 </div>
 {% endblock %}
