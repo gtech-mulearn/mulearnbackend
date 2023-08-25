@@ -125,7 +125,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                    .get("karma__sum")
             )
             interest_groups.append(
-                {"name": ig_link.ig.name, "karma": total_ig_karma})
+                {"id":ig_link.ig.id,"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
 
