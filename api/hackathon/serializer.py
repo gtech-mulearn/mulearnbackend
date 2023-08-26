@@ -337,12 +337,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         hackathon = Hackathon.objects.filter(id=value).first()
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
-        if HackathonUserSubmission.objects.filter(
-                hackathon_id=value, user_id=self.context.get("user_id")
-        ).first():
-            raise serializers.ValidationError(
-                "User has already submitted for this hackathon."
-            )
+
         return hackathon.id
 
     def create(self, validated_data):
@@ -355,9 +350,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
             validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
 
-            hackathon_submission = HackathonUserSubmission.objects.create(
-                **validated_data
-            )
+            hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
         return hackathon_submission
 
 
