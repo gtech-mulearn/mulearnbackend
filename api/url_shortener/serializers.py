@@ -37,6 +37,7 @@ class ShortenUrlsCreateUpdateSerializer(ModelSerializer):
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
         instance.short_url = validated_data.get('short_url', instance.short_url)
+        instance.long_url = validated_data.get('long_url', instance.long_url)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
