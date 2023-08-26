@@ -1,13 +1,12 @@
 from datetime import timedelta
 
-from django.db.models import Sum, F
+from django.db.models import Case, F, IntegerField, Sum, Value, When
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import UserLvlLink, TotalKarma, KarmaActivityLog, Level
+from db.task import KarmaActivityLog, Level, TotalKarma, UserLvlLink
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-from django.db.models import Sum, F, Case, When, Value, IntegerField
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):

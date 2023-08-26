@@ -7,7 +7,7 @@ from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
-from db.user import User, UserSettings
+from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -125,7 +125,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                    .get("karma__sum")
             )
             interest_groups.append(
-                {"name": ig_link.ig.name, "karma": total_ig_karma})
+                {"id":ig_link.ig.id,"name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
 
@@ -282,27 +282,12 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
 
 class UserIgListSerializer(serializers.ModelSerializer):
-    karma = serializers.SerializerMethodField()
-
-    def get_karma(self, obj):
-        return (
-            0
-            if KarmaActivityLog.objects.filter(task__ig=obj, user=self.context.get("user_id"), appraiser_approved=True)
-               .aggregate(Sum("karma"))
-               .get("karma__sum")
-               is None
-            else KarmaActivityLog.objects.filter(task__ig=obj, user=self.context.get("user_id"),
-                                                 appraiser_approved=True)
-               .aggregate(Sum("karma"))
-               .get("karma__sum")
-        )
 
     class Meta:
         model = InterestGroup
         fields = [
             "id",
             "name",
-            "karma"
         ]
 
 
@@ -337,42 +322,43 @@ class UserIgEditSerializer(serializers.ModelSerializer):
         ]
 
 
-# class LinkSocials(ModelSerializer):
-#     github = serializers.CharField(required=False)
-#     facebook = serializers.CharField(required=False)
-#     instagram = serializers.CharField(required=False)
-#     linkedin = serializers.CharField(required=False)
-#     dribble = serializers.CharField(required=False)
-#     behance = serializers.CharField(required=False)
-#     stackoverflow = serializers.CharField(required=False)
-#     medium = serializers.CharField(required=False)
-#
-#     class Meta:
-#         model = Socials
-#         fields = [
-#             "github",
-#             "facebook",
-#             "instagram",
-#             "linkedin",
-#             "dribble",
-#             "behance",
-#             "stackoverflow",
-#             "medium",
-#         ]
-#
-#     def create(self, validated_data):
-#         validated_data['user_id'] = JWTUtils.fetch_user_id(self.context.get('request'))
-#         validated_data['id'] = str(uuid.uuid4())
-#         # validated_data['updated_by_id'] = JWTUtils.fetch_user_id(self.context.get('request'))
-#         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-#         validated_data['github'] = self.data.get('github')
-#         validated_data['facebook'] = self.data.get('facebook')
-#         validated_data['instagram'] = self.data.get('instagram')
-#         validated_data['linkedin'] = self.data.get('linkedin')
-#         validated_data['dribble'] = self.data.get('dribble')
-#         validated_data['behance'] = self.data.get('behance')
-#         validated_data['stackoverflow'] = self.data.get('stackoverflow')
-#         validated_data['medium'] = self.data.get('medium')
-#         print(validated_data)
-#
-#         return Socials.objects.create(**validated_data)
+class LinkSocials(ModelSerializer):
+    github = serializers.CharField(required=False)
+    facebook = serializers.CharField(required=False)
+    instagram = serializers.CharField(required=False)
+    linkedin = serializers.CharField(required=False)
+    dribble = serializers.CharField(required=False)
+    behance = serializers.CharField(required=False)
+    stackoverflow = serializers.CharField(required=False)
+    medium = serializers.CharField(required=False)
+
+    class Meta:
+        model = Socials
+        fields = [
+            "github",
+            "facebook",
+            "instagram",
+            "linkedin",
+            "dribble",
+            "behance",
+            "stackoverflow",
+            "medium",
+        ]
+
+    def create(self, validated_data):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        validated_data['user_id'] = user_id
+        validated_data['id'] = str(uuid.uuid4())
+        validated_data['updated_by_id'] = user_id
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['created_by_id'] = user_id
+        validated_data['github'] = self.data.get('github')
+        validated_data['facebook'] = self.data.get('facebook')
+        validated_data['instagram'] = self.data.get('instagram')
+        validated_data['linkedin'] = self.data.get('linkedin')
+        validated_data['dribble'] = self.data.get('dribble')
+        validated_data['behance'] = self.data.get('behance')
+        validated_data['stackoverflow'] = self.data.get('stackoverflow')
+        validated_data['medium'] = self.data.get('medium')
+        return Socials.objects.create(**validated_data)
