@@ -9,7 +9,7 @@ from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, Hacka
 from db.organization import Organization, District, UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
-from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, OrganizationType
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.utils import DateTimeUtils
 
 
@@ -425,8 +425,7 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
                     elif field == 'name':
                         data[field] = user.fullname
                     elif field == 'college':
-                        data[field] = UserOrganizationLink.objects.filter(user_id=user.id,
-                                                                          org__org_type=OrganizationType.COLLEGE.value).first().org.title
+                        data[field] = UserOrganizationLink.objects.filter(user_id=user.id).first().org.title
             return data
         except json.JSONDecodeError:
             return {}
