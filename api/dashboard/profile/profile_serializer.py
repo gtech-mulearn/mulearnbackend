@@ -362,3 +362,22 @@ class LinkSocials(ModelSerializer):
         validated_data['stackoverflow'] = self.data.get('stackoverflow')
         validated_data['medium'] = self.data.get('medium')
         return Socials.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        instance.user_id = user_id
+
+        instance.github = validated_data.get('github', instance.github)
+        instance.facebook = validated_data.get('facebook', instance.facebook)
+        instance.instagram = validated_data.get('instagram', instance.instagram)
+        instance.linkedin = validated_data.get('linkedin', instance.linkedin)
+        instance.dribble = validated_data.get('dribble', instance.dribble)
+        instance.behance = validated_data.get('behance', instance.behance)
+        instance.stackoverflow = validated_data.get('stackoverflow', instance.stackoverflow)
+        instance.medium = validated_data.get('medium', instance.medium)
+
+        instance.updated_by_id = user_id
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+
+        instance.save()
+        return instance

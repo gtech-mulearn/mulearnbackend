@@ -232,3 +232,16 @@ class SocialsAPI(APIView):
             serializer.save()
             return CustomResponse(general_message="Socials Linked").get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
+
+    def put(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        try:
+            social_instance = Socials.objects.filter(user_id=user_id).first()
+        except Socials.DoesNotExist:
+            return CustomResponse(general_message='No Socials Found for this User').get_failure_response()
+
+        serializer = LinkSocials(instance=social_instance, data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message="Socials Updated").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
