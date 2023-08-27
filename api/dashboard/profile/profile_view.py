@@ -65,10 +65,14 @@ class UserIgEditView(APIView):
             serializer = profile_serializer.UserIgEditSerializer(
                 user, data=request.data, partial=True
             )
-            if serializer.is_valid():
-                serializer.save()
-            else:
+            if not serializer.is_valid():
                 return CustomResponse(response=serializer.errors).get_failure_response()
+            serializer.save()
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER.value,
+                WebHookActions.UPDATE.value,
+                user_id,
+            )
             return CustomResponse(general_message="Interest Group edited successfully").get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
