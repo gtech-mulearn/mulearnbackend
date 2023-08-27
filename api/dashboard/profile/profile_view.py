@@ -236,7 +236,7 @@ class SocialsAPI(APIView):
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         try:
-            social_instance = Socials.objects.get(user_id=user_id)
+            social_instance = Socials.objects.filter(user_id=user_id).first()
         except Socials.DoesNotExist:
             return CustomResponse(general_message='No Socials Found for this User').get_failure_response()
 
