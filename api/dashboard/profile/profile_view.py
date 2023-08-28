@@ -1,15 +1,13 @@
 from rest_framework.views import APIView
 
 from db.task import InterestGroup, KarmaActivityLog, Level
-from db.user import User, UserSettings, UserRoleLink
+from db.user import User, UserSettings, UserRoleLink, Socials
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DiscordWebhooks
 from . import profile_serializer
-
-
-# from .profile_serializer import LinkSocials
+from .profile_serializer import LinkSocials
 
 
 class UserProfileEditView(APIView):
@@ -67,10 +65,14 @@ class UserIgEditView(APIView):
             serializer = profile_serializer.UserIgEditSerializer(
                 user, data=request.data, partial=True
             )
-            if serializer.is_valid():
-                serializer.save()
-            else:
+            if not serializer.is_valid():
                 return CustomResponse(response=serializer.errors).get_failure_response()
+            serializer.save()
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER.value,
+                WebHookActions.UPDATE.value,
+                user_id,
+            )
             return CustomResponse(general_message="Interest Group edited successfully").get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
@@ -217,17 +219,39 @@ class UserRankAPI(APIView):
         )
         return CustomResponse(response=serializer.data).get_success_response()
 
-# class Socials(APIView):
-#     authentication_classes = [CustomizePermission]
-#
-#     def post(self, request):
-#         # print(request.data)
-#         serializer = LinkSocials(data=request.data, context={"request": request})
-#         # print(serializer)
-#         if serializer.is_valid():
-#             # print(serializer.data)
-#             serializer.save()
-#
-#             return CustomResponse(general_message="Socials Added").get_success_response()
-#         return CustomResponse(response=serializer.errors).get_failure_response()
-#
+
+class SocialsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if Socials.objects.filter(user_id=user_id).exists():
+            return CustomResponse(general_message='This User Have Already Have Socials').get_failure_response()
+        serializer = LinkSocials(data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message="Socials Linked").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    def put(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        try:
+            social_instance = Socials.objects.filter(user_id=user_id).first()
+        except Socials.DoesNotExist:
+            return CustomResponse(general_message='No Socials Found for this User').get_failure_response()
+
+        serializer = LinkSocials(instance=social_instance, data=request.data, context={"request": request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message="Socials Updated").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        try:
+            social_instance = Socials.objects.filter(user_id=user_id).first()
+        except Socials.DoesNotExist:
+            return CustomResponse(general_message='No Socials Found for this User').get_failure_response()
+
+        serializer = LinkSocials(instance=social_instance)
+        return CustomResponse(response=serializer.data).get_success_response()

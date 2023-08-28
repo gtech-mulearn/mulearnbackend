@@ -9,7 +9,7 @@ from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, Hacka
 from db.organization import Organization, District, UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
-from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, OrganizationType
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.utils import DateTimeUtils
 
 
@@ -337,12 +337,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         hackathon = Hackathon.objects.filter(id=value).first()
         if not hackathon:
             raise serializers.ValidationError("Hackathon Not Exists")
-        if HackathonUserSubmission.objects.filter(
-                hackathon_id=value, user_id=self.context.get("user_id")
-        ).first():
-            raise serializers.ValidationError(
-                "User has already submitted for this hackathon."
-            )
+
         return hackathon.id
 
     def create(self, validated_data):
@@ -355,9 +350,7 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
             validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
 
-            hackathon_submission = HackathonUserSubmission.objects.create(
-                **validated_data
-            )
+            hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
         return hackathon_submission
 
 
@@ -425,8 +418,7 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
                     elif field == 'name':
                         data[field] = user.fullname
                     elif field == 'college':
-                        data[field] = UserOrganizationLink.objects.filter(user_id=user.id,
-                                                                          org__org_type=OrganizationType.COLLEGE.value).first().org.title
+                        data[field] = UserOrganizationLink.objects.filter(user_id=user.id).first().org.title
             return data
         except json.JSONDecodeError:
             return {}

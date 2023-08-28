@@ -10,14 +10,14 @@ from db.hackathon import (
     HackathonUserSubmission,
 )
 from db.organization import District, Organization
+from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.response import CustomResponse
+from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, RoleType
 from .serializer import HackathonRetrievalSerializer, UpcomingHackathonRetrievalSerializer, \
     HackathonCreateUpdateDeleteSerializer, HackathonUpdateSerializer, HackathonPublishingSerializer, \
     HackathonInfoSerializer, HackathonUserSubmissionSerializer, ListApplicantsSerializer, \
     HackathonOrganiserSerializerRetrieval, HackathonOrganiserSerializer, HackathonFormSerializer, DistrictSerializer, \
     OrganisationSerializer
-from utils.permission import CustomizePermission, JWTUtils, role_required
-from utils.response import CustomResponse
-from utils.types import DEFAULT_HACKATHON_FORM_FIELDS, RoleType
 
 
 class HackathonManagementAPI(APIView):
@@ -145,9 +145,13 @@ class HackathonSubmissionAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        serializer = HackathonUserSubmissionSerializer(
-            data=request.data, context={"request": request, "user_id": user_id}
-        )
+        hackathon_id = request.data.get('hackathon_id')
+
+        if HackathonUserSubmission.objects.filter(hackathon_id=hackathon_id, user_id=user_id).first():
+            return CustomResponse(general_message="User already submitted").get_failure_response()
+
+        serializer = HackathonUserSubmissionSerializer(data=request.data,
+                                                       context={"request": request, "user_id": user_id})
         if serializer.is_valid():
             instance = serializer.save()
             return CustomResponse(

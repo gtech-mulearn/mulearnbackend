@@ -1,6 +1,5 @@
 from django.db.models import Sum
 from rest_framework import serializers
-from rest_framework.serializers import ModelSerializer
 
 from db.organization import Organization
 from db.task import TotalKarma
@@ -49,7 +48,7 @@ class CollegeLeaderboardSerializer(serializers.ModelSerializer):
             return 0
 
 
-class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
+class CollegeMonthlyLeaderboardSerializer(serializers.ModelSerializer):
     institution = serializers.CharField(source="title")
     total_karma = serializers.SerializerMethodField()
 
@@ -58,5 +57,9 @@ class CollegeMonthlyLeaderboardSerializer(ModelSerializer):
         fields = ["code", "institution", "total_karma"]
 
     def get_total_karma(self, obj):
-        total_karma = obj.totalKarma
-        return total_karma or 0
+        try:
+            total_karma = obj.user_organization_link_org_id.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
+                'total_karma']
+            return total_karma if total_karma is not None else 0
+        except Exception as e:
+            return 0
