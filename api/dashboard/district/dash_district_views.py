@@ -16,7 +16,8 @@ class DistrictDetailAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            user=user_id).first()
+            user=user_id,
+            org__org_type=OrganizationType.COLLEGE.value).first()
 
         serializer = dash_district_serializer.DistrictDetailsSerializer(user_org_link, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
@@ -30,7 +31,8 @@ class DistrictTopThreeCampusAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            user=user_id).first()
+            user=user_id,
+            org_type=OrganizationType.COLLEGE.value).first()
 
         user_organizations = Organization.objects.filter(
             district__name=user_org_link.org.district.name,
@@ -50,7 +52,8 @@ class DistrictStudentLevelStatusAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            user=user_id).first()
+            user=user_id,
+            org__org_type=OrganizationType.COLLEGE.value).first()
 
         organizations = Organization.objects.filter(
             district__name=user_org_link.org.district.name,
@@ -68,7 +71,8 @@ class DistrictStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id).first()
+            user_id=user_id,
+            org__org_type=OrganizationType.COLLEGE.value).first()
 
         user_org_links = UserOrganizationLink.objects.filter(
             org__district_id=user_org_link.org.district.id,
@@ -98,7 +102,8 @@ class DistrictStudentDetailsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id).first()
+            user_id=user_id,
+            org__org_type=OrganizationType.COLLEGE.value).first()
 
         user_org_links = UserOrganizationLink.objects.filter(
             org__district_id=user_org_link.org.district.id,
@@ -116,7 +121,8 @@ class ListAllDistrictsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id).first()
+            user_organization_link_org_id__user_id=user_id,
+            org_type=OrganizationType.COLLEGE.value).first()
 
         organizations = Organization.objects.filter(
             district=user_org.district,
@@ -124,9 +130,7 @@ class ListAllDistrictsAPI(APIView):
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations, request,
-            ['title',
-             'code',
-             'user_organization_link_org_id__user__first_name',
+            ['title', 'code', 'user_organization_link_org_id__user__first_name',
              'user_organization_link_org_id__user__mobile'],
             {'title': 'title',
              'code': 'code',
@@ -150,7 +154,8 @@ class ListAllDistrictsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id).first()
+            user_organization_link_org_id__user_id=user_id,
+            org_type=OrganizationType.COLLEGE.value).first()
 
         organizations = Organization.objects.filter(
             district=user_org.district,
