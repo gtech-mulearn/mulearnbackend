@@ -92,6 +92,10 @@ class ZonalStudentDetailsAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college(user_id)
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
             org__org_type=OrganizationType.COLLEGE.value,
@@ -130,10 +134,13 @@ class ZonalStudentDetailsCSVAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college(user_id)
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
-            org__district__zone_id=user_org_link.org.district.zone.id,
-            org__org_type=OrganizationType.COLLEGE.value,
-        )
+            org__district__zone=user_org_link.org.district.zone,
+            org__org_type=OrganizationType.COLLEGE.value)
 
         serializer = dash_zonal_serializer.ZonalStudentDetailsSerializer(
             user_org_links, many=True
@@ -153,9 +160,13 @@ class ListAllDistrictsAPI(APIView):
             org_type=OrganizationType.COLLEGE.value,
         ).first()
 
+        if user_org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
+
         organizations = Organization.objects.filter(
-            district=user_org.district, org_type=OrganizationType.COLLEGE.value
-        )
+            district__zone=user_org.district.zone,
+            org_type=OrganizationType.COLLEGE.value)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations,
@@ -197,6 +208,10 @@ class ListAllDistrictsCSVAPI(APIView):
             user_organization_link_org_id__user_id=user_id,
             org_type=OrganizationType.COLLEGE.value,
         ).first()
+
+        if user_org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
 
         organizations = Organization.objects.filter(
             district_zone=user_org.district.zone,
