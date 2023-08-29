@@ -8,6 +8,8 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 
 from . import dash_zonal_serializer
+from django.db.models import Sum, F
+
 
 
 class ZonalDetailsAPI(APIView):
@@ -33,15 +35,33 @@ class ZonalTopThreeDistrictAPI(APIView):
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         org_user_district = District.objects.filter(
-            zone__name=user_org_link.org.district.zone.name,
-            organization_district__user_organization_link_org_id__user__total_karma_user__isnull=False,
+            zone=user_org_link.org.district.zone
         ).distinct()
+        
+        district_karma_dict = (
+            UserOrganizationLink.objects.filter(
+                org__district__zone=org_user_district[0].zone,
+                verified=True,
+            )
+            .values("org__district")
+            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+        )
+        district_ranks = {
+            data["org__district"]: data["total_karma"]
+            if data["total_karma"] is not None
+            else 0
+            for data in district_karma_dict
+        }
+        
+        district_ranks = dict(
+            sorted(district_ranks.items(), key=lambda x: x[1], reverse=True)
+        )
 
         serializer = dash_zonal_serializer.ZonalTopThreeDistrictSerializer(
-            org_user_district, many=True
-        ).data
-        sorted_serializer = sorted(serializer, key=lambda x: x["rank"])[:3]
-        return CustomResponse(response=sorted_serializer).get_success_response()
+            org_user_district, many=True, context = {"ranks" : district_ranks}
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class ZonalStudentLevelStatusAPI(APIView):

@@ -31,9 +31,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value
-            )
+            UserOrganizationLink.objects.all()
             .values("org__district__zone")
             .annotate(total_karma=Sum("user__total_karma_user__karma"))
         )
@@ -56,12 +54,12 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
-            org__district__zone=obj.org.district.zone
+            org__district__zone=obj.org.district.zone,
         ).aggregate(total_karma=Sum("user__total_karma_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
         return UserOrganizationLink.objects.filter(
-            org__district__zone=obj.org.district.zone
+            org__district__zone=obj.org.district.zone,
         ).count()
 
     def get_active_members(self, obj):
@@ -71,40 +69,25 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
             day=1, month=(start_date.month % 12) + 1
         ) - timedelta(days=1)
 
-        users_in_zone = User.objects.filter(
-            user_organization_link_user_id__org__district__zone=obj.org.district.zone,
-        )
-
         return KarmaActivityLog.objects.filter(
-            user__in=users_in_zone,
+            user__user_organization_link_user_id__org__district__zone=obj.org.district.zone,
             created_at__range=(start_date, end_date),
         ).count()
 
 
 class ZonalTopThreeDistrictSerializer(serializers.ModelSerializer):
-    rank = serializers.SerializerMethodField()
     district = serializers.CharField(source="name")
-
+    rank = serializers.SerializerMethodField()
+    
+    def get_rank(self, district):
+        keys_list = list(self.context("ranks").keys())
+        position = keys_list.index(district.org.district.zone.id)
+        return position + 1
+        
+    
     class Meta:
         model = District
-        fields = ["rank", "district"]
-
-    def get_rank(self, obj):
-        rank = (
-            UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                org__district__zone__name=obj.zone.name,
-                verified=True,
-            )
-            .values("org__district")
-            .annotate(total_karma=Sum("user__total_karma_user__karma"))
-            .order_by("-total_karma")
-        )
-        district_ranks = {
-            district["org__district"]: i + 1 for i, district in enumerate(rank)
-        }
-        district_id = obj.id
-        return district_ranks.get(district_id)
+        fields = ["district", "id", "rank"] 
 
 
 class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):

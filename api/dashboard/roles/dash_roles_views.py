@@ -82,7 +82,7 @@ class RoleAPI(APIView):
                 WebHookCategory.ROLE.value, WebHookActions.DELETE.value, role.title
             )
             return CustomResponse(
-                general_message=["Role deleted successfully"]
+                general_message="Role deleted successfully"
             ).get_success_response()
 
         except ObjectDoesNotExist as e:
@@ -155,33 +155,53 @@ class UserRole(APIView):
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         try:
-            serializer = dash_roles_serializer.UserRoleCreateSerializer(data=request.data, context={'request': request})
-            if serializer.is_valid():
-                serializer.save()
+            serializer = dash_roles_serializer.UserRoleCreateSerializer(
+                data=request.data, context={"request": request}
+            )
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
 
-                DiscordWebhooks.general_updates(
-                    WebHookCategory.USER_ROLE.value,
-                    WebHookActions.UPDATE.value,
-                    request.data.get("user_id"),
-                )
-                return CustomResponse(general_message=['Role Added Successfully']).get_success_response()
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=[str(e)]).get_failure_response()
+            serializer.save()
 
+            # DiscordWebhooks.general_updates(
+            #     WebHookCategory.USER_ROLE.value,
+            #     WebHookActions.UPDATE.value,
+            #     request.data.get("user_id"),
+            # )
+            return CustomResponse(
+                general_message="Role Added Successfully"
+            ).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request):
-        user_id = request.data.get('user_id')
-        role_id = request.data.get('role_id')
         try:
+            serializer = dash_roles_serializer.UserRoleCreateSerializer(
+                data=request.data, context={"request": request}
+            )
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
+                
+            user_id = request.data.get("user_id")
+            role_id = request.data.get("role_id")
             user_role_link = UserRoleLink.objects.get(role_id=role_id, user_id=user_id)
+                
             user_role_link.delete()
 
-            DiscordWebhooks.general_updates(
-                WebHookCategory.USER_ROLE.value,
-                WebHookActions.DELETE.value,
-                user_role_link.id
-            )
-            return CustomResponse(general_message=["User Role deleted successfully"]).get_success_response()
+            # DiscordWebhooks.general_updates(
+            #     WebHookCategory.USER_ROLE.value,
+            #     WebHookActions.DELETE.value,
+            #     user_role_link.id,
+            # )
+            return CustomResponse(
+                general_message="User Role deleted successfully"
+            ).get_success_response()
 
-        except ObjectDoesNotExist as e:
-            return CustomResponse(general_message=[str(e)]).get_failure_response()
-
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()

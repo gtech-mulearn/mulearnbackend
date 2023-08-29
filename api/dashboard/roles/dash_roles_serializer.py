@@ -39,7 +39,9 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
 
         validated_data["id"] = uuid.uuid4()
         validated_data["created_by"] = validated_data["updated_by"] = user
-        validated_data["created_at"] = validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
+        validated_data["created_at"] = validated_data[
+            "updated_at"
+        ] = DateTimeUtils.get_current_utc_time()
 
         return super().create(validated_data)
 
@@ -48,28 +50,31 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
 
 
 class UserRoleSearchSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = User
         fields = ["id", "fullname", "mu_id"]
 
 
 class UserRoleCreateSerializer(serializers.ModelSerializer):
-    user_id = serializers.CharField()
-    role_id = serializers.CharField()
-
+    
+    user_id = serializers.CharField(required=True, source="user.id")
+    role_id = serializers.CharField(required=True, source="role.id")
     class Meta:
         model = UserRoleLink
-        fields = ("user_id", "role_id")
+        fields = ["user_id", "role_id"]
 
     def create(self, validated_data):
-        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        validated_data['id'] = uuid.uuid4()
-        validated_data['user_id'] = self.data.get('user_id')
-        validated_data['role_id'] = self.data.get('role_id')
-        validated_data['verified'] = True
-        validated_data['created_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        if user_role_link := UserRoleLink.objects.filter(
+            role_id=validated_data["role"]["id"], user_id=validated_data["user"]["id"]
+        ).first():
+            return user_role_link
 
-        return UserRoleLink.objects.create(**validated_data)
-
+        user_id = JWTUtils.fetch_user_id(self.context.get("request"))
+        
+        validated_data["user_id"] = (validated_data.pop("user"))["id"]
+        validated_data["role_id"] = (validated_data.pop("role"))["id"]
+        validated_data["verified"] = True
+        validated_data["created_by_id"] = user_id
+        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        
+        return super().create(validated_data)
