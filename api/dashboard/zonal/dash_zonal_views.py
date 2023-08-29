@@ -1,4 +1,7 @@
+from itertools import islice
 from rest_framework.views import APIView
+
+from db.task import TotalKarma
 
 from . import dash_zonal_helper
 from db.organization import District, Organization, UserOrganizationLink
@@ -9,7 +12,15 @@ from utils.utils import CommonUtils
 
 from . import dash_zonal_serializer
 from django.db.models import Sum, F
-
+from django.db.models import (
+    F,
+    ExpressionWrapper,
+    CharField,
+    Value,
+    Case,
+    When,
+    IntegerField,
+)
 
 
 class ZonalDetailsAPI(APIView):
@@ -31,34 +42,34 @@ class ZonalTopThreeDistrictAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
-        org_user_district = District.objects.filter(
-            zone=user_org_link.org.district.zone
-        ).distinct()
-        
         district_karma_dict = (
             UserOrganizationLink.objects.filter(
-                org__district__zone=org_user_district[0].zone,
+                org__district__zone=user_org_link.org.district.zone,
                 verified=True,
             )
             .values("org__district")
             .annotate(total_karma=Sum("user__total_karma_user__karma"))
         )
+
         district_ranks = {
             data["org__district"]: data["total_karma"]
             if data["total_karma"] is not None
             else 0
             for data in district_karma_dict
         }
-        
+
         district_ranks = dict(
             sorted(district_ranks.items(), key=lambda x: x[1], reverse=True)
         )
 
+        top_districts = dict(islice(district_ranks.items(), 3))
+
+        org_user_district = District.objects.filter(id__in=top_districts).distinct()
+
         serializer = dash_zonal_serializer.ZonalTopThreeDistrictSerializer(
-            org_user_district, many=True, context = {"ranks" : district_ranks}
+            org_user_district, many=True, context={"ranks": district_ranks}
         )
 
         return CustomResponse(response=serializer.data).get_success_response()
@@ -71,7 +82,8 @@ class ZonalStudentLevelStatusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        district_id = request.data.get("district_id")
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+        district_id = user_org_link.org.district.id
 
         org = Organization.objects.filter(
             district__id=district_id, org_type=OrganizationType.COLLEGE.value
@@ -89,12 +101,7 @@ class ZonalStudentDetailsAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
-        user_org_link = dash_zonal_helper.get_user_college(user_id)
-
-        if user_org_link.org.district is None:
-            return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
@@ -132,15 +139,12 @@ class ZonalStudentDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = dash_zonal_helper.get_user_college(user_id)
-
-        if user_org_link.org.district is None:
-            return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
-            org__org_type=OrganizationType.COLLEGE.value)
+            org__org_type=OrganizationType.COLLEGE.value,
+        )
 
         serializer = dash_zonal_serializer.ZonalStudentDetailsSerializer(
             user_org_links, many=True
@@ -162,11 +166,13 @@ class ListAllDistrictsAPI(APIView):
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message=["Zonal Lead has no district"]
+            ).get_failure_response()
 
         organizations = Organization.objects.filter(
             district__zone=user_org.district.zone,
-            org_type=OrganizationType.COLLEGE.value)
+            org_type=OrganizationType.COLLEGE.value,
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations,
@@ -211,7 +217,8 @@ class ListAllDistrictsCSVAPI(APIView):
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message=["Zonal Lead has no district"]
+            ).get_failure_response()
 
         organizations = Organization.objects.filter(
             district_zone=user_org.district.zone,

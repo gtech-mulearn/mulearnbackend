@@ -1,6 +1,6 @@
 from datetime import timedelta
 
-from django.db.models import Sum, F
+from django.db.models import Sum, F, Count, Q
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink, District, Organization, College
@@ -78,16 +78,15 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 class ZonalTopThreeDistrictSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source="name")
     rank = serializers.SerializerMethodField()
-    
+
     def get_rank(self, district):
-        keys_list = list(self.context("ranks").keys())
-        position = keys_list.index(district.org.district.zone.id)
+        keys_list = list(self.context.get("ranks").keys())
+        position = keys_list.index(district.id)
         return position + 1
-        
-    
+
     class Meta:
         model = District
-        fields = ["district", "id", "rank"] 
+        fields = ["district", "id", "rank"]
 
 
 class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
@@ -100,20 +99,14 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
         fields = ["college_name", "college_code", "level"]
 
     def get_level(self, obj):
-        level = Level.objects.all()
-        level_dict = {}
-        level_list = []
-        for levels in level:
-            level_dict["level"] = levels.level_order
-            level_dict["students_count"] = len(
-                UserLvlLink.objects.filter(
-                    level=levels,
-                    user__user_organization_link_user_id=obj.user_organization_link_org_id,
-                ).all()
+        return Level.objects.annotate(
+            students_count=Count(
+                'user_lvl_link_level',
+                filter=Q(
+                    user_lvl_link_level__user__user_organization_link_user_id=obj.user_organization_link_org_id
+                ),
             )
-            level_list.append(level_dict)
-            level_dict = {}
-        return level_list
+        ).values('level_order', 'students_count')
 
 
 class UserOrgSerializer(serializers.ModelSerializer):
