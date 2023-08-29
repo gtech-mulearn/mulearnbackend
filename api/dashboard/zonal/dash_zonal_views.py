@@ -164,11 +164,6 @@ class ListAllDistrictsAPI(APIView):
             org_type=OrganizationType.COLLEGE.value,
         ).first()
 
-        if user_org.district is None:
-            return CustomResponse(
-                general_message=["Zonal Lead has no district"]
-            ).get_failure_response()
-
         organizations = Organization.objects.filter(
             district__zone=user_org.district.zone,
             org_type=OrganizationType.COLLEGE.value,
@@ -214,11 +209,6 @@ class ListAllDistrictsCSVAPI(APIView):
             user_organization_link_org_id__user_id=user_id,
             org_type=OrganizationType.COLLEGE.value,
         ).first()
-
-        if user_org.district is None:
-            return CustomResponse(
-                general_message=["Zonal Lead has no district"]
-            ).get_failure_response()
 
         organizations = Organization.objects.filter(
             district_zone=user_org.district.zone,
