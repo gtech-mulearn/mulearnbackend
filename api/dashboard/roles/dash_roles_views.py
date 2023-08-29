@@ -165,11 +165,11 @@ class UserRole(APIView):
 
             serializer.save()
 
-            # DiscordWebhooks.general_updates(
-            #     WebHookCategory.USER_ROLE.value,
-            #     WebHookActions.UPDATE.value,
-            #     request.data.get("user_id"),
-            # )
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_ROLE.value,
+                WebHookActions.UPDATE.value,
+                request.data.get("user_id"),
+            )
             return CustomResponse(
                 general_message="Role Added Successfully"
             ).get_success_response()
@@ -194,11 +194,11 @@ class UserRole(APIView):
                 
             user_role_link.delete()
 
-            # DiscordWebhooks.general_updates(
-            #     WebHookCategory.USER_ROLE.value,
-            #     WebHookActions.DELETE.value,
-            #     user_role_link.id,
-            # )
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_ROLE.value,
+                WebHookActions.DELETE.value,
+                user_role_link.id,
+            )
             return CustomResponse(
                 general_message="User Role deleted successfully"
             ).get_success_response()
