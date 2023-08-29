@@ -153,7 +153,7 @@ class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
     level = serializers.SerializerMethodField()
 
     class Meta:
-        model = TotalKarma
+        model = UserOrganizationLink
         fields = ("fullname", "karma", "muid", "rank", "level", 'created_at')
 
     def get_karma(self, obj):
@@ -161,13 +161,11 @@ class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         rank = TotalKarma.objects.filter(
-            user__total_karma_user__isnull=False
-        ).annotate(
-            rank=F('user__total_karma_user__karma')
-        ).order_by('-rank').values_list('rank', flat=True)
+            karma__isnull=False).order_by(
+            '-karma').values('user_id', 'karma',)
 
-        ranks = {karma: i + 1 for i, karma in enumerate(rank)}
-        return ranks.get(obj.user.total_karma_user.karma, None)
+        ranks = {user['user_id']: i + 1 for i, user in enumerate(rank)}
+        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else None
 
     def get_level(self, obj):
         user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
