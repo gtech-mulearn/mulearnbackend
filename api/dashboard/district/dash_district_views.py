@@ -32,10 +32,14 @@ class DistrictTopThreeCampusAPI(APIView):
 
         user_org_link = UserOrganizationLink.objects.filter(
             user=user_id,
-            org_type=OrganizationType.COLLEGE.value).first()
+            org__org_type=OrganizationType.COLLEGE.value).first()
+
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
 
         user_organizations = Organization.objects.filter(
-            district__name=user_org_link.org.district.name,
+            district=user_org_link.org.district,
             user_organization_link_org_id__user__total_karma_user__isnull=False).distinct()
 
         serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(user_organizations, many=True).data
@@ -55,8 +59,12 @@ class DistrictStudentLevelStatusAPI(APIView):
             user=user_id,
             org__org_type=OrganizationType.COLLEGE.value).first()
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
+
         organizations = Organization.objects.filter(
-            district__name=user_org_link.org.district.name,
+            district=user_org_link.org.district,
             org_type=OrganizationType.COLLEGE.value)
 
         serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(organizations, many=True)
@@ -74,8 +82,12 @@ class DistrictStudentDetailsAPI(APIView):
             user_id=user_id,
             org__org_type=OrganizationType.COLLEGE.value).first()
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
-            org__district_id=user_org_link.org.district.id,
+            org__district=user_org_link.org.district,
             org__org_type=OrganizationType.COLLEGE.value)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -105,8 +117,12 @@ class DistrictStudentDetailsCSVAPI(APIView):
             user_id=user_id,
             org__org_type=OrganizationType.COLLEGE.value).first()
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
-            org__district_id=user_org_link.org.district.id,
+            org__district=user_org_link.org.district,
             org__org_type=OrganizationType.COLLEGE.value)
 
         serializer = dash_district_serializer.DistrictStudentDetailsSerializer(user_org_links, many=True)
@@ -123,6 +139,10 @@ class ListAllDistrictsAPI(APIView):
         user_org = Organization.objects.filter(
             user_organization_link_org_id__user_id=user_id,
             org_type=OrganizationType.COLLEGE.value).first()
+
+        if user_org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
 
         organizations = Organization.objects.filter(
             district=user_org.district,
@@ -156,6 +176,10 @@ class ListAllDistrictsCSVAPI(APIView):
         user_org = Organization.objects.filter(
             user_organization_link_org_id__user_id=user_id,
             org_type=OrganizationType.COLLEGE.value).first()
+
+        if user_org.district is None:
+            return CustomResponse(
+                general_message=['Zonal Lead has no district']).get_failure_response()
 
         organizations = Organization.objects.filter(
             district=user_org.district,
