@@ -311,7 +311,7 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
             return super().validate(attrs)
 
         null_field_names = ", ".join(null_instances)
-        raise serializers.ValidationError(f"The following fields are empty: {null_field_names}" )
+        raise serializers.ValidationError(f"The following fields are empty: {null_field_names}")
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
@@ -420,7 +420,6 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
                         data[field] = UserOrganizationLink.objects.filter(user_id=user.id).first().org.title
             return data
         except json.JSONDecodeError:
-            print('je')
             return {}
 
 
@@ -431,6 +430,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source="district.name", allow_null=True)
     org_id = serializers.CharField(source="org.id", allow_null=True)
     district_id = serializers.CharField(source="district.id", allow_null=True)
+    form_fields = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -455,6 +455,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
             "website",
             "org_id",
             "district_id",
+            'form_fields',
         )
 
     def get_banner(self, obj):
