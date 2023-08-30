@@ -150,11 +150,7 @@ class DistrictStudentDetailsSerializer(serializers.ModelSerializer):
         return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else None
 
     def get_level(self, obj):
-        user_level_link = UserLvlLink.objects.filter(
-            user=obj.user
-        ).first()
-
-        if user_level_link:
+        if user_level_link := UserLvlLink.objects.filter(user=obj.user).first():
             return user_level_link.level.name
         return None
 

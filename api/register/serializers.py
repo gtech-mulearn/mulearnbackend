@@ -182,8 +182,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 ]
             )
 
-            level = Level.objects.filter(level_order="1").first()
-            if level:
+            if level := Level.objects.filter(level_order="1").first():
                 UserLvlLink.objects.create(
                     id=uuid4(),
                     user=user,
