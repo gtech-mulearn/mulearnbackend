@@ -408,6 +408,7 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
             data = json.loads(obj.data.replace("'", "\""))
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
                 if value == 'system' and not data.get(field):
+
                     user = User.objects.filter(id=obj.user.id).first()
                     if field == 'gender':
                         data[field] = user.gender
@@ -421,6 +422,7 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
                         data[field] = UserOrganizationLink.objects.filter(user_id=user.id).first().org.title
             return data
         except json.JSONDecodeError:
+            print('je')
             return {}
 
 
