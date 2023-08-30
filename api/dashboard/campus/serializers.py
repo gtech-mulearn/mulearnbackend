@@ -37,13 +37,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_active_members(self, obj):
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        active_members_count = obj.org.user_organization_link_org_id.filter(
+        return obj.org.user_organization_link_org_id.filter(
             verified=True,
             user__active=True,
             user__total_karma_user__isnull=False,
             user__total_karma_user__created_at__gte=last_month,
         ).count()
-        return active_members_count
 
     def get_total_karma(self, obj):
         karma = obj.org.user_organization_link_org_id.filter(
@@ -113,8 +112,7 @@ class CampusStudentDetailsSerializer(serializers.ModelSerializer):
         return ranks.get(obj.user.total_karma_user.karma, None)
 
     def get_level(self, obj):
-        user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
-        if user_level_link:
+        if user_level_link := UserLvlLink.objects.filter(user=obj.user).first():
             return user_level_link.level.name
         return None
 
