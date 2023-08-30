@@ -118,7 +118,7 @@ class ZonalStudentDetailsAPI(APIView):
                 user_id=F("id"),
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
-                level=F("user_lvl_link_user_id__level__name"),
+                level=F("user_lvl_link_user__level__name"),
             )
         )
 
@@ -131,7 +131,7 @@ class ZonalStudentDetailsAPI(APIView):
                 "last_name": "last_name",
                 "muid": "mu_id",
                 "karma": "total_karma_user__karma",
-                "level": "user_lvl_link_user_id__level__level_order",
+                "level": "user_lvl_link_user__level__level_order",
             },
         )
 
@@ -180,7 +180,7 @@ class ZonalStudentDetailsCSVAPI(APIView):
                 user_id=F("id"),
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
-                level=F("user_lvl_link_user_id__level__name"),
+                level=F("user_lvl_link_user__level__name"),
             )
         )
 
