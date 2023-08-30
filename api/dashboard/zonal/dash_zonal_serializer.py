@@ -106,7 +106,7 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
                 Case(
                     When(
                         Q(
-                            user_lvl_link_level__user__user_organization_link_user_id__org=obj.user_organization_link_org_id.first().org,
+                            user_lvl_link_level__user__user_organization_link_user_id__org=obj.id,
                         ),
                         then=1,
                     ),
