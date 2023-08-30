@@ -403,7 +403,7 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
 
     def get_data(self, obj):
         try:
-            data = json.loads(obj.data)
+            data = obj.data
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
                 if value == 'system' and not data.get(field):
 
