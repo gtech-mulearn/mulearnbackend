@@ -84,17 +84,21 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
                                                        org__org_type=OrganizationType.COLLEGE.value).first()
 
         ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
-        code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2]
+
+        if len(org_link.org.code) >= 5:
+            code = org_link.org.code[:3] + ig.code + validated_data.get('name')[:2]
+        else:
+            code = org_link.org.code + ig.code + validated_data.get('name')[:2]
         existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
         i = 1
         while code in existing_codes:
-            code = org_link.org.code + ig.code + validated_data.get('name').upper()[:2] + str(i)
+            code = org_link.org.code + ig.code + validated_data.get('name')[:2] + str(i)
             i += 1
 
         lc = LearningCircle.objects.create(
             id=uuid.uuid4(),
             name=validated_data.get('name'),
-            circle_code=code,
+            circle_code=code.upper(),
             ig=ig,
             org=org_link.org,
             updated_by_id=user_id,

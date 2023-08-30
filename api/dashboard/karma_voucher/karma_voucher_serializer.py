@@ -10,7 +10,7 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VoucherLog
-        fields = ['id', 'code', 'user_id', 'task_id', 'karma', 'mail', 'month', 'week', 'created_by_id', 'updated_by_id', 'created_at', 'updated_at']
+        fields = ['id', 'code', 'user_id', 'task_id', 'karma', 'mail', 'month', 'week', 'claimed', 'created_by_id', 'updated_by_id', 'created_at', 'updated_at']
 
 class VoucherLogSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source='user.fullname')

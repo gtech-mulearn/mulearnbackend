@@ -103,6 +103,11 @@ class ZonalStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message="Zonal Lead has no district"
+            ).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
             org__org_type=OrganizationType.COLLEGE.value,
@@ -113,10 +118,10 @@ class ZonalStudentDetailsAPI(APIView):
             request,
             ["user__first_name"],
             {
-                "name": "user__full_name",
+                "name": "user__first_name",
                 "muid": "user__mu_id",
                 "karma": "user__total_karma_user__karma",
-                "level": "user__user_level_link_user__level__level_order",
+                "level": "user__user_lvl_link_user_id__level__level_order",
             },
         )
 
@@ -141,6 +146,11 @@ class ZonalStudentDetailsCSVAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message="Zonal Lead has no district"
+            ).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
             org__org_type=OrganizationType.COLLEGE.value,
@@ -152,7 +162,7 @@ class ZonalStudentDetailsCSVAPI(APIView):
         return CommonUtils.generate_csv(serializer.data, "Zonal Details")
 
 
-class ListAllDistrictsAPI(APIView):
+class ZonalCollegeDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
@@ -166,7 +176,7 @@ class ListAllDistrictsAPI(APIView):
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=["Zonal Lead has no district"]
+                general_message="Zonal Lead has no district"
             ).get_failure_response()
 
         organizations = Organization.objects.filter(
@@ -191,7 +201,7 @@ class ListAllDistrictsAPI(APIView):
             },
         )
 
-        serializer = dash_zonal_serializer.ListAllDistrictsSerializer(
+        serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
             paginated_queryset.get("queryset"), many=True
         ).data
 
@@ -203,7 +213,7 @@ class ListAllDistrictsAPI(APIView):
         ).get_success_response()
 
 
-class ListAllDistrictsCSVAPI(APIView):
+class ZonalCollegeDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
@@ -217,15 +227,15 @@ class ListAllDistrictsCSVAPI(APIView):
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=["Zonal Lead has no district"]
+                general_message="Zonal Lead has no district"
             ).get_failure_response()
 
         organizations = Organization.objects.filter(
-            district_zone=user_org.district.zone,
+            district__zone=user_org.district.zone,
             org_type=OrganizationType.COLLEGE.value,
         )
 
-        serializer = dash_zonal_serializer.ListAllDistrictsSerializer(
+        serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
             organizations, many=True
         )
         return CommonUtils.generate_csv(serializer.data, "District Details")
