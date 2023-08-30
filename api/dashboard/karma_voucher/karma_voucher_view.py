@@ -86,6 +86,7 @@ class ImportVoucherLogAPI(APIView):
                     row['task_id'] = task_id
                     row['id'] = str(uuid.uuid4())
                     row['code'] = str(uuid.uuid4())
+                    row['claimed'] = False
                     row['created_by_id'] = current_user
                     row['updated_by_id'] = current_user
                     row['created_at'] = DateTimeUtils.get_current_utc_time()
