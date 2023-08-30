@@ -186,7 +186,3 @@ class UserOrganizationLink(models.Model):
     @property
     def district(self):
         return self.org.district
-
-    @property
-    def zone(self):
-        return self.org.district.zone
