@@ -82,7 +82,7 @@ class Level(models.Model):
 
 class UserLvlLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_lvl_link_user_id")
     level = models.ForeignKey(Level, on_delete=models.CASCADE,  related_name="user_lvl_link_level")
     updated_by = models.ForeignKey(
         User,

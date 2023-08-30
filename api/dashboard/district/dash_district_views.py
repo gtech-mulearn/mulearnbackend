@@ -1,3 +1,6 @@
+from itertools import islice
+
+from django.db.models import Sum
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink, Organization
@@ -6,6 +9,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
 from . import dash_district_serializer
+from .dash_district_helper import get_user_college_link, get_user_college
 
 
 class DistrictDetailAPI(APIView):
@@ -15,37 +19,55 @@ class DistrictDetailAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.filter(
-            user=user_id,
-            org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = get_user_college_link(user_id)
 
-        serializer = dash_district_serializer.DistrictDetailsSerializer(user_org_link, many=False)
+        serializer = dash_district_serializer.DistrictDetailsSerializer(
+            user_org_link, many=False
+        )
+
         return CustomResponse(response=serializer.data).get_success_response()
 
 
 class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.filter(
-            user=user_id,
-            org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = get_user_college_link(user_id)
 
-        if user_org_link.org.district is None:
-            return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+        org_karma_dict = (
+            UserOrganizationLink.objects.filter(
+                org__district=user_org_link.org.district,
+                verified=True,
+            )
+            .values("org")
+            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+        )
 
-        user_organizations = Organization.objects.filter(
-            district=user_org_link.org.district,
-            user_organization_link_org_id__user__total_karma_user__isnull=False).distinct()
+        org_ranks = {
+            data["org"]: data["total_karma"]
+            if data["total_karma"] is not None
+            else 0
+            for data in org_karma_dict
+        }
 
-        serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(user_organizations, many=True).data
-        sorted_serializer = sorted(serializer, key=lambda x: x['rank'])[:3]
+        sorted_org_ranks = dict(
+            sorted(org_ranks.items(), key=lambda x: x[1], reverse=True)
+        )
 
-        return CustomResponse(response=sorted_serializer).get_success_response()
+        top_three_orgs = dict(islice(sorted_org_ranks.items(), 3))
+
+        user_org = Organization.objects.filter(id__in=top_three_orgs).distinct()
+
+        serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(
+            user_org,
+            many=True,
+            context={"ranks": org_ranks}
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class DistrictStudentLevelStatusAPI(APIView):
@@ -55,19 +77,22 @@ class DistrictStudentLevelStatusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.filter(
-            user=user_id,
-            org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = get_user_college_link(user_id)
 
         if user_org_link.org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message='Zonal Lead has no district'
+            ).get_failure_response()
 
         organizations = Organization.objects.filter(
             district=user_org_link.org.district,
-            org_type=OrganizationType.COLLEGE.value)
+            org_type=OrganizationType.COLLEGE.value
+        )
 
-        serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(organizations, many=True)
+        serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(
+            organizations, many=True
+        )
+
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -78,32 +103,34 @@ class DistrictStudentDetailsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id,
-            org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = get_user_college_link(user_id)
 
         if user_org_link.org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message='Zonal Lead has no district'
+            ).get_failure_response()
 
         user_org_links = UserOrganizationLink.objects.filter(
             org__district=user_org_link.org.district,
-            org__org_type=OrganizationType.COLLEGE.value)
+            org__org_type=OrganizationType.COLLEGE.value
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links, request,
             ['user__first_name'],
-            {'name': 'user__full_name',
+            {'name': 'user__first_name',
              'muid': 'user__mu_id',
              'karma': 'user__total_karma_user__karma',
-             'level': 'user__user_level_link_user__level__level_order'})
+             'level': 'user__user_lvl_link_user_id__level__level_order'})
 
         serializer = dash_district_serializer.DistrictStudentDetailsSerializer(
-            paginated_queryset.get('queryset'), many=True).data
+            paginated_queryset.get(
+                'queryset'), many=True).data
 
         return CustomResponse(
-            response={"data": serializer, 'pagination': paginated_queryset.get(
-                'pagination')}).get_success_response()
+            response={"data": serializer,
+                      'pagination': paginated_queryset.get(
+                          'pagination')}).get_success_response()
 
 
 class DistrictStudentDetailsCSVAPI(APIView):
@@ -113,44 +140,49 @@ class DistrictStudentDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id,
-            org__org_type=OrganizationType.COLLEGE.value).first()
+        user_org_link = get_user_college_link(user_id)
 
         if user_org_link.org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message='Zonal Lead has no district'
+            ).get_failure_response()
 
         user_org_links = UserOrganizationLink.objects.filter(
             org__district=user_org_link.org.district,
-            org__org_type=OrganizationType.COLLEGE.value)
+            org__org_type=OrganizationType.COLLEGE.value
+        )
 
-        serializer = dash_district_serializer.DistrictStudentDetailsSerializer(user_org_links, many=True)
+        serializer = dash_district_serializer.DistrictStudentDetailsSerializer(
+            user_org_links, many=True
+        )
+
         return CommonUtils.generate_csv(serializer.data, 'District Details')
 
 
-class ListAllDistrictsAPI(APIView):
+class DistrictsCollageDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id,
-            org_type=OrganizationType.COLLEGE.value).first()
+        user_org = get_user_college(user_id)
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message='Zonal Lead has no district'
+            ).get_failure_response()
 
         organizations = Organization.objects.filter(
             district=user_org.district,
-            org_type=OrganizationType.COLLEGE.value)
+            org_type=OrganizationType.COLLEGE.value
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             organizations, request,
-            ['title', 'code', 'user_organization_link_org_id__user__first_name',
+            ['title',
+             'code',
+             'user_organization_link_org_id__user__first_name',
              'user_organization_link_org_id__user__mobile'],
             {'title': 'title',
              'code': 'code',
@@ -158,32 +190,34 @@ class ListAllDistrictsAPI(APIView):
              'mobile': 'user_organization_link_org_id__user__mobile',
              })
 
-        serializer = dash_district_serializer.ListAllDistrictsSerializer(
+        serializer = dash_district_serializer.DistrictCollegeDetailsSerializer(
             paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse(
-            response={"data": serializer, 'pagination': paginated_queryset.get(
-                'pagination')}).get_success_response()
+            response={
+                "data": serializer,
+                'pagination': paginated_queryset.get(
+                    'pagination')}).get_success_response()
 
 
-class ListAllDistrictsCSVAPI(APIView):
+class DistrictsCollageDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id,
-            org_type=OrganizationType.COLLEGE.value).first()
+        user_org = get_user_college(user_id)
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=['Zonal Lead has no district']).get_failure_response()
+                general_message='Zonal Lead has no district'
+            ).get_failure_response()
 
         organizations = Organization.objects.filter(
             district=user_org.district,
-            org_type=OrganizationType.COLLEGE.value)
+            org_type=OrganizationType.COLLEGE.value
+        )
 
-        serializer = dash_district_serializer.ListAllDistrictsSerializer(organizations, many=True)
+        serializer = dash_district_serializer.DistrictCollegeDetailsSerializer(organizations, many=True)
         return CommonUtils.generate_csv(serializer.data, 'District Details')

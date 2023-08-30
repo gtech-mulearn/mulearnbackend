@@ -108,38 +108,6 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
         ).values('level_order', 'students_count')
 
 
-class UserOrgSerializer(serializers.ModelSerializer):
-    fullname = serializers.ReadOnlyField(source="user.fullname")
-    muid = serializers.ReadOnlyField(source="user.mu_id")
-    karma = serializers.SerializerMethodField()
-    rank = serializers.SerializerMethodField()
-    level = serializers.SerializerMethodField()
-
-    class Meta:
-        model = TotalKarma
-        fields = ("fullname", "karma", "muid", "rank", "level", "created_at")
-
-    def get_karma(self, obj):
-        return obj.user.total_karma_user.karma or 0
-
-    def get_rank(self, obj):
-        rank = (
-            TotalKarma.objects.filter(user__total_karma_user__isnull=False)
-            .annotate(rank=F("user__total_karma_user__karma"))
-            .order_by("-rank")
-            .values_list("rank", flat=True)
-        )
-
-        ranks = {karma: i + 1 for i, karma in enumerate(rank)}
-        return ranks.get(obj.user.total_karma_user.karma, None)
-
-    def get_level(self, obj):
-        user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
-        if user_level_link:
-            return user_level_link.level.name
-        return None
-
-
 class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
     fullname = serializers.ReadOnlyField(source="user.fullname")
     muid = serializers.ReadOnlyField(source="user.mu_id")
@@ -160,7 +128,7 @@ class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
             '-karma').values('user_id', 'karma',)
 
         ranks = {user['user_id']: i + 1 for i, user in enumerate(rank)}
-        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else 0
+        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else None
 
     def get_level(self, obj):
         if user_level_link := UserLvlLink.objects.filter(user=obj.user).first():
@@ -168,7 +136,7 @@ class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
         return None
 
 
-class ListAllDistrictsSerializer(serializers.ModelSerializer):
+class ZonalCollegeDetailsSerializer(serializers.ModelSerializer):
     level = serializers.SerializerMethodField()
     lead = serializers.SerializerMethodField()
     lead_number = serializers.SerializerMethodField()
