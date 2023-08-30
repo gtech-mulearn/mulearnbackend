@@ -103,6 +103,11 @@ class ZonalStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message="Zonal Lead has no district"
+            ).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
             org__org_type=OrganizationType.COLLEGE.value,
@@ -141,6 +146,11 @@ class ZonalStudentDetailsCSVAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link.org.district is None:
+            return CustomResponse(
+                general_message="Zonal Lead has no district"
+            ).get_failure_response()
+
         user_org_links = UserOrganizationLink.objects.filter(
             org__district__zone=user_org_link.org.district.zone,
             org__org_type=OrganizationType.COLLEGE.value,
@@ -166,7 +176,7 @@ class ListAllDistrictsAPI(APIView):
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=["Zonal Lead has no district"]
+                general_message="Zonal Lead has no district"
             ).get_failure_response()
 
         organizations = Organization.objects.filter(
@@ -217,11 +227,11 @@ class ListAllDistrictsCSVAPI(APIView):
 
         if user_org.district is None:
             return CustomResponse(
-                general_message=["Zonal Lead has no district"]
+                general_message="Zonal Lead has no district"
             ).get_failure_response()
 
         organizations = Organization.objects.filter(
-            district_zone=user_org.district.zone,
+            district__zone=user_org.district.zone,
             org_type=OrganizationType.COLLEGE.value,
         )
 

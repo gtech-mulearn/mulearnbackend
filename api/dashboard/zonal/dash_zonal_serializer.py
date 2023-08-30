@@ -5,8 +5,7 @@ from rest_framework import serializers
 
 from db.organization import UserOrganizationLink, District, Organization, College
 from db.task import KarmaActivityLog, Level, UserLvlLink, TotalKarma
-from db.user import User
-from utils.types import OrganizationType, RoleType
+from utils.types import RoleType
 from utils.utils import DateTimeUtils
 
 
@@ -161,7 +160,7 @@ class ZonalStudentDetailsSerializer(serializers.ModelSerializer):
             '-karma').values('user_id', 'karma',)
 
         ranks = {user['user_id']: i + 1 for i, user in enumerate(rank)}
-        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else None
+        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else 0
 
     def get_level(self, obj):
         if user_level_link := UserLvlLink.objects.filter(user=obj.user).first():
@@ -184,14 +183,14 @@ class ListAllDistrictsSerializer(serializers.ModelSerializer):
 
     def get_lead(self, obj):
         user_org_link = obj.user_organization_link_org_id.filter(
-            org__title=obj.title,
+            org=obj,
             user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
         ).first()
         return user_org_link.user.fullname if user_org_link else None
 
     def get_lead_number(self, obj):
         user_org_link = obj.user_organization_link_org_id.filter(
-            org__title=obj.title,
+            org=obj,
             user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
         ).first()
         return user_org_link.user.mobile if user_org_link else None
