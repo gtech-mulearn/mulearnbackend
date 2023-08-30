@@ -1,3 +1,4 @@
+from django.db.models import Count, Q, F
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
@@ -8,6 +9,7 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 
 from . import serializers
+from .dash_campus_helper import get_user_college_link
 
 
 class CampusDetailsAPI(APIView):
@@ -16,10 +18,13 @@ class CampusDetailsAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = UserOrganizationLink.objects.filter(
-            user_id=user_id, org__org_type=OrganizationType.COLLEGE.value
-        ).first()
-        serializer = serializers.CampusDetailsSerializer(user_org_link, many=False)
+
+        user_org_link = get_user_college_link(user_id)
+
+        serializer = serializers.CampusDetailsSerializer(
+            user_org_link, many=False
+        )
+
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -29,12 +34,17 @@ class CampusStudentInEachLevelAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
-        level = Level.objects.all()
-        serializer = serializers.CampusStudentInEachLevelSerializer(
-            level, many=True, context={"user_org": user_org_link.org.title}
-        )
-        return CustomResponse(response=serializer.data).get_success_response()
+
+        user_org_link = get_user_college_link(user_id)
+
+        level_with_student_count = Level.objects.annotate(
+                    students=Count(
+                        'user_lvl_link_level__user',
+                        filter=Q(user_lvl_link_level__user__user_organization_link_user_id__org=user_org_link.org)
+                    )).values(level=F('level_order'),
+                              students=F('students'))
+
+        return CustomResponse(response=level_with_student_count).get_success_response()
 
 
 class CampusStudentDetailsAPI(APIView):
@@ -43,14 +53,19 @@ class CampusStudentDetailsAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
+        user_org_link = get_user_college_link(user_id)
+
         user_org_links = UserOrganizationLink.objects.filter(
-            org_id=user_org_link.org_id, org__org_type=OrganizationType.COLLEGE.value
+            org=user_org_link.org,
+            org__org_type=OrganizationType.COLLEGE.value
         )
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["user__first_name", "user__mu_id", "user__total_karma_user__karma"],
+            ["user__first_name",
+             "user__mu_id",
+             "user__total_karma_user__karma"],
             {
                 "name": "user__first_name",
                 "muid": "user__mu_id",
@@ -58,8 +73,10 @@ class CampusStudentDetailsAPI(APIView):
             },
         )
         serializer = serializers.CampusStudentDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"),
+            many=True
         ).data
+
         return CustomResponse(
             response={
                 "data": serializer,
@@ -74,11 +91,13 @@ class CampusStudentDetailsCSVAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = UserOrganizationLink.objects.filter(user_id=user_id).first()
+        user_org_link = get_user_college_link(user_id)
 
         user_org_links = UserOrganizationLink.objects.filter(
-            org_id=user_org_link.org_id, org__org_type=OrganizationType.COLLEGE.value
+            org_id=user_org_link.org_id,
+            org__org_type=OrganizationType.COLLEGE.value
         )
+
         serializer = serializers.CampusStudentDetailsSerializer(
             user_org_links, many=True
         )

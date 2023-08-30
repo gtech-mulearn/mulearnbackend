@@ -121,7 +121,7 @@ class ZonalStudentDetailsAPI(APIView):
                 "name": "user__first_name",
                 "muid": "user__mu_id",
                 "karma": "user__total_karma_user__karma",
-                "level": "user__user_lvl_link_user_id__level__level_order",
+                "level": "user__user_lvl_link_user__level__level_order",
             },
         )
 
