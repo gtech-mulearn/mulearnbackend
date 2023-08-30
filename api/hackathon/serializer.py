@@ -311,9 +311,7 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
             return super().validate(attrs)
 
         null_field_names = ", ".join(null_instances)
-        raise serializers.ValidationError(
-            f"The following fields are empty: {null_field_names}"
-        )
+        raise serializers.ValidationError(f"The following fields are empty: {null_field_names}" )
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
@@ -405,7 +403,7 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
 
     def get_data(self, obj):
         try:
-            data = json.loads(obj.data.replace("'", "\""))
+            data = json.loads(obj.data)
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
                 if value == 'system' and not data.get(field):
 
