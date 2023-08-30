@@ -1,26 +1,17 @@
 from itertools import islice
+
+from django.db.models import Case, CharField, F, Sum, When
 from rest_framework.views import APIView
 
-from db.task import TotalKarma
-
-from . import dash_zonal_helper
 from db.organization import District, Organization, UserOrganizationLink
+from db.task import TotalKarma
+from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 
-from . import dash_zonal_serializer
-from django.db.models import Sum, F
-from django.db.models import (
-    F,
-    ExpressionWrapper,
-    CharField,
-    Value,
-    Case,
-    When,
-    IntegerField,
-)
+from . import dash_zonal_helper, dash_zonal_serializer
 
 
 class ZonalDetailsAPI(APIView):
@@ -81,12 +72,11 @@ class ZonalStudentLevelStatusAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
-        district_id = user_org_link.org.district.id
 
         org = Organization.objects.filter(
-            district__id=district_id, org_type=OrganizationType.COLLEGE.value
+            district__zone=user_org_link.org.district.zone,
+            org_type=OrganizationType.COLLEGE.value,
         )
 
         serializer = dash_zonal_serializer.ZonalStudentLevelStatusSerializer(
@@ -103,35 +93,55 @@ class ZonalStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
-        if user_org_link.org.district is None:
-            return CustomResponse(
-                general_message="Zonal Lead has no district"
-            ).get_failure_response()
+        rank = (
+            TotalKarma.objects.filter(
+                user__user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
+                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma")
+            .values(
+                "user_id",
+                "karma",
+            )
+        )
 
-        user_org_links = UserOrganizationLink.objects.filter(
-            org__district__zone=user_org_link.org.district.zone,
-            org__org_type=OrganizationType.COLLEGE.value,
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["user__first_name"],
+            ["first_name", "last_name", "level"],
             {
-                "name": "user__first_name",
-                "muid": "user__mu_id",
-                "karma": "user__total_karma_user__karma",
-                "level": "user__user_lvl_link_user__level__level_order",
+                "first_name": "first_name",
+                "last_name": "last_name",
+                "muid": "mu_id",
+                "karma": "total_karma_user__karma",
+                "level": "user_lvl_link_user__level__level_order",
             },
         )
 
         serializer = dash_zonal_serializer.ZonalStudentDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True
-        ).data
+            paginated_queryset.get("queryset"), many=True, context={"ranks": ranks}
+        )
 
         return CustomResponse(
             response={
-                "data": serializer,
+                "data": serializer.data,
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
@@ -143,23 +153,41 @@ class ZonalStudentDetailsCSVAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
-        if user_org_link.org.district is None:
-            return CustomResponse(
-                general_message="Zonal Lead has no district"
-            ).get_failure_response()
+        rank = (
+            TotalKarma.objects.filter(
+                user__user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
+                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma")
+            .values(
+                "user_id",
+                "karma",
+            )
+        )
 
-        user_org_links = UserOrganizationLink.objects.filter(
-            org__district__zone=user_org_link.org.district.zone,
-            org__org_type=OrganizationType.COLLEGE.value,
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
         )
 
         serializer = dash_zonal_serializer.ZonalStudentDetailsSerializer(
-            user_org_links, many=True
+            user_org_links, many=True, context={"ranks": ranks}
         )
-        return CommonUtils.generate_csv(serializer.data, "Zonal Details")
+        return CommonUtils.generate_csv(serializer.data, "Zonal Student Details")
 
 
 class ZonalCollegeDetailsAPI(APIView):
@@ -169,19 +197,36 @@ class ZonalCollegeDetailsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id,
-            org_type=OrganizationType.COLLEGE.value,
-        ).first()
+        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
 
-        if user_org.district is None:
-            return CustomResponse(
-                general_message="Zonal Lead has no district"
-            ).get_failure_response()
+        organizations = (
+            Organization.objects.filter(
+                district__zone=user_org_links.org.district.zone,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .values("title", "code", "id")
+            .annotate(
+                level=F("college_org__level"),
+            )
+        )
 
-        organizations = Organization.objects.filter(
-            district__zone=user_org.district.zone,
-            org_type=OrganizationType.COLLEGE.value,
+        leads = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
+            )
+            .distinct()
+            .annotate(
+                college=Case(
+                    When(
+                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user_id__org__id"),
+                    ),
+                    default=None,
+                    output_field=CharField(),
+                )
+            )
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -190,24 +235,20 @@ class ZonalCollegeDetailsAPI(APIView):
             [
                 "title",
                 "code",
-                "user_organization_link_org_id__user__first_name",
-                "user_organization_link_org_id__user__mobile",
             ],
             {
                 "title": "title",
                 "code": "code",
-                "lead": "user_organization_link_org_id__user__first_name",
-                "mobile": "user_organization_link_org_id__user__mobile",
             },
         )
 
         serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True
-        ).data
+            paginated_queryset.get("queryset"), many=True, context={"leads": leads}
+        )
 
         return CustomResponse(
             response={
-                "data": serializer,
+                "data": serializer.data,
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
@@ -220,22 +261,39 @@ class ZonalCollegeDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id,
-            org_type=OrganizationType.COLLEGE.value,
-        ).first()
+        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
 
-        if user_org.district is None:
-            return CustomResponse(
-                general_message="Zonal Lead has no district"
-            ).get_failure_response()
+        organizations = (
+            Organization.objects.filter(
+                district__zone=user_org_links.org.district.zone,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .values("title", "code", "id")
+            .annotate(
+                level=F("college_org__level"),
+            )
+        )
 
-        organizations = Organization.objects.filter(
-            district__zone=user_org.district.zone,
-            org_type=OrganizationType.COLLEGE.value,
+        leads = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
+            )
+            .distinct()
+            .annotate(
+                college=Case(
+                    When(
+                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user_id__org__id"),
+                    ),
+                    default=None,
+                    output_field=CharField(),
+                )
+            )
         )
 
         serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
-            organizations, many=True
+            organizations, many=True, context={"leads": leads}
         )
         return CommonUtils.generate_csv(serializer.data, "District Details")
