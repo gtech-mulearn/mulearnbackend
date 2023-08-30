@@ -137,29 +137,23 @@ class ZonalStudentDetailsSerializer(serializers.Serializer):
         return obj.fullname
 
 
-class ZonalCollegeDetailsSerializer(serializers.ModelSerializer):
-    level = serializers.SerializerMethodField()
+class ZonalCollegeDetailsSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    code = serializers.CharField()
+    level = serializers.CharField()
     lead = serializers.SerializerMethodField()
     lead_number = serializers.SerializerMethodField()
 
-    class Meta:
-        model = Organization
-        fields = ("title", "code", "level", "lead", "lead_number")
-
-    def get_level(self, obj):
-        college = College.objects.filter(org=obj).first()
-        return college.level if college else None
-
     def get_lead(self, obj):
-        user_org_link = obj.user_organization_link_org_id.filter(
-            org=obj,
-            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
-        ).first()
-        return user_org_link.user.fullname if user_org_link else None
+        leads = self.context.get("leads")
+        college_lead = [lead for lead in leads if lead.college == obj["id"]]
+        return college_lead[0].fullname if college_lead else None
 
     def get_lead_number(self, obj):
-        user_org_link = obj.user_organization_link_org_id.filter(
-            org=obj,
-            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
-        ).first()
-        return user_org_link.user.mobile if user_org_link else None
+        leads = self.context.get("leads")
+        college_lead = [lead for lead in leads if lead.college == obj["id"]]
+        return college_lead[0].mobile if college_lead else None
+
+    class Meta:
+        fields = ["id", "title", "code", "level", "lead", "lead_number"]

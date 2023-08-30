@@ -1,22 +1,6 @@
 from itertools import islice
 
-from django.db.models import (
-    Sum,
-    F,
-    Value,
-    Case,
-    When,
-    CharField,
-    Count,
-    Q,
-    IntegerField,
-    ExpressionWrapper,
-    Func,
-)
-
-from django.db.models import Window, F, Func, Value, CharField
-from django.db.models.functions import DenseRank
-
+from django.db.models import Case, CharField, F, Sum, When
 from rest_framework.views import APIView
 
 from db.organization import District, Organization, UserOrganizationLink
@@ -113,7 +97,8 @@ class ZonalStudentDetailsAPI(APIView):
             TotalKarma.objects.filter(
                 user__user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
                 user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-            ).distinct()
+            )
+            .distinct()
             .order_by("-karma")
             .values(
                 "user_id",
@@ -122,12 +107,13 @@ class ZonalStudentDetailsAPI(APIView):
         )
 
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
-        
+
         user_org_links = (
             User.objects.filter(
                 user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
                 user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-            ).distinct()
+            )
+            .distinct()
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
@@ -139,9 +125,10 @@ class ZonalStudentDetailsAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["first_name", "last_name"],
+            ["first_name", "last_name", "level"],
             {
-                "name": "first_name",
+                "first_name": "first_name",
+                "last_name": "last_name",
                 "muid": "mu_id",
                 "karma": "total_karma_user__karma",
                 "level": "user_lvl_link_user_id__level__level_order",
@@ -166,18 +153,41 @@ class ZonalStudentDetailsCSVAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
-        user_org_links = UserOrganizationLink.objects.filter(
-            org__district__zone=user_org_link.org.district.zone,
-            org__org_type=OrganizationType.COLLEGE.value,
+        rank = (
+            TotalKarma.objects.filter(
+                user__user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
+                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma")
+            .values(
+                "user_id",
+                "karma",
+            )
+        )
+
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user_id__level__name"),
+            )
         )
 
         serializer = dash_zonal_serializer.ZonalStudentDetailsSerializer(
-            user_org_links, many=True
+            user_org_links, many=True, context={"ranks": ranks}
         )
-        return CommonUtils.generate_csv(serializer.data, "Zonal Details")
+        return CommonUtils.generate_csv(serializer.data, "Zonal Student Details")
 
 
 class ZonalCollegeDetailsAPI(APIView):
@@ -187,14 +197,36 @@ class ZonalCollegeDetailsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id,
-            org_type=OrganizationType.COLLEGE.value,
-        ).first()
+        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
 
-        organizations = Organization.objects.filter(
-            district__zone=user_org.district.zone,
-            org_type=OrganizationType.COLLEGE.value,
+        organizations = (
+            Organization.objects.filter(
+                district__zone=user_org_links.org.district.zone,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .values("title", "code", "id")
+            .annotate(
+                level=F("college_org__level"),
+            )
+        )
+
+        leads = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
+            )
+            .distinct()
+            .annotate(
+                college=Case(
+                    When(
+                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user_id__org__id"),
+                    ),
+                    default=None,
+                    output_field=CharField(),
+                )
+            )
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -203,24 +235,20 @@ class ZonalCollegeDetailsAPI(APIView):
             [
                 "title",
                 "code",
-                "user_organization_link_org_id__user__first_name",
-                "user_organization_link_org_id__user__mobile",
             ],
             {
                 "title": "title",
                 "code": "code",
-                "lead": "user_organization_link_org_id__user__first_name",
-                "mobile": "user_organization_link_org_id__user__mobile",
             },
         )
 
         serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True
-        ).data
+            paginated_queryset.get("queryset"), many=True, context={"leads": leads}
+        )
 
         return CustomResponse(
             response={
-                "data": serializer,
+                "data": serializer.data,
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
@@ -233,17 +261,39 @@ class ZonalCollegeDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org = Organization.objects.filter(
-            user_organization_link_org_id__user_id=user_id,
-            org_type=OrganizationType.COLLEGE.value,
-        ).first()
+        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
 
-        organizations = Organization.objects.filter(
-            district__zone=user_org.district.zone,
-            org_type=OrganizationType.COLLEGE.value,
+        organizations = (
+            Organization.objects.filter(
+                district__zone=user_org_links.org.district.zone,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .values("title", "code", "id")
+            .annotate(
+                level=F("college_org__level"),
+            )
+        )
+
+        leads = (
+            User.objects.filter(
+                user_organization_link_user_id__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
+            )
+            .distinct()
+            .annotate(
+                college=Case(
+                    When(
+                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user_id__org__id"),
+                    ),
+                    default=None,
+                    output_field=CharField(),
+                )
+            )
         )
 
         serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
-            organizations, many=True
+            organizations, many=True, context={"leads": leads}
         )
         return CommonUtils.generate_csv(serializer.data, "District Details")
