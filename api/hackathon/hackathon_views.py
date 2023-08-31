@@ -45,11 +45,10 @@ class HackathonManagementAPI(APIView):
             )
         else:
             hackathons_queryset = Hackathon.objects.filter(
-                Q(status="Published") | Q(hackathonorganiserlink__organiser_id=user_id)
-            )
-            serializer = HackathonRetrievalSerializer(
-                hackathons_queryset, many=True, context={"user_id": user_id}
-            )
+                Q(status="Published") | Q(hackathonorganiserlink__organiser_id=user_id)).distinct()
+
+            serializer = HackathonRetrievalSerializer(hackathons_queryset, many=True, context={"user_id": user_id})
+
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
