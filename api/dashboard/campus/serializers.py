@@ -76,60 +76,29 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             return position + 1
 
 
-# class CampusStudentInEachLevelSerializer(serializers.ModelSerializer):
-#     # levels = serializers.SerializerMethodField()
-#
-#     class Meta:
-#         model = UserOrganizationLink
-#         fields = []
-#
-#     def to_representation(self, instance):
-#         level_with_student_count = Level.objects.annotate(
-#             students=Count('user_lvl_link_level__user', filter=Q(
-#                 user_lvl_link_level__user__user_organization_link_user_id__org=instance.org)
-#                            )).values(level=F('level_order'), students=F('students'))
-#         print(level_with_student_count)
-#         return level_with_student_count
-#
-#     def to_representation(self, instance):
-#         return [{'students': 1, 'level': 5}, {'students': 1, 'level': 5}]
-
-
-class CampusStudentDetailsSerializer(serializers.ModelSerializer):
-    fullname = serializers.ReadOnlyField(source="user.fullname")
+class CampusStudentDetailsSerializer(serializers.Serializer):
+    user_id = serializers.CharField()
+    fullname = serializers.SerializerMethodField()
     muid = serializers.ReadOnlyField(source="user.mu_id")
-    karma = serializers.SerializerMethodField()
+    karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
-    level = serializers.SerializerMethodField()
+    level = serializers.CharField()
 
     class Meta:
-        model = TotalKarma
-        fields = ("fullname",
+        fields = ("user_id",
+                  "fullname",
                   "karma",
                   "muid",
                   "rank",
                   "level",
-                  "created_at"
                   )
 
-    def get_karma(self, obj):
-        return obj.user.total_karma_user.karma or 0
-
     def get_rank(self, obj):
-        rank = (
-            TotalKarma.objects.filter(user__total_karma_user__isnull=False)
-            .annotate(rank=F("user__total_karma_user__karma"))
-            .order_by("-rank")
-            .values_list("rank", flat=True)
-        )
+        ranks = self.context.get("ranks")
+        return ranks.get(obj.id, None)
 
-        ranks = {karma: i + 1 for i, karma in enumerate(rank)}
-        return ranks.get(obj.user.total_karma_user.karma, None)
-
-    def get_level(self, obj):
-        if user_level_link := UserLvlLink.objects.filter(user=obj.user).first():
-            return user_level_link.level.name
-        return None
+    def get_fullname(self, obj):
+        return obj.fullname
 
 
 class WeeklyKarmaSerializer(serializers.ModelSerializer):
