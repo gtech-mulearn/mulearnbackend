@@ -98,48 +98,47 @@ class InstitutionsAPI(APIView):
             ).get_failure_response()
         org_type = org_obj.org_type
 
-        if org_type == OrganizationType.COLLEGE.value:
-            org_id_list = Organization.objects.filter(org_type=org_type).values_list(
-                "id", flat=True
-            )
-            organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
-            college_users = {}
-            total_karma_by_college = {}
-            for user_link in organisations:
-                college_users.setdefault(user_link.org.id, []).append(user_link.user)
-
-                total_karma = total_karma_by_college.get(user_link.org.id, 0)
-                total_karma += (
-                    TotalKarma.objects.filter(user=user_link.user)
-                    .aggregate(total_karma=Sum("karma"))
-                    .get("total_karma", 0)
-                )
-                total_karma_by_college[user_link.org.id] = total_karma
-
-            sorted_college_karma = sorted(
-                total_karma_by_college.items(), key=lambda x: x[1], reverse=True
-            )
-            rank = next(
-                (
-                    i + 1
-                    for i, (college_id, _) in enumerate(sorted_college_karma)
-                    if college_id == org_obj.id
-                ),
-                0,
-            )
-            score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
-
-            return CustomResponse(
-                response={
-                    "institution": OrganisationSerializer(org_obj).data,
-                    "rank": str(rank),
-                    "score": str(score),
-                }
-            ).get_success_response()
-        else:
+        if org_type != OrganizationType.COLLEGE.value:
             return CustomResponse(
                 response={"institution": OrganisationSerializer(org_obj).data}
             ).get_success_response()
+        org_id_list = Organization.objects.filter(org_type=org_type).values_list(
+            "id", flat=True
+        )
+        organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
+        college_users = {}
+        total_karma_by_college = {}
+        for user_link in organisations:
+            college_users.setdefault(user_link.org.id, []).append(user_link.user)
+
+            total_karma = total_karma_by_college.get(user_link.org.id, 0)
+            total_karma += (
+                TotalKarma.objects.filter(user=user_link.user)
+                .aggregate(total_karma=Sum("karma"))
+                .get("total_karma", 0)
+            )
+            total_karma_by_college[user_link.org.id] = total_karma
+
+        sorted_college_karma = sorted(
+            total_karma_by_college.items(), key=lambda x: x[1], reverse=True
+        )
+        rank = next(
+            (
+                i + 1
+                for i, (college_id, _) in enumerate(sorted_college_karma)
+                if college_id == org_obj.id
+            ),
+            0,
+        )
+        score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
+
+        return CustomResponse(
+            response={
+                "institution": OrganisationSerializer(org_obj).data,
+                "rank": str(rank),
+                "score": str(score),
+            }
+        ).get_success_response()
 
 
 class GetInstitutionsAPI(APIView):
@@ -222,14 +221,14 @@ class PostInstitutionAPI(APIView):
         if request.data.get("affiliation") and (
             request.data.get("orgType") == OrganizationType.COLLEGE.value
         ):
-            affiliation = OrgAffiliation.objects.filter(
+            if affiliation := OrgAffiliation.objects.filter(
                 title=request.data.get("affiliation")
-            ).first()
-            if not affiliation:
+            ).first():
+                affiliation_id = affiliation.id
+            else:
                 return CustomResponse(
                     general_message="Affiliation not found"
                 ).get_failure_response()
-            affiliation_id = affiliation.id
         else:
             affiliation_id = None
 
@@ -285,8 +284,9 @@ class PostInstitutionAPI(APIView):
         old_type = organisation_obj.org_type
 
         if request.data.get("code") and (request.data.get("code") != org_code):
-            org_code_exist = Organization.objects.filter(code=request.data.get("code"))
-            if org_code_exist:
+            if org_code_exist := Organization.objects.filter(
+                code=request.data.get("code")
+            ):
                 return CustomResponse(
                     general_message="Organisation with this code already exist"
                 ).get_failure_response()
@@ -373,26 +373,21 @@ class PostInstitutionAPI(APIView):
                     old_name,
                 )
 
-            if request.data.get("orgType"):
-                if (
-                    request.data.get("orgType") != OrganizationType.COMMUNITY.value
-                    and old_type == OrganizationType.COMMUNITY.value
-                ):
-                    DiscordWebhooks.general_updates(
-                        WebHookCategory.COMMUNITY.value,
-                        WebHookActions.DELETE.value,
-                        old_name,
-                    )
+            if request.data.get("orgType") and (
+                                request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                                and old_type == OrganizationType.COMMUNITY.value
+                            ):
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.COMMUNITY.value,
+                    WebHookActions.DELETE.value,
+                    old_name,
+                )
 
             if (
                 old_type != OrganizationType.COMMUNITY.value
                 and request.data.get("orgType") == OrganizationType.COMMUNITY.value
             ):
-                if request.data.get("title"):
-                    title = request.data.get("title")
-                else:
-                    title = old_name
-
+                title = request.data.get("title") or old_name
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value, WebHookActions.CREATE.value, title
                 )
@@ -406,23 +401,23 @@ class PostInstitutionAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, org_code):
-        organisation = Organization.objects.filter(code=org_code).first()
-        org_type = organisation.org_type
-        if organisation:
-            organisation.delete()
-            if org_type == OrganizationType.COMMUNITY.value:
-                DiscordWebhooks.general_updates(
-                    WebHookCategory.COMMUNITY.value,
-                    WebHookActions.DELETE.value,
-                    organisation.title,
-                )
-            return CustomResponse(
-                general_message="Deleted Successfully"
-            ).get_success_response()
-        else:
+        if not (
+            organisation := Organization.objects.filter(code=org_code).first()
+        ):
             return CustomResponse(
                 general_message=f"Org with code '{org_code}', does not exist"
             ).get_failure_response()
+        organisation.delete()
+        org_type = organisation.org_type
+        if org_type == OrganizationType.COMMUNITY.value:
+            DiscordWebhooks.general_updates(
+                WebHookCategory.COMMUNITY.value,
+                WebHookActions.DELETE.value,
+                organisation.title,
+            )
+        return CustomResponse(
+            general_message="Deleted Successfully"
+        ).get_success_response()
 
 
 class AffiliationAPI(APIView):
@@ -462,8 +457,7 @@ class AffiliationAPI(APIView):
         created_at = DateTimeUtils.get_current_utc_time()
         updated_at = DateTimeUtils.get_current_utc_time()
         title = request.data.get("title")
-        org_exist = OrgAffiliation.objects.filter(title=title).first()
-        if org_exist:
+        if org_exist := OrgAffiliation.objects.filter(title=title).first():
             return CustomResponse(
                 general_message="Affiliation already exist"
             ).get_failure_response()
@@ -503,9 +497,7 @@ class AffiliationAPI(APIView):
                 general_message="Organisation not found"
             ).get_failure_response()
 
-        new_title = request.data.get("newTitle")
-
-        if new_title:
+        if new_title := request.data.get("newTitle"):
             request.data["title"] = new_title
 
         request.data["updated_at"] = DateTimeUtils.get_current_utc_time()
@@ -526,16 +518,14 @@ class AffiliationAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def delete(self, request):
         title = request.data.get("title")
-        affiliation = OrgAffiliation.objects.filter(title=title).first()
-        if affiliation:
-            affiliation.delete()
-            return CustomResponse(
-                general_message="Deleted Successfully"
-            ).get_success_response()
-        else:
+        if not (affiliation := OrgAffiliation.objects.filter(title=title).first()):
             return CustomResponse(
                 general_message=f"Org with code {title}, does not exist"
             ).get_failure_response()
+        affiliation.delete()
+        return CustomResponse(
+            general_message="Deleted Successfully"
+        ).get_success_response()
 
 
 class GetInstitutionsNamesAPI(APIView):

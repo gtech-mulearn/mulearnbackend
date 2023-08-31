@@ -329,11 +329,10 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         fields = ("hackathon_id", "data")
 
     def validate_hackathon_id(self, value):
-        hackathon = Hackathon.objects.filter(id=value).first()
-        if not hackathon:
+        if hackathon := Hackathon.objects.filter(id=value).first():
+            return hackathon.id
+        else:
             raise serializers.ValidationError("Hackathon Not Exists")
-
-        return hackathon.id
 
     def create(self, validated_data):
         with transaction.atomic():
