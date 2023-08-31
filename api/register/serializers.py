@@ -132,8 +132,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             if "response" not in response_data or not response_data["response"].get(
                 "req_status", False
             ):
-                pass
-                # raise ValueError("Invalid jsid")
+                raise ValueError("Invalid jsid")
 
         referral_provider = None
         user_role_verified = True
