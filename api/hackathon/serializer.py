@@ -19,7 +19,6 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
     org_id = serializers.CharField(source="org.id", allow_null=True)
     district_id = serializers.CharField(source="district.id", allow_null=True)
     editable = serializers.SerializerMethodField()
-
     banner = serializers.SerializerMethodField()
     event_logo = serializers.SerializerMethodField()
 
@@ -57,9 +56,7 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
 
     def get_editable(self, obj):
         user_id = self.context.get("user_id")
-        return HackathonOrganiserLink.objects.filter(
-            organiser=user_id, hackathon=obj
-        ).exists()
+        return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
 
 
 class UpcomingHackathonRetrievalSerializer(serializers.ModelSerializer):
