@@ -2,7 +2,8 @@ from django.db.models import Count, Q, F
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
-from db.task import Level
+from db.task import Level, TotalKarma
+from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
@@ -55,31 +56,55 @@ class CampusStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
-        user_org_links = UserOrganizationLink.objects.filter(
-            org=user_org_link.org,
-            org__org_type=OrganizationType.COLLEGE.value
+        rank = (
+            TotalKarma.objects.filter(
+                user__user_organization_link_user_id__org=user_org_link.org,
+                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma")
+            .values(
+                "user_id",
+                "karma",
+            )
+        )
+
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(
+                user_organization_link_user_id__org=user_org_link.org,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["user__first_name",
-             "user__mu_id",
-             "user__total_karma_user__karma"],
+            ["first_name", "last_name", "level"],
             {
-                "name": "user__first_name",
-                "muid": "user__mu_id",
-                "karma": "user__total_karma_user__karma",
+                "first_name": "first_name",
+                "last_name": "last_name",
+                "muid": "mu_id",
+                "karma": "total_karma_user__karma",
+                "level": "user_lvl_link_user__level__level_order",
             },
         )
+
         serializer = serializers.CampusStudentDetailsSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
-        ).data
+            paginated_queryset.get("queryset"), many=True, context={"ranks": ranks}
+        )
 
         return CustomResponse(
             response={
-                "data": serializer,
+                "data": serializer.data,
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
@@ -93,15 +118,39 @@ class CampusStudentDetailsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
-        user_org_links = UserOrganizationLink.objects.filter(
-            org_id=user_org_link.org_id,
-            org__org_type=OrganizationType.COLLEGE.value
+        rank = (
+            TotalKarma.objects.filter(
+                user__user_organization_link_user_id__org=user_org_link.org,
+                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma")
+            .values(
+                "user_id",
+                "karma",
+            )
+        )
+
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(
+                user_organization_link_user_id__org=user_org_link.org,
+                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
         )
 
         serializer = serializers.CampusStudentDetailsSerializer(
-            user_org_links, many=True
+            user_org_links, many=True, context={"ranks": ranks}
         )
-        return CommonUtils.generate_csv(serializer.data, "Campus Details")
+        return CommonUtils.generate_csv(serializer.data, "Campus Student Details")
 
 
 class WeeklyKarmaAPI(APIView):

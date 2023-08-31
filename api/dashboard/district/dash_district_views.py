@@ -200,7 +200,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
         serializer = dash_district_serializer.DistrictStudentDetailsSerializer(
             user_org_links, many=True, context={"ranks": ranks}
         )
-        return CommonUtils.generate_csv(serializer.data, "Zonal Student Details")
+        return CommonUtils.generate_csv(serializer.data, "District Student Details")
 
 
 class DistrictsCollageDetailsAPI(APIView):
@@ -309,4 +309,4 @@ class DistrictsCollageDetailsCSVAPI(APIView):
         serializer = dash_district_serializer.DistrictCollegeDetailsSerializer(
             organizations, many=True, context={"leads": leads}
         )
-        return CommonUtils.generate_csv(serializer.data, "District Details")
+        return CommonUtils.generate_csv(serializer.data, "District College Details")

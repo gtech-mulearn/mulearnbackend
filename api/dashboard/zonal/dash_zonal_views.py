@@ -296,4 +296,4 @@ class ZonalCollegeDetailsCSVAPI(APIView):
         serializer = dash_zonal_serializer.ZonalCollegeDetailsSerializer(
             organizations, many=True, context={"leads": leads}
         )
-        return CommonUtils.generate_csv(serializer.data, "District Details")
+        return CommonUtils.generate_csv(serializer.data, "Zonal College Details")
