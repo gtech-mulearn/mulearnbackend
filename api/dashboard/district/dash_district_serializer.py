@@ -7,6 +7,7 @@ from django.db.models import Sum, Count, Q, Case, When, IntegerField
 
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog, Level
+from db.user import User
 from utils.utils import DateTimeUtils
 
 
@@ -103,29 +104,22 @@ class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
 
 
 class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
-    college_name = serializers.CharField(source="title")
-    college_code = serializers.CharField(source="code")
-    level = serializers.SerializerMethodField()
+    students_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = Organization
-        fields = ["college_name", "college_code", "level"]
+        model = Level
+        fields = ["level_order", "students_count"]
 
-    def get_level(self, obj):
-        return Level.objects.annotate(
-            students_count=Count(
-                Case(
-                    When(
-                        Q(
-                            user_lvl_link_level__user__user_organization_link_user_id__org=obj.id,
-                        ),
-                        then=1,
-                    ),
-                    default=None,
-                    output_field=IntegerField(),
-                )
+    def get_students_count(self, obj):
+        district = self.context.get("district")
+        return (
+            User.objects.filter(
+                user_organization_link_user_id__org__district=district,
+                user_lvl_link_user__level=obj,
             )
-        ).values("level_order", "students_count")
+            .distinct()
+            .count()
+        )
 
 
 class DistrictStudentDetailsSerializer(serializers.Serializer):

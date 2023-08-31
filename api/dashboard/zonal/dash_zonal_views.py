@@ -4,7 +4,7 @@ from django.db.models import Case, CharField, F, Sum, When
 from rest_framework.views import APIView
 
 from db.organization import District, Organization, UserOrganizationLink
-from db.task import TotalKarma
+from db.task import Level, TotalKarma
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -73,14 +73,11 @@ class ZonalStudentLevelStatusAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+        zone = user_org_link.org.district.zone
 
-        org = Organization.objects.filter(
-            district__zone=user_org_link.org.district.zone,
-            org_type=OrganizationType.COLLEGE.value,
-        )
-
+        levels = Level.objects.all()
         serializer = dash_zonal_serializer.ZonalStudentLevelStatusSerializer(
-            org, many=True
+            levels, many=True, context={"zone": zone}
         )
         return CustomResponse(response=serializer.data).get_success_response()
 
