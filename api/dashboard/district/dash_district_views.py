@@ -11,13 +11,13 @@ from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
 from . import dash_district_serializer
-from .dash_district_helper import get_user_college_link, get_user_college
+from .dash_district_helper import get_user_college_link
 
 
 class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -49,9 +49,7 @@ class DistrictTopThreeCampusAPI(APIView):
         )
 
         org_ranks = {
-            data["org"]: data["total_karma"]
-            if data["total_karma"] is not None
-            else 0
+            data["org"]: data["total_karma"] if data["total_karma"] is not None else 0
             for data in org_karma_dict
         }
 
@@ -64,9 +62,7 @@ class DistrictTopThreeCampusAPI(APIView):
         user_org = Organization.objects.filter(id__in=top_three_orgs).distinct()
 
         serializer = dash_district_serializer.DistrictTopThreeCampusSerializer(
-            user_org,
-            many=True,
-            context={"ranks": org_ranks}
+            user_org, many=True, context={"ranks": org_ranks}
         )
 
         return CustomResponse(response=serializer.data).get_success_response()
@@ -75,20 +71,14 @@ class DistrictTopThreeCampusAPI(APIView):
 class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
-
-        if user_org_link.org.district is None:
-            return CustomResponse(
-                general_message='Zonal Lead has no district'
-            ).get_failure_response()
-
+        
         organizations = Organization.objects.filter(
-            district=user_org_link.org.district,
-            org_type=OrganizationType.COLLEGE.value
+            district=user_org_link.org.district, org_type=OrganizationType.COLLEGE.value
         )
 
         serializer = dash_district_serializer.DistrictStudentLevelStatusSerializer(
@@ -206,7 +196,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
 class DistrictsCollageDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -270,7 +260,7 @@ class DistrictsCollageDetailsAPI(APIView):
 class DistrictsCollageDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 

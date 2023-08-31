@@ -2,14 +2,16 @@ from uuid import uuid4
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+import requests
 from rest_framework import serializers
+from db.integrations import Integration, IntegrationAuthorization
 
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink
-from utils.types import RoleType, TasksTypesHashtag
+from utils.types import IntegrationType, RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 
 
@@ -83,6 +85,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
     password = serializers.CharField(required=True, max_length=200)
     referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
+    jsid = serializers.CharField(required=False, allow_null=True, max_length=100)
 
     def validate_referral_id(self, value):
         if value:
@@ -110,9 +113,31 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password")
         hashed_password = make_password(password)
         referral_id = validated_data.pop("referral_id")
-        referral_provider = None
 
+        if jsid := validated_data.pop("jsid", None):
+            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
+                raise ValueError(
+                    "This KKEM account is already connected to another user"
+                )
+
+            integration = Integration.objects.get(name=IntegrationType.KKEM.value)
+
+            response = requests.post(
+                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                data=f'{{"job_seeker_id": {jsid}}}',
+                headers={"Authorization": f"Bearer {integration.token}"},
+            )
+            response_data = response.json()
+
+            if "response" not in response_data or not response_data["response"].get(
+                "req_status", False
+            ):
+                pass
+                # raise ValueError("Invalid jsid")
+
+        referral_provider = None
         user_role_verified = True
+        
         if role_id:
             role = Role.objects.get(id=role_id)
             user_role_verified = role.title == RoleType.STUDENT.value
@@ -123,6 +148,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 hashtag=TasksTypesHashtag.REFERRAL.value
             ).first()
             karma_amount = getattr(task_list, "karma", 0)
+
         with transaction.atomic():
             user = User.objects.create(
                 **validated_data,
@@ -231,11 +257,21 @@ class RegisterSerializer(serializers.ModelSerializer):
                 referrer_karma = TotalKarma.objects.filter(
                     user=referral_provider
                 ).first()
-                
+
                 referrer_karma.karma += karma_amount
                 referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
                 referrer_karma.updated_by = user
                 referrer_karma.save()
+                
+            if jsid:
+                IntegrationAuthorization.objects.create(
+                    id=uuid4(),
+                    user=user,
+                    integration=integration,
+                    integration_value=jsid,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    updated_at=DateTimeUtils.get_current_utc_time(),
+                )
 
         return user, password
 
@@ -255,6 +291,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "area_of_interests",
             "password",
             "referral_id",
+            "jsid",
         ]
 
 

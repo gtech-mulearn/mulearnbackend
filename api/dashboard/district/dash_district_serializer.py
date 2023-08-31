@@ -27,7 +27,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
             "district_lead",
             "karma",
             "total_members",
-            "active_members"
+            "active_members",
         )
 
     def get_rank(self, obj):
@@ -56,13 +56,14 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
     def get_district_lead(self, obj):
         user_org_link = UserOrganizationLink.objects.filter(
             org__district=obj.org.district,
-            user__user_role_link_user__role__title='District Campus Lead').first()
+            user__user_role_link_user__role__title="District Campus Lead",
+        ).first()
         return user_org_link.user.fullname if user_org_link else None
 
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
             org__district=obj.org.district
-        ).aggregate(total_karma=Sum('user__total_karma_user__karma'))['total_karma']
+        ).aggregate(total_karma=Sum("user__total_karma_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
         return UserOrganizationLink.objects.filter(
@@ -83,7 +84,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
 
 class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
-    campus_code = serializers.CharField(source='code')
+    campus_code = serializers.CharField(source="code")
     rank = serializers.SerializerMethodField()
 
     class Meta:
@@ -97,26 +98,23 @@ class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
 
 
 class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
-    college_name = serializers.CharField(source='title')
-    college_code = serializers.CharField(source='code')
+    college_name = serializers.CharField(source="title")
+    college_code = serializers.CharField(source="code")
     level = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
-        fields = [
-            "college_name",
-            "college_code",
-            "level"]
+        fields = ["college_name", "college_code", "level"]
 
     def get_level(self, obj):
         return Level.objects.annotate(
             students_count=Count(
-                'user_lvl_link_level',
+                "user_lvl_link_level",
                 filter=Q(
                     user_lvl_link_level__user__user_organization_link_user_id=obj.user_organization_link_org_id
                 ),
             )
-        ).values('level_order', 'students_count')
+        ).values("level_order", "students_count")
 
 
 class DistrictStudentDetailsSerializer(serializers.Serializer):
