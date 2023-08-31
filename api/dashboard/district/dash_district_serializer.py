@@ -119,50 +119,43 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
         ).values('level_order', 'students_count')
 
 
-class DistrictStudentDetailsSerializer(serializers.ModelSerializer):
-    fullname = serializers.ReadOnlyField(source="user.fullname")
+class DistrictStudentDetailsSerializer(serializers.Serializer):
+    user_id = serializers.CharField()
+    fullname = serializers.SerializerMethodField()
     muid = serializers.ReadOnlyField(source="user.mu_id")
-    karma = serializers.SerializerMethodField()
+    karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
-    level = serializers.SerializerMethodField()
+    level = serializers.CharField()
 
     class Meta:
-        model = UserOrganizationLink
         fields = (
+            "user_id"
             "fullname",
             "karma",
             "muid",
             "rank",
             "level",
-            "created_at")
-
-    def get_karma(self, obj):
-        return obj.user.total_karma_user.karma or 0
-
-    def get_rank(self, obj):
-        rank = TotalKarma.objects.filter(
-            karma__isnull=False).order_by(
-            '-karma').values(
-            'user_id', 'karma'
         )
 
-        ranks = {user['user_id']: i + 1 for i, user in enumerate(rank)}
-        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else None
+    def get_rank(self, obj):
+        ranks = self.context.get("ranks")
+        return ranks.get(obj.id, None)
 
-    def get_level(self, obj):
-        if user_level_link := UserLvlLink.objects.filter(user=obj.user).first():
-            return user_level_link.level.name
-        return None
+    def get_fullname(self, obj):
+        return obj.fullname
 
 
-class DistrictCollegeDetailsSerializer(serializers.ModelSerializer):
-    level = serializers.SerializerMethodField()
+class DistrictCollegeDetailsSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    code = serializers.CharField()
+    level = serializers.CharField()
     lead = serializers.SerializerMethodField()
     lead_number = serializers.SerializerMethodField()
 
     class Meta:
-        model = Organization
         fields = (
+            'id'
             'title',
             'level',
             'code',
@@ -170,24 +163,12 @@ class DistrictCollegeDetailsSerializer(serializers.ModelSerializer):
             'lead_number'
         )
 
-    def get_level(self, obj):
-        college = College.objects.filter(
-            org=obj).first()
-
-        return college.level if college else None
-
     def get_lead(self, obj):
-        user_org_link = obj.user_organization_link_org_id.filter(
-            org=obj,
-            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value
-        ).first()
-
-        return user_org_link.user.fullname if user_org_link else None
+        leads = self.context.get("leads")
+        college_lead = [lead for lead in leads if lead.college == obj["id"]]
+        return college_lead[0].fullname if college_lead else None
 
     def get_lead_number(self, obj):
-        user_org_link = obj.user_organization_link_org_id.filter(
-            org=obj,
-            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value
-        ).first()
-
-        return user_org_link.user.mobile if user_org_link else None
+        leads = self.context.get("leads")
+        college_lead = [lead for lead in leads if lead.college == obj["id"]]
+        return college_lead[0].mobile if college_lead else None
