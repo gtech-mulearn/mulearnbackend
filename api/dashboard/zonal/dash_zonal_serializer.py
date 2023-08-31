@@ -88,7 +88,7 @@ class ZonalTopThreeDistrictSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["district", "id", "rank", "karma"]
+        fields = ["district", "rank", "karma"]
 
 
 class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):

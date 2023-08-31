@@ -1,11 +1,12 @@
 from datetime import timedelta
 
-from django.db.models import Sum, F, Count, Q
+from django.db.models import Sum, Count, Q
 from rest_framework import serializers
+from django.db.models import Sum, Count, Q, Case, When, IntegerField
 
-from db.organization import UserOrganizationLink, Organization, College
-from db.task import TotalKarma, KarmaActivityLog, Level, UserLvlLink
-from utils.types import OrganizationType, RoleType
+
+from db.organization import UserOrganizationLink, Organization
+from db.task import KarmaActivityLog, Level
 from utils.utils import DateTimeUtils
 
 
@@ -86,15 +87,19 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
     campus_code = serializers.CharField(source="code")
     rank = serializers.SerializerMethodField()
+    karma = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
-        fields = ["rank", "campus_code"]
+        fields = ["rank", "campus_code", "karma"]
 
     def get_rank(self, obj):
         keys_list = list(self.context.get("ranks").keys())
         position = keys_list.index(obj.id)
         return position + 1
+    
+    def get_karma(self, obj):
+        return self.context.get("ranks")[obj.id]
 
 
 class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
@@ -109,10 +114,16 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
     def get_level(self, obj):
         return Level.objects.annotate(
             students_count=Count(
-                "user_lvl_link_level",
-                filter=Q(
-                    user_lvl_link_level__user__user_organization_link_user_id=obj.user_organization_link_org_id
-                ),
+                Case(
+                    When(
+                        Q(
+                            user_lvl_link_level__user__user_organization_link_user_id__org=obj.id,
+                        ),
+                        then=1,
+                    ),
+                    default=None,
+                    output_field=IntegerField(),
+                )
             )
         ).values("level_order", "students_count")
 
