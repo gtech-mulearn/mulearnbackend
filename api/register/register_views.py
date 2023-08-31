@@ -38,61 +38,52 @@ class LearningCircleUserViewAPI(APIView):
 
 class RegisterDataAPI(APIView):
     def post(self, request):
-        data = request.data
-        jsid = request.data.get("jsid", None)
-        integration = request.data.get("integration", None)
+        try:
+            data = request.data
 
-        create_user = serializers.RegisterSerializer(
-            data=data, context={"request": request}
-        )
-
-        if not create_user.is_valid():
-            return CustomResponse(
-                message=create_user.errors, general_message="Invalid fields"
-            ).get_failure_response()
-
-        user_obj, password = create_user.save()
-        auth_domain = decouple.config("AUTH_DOMAIN")
-        response = requests.post(
-            f"{auth_domain}/api/v1/auth/user-authentication/",
-            data={"emailOrMuid": user_obj.mu_id, "password": password},
-        )
-        response = response.json()
-        if response.get("statusCode") != 200:
-            return CustomResponse(
-                message=response.get("message")
-            ).get_failure_response()
-        res_data = response.get("response")
-        access_token = res_data.get("accessToken")
-        refresh_token = res_data.get("refreshToken")
-
-        response = {
-            "accessToken": access_token,
-            "refreshToken": refresh_token,
-        }
-
-        if jsid and integration:
-            request.data["verified"] = True
-            serialized_set = KKEMAuthorization(
-                data=request.data, context={"type": "register"}
+            create_user = serializers.RegisterSerializer(
+                data=data, context={"request": request}
             )
 
-            if not serialized_set.is_valid():
+            if not create_user.is_valid():
                 return CustomResponse(
-                    general_message=serialized_set.errors
+                    message=create_user.errors, general_message="Invalid fields"
                 ).get_failure_response()
 
-            serialized_set.save()
-            response["dwms"] = serialized_set.data
-            
-        send_template_mail(
-            context=user_obj,
-            subject="YOUR TICKET TO µFAM IS HERE!",
-            address=["user_registration.html"],
-        )
+            user_obj, password = create_user.save()
+            auth_domain = decouple.config("AUTH_DOMAIN")
+            response = requests.post(
+                f"{auth_domain}/api/v1/auth/user-authentication/",
+                data={"emailOrMuid": user_obj.mu_id, "password": password},
+            )
+            response = response.json()
+            if response.get("statusCode") != 200:
+                return CustomResponse(
+                    message=response.get("message")
+                ).get_failure_response()
 
-        response["data"] = serializers.UserDetailSerializer(user_obj, many=False).data
-        return CustomResponse(response=response).get_success_response()
+            res_data = response.get("response")
+            access_token = res_data.get("accessToken")
+            refresh_token = res_data.get("refreshToken")
+
+            response = {
+                "accessToken": access_token,
+                "refreshToken": refresh_token,
+            }
+
+            send_template_mail(
+                context=user_obj,
+                subject="YOUR TICKET TO µFAM IS HERE!",
+                address=["user_registration.html"],
+            )
+
+            response["data"] = serializers.UserDetailSerializer(
+                user_obj, many=False
+            ).data
+            
+            return CustomResponse(response=response).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class RoleAPI(APIView):
