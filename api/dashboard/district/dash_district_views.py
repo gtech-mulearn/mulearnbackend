@@ -33,7 +33,7 @@ class DistrictDetailAPI(APIView):
 class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -101,7 +101,7 @@ class DistrictStudentLevelStatusAPI(APIView):
 class DistrictStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
@@ -163,7 +163,7 @@ class DistrictStudentDetailsAPI(APIView):
 class DistrictStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
