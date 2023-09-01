@@ -294,7 +294,7 @@ class DistrictDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request, zone_id):
+    def patch(self, request, district_id):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             district = District.objects.get(id=zone_id)
@@ -315,7 +315,7 @@ class DistrictDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request, zone_id):
+    def delete(self, request, district_id):
         try:
             district = District.objects.get(id=zone_id)
             district.delete()
