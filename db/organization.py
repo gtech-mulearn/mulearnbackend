@@ -153,11 +153,11 @@ class OrgDiscordLink(models.Model):
 class UserOrganizationLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE,
-                             related_name='user_organization_link_user_id')
+                             related_name='user_organization_link_user')
     org = models.ForeignKey(Organization, on_delete=models.CASCADE,
-                            related_name='user_organization_link_org_id')
+                            related_name='user_organization_link_org')
     department = models.ForeignKey(Department, on_delete=models.CASCADE, blank=True, null=True,
-                                   related_name='user_organization_link_department_id')
+                                   related_name='user_organization_link_department')
     graduation_year = models.CharField(max_length=10, blank=True, null=True)
     verified = models.BooleanField()
     created_by = models.ForeignKey(

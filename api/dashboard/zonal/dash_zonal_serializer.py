@@ -69,7 +69,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
         ) - timedelta(days=1)
 
         return KarmaActivityLog.objects.filter(
-            user__user_organization_link_user_id__org__district__zone=obj.org.district.zone,
+            user__user_organization_link_user__org__district__zone=obj.org.district.zone,
             created_at__range=(start_date, end_date),
         ).count()
 
@@ -103,7 +103,7 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
         zone = self.context.get("zone")
         return (
             User.objects.filter(
-                user_organization_link_user_id__org__district__zone=zone,
+                user_organization_link_user__org__district__zone=zone,
                 user_lvl_link_user__level=obj,
             )
             .distinct()
