@@ -125,7 +125,7 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
 class DistrictStudentDetailsSerializer(serializers.Serializer):
     user_id = serializers.CharField()
     fullname = serializers.SerializerMethodField()
-    muid = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
     level = serializers.CharField()
