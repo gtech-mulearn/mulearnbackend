@@ -60,7 +60,7 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
         user_id = self.context.get("user_id")
         return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
 
-    def is_applied(self, obj):
+    def get_is_applied(self, obj):
         user_id = self.context.get("user_id")
         return HackathonUserSubmission.objects.filter(user=user_id, hackathon=obj).exists()
 
