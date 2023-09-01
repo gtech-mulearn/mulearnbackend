@@ -22,6 +22,11 @@ class CampusDetailsAPI(APIView):
 
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message='Campus lead has no college'
+            ).get_failure_response()
+
         serializer = serializers.CampusDetailsSerializer(
             user_org_link, many=False
         )
@@ -37,6 +42,11 @@ class CampusStudentInEachLevelAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message='Campus lead has no college'
+            ).get_failure_response()
 
         level_with_student_count = Level.objects.annotate(
                     students=Count(
@@ -55,6 +65,11 @@ class CampusStudentDetailsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message='Campus lead has no college'
+            ).get_failure_response()
 
         rank = (
             TotalKarma.objects.filter(
@@ -118,6 +133,11 @@ class CampusStudentDetailsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message='Campus lead has no college'
+            ).get_failure_response()
+
         rank = (
             TotalKarma.objects.filter(
                 user__user_organization_link_user_id__org=user_org_link.org,
@@ -160,9 +180,14 @@ class WeeklyKarmaAPI(APIView):
     def get(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            user_org_link = UserOrganizationLink.objects.get(
-                user_id=user_id, org__org_type=OrganizationType.COLLEGE.value
-            )
+
+            user_org_link = get_user_college_link(user_id)
+
+            if user_org_link.org is None:
+                return CustomResponse(
+                    general_message='Campus lead has no college'
+                ).get_failure_response()
+
             serializer = serializers.WeeklyKarmaSerializer(
                 user_org_link
             )
