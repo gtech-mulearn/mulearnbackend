@@ -21,7 +21,7 @@ class CollegeApi(APIView):
             return CustomResponse(general_message='Level added successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    def delete(self, request):
+    def put(self, request):
         if college := College.objects.filter(org_id=request.data.get('org_id')).first():
             CollegeCreateDeleteSerializer().destroy(college)
             return CustomResponse(general_message='College succesfully deleted').get_success_response()
@@ -35,6 +35,3 @@ class CollegeApi(APIView):
             serializer.save()
             return CustomResponse(general_message='Level updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
-
-# class CollegeDropDownApi(APIView):
-#     colleges = Organization.objects.filter(type=OrganizationType.COLLEGE.value)
