@@ -19,9 +19,9 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
     org_id = serializers.CharField(source="org.id", allow_null=True)
     district_id = serializers.CharField(source="district.id", allow_null=True)
     editable = serializers.SerializerMethodField()
-
     banner = serializers.SerializerMethodField()
     event_logo = serializers.SerializerMethodField()
+    is_applied = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -47,6 +47,7 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
             "editable",
             "org_id",
             "district_id",
+            'is_applied',
         )
 
     def get_banner(self, obj):
@@ -57,9 +58,11 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
 
     def get_editable(self, obj):
         user_id = self.context.get("user_id")
-        return HackathonOrganiserLink.objects.filter(
-            organiser=user_id, hackathon=obj
-        ).exists()
+        return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
+
+    def get_is_applied(self, obj):
+        user_id = self.context.get("user_id")
+        return HackathonUserSubmission.objects.filter(user=user_id, hackathon=obj).exists()
 
 
 class UpcomingHackathonRetrievalSerializer(serializers.ModelSerializer):
@@ -311,9 +314,7 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
             return super().validate(attrs)
 
         null_field_names = ", ".join(null_instances)
-        raise serializers.ValidationError(
-            f"The following fields are empty: {null_field_names}"
-        )
+        raise serializers.ValidationError(f"The following fields are empty: {null_field_names}")
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
@@ -334,11 +335,10 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
         fields = ("hackathon_id", "data")
 
     def validate_hackathon_id(self, value):
-        hackathon = Hackathon.objects.filter(id=value).first()
-        if not hackathon:
+        if hackathon := Hackathon.objects.filter(id=value).first():
+            return hackathon.id
+        else:
             raise serializers.ValidationError("Hackathon Not Exists")
-
-        return hackathon.id
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -405,9 +405,10 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
 
     def get_data(self, obj):
         try:
-            data = json.loads(obj.data.replace("'", "\""))
+            data = obj.data
             for field, value in DEFAULT_HACKATHON_FORM_FIELDS.items():
                 if value == 'system' and not data.get(field):
+
                     user = User.objects.filter(id=obj.user.id).first()
                     if field == 'gender':
                         data[field] = user.gender
@@ -431,6 +432,8 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     district = serializers.CharField(source="district.name", allow_null=True)
     org_id = serializers.CharField(source="org.id", allow_null=True)
     district_id = serializers.CharField(source="district.id", allow_null=True)
+    form_fields = serializers.SerializerMethodField()
+    is_applied = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -455,6 +458,8 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
             "website",
             "org_id",
             "district_id",
+            'form_fields',
+            'is_applied'
         )
 
     def get_banner(self, obj):
@@ -466,6 +471,10 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     def get_form_fields(self, obj):
         hackathon = HackathonForm.objects.filter(hackathon=obj)
         return [i.field_name for i in hackathon]
+
+    def get_is_applied(self, obj):
+        user_id = self.context.get("user_id")
+        return HackathonUserSubmission.objects.filter(user=user_id, hackathon=obj).exists()
 
 
 class OrganisationSerializer(serializers.ModelSerializer):

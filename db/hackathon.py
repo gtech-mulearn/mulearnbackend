@@ -79,7 +79,7 @@ class HackathonUserSubmission(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='hackathon_submission_created_by')
     created_at = models.DateTimeField()
-    data = models.CharField(max_length=2000, blank=True, null=True)
+    data = models.JSONField(max_length=2000, blank=True, null=True)
 
     class Meta:
         managed = False

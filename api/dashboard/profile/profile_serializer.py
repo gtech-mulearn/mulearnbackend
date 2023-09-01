@@ -107,7 +107,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_level(self, obj):
-        if user_level_link := obj.userlvllink_set.first():
+        if user_level_link := obj.user_lvl_link_user.first():
             return user_level_link.level.name
         return None
 

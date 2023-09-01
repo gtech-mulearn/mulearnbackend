@@ -1,11 +1,13 @@
 from datetime import timedelta
 
-from django.db.models import Sum, F
+from django.db.models import Sum, Count, Q
 from rest_framework import serializers
+from django.db.models import Sum, Count, Q, Case, When, IntegerField
 
-from db.organization import UserOrganizationLink, Organization, College
-from db.task import TotalKarma, KarmaActivityLog, Level, UserLvlLink
-from utils.types import OrganizationType, RoleType
+
+from db.organization import UserOrganizationLink, Organization
+from db.task import KarmaActivityLog, Level
+from db.user import User
 from utils.utils import DateTimeUtils
 
 
@@ -20,164 +22,156 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserOrganizationLink
-        fields = ("district", "zone", "rank", "district_lead", "karma", "total_members", "active_members")
+        fields = (
+            "district",
+            "zone",
+            "rank",
+            "district_lead",
+            "karma",
+            "total_members",
+            "active_members",
+        )
 
     def get_rank(self, obj):
-        user_org_link = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value).values(
-            'org', 'org__district__name').annotate(
-            total_karma=Sum('user__total_karma_user__karma')).order_by('-total_karma')
+        org_karma_dict = (
+            UserOrganizationLink.objects.all()
+            .values("org__district")
+            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+        )
 
-        rank_dict = {}
+        rank_dict = {
+            data["org__district"]: data["total_karma"]
+            if data["total_karma"] is not None
+            else 0
+            for data in org_karma_dict
+        }
 
-        for data in user_org_link:
-            district_name = data['org__district__name']
-            total_karma = data['total_karma']
+        sorted_rank_dict = dict(
+            sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
+        )
 
-            if district_name in rank_dict:
-                rank_dict[district_name] += total_karma
-            else:
-                rank_dict[district_name] = total_karma
-
-        sorted_rank_dict = dict(sorted(rank_dict.items(), key=lambda x: x[1], reverse=True))
-
-        if obj.org.district.name in sorted_rank_dict:
+        if obj.org.district.id in sorted_rank_dict:
             keys_list = list(sorted_rank_dict.keys())
-            position = keys_list.index(obj.org.district.name)
+            position = keys_list.index(obj.org.district.id)
             return position + 1
 
     def get_district_lead(self, obj):
         user_org_link = UserOrganizationLink.objects.filter(
-            org__district__name=obj.org.district.name,
-            user__user_role_link_user__role__title='District Campus Lead').first()
+            org__district=obj.org.district,
+            user__user_role_link_user__role__title="District Campus Lead",
+        ).first()
         return user_org_link.user.fullname if user_org_link else None
 
     def get_karma(self, obj):
-        user_org_link = UserOrganizationLink.objects.filter(
-            org__district__name=obj.org.district.name).aggregate(
-            total_karma=Sum('user__total_karma_user__karma'))['total_karma']
-        return user_org_link
+        return UserOrganizationLink.objects.filter(
+            org__district=obj.org.district
+        ).aggregate(total_karma=Sum("user__total_karma_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
-        user_org_link = UserOrganizationLink.objects.filter(
-            org__district__name=obj.org.district.name).all()
-        return len(user_org_link)
+        return UserOrganizationLink.objects.filter(
+            org__district=obj.org.district
+        ).count()
 
     def get_active_members(self, obj):
         today = DateTimeUtils.get_current_utc_time()
         start_date = today.replace(day=1)
-        end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - timedelta(days=1)
+        end_date = start_date.replace(
+            day=1, month=start_date.month % 12 + 1
+        ) - timedelta(days=1)
 
-        user_org_link = UserOrganizationLink.objects.filter(
-            org__district__name=obj.org.district.name).all()
-
-        active_members = []
-
-        for data in user_org_link:
-            karma_activity_log = KarmaActivityLog.objects.filter(
-                user=data.user,
-                created_at__range=(start_date, end_date)).first()
-
-            if karma_activity_log is not None:
-                active_members.append(karma_activity_log)
-        return len(active_members)
+        return KarmaActivityLog.objects.filter(
+            user__user_organization_link_user_id__org__district=obj.org.district,
+            created_at__range=(start_date, end_date),
+        ).count()
 
 
 class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
+    campus_code = serializers.CharField(source="code")
     rank = serializers.SerializerMethodField()
-    campus_code = serializers.CharField(source='code')
+    karma = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
-        fields = ["rank", "campus_code"]
+        fields = ["rank", "campus_code", "karma"]
 
     def get_rank(self, obj):
-        rank = UserOrganizationLink.objects.filter(
-            org__org_type=OrganizationType.COLLEGE.value,
-            org__district__name=obj.district.name, verified=True,
-            user__total_karma_user__isnull=False).values('org').annotate(
-            total_karma=Sum('user__total_karma_user__karma')).order_by('-total_karma')
-
-        college_ranks = {college['org']: i + 1 for i, college in enumerate(rank)}
-        college_id = obj.id
-        return college_ranks.get(college_id)
+        keys_list = list(self.context.get("ranks").keys())
+        position = keys_list.index(obj.id)
+        return position + 1
+    
+    def get_karma(self, obj):
+        return self.context.get("ranks")[obj.id]
 
 
 class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
-    college_name = serializers.CharField(source='title')
-    college_code = serializers.CharField(source='code')
-    level = serializers.SerializerMethodField()
+    students_count = serializers.SerializerMethodField()
 
     class Meta:
-        model = Organization
-        fields = ["college_name", "college_code", "level"]
+        model = Level
+        fields = ["level_order", "students_count"]
 
-    def get_level(self, obj):
-        level = Level.objects.all()
-        level_dict = {}
-        level_list = []
-
-        for levels in level:
-            level_dict['level'] = levels.level_order
-            level_dict['students_count'] = len(UserLvlLink.objects.filter(
-                level=levels,
-                user__user_organization_link_user_id__org=obj))
-            level_list.append(level_dict)
-
-            level_dict = {}
-        return level_list
+    def get_students_count(self, obj):
+        district = self.context.get("district")
+        return (
+            User.objects.filter(
+                user_organization_link_user_id__org__district=district,
+                user_lvl_link_user__level=obj,
+            )
+            .distinct()
+            .count()
+        )
 
 
-class DistrictStudentDetailsSerializer(serializers.ModelSerializer):
-    fullname = serializers.ReadOnlyField(source="user.fullname")
+class DistrictStudentDetailsSerializer(serializers.Serializer):
+    user_id = serializers.CharField()
+    fullname = serializers.SerializerMethodField()
     muid = serializers.ReadOnlyField(source="user.mu_id")
-    karma = serializers.SerializerMethodField()
+    karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
-    level = serializers.SerializerMethodField()
+    level = serializers.CharField()
 
     class Meta:
-        model = UserOrganizationLink
-        fields = ("fullname", "karma", "muid", "rank", "level", 'created_at')
-
-    def get_karma(self, obj):
-        return obj.user.total_karma_user.karma or 0
+        fields = (
+            "user_id"
+            "fullname",
+            "karma",
+            "muid",
+            "rank",
+            "level",
+        )
 
     def get_rank(self, obj):
-        rank = TotalKarma.objects.filter(
-            karma__isnull=False).order_by(
-            '-karma').values('user_id', 'karma', )
+        ranks = self.context.get("ranks")
+        return ranks.get(obj.id, None)
 
-        ranks = {user['user_id']: i + 1 for i, user in enumerate(rank)}
-        return ranks.get(obj.user.id) if obj.user.total_karma_user.karma else None
-
-    def get_level(self, obj):
-        user_level_link = UserLvlLink.objects.filter(user=obj.user).first()
-        if user_level_link:
-            return user_level_link.level.name
-        return None
+    def get_fullname(self, obj):
+        return obj.fullname
 
 
-class ListAllDistrictsSerializer(serializers.ModelSerializer):
-    level = serializers.SerializerMethodField()
+class DistrictCollegeDetailsSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
+    code = serializers.CharField()
+    level = serializers.CharField()
     lead = serializers.SerializerMethodField()
     lead_number = serializers.SerializerMethodField()
 
     class Meta:
-        model = Organization
-        fields = ('title', 'level', 'code', 'lead', 'lead_number')
-
-    def get_level(self, obj):
-        college = College.objects.filter(org=obj).first()
-        return college.level if college else None
+        fields = (
+            'id'
+            'title',
+            'level',
+            'code',
+            'lead',
+            'lead_number'
+        )
 
     def get_lead(self, obj):
-        user_org_link = obj.user_organization_link_org_id.filter(
-            org__title=obj.title,
-            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value).first()
-        return user_org_link.user.fullname if user_org_link else None
+        leads = self.context.get("leads")
+        college_lead = [lead for lead in leads if lead.college == obj["id"]]
+        return college_lead[0].fullname if college_lead else None
 
     def get_lead_number(self, obj):
-        user_org_link = obj.user_organization_link_org_id.filter(
-            org__title=obj.title,
-            user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value).first()
-        return user_org_link.user.mobile if user_org_link else None
+        leads = self.context.get("leads")
+        college_lead = [lead for lead in leads if lead.college == obj["id"]]
+        return college_lead[0].mobile if college_lead else None
