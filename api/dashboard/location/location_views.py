@@ -297,7 +297,7 @@ class DistrictDataAPI(APIView):
     def patch(self, request, district_id):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            district = District.objects.get(id=zone_id)
+            district = District.objects.get(id=district_id)
             serializer = DistrictSerializer(
                 district, data=request.data, context={"user_id": user_id}
             )
@@ -317,7 +317,7 @@ class DistrictDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, district_id):
         try:
-            district = District.objects.get(id=zone_id)
+            district = District.objects.get(id=district_id)
             district.delete()
             return CustomResponse(
                 general_message="District deleted successfully"
