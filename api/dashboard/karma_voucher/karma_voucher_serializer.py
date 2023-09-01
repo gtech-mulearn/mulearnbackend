@@ -20,4 +20,18 @@ class VoucherLogSerializer(serializers.ModelSerializer):
 
     class  Meta:
         model = VoucherLog
-        fields = '__all__'       
+        fields = [
+            "id",
+            "code",
+            "user",
+            "task",
+            "karma",
+            "mail",
+            "month",
+            "week",
+            "claimed",
+            "created_by",
+            "updated_by",
+            "created_at",
+            "updated_at"
+        ]    

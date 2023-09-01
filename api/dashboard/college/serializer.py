@@ -1,7 +1,7 @@
 import uuid
 from utils.utils import DateTimeUtils
 from rest_framework import serializers
-from db.organization import College, Organization , OrgDiscordLink
+from db.organization import College, Organization, OrgDiscordLink
 
 
 class CollegeListSerializer(serializers.ModelSerializer):
@@ -14,8 +14,9 @@ class CollegeListSerializer(serializers.ModelSerializer):
         model = College
         fields = '__all__'
 
-    def get_discord_link(self,obj):
+    def get_discord_link(self, obj):
         return OrgDiscordLink.objects.filter(org_id=obj.org).exists()
+
 
 class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
     org_id = serializers.CharField(required=True, error_messages={
@@ -36,6 +37,10 @@ class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
     def validate(self, data):
         if not Organization.objects.filter(id=data.get('org_id')).exists():
             raise serializers.ValidationError("Invalid college")
+
+        if College.objects.filter(org_id=data.get('org_id')).exists():
+            raise serializers.ValidationError("College already exists")
+
         return data
 
     def create(self, validated_data):
@@ -65,7 +70,7 @@ class CollegeEditSerializer(serializers.ModelSerializer):
             "level"
         ]
 
-    def update(self,instance,validated_data):
+    def update(self, instance, validated_data):
         user_id = self.context.get('user_id')
         instance.level = validated_data.get('level')
         instance.updated_at = DateTimeUtils.get_current_utc_time()

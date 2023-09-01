@@ -21,6 +21,7 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
     editable = serializers.SerializerMethodField()
     banner = serializers.SerializerMethodField()
     event_logo = serializers.SerializerMethodField()
+    is_applied = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -46,6 +47,7 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
             "editable",
             "org_id",
             "district_id",
+            'is_applied',
         )
 
     def get_banner(self, obj):
@@ -57,6 +59,10 @@ class HackathonRetrievalSerializer(serializers.ModelSerializer):
     def get_editable(self, obj):
         user_id = self.context.get("user_id")
         return HackathonOrganiserLink.objects.filter(organiser=user_id, hackathon=obj).exists()
+
+    def get_is_applied(self, obj):
+        user_id = self.context.get("user_id")
+        return HackathonUserSubmission.objects.filter(user=user_id, hackathon=obj).exists()
 
 
 class UpcomingHackathonRetrievalSerializer(serializers.ModelSerializer):
@@ -427,6 +433,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     org_id = serializers.CharField(source="org.id", allow_null=True)
     district_id = serializers.CharField(source="district.id", allow_null=True)
     form_fields = serializers.SerializerMethodField()
+    is_applied = serializers.SerializerMethodField()
 
     class Meta:
         model = Hackathon
@@ -452,6 +459,7 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
             "org_id",
             "district_id",
             'form_fields',
+            'is_applied'
         )
 
     def get_banner(self, obj):
@@ -463,6 +471,10 @@ class HackathonInfoSerializer(serializers.ModelSerializer):
     def get_form_fields(self, obj):
         hackathon = HackathonForm.objects.filter(hackathon=obj)
         return [i.field_name for i in hackathon]
+
+    def get_is_applied(self, obj):
+        user_id = self.context.get("user_id")
+        return HackathonUserSubmission.objects.filter(user=user_id, hackathon=obj).exists()
 
 
 class OrganisationSerializer(serializers.ModelSerializer):

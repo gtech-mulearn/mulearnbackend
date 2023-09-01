@@ -16,7 +16,7 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
 
     def get_institution(self, obj):
         try:
-            user_organization = obj.user.user_organization_link_user_id.first().org
+            user_organization = obj.user.user_organization_link_user.first().org
             return user_organization.code if user_organization else None
         except Exception as e:
             return None
@@ -41,7 +41,7 @@ class CollegeLeaderboardSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         try:
-            total_karma = obj.user_organization_link_org_id.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
+            total_karma = obj.user_organization_link_org.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
                 'total_karma']
             return total_karma if total_karma is not None else 0
         except Exception as e:
@@ -58,7 +58,7 @@ class CollegeMonthlyLeaderboardSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         try:
-            total_karma = obj.user_organization_link_org_id.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
+            total_karma = obj.user_organization_link_org.aggregate(total_karma=Sum('user__total_karma_user__karma'))[
                 'total_karma']
             return total_karma if total_karma is not None else 0
         except Exception as e:

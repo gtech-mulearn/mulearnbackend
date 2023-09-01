@@ -3,16 +3,18 @@ from typing import Optional
 
 from PIL import Image, ImageDraw, ImageFont
 
+import time
+
 image_location = './api/dashboard/karma_voucher/assets/karmacard.png'
 font_location =  './api/dashboard/karma_voucher/fonts/Roboto-Light.ttf'
 
-def generate_karma_voucher(name, hashtag, karma, muid, month):
+def generate_karma_voucher(name, hashtag, karma, code, month):
     """
     Generate a karma voucher for the given users
     :param name:
     :param hashtag:
     :param karma:
-    :param muid:
+    :param code:
     :param month:
     :return:
     """   
@@ -40,7 +42,7 @@ def generate_karma_voucher(name, hashtag, karma, muid, month):
     x3 = 135
     y3 = 135
     font3 = ImageFont.truetype(font_location, size=20)
-    draw.text((x3, y3), muid, fill=(255, 255, 255), font=font3)
+    draw.text((x3, y3), code, fill=(255, 255, 255), font=font3)
 
     x3 = 135
     y3 = 375
@@ -50,3 +52,12 @@ def generate_karma_voucher(name, hashtag, karma, muid, month):
     image_data = BytesIO()
     image.save(image_data, format='JPEG')
     return image_data
+
+
+def generate_ordered_id(count):
+    day = time.strftime('%d')
+    month = time.strftime('%m')
+    year = time.strftime('%y')
+    serial = str(count).zfill(4)
+    ordered_id = f'P{day}{month}{year}{serial}'
+    return ordered_id

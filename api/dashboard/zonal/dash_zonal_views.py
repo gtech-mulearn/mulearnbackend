@@ -92,8 +92,8 @@ class ZonalStudentDetailsAPI(APIView):
 
         rank = (
             TotalKarma.objects.filter(
-                user__user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
-                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user__user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .order_by("-karma")
@@ -107,8 +107,8 @@ class ZonalStudentDetailsAPI(APIView):
 
         user_org_links = (
             User.objects.filter(
-                user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .annotate(
@@ -154,8 +154,8 @@ class ZonalStudentDetailsCSVAPI(APIView):
 
         rank = (
             TotalKarma.objects.filter(
-                user__user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
-                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user__user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .order_by("-karma")
@@ -169,8 +169,8 @@ class ZonalStudentDetailsCSVAPI(APIView):
 
         user_org_links = (
             User.objects.filter(
-                user_organization_link_user_id__org__district__zone=user_org_link.org.district.zone,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .annotate(
@@ -209,16 +209,16 @@ class ZonalCollegeDetailsAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user_id__org__district__zone=user_org_links.org.district.zone,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
             .distinct()
             .annotate(
                 college=Case(
                     When(
-                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                        then=F("user_organization_link_user_id__org__id"),
+                        user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user__org__id"),
                     ),
                     default=None,
                     output_field=CharField(),
@@ -273,16 +273,16 @@ class ZonalCollegeDetailsCSVAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user_id__org__district__zone=user_org_links.org.district.zone,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
             .distinct()
             .annotate(
                 college=Case(
                     When(
-                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                        then=F("user_organization_link_user_id__org__id"),
+                        user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user__org__id"),
                     ),
                     default=None,
                     output_field=CharField(),
