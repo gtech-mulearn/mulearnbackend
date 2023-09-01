@@ -61,7 +61,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
 
     def get_college_code(self, obj):
-        if user_org_link := obj.user_organization_link_user_id.filter(
+        if user_org_link := obj.user_organization_link_user.filter(
                 org__org_type=OrganizationType.COLLEGE.value
         ).first():
             return user_org_link.org.code
@@ -237,7 +237,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        communities = instance.user_organization_link_user_id.filter(
+        communities = instance.user_organization_link_user.filter(
             org__org_type=OrganizationType.COMMUNITY.value).all()
         data["communities"] = (
             [community.org_id for community in communities] if communities else [])
@@ -247,7 +247,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             if "communities" in validated_data:
                 community_data = validated_data.pop("communities", [])
-                instance.user_organization_link_user_id.filter(
+                instance.user_organization_link_user.filter(
                     org__org_type=OrganizationType.COMMUNITY.value
                 ).delete()
 

@@ -103,8 +103,8 @@ class UserProfileAPI(APIView):
         user = (
             User.objects.select_related("total_karma_user")
             .prefetch_related(
-                "user_organization_link_user_id__org",
-                "user_organization_link_user_id__department",
+                "user_organization_link_user__org",
+                "user_organization_link_user__department",
                 "user_role_link_user__role",
                 "user_lvl_link_user__level",
             )

@@ -95,8 +95,8 @@ class DistrictStudentDetailsAPI(APIView):
 
         rank = (
             TotalKarma.objects.filter(
-                user__user_organization_link_user_id__org__district=user_org_link.org.district,
-                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user__user_organization_link_user__org__district=user_org_link.org.district,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .order_by("-karma")
@@ -110,8 +110,8 @@ class DistrictStudentDetailsAPI(APIView):
 
         user_org_links = (
             User.objects.filter(
-                user_organization_link_user_id__org__district=user_org_link.org.district,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district=user_org_link.org.district,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .annotate(
@@ -157,8 +157,8 @@ class DistrictStudentDetailsCSVAPI(APIView):
 
         rank = (
             TotalKarma.objects.filter(
-                user__user_organization_link_user_id__org__district=user_org_link.org.district,
-                user__user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user__user_organization_link_user__org__district=user_org_link.org.district,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .order_by("-karma")
@@ -172,8 +172,8 @@ class DistrictStudentDetailsCSVAPI(APIView):
 
         user_org_links = (
             User.objects.filter(
-                user_organization_link_user_id__org__district=user_org_link.org.district,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district=user_org_link.org.district,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
             .annotate(
@@ -212,16 +212,16 @@ class DistrictsCollageDetailsAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user_id__org__district=user_org_links.org.district,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district=user_org_links.org.district,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
             .distinct()
             .annotate(
                 college=Case(
                     When(
-                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                        then=F("user_organization_link_user_id__org__id"),
+                        user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user__org__id"),
                     ),
                     default=None,
                     output_field=CharField(),
@@ -276,16 +276,16 @@ class DistrictsCollageDetailsCSVAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user_id__org__district=user_org_links.org.district,
-                user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__district=user_org_links.org.district,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
             .distinct()
             .annotate(
                 college=Case(
                     When(
-                        user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                        then=F("user_organization_link_user_id__org__id"),
+                        user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user__org__id"),
                     ),
                     default=None,
                     output_field=CharField(),

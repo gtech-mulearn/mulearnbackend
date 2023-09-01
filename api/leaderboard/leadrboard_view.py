@@ -77,9 +77,9 @@ class CollegeMonthlyLeaderboard(APIView):
         end_date = start_date.replace(day=1, month=start_date.month % 12 + 1) - timedelta(days=1)
 
         organizations = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value).annotate(
-            total_karma=Sum('user_organization_link_org_id__user__karma_activity_log_user__karma',
+            total_karma=Sum('user_organization_link_org__user__karma_activity_log_user__karma',
                             filter=Q(
-                                user_organization_link_org_id__user__karma_activity_log_user__created_at__range=(
+                                user_organization_link_org__user__karma_activity_log_user__created_at__range=(
                                     start_date, end_date)))
         ).order_by('-total_karma')[:20]
 
