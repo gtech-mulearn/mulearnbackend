@@ -96,34 +96,34 @@ class UserAPI(APIView):
             ),
             company=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
-                    then=F("user_organization_link_user_id__org__title"),
+                    user_organization_link_user__verified=True,
+                    user_organization_link_user__org__org_type=OrganizationType.COMPANY.value,
+                    then=F("user_organization_link_user__org__title"),
                 ),
                 default=Value(None),
                 output_field=CharField(),
             ),
             department=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    then=F("user_organization_link_user_id__department__title"),
+                    user_organization_link_user__verified=True,
+                    then=F("user_organization_link_user__department__title"),
                 ),
                 default=Value(""),
                 output_field=CharField(),
             ),
             graduation_year=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    then=F("user_organization_link_user_id__graduation_year"),
+                    user_organization_link_user__verified=True,
+                    then=F("user_organization_link_user__graduation_year"),
                 ),
                 default=Value(""),
                 output_field=CharField(),
             ),
             college=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F("user_organization_link_user_id__org__title"),
+                    user_organization_link_user__verified=True,
+                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    then=F("user_organization_link_user__org__title"),
                 ),
                 default=Value(None),
                 output_field=CharField(),
@@ -162,34 +162,34 @@ class UserManagementCSV(APIView):
             ),
             company=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    user_organization_link_user_id__org__org_type=OrganizationType.COMPANY.value,
-                    then=F("user_organization_link_user_id__org__title"),
+                    user_organization_link_user__verified=True,
+                    user_organization_link_user__org__org_type=OrganizationType.COMPANY.value,
+                    then=F("user_organization_link_user__org__title"),
                 ),
                 default=Value(None),
                 output_field=CharField(),
             ),
             department=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    then=F("user_organization_link_user_id__department__title"),
+                    user_organization_link_user__verified=True,
+                    then=F("user_organization_link_user__department__title"),
                 ),
                 default=Value(""),
                 output_field=CharField(),
             ),
             graduation_year=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    then=F("user_organization_link_user_id__graduation_year"),
+                    user_organization_link_user__verified=True,
+                    then=F("user_organization_link_user__graduation_year"),
                 ),
                 default=Value(""),
                 output_field=CharField(),
             ),
             college=Case(
                 When(
-                    user_organization_link_user_id__verified=True,
-                    user_organization_link_user_id__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F("user_organization_link_user_id__org__title"),
+                    user_organization_link_user__verified=True,
+                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    then=F("user_organization_link_user__org__title"),
                 ),
                 default=Value(None),
                 output_field=CharField(),
