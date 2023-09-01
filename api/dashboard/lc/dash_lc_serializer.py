@@ -61,18 +61,15 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
     def validate(self, data):
         user_id = self.context.get('user_id')
 
-        # Validate interest group (ig)
         ig_id = data.get('ig')
         if not InterestGroup.objects.filter(id=ig_id).exists():
             raise serializers.ValidationError("Invalid interest group")
 
-        # Validate user's organization link
         org_link = UserOrganizationLink.objects.filter(user_id=user_id,
                                                        org__org_type=OrganizationType.COLLEGE.value).first()
         if not org_link:
             raise serializers.ValidationError("User must be associated with a college organization")
 
-        # Check if the user is already a member of a learning circle with the same interest group
         if UserCircleLink.objects.filter(user_id=user_id, circle__ig_id=ig_id, accepted=True).exists():
             raise serializers.ValidationError("Already a member of a learning circle with the same interest group")
 
@@ -85,10 +82,10 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
         ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
 
-        if len(org_link.org.code) >= 5:
-            code = org_link.org.code[:3] + ig.code + validated_data.get('name')[:2]
+        if len(org_link.org.code) > 4:
+            code = validated_data.get('name')[:2] + ig.code + org_link.org.code[:4]
         else:
-            code = org_link.org.code + ig.code + validated_data.get('name')[:2]
+            code = validated_data.get('name') + ig.code + org_link.org.code[:4]
         existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
         i = 1
         while code in existing_codes:
