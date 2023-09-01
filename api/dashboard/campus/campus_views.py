@@ -1,14 +1,12 @@
 from django.db.models import Count, Q, F
 from rest_framework.views import APIView
 
-from db.organization import UserOrganizationLink
 from db.task import Level, TotalKarma
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
-
 from . import serializers
 from .dash_campus_helper import get_user_college_link
 
@@ -49,11 +47,11 @@ class CampusStudentInEachLevelAPI(APIView):
             ).get_failure_response()
 
         level_with_student_count = Level.objects.annotate(
-                    students=Count(
-                        'user_lvl_link_level__user',
-                        filter=Q(user_lvl_link_level__user__user_organization_link_user_id__org=user_org_link.org)
-                    )).values(level=F('level_order'),
-                              students=F('students'))
+            students=Count(
+                'user_lvl_link_level__user',
+                filter=Q(user_lvl_link_level__user__user_organization_link_user_id__org=user_org_link.org)
+            )).values(level=F('level_order'),
+                      students=F('students'))
 
         return CustomResponse(response=level_with_student_count).get_success_response()
 
@@ -194,4 +192,3 @@ class WeeklyKarmaAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         except Exception as e:
             return CustomResponse(response=str(e)).get_failure_response()
-
