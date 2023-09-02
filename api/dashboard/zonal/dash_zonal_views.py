@@ -20,7 +20,14 @@ class ZonalDetailsAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
+
         serializer = dash_zonal_serializer.ZonalDetailsSerializer(
             user_org_link, many=False
         )
@@ -33,7 +40,13 @@ class ZonalTopThreeDistrictAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
 
         district_karma_dict = (
             UserOrganizationLink.objects.filter(
@@ -71,8 +84,16 @@ class ZonalStudentLevelStatusAPI(APIView):
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
+
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
+
         zone = user_org_link.org.district.zone
 
         levels = Level.objects.all()
@@ -88,7 +109,13 @@ class ZonalStudentDetailsAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
 
         rank = (
             TotalKarma.objects.filter(
@@ -150,7 +177,13 @@ class ZonalStudentDetailsCSVAPI(APIView):
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
 
         rank = (
             TotalKarma.objects.filter(
@@ -194,11 +227,16 @@ class ZonalCollegeDetailsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
-                district__zone=user_org_links.org.district.zone,
+                district__zone=user_org_link.org.district.zone,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -209,7 +247,7 @@ class ZonalCollegeDetailsAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
@@ -258,11 +296,16 @@ class ZonalCollegeDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='Zonal lead has no college'
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
-                district__zone=user_org_links.org.district.zone,
+                district__zone=user_org_link.org.district.zone,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -273,7 +316,7 @@ class ZonalCollegeDetailsCSVAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )

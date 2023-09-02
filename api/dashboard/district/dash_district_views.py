@@ -23,6 +23,11 @@ class DistrictDetailAPI(APIView):
 
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
+
         serializer = dash_district_serializer.DistrictDetailsSerializer(
             user_org_link, many=False
         )
@@ -38,6 +43,11 @@ class DistrictTopThreeCampusAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
 
         org_karma_dict = (
             UserOrganizationLink.objects.filter(
@@ -74,7 +84,14 @@ class DistrictStudentLevelStatusAPI(APIView):
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
+
         district = user_org_link.org.district
 
         levels = Level.objects.all()
@@ -91,7 +108,13 @@ class DistrictStudentDetailsAPI(APIView):
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
 
         rank = (
             TotalKarma.objects.filter(
@@ -153,7 +176,13 @@ class DistrictStudentDetailsCSVAPI(APIView):
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
 
         rank = (
             TotalKarma.objects.filter(
@@ -197,11 +226,16 @@ class DistrictsCollageDetailsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = get_user_college_link(user_id)
+        user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
-                district=user_org_links.org.district,
+                district=user_org_link.org.district,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -212,7 +246,7 @@ class DistrictsCollageDetailsAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district=user_org_links.org.district,
+                user_organization_link_user__org__district=user_org_link.org.district,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
@@ -261,11 +295,16 @@ class DistrictsCollageDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = get_user_college_link(user_id)
+        user_org_link = get_user_college_link(user_id)
+
+        if user_org_link.org or user_org_link.org.district:
+            return CustomResponse(
+                general_message='District lead has no college'
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
-                district=user_org_links.org.district,
+                district=user_org_link.org.district,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -276,7 +315,7 @@ class DistrictsCollageDetailsCSVAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district=user_org_links.org.district,
+                user_organization_link_user__org__district=user_org_link.org.district,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
