@@ -345,24 +345,6 @@ class LinkSocials(ModelSerializer):
             "medium",
         ]
 
-    def create(self, validated_data):
-        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        validated_data['user_id'] = user_id
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['created_by_id'] = user_id
-        validated_data['github'] = self.data.get('github')
-        validated_data['facebook'] = self.data.get('facebook')
-        validated_data['instagram'] = self.data.get('instagram')
-        validated_data['linkedin'] = self.data.get('linkedin')
-        validated_data['dribble'] = self.data.get('dribble')
-        validated_data['behance'] = self.data.get('behance')
-        validated_data['stackoverflow'] = self.data.get('stackoverflow')
-        validated_data['medium'] = self.data.get('medium')
-        return Socials.objects.create(**validated_data)
-
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
         instance.user_id = user_id
