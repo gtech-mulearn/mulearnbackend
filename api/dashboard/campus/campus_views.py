@@ -97,6 +97,7 @@ class CampusStudentDetailsAPI(APIView):
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
+                join_date=F("created_at"),
             )
         )
 
@@ -164,6 +165,7 @@ class CampusStudentDetailsCSVAPI(APIView):
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
+                join_date=F("created_at"),
             )
         )
 
