@@ -10,7 +10,7 @@ from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
 from db.task import UserLvlLink, Level
-from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink
+from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
 from utils.types import IntegrationType, RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 
@@ -161,6 +161,15 @@ class RegisterSerializer(serializers.ModelSerializer):
                 id=uuid4(),
                 user=user,
                 karma=0,
+                created_by=user,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
+
+            Socials.objects.create(
+                id=uuid4(),
+                user=user,
                 created_by=user,
                 created_at=DateTimeUtils.get_current_utc_time(),
                 updated_by=user,
