@@ -9,6 +9,7 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
+from db.task import UserLvlLink, TotalKarma
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
@@ -21,15 +22,32 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        user = User.objects.filter(mu_id=user_muid).first()
+        try:
+            user = User.objects.get(mu_id=user_muid)
 
-        if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
+            user_level_link = UserLvlLink.objects.filter(user=user).first()
+            user_level = user_level_link.level if user_level_link else None
 
-        response = dash_user_serializer.UserSerializer(user, many=False).data
-        return CustomResponse(response=response).get_success_response()
+            user_karma = TotalKarma.objects.filter(user=user).first()
+
+            level_data = dash_user_serializer.LevelSerializer(user_level).data if user_level else {}
+            karma_data = dash_user_serializer.TotalKarmaSerializer(user_karma).data if user_karma else {}
+
+            karma = karma_data.get("karma") if karma_data else 0
+            level = level_data.get("name") if level_data else "No Level"
+
+            response = {
+                "name": user.first_name + " " + user.last_name,
+                "email": user.email,
+                "mu_id": user.mu_id,
+                "mobile": user.mobile,
+                "level": level,
+                "karma": karma
+            }
+
+            return CustomResponse(response=response).get_success_response()
+        except User.DoesNotExist:
+            return CustomResponse(general_message="No user data available").get_failure_response()
 
 
 class UserEditAPI(APIView):

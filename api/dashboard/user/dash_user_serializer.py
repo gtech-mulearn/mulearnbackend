@@ -4,7 +4,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import UserIgLink
+from db.task import UserIgLink, Level, TotalKarma
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
@@ -365,3 +365,15 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             return super().update(instance, validated_data)
+
+
+class LevelSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Level
+        fields = '__all__'
+
+
+class TotalKarmaSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = TotalKarma
+        fields = '__all__'
