@@ -17,7 +17,7 @@ from .dash_district_helper import get_user_college_link
 class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -33,7 +33,7 @@ class DistrictDetailAPI(APIView):
 class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -71,7 +71,7 @@ class DistrictTopThreeCampusAPI(APIView):
 class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -90,7 +90,7 @@ class DistrictStudentLevelStatusAPI(APIView):
 class DistrictStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -153,7 +153,7 @@ class DistrictStudentDetailsAPI(APIView):
 class DistrictStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -197,7 +197,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
 class DistrictsCollageDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -261,7 +261,7 @@ class DistrictsCollageDetailsAPI(APIView):
 class DistrictsCollageDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
