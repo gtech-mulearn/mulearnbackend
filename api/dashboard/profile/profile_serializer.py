@@ -323,14 +323,14 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
 
 class LinkSocials(ModelSerializer):
-    github = serializers.CharField(required=False)
-    facebook = serializers.CharField(required=False)
-    instagram = serializers.CharField(required=False)
-    linkedin = serializers.CharField(required=False)
-    dribble = serializers.CharField(required=False)
-    behance = serializers.CharField(required=False)
-    stackoverflow = serializers.CharField(required=False)
-    medium = serializers.CharField(required=False)
+    github = serializers.CharField(required=False, allow_blank=True)
+    facebook = serializers.CharField(required=False, allow_blank=True)
+    instagram = serializers.CharField(required=False, allow_blank=True)
+    linkedin = serializers.CharField(required=False, allow_blank=True)
+    dribble = serializers.CharField(required=False, allow_blank=True)
+    behance = serializers.CharField(required=False, allow_blank=True)
+    stackoverflow = serializers.CharField(required=False, allow_blank=True)
+    medium = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Socials
