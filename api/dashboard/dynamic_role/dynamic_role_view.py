@@ -14,14 +14,7 @@ class DynamicRoleAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request): # create
-        type = request.data['type']
-        role = Role.objects.filter(title=request.data['role']).first()
-        if role:
-            role = role.id
-        else:
-            return CustomResponse(general_message='Role does not exist').get_failure_response()
-        data = {'type': type, 'role': role}
-        serializer = DynamicRoleCreateSerializer(data=data, context={'request': request})
+        serializer = DynamicRoleCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Dynamic Role created successfully', response=serializer.data).get_success_response()

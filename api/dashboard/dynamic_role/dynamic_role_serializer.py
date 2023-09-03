@@ -7,6 +7,8 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
 class DynamicRoleCreateSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(required=True)
+
     class Meta:
         model = DynamicRole
         fields = ["type", "role"]
@@ -21,6 +23,17 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
 
         return DynamicRole.objects.create(**validated_data)
+    
+    def validate(self, data):
+        if DynamicRole.objects.filter(type=data['type'], role=data['role']).first():
+            raise serializers.ValidationError("Dynamic Role already exists")
+        return data
+    
+    def validate_role(self, value):
+        role = Role.objects.filter(title=value).first()
+        if role is None:
+            raise serializers.ValidationError("Enter a valid role name")
+        return role
     
 class DynamicRoleListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
