@@ -61,7 +61,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
 
     def get_college_code(self, obj):
-        if user_org_link := obj.user_organization_link_user_id.filter(
+        if user_org_link := obj.user_organization_link_user.filter(
                 org__org_type=OrganizationType.COLLEGE.value
         ).first():
             return user_org_link.org.code
@@ -237,7 +237,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        communities = instance.user_organization_link_user_id.filter(
+        communities = instance.user_organization_link_user.filter(
             org__org_type=OrganizationType.COMMUNITY.value).all()
         data["communities"] = (
             [community.org_id for community in communities] if communities else [])
@@ -247,7 +247,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         with transaction.atomic():
             if "communities" in validated_data:
                 community_data = validated_data.pop("communities", [])
-                instance.user_organization_link_user_id.filter(
+                instance.user_organization_link_user.filter(
                     org__org_type=OrganizationType.COMMUNITY.value
                 ).delete()
 
@@ -344,24 +344,6 @@ class LinkSocials(ModelSerializer):
             "stackoverflow",
             "medium",
         ]
-
-    def create(self, validated_data):
-        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        validated_data['user_id'] = user_id
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['created_by_id'] = user_id
-        validated_data['github'] = self.data.get('github')
-        validated_data['facebook'] = self.data.get('facebook')
-        validated_data['instagram'] = self.data.get('instagram')
-        validated_data['linkedin'] = self.data.get('linkedin')
-        validated_data['dribble'] = self.data.get('dribble')
-        validated_data['behance'] = self.data.get('behance')
-        validated_data['stackoverflow'] = self.data.get('stackoverflow')
-        validated_data['medium'] = self.data.get('medium')
-        return Socials.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))

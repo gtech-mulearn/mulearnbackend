@@ -33,11 +33,11 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         ]
 
     def get_total_members(self, obj):
-        return obj.org.user_organization_link_org_id.count()
+        return obj.org.user_organization_link_org.count()
 
     def get_active_members(self, obj):
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        return obj.org.user_organization_link_org_id.filter(
+        return obj.org.user_organization_link_org.filter(
             verified=True,
             user__active=True,
             user__total_karma_user__isnull=False,
@@ -45,7 +45,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         ).count()
 
     def get_total_karma(self, obj):
-        return obj.org.user_organization_link_org_id.filter(
+        return obj.org.user_organization_link_org.filter(
             org__org_type=OrganizationType.COLLEGE.value,
             verified=True,
             user__total_karma_user__isnull=False,
@@ -79,10 +79,11 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 class CampusStudentDetailsSerializer(serializers.Serializer):
     user_id = serializers.CharField()
     fullname = serializers.SerializerMethodField()
-    muid = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
     level = serializers.CharField()
+    join_date = serializers.CharField()
 
     class Meta:
         fields = ("user_id",
@@ -91,6 +92,7 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
                   "muid",
                   "rank",
                   "level",
+                  "join_date"
                   )
 
     def get_rank(self, obj):
@@ -116,7 +118,7 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
 
         karma_logs = (
             KarmaActivityLog.objects.filter(
-                user__user_organization_link_user_id__org=instance.org,
+                user__user_organization_link_user__org=instance.org,
                 created_at__date__in=date_range,
             )
             .annotate(

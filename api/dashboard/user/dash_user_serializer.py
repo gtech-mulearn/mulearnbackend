@@ -195,7 +195,7 @@ class UserEditSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
     def get_organizations(self, user):
-        organization_links = user.user_organization_link_user_id.select_related("org")
+        organization_links = user.user_organization_link_user.select_related("org")
         if not organization_links.exists():
             return None
 
@@ -275,7 +275,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
 
         if (
-                college := instance.user_organization_link_user_id.filter(
+                college := instance.user_organization_link_user.filter(
                     org__org_type=OrganizationType.COLLEGE.value
                 )
                         .select_related("org__district__zone__state__country", "department")
@@ -294,7 +294,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         data.update(
             {
                 "organizations": list(
-                    instance.user_organization_link_user_id.all().values_list(
+                    instance.user_organization_link_user.all().values_list(
                         "org_id", flat=True
                     )
                 ),
@@ -317,7 +317,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             if isinstance(
                     organization_ids := validated_data.pop("organizations", None), list
             ):
-                instance.user_organization_link_user_id.all().delete()
+                instance.user_organization_link_user.all().delete()
                 UserOrganizationLink.objects.bulk_create(
                     [
                         UserOrganizationLink(
