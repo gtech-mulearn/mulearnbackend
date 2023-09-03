@@ -326,3 +326,36 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             }
             for member in members
         ]
+
+
+class LearningCircleDataSerializer(serializers.ModelSerializer):
+    state = serializers.SerializerMethodField()
+    district = serializers.SerializerMethodField()
+    interest_group = serializers.SerializerMethodField()
+    college = serializers.SerializerMethodField()
+    learning_circle = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "state",
+            "district",
+            "interest_group",
+            "college",
+            "learning_circle",
+        ]
+
+    def get_learning_circle(self, obj):
+        return LearningCircle.objects.all().count()
+
+    def get_college(self, obj):
+        return LearningCircle.objects.values('org_id').distinct().count()
+
+    def get_interest_group(self, obj):
+        return LearningCircle.objects.values('ig_id').distinct().count()
+
+    def get_district(self, obj):
+        return LearningCircle.objects.values('org__district_id').distinct().count()
+
+    def get_state(self, obj):
+        return LearningCircle.objects.values('org__district__zone__state_id').distinct().count()

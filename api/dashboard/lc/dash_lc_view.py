@@ -10,7 +10,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
-    LearningCircleMainSerializer, LearningCircleNoteSerializer
+    LearningCircleMainSerializer, LearningCircleNoteSerializer , LearningCircleDataSerializer
 
 domain = config("FR_DOMAIN_NAME")
 
@@ -174,4 +174,10 @@ class LearningCircleMainApi(APIView):
         else:
             random_circles = all_circles.order_by('?')[:9]
             serializer = LearningCircleMainSerializer(random_circles, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+class LearningCircleDataAPI(APIView):
+    def get(self, request):
+        all_circles = LearningCircle.objects.all()
+        serializer = LearningCircleDataSerializer(all_circles, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
