@@ -1,13 +1,18 @@
 from rest_framework.views import APIView
+
+from rest_framework import pagination
+
 from db.user import Role, DynamicRole
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from .dynamic_role_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, CommonUtils
+from utils.types import RoleType
 
 class DynamicRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required([RoleType.ADMIN.value])
     def post(self, request): # create
         type = request.data['type']
         role = Role.objects.filter(title=request.data['role']).first()
@@ -22,13 +27,22 @@ class DynamicRoleAPI(APIView):
             return CustomResponse(general_message='Dynamic Role created successfully', response=serializer.data).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    def get(self, request): # list
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):    # list
         dynamic_roles = DynamicRole.objects.values('type').distinct()
         data = [{'type': role['type']} for role in dynamic_roles]
 
-        serializer = DynamicRoleListSerializer(data, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            data, request,
+            search_fields=["type", "role__title",],
+            sort_fields={'type':'type',
+                            'role':'role__title'}
+        )
+        dynamic_role_serializer = DynamicRoleListSerializer(paginated_queryset.get('queryset'), many=True).data
+        return CustomResponse().paginated_response(data=dynamic_role_serializer,
+                                                   pagination=paginated_queryset.get('pagination')) 
 
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request): # delete
         type = request.data['type']
         role = request.data['role']
@@ -41,6 +55,7 @@ class DynamicRoleAPI(APIView):
             general_message=f'No such Dynamic Role of type {type} and role {role} present'
             ).get_failure_response()
 
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         type = request.data['type']
