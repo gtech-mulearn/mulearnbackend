@@ -23,8 +23,12 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         return DynamicRole.objects.create(**validated_data)
     
 class DynamicRoleListSerializer(serializers.ModelSerializer):
-    role = serializers.CharField()
+    roles = serializers.SerializerMethodField()
+
+    def get_roles(self, obj):
+        dynamic_roles = DynamicRole.objects.filter(type=obj['type']).values_list('role__title', flat=True)
+        return list(dynamic_roles)
 
     class Meta:
         model = DynamicRole
-        fields = ["type", "role"]
+        fields = ["type", "roles"]
