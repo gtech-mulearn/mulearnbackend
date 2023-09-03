@@ -30,7 +30,6 @@ class DynamicRoleAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     def get(self, request): # list
-        #dynamic_role_queryset = DynamicRole.objects.all()
         dynamic_roles = DynamicRole.objects.values('type', 'role__title').distinct()
 
         roles_by_type = {}
@@ -48,5 +47,15 @@ class DynamicRoleAPI(APIView):
 
         serializer = DynamicRoleListSerializer(data, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
-        # serializer = DynamicRoleListSerializer(dynamic_role_queryset, many=True)
-        # return CustomResponse(response=serializer.data).get_success_response()
+
+    def delete(self, request): # delete
+        type = request.data['type']
+        role = request.data['role']
+        if dynamic_role := DynamicRole.objects.filter(type=type, role__title=role).first():
+            dynamic_role.delete()
+            return CustomResponse(
+                general_message=f'Dynamic Role of type {type} and role {role} deleted successfully'
+                ).get_success_response()
+        return CustomResponse(
+            general_message=f'No such Dynamic Role of type {type} and role {role} present'
+            ).get_failure_response()
