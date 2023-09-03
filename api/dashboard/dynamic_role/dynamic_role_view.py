@@ -59,3 +59,24 @@ class DynamicRoleAPI(APIView):
         return CustomResponse(
             general_message=f'No such Dynamic Role of type {type} and role {role} present'
             ).get_failure_response()
+
+    def patch(self, request):
+        type = request.data['type']
+        role = request.data['role']
+        new_role = request.data['new_role']
+        if dynamic_role := DynamicRole.objects.filter(type=type, role__title=role).first():
+            new_role = Role.objects.filter(title=new_role).first()
+            if new_role:
+                new_role = new_role.id
+            else:
+                return CustomResponse(general_message='Role does not exist').get_failure_response()
+            dynamic_role.role_id = new_role
+            dynamic_role.save()
+            serializer = DynamicRoleListSerializer(dynamic_role)
+            return CustomResponse(
+                general_message=f'Dynamic Role of type {type} and role {role} updated successfully',
+                response=serializer.data,
+                ).get_success_response()
+        return CustomResponse(
+            general_message=f'No such Dynamic Role of type {type} and role {role} present'
+            ).get_failure_response()
