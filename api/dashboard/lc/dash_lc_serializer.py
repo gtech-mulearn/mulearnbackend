@@ -218,7 +218,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "pending_members",
             "rank",
             "total_karma",
-            "is_lead"
+            "is_lead",
+            "is_member",
         ]
 
 
