@@ -20,11 +20,6 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     def get_member_count(self, obj):
         return UserCircleLink.objects.filter(circle_id=obj.id, accepted=1).count()
 
-    def to_representation(self, instance):
-        representation = super().to_representation(instance)
-        member_count = representation.get('member_count', 0)
-        return None if member_count <= 0 else representation
-
     class Meta:
         model = LearningCircle
         fields = [
@@ -122,6 +117,15 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     pending_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     is_lead = serializers.SerializerMethodField()
+    is_member = serializers.SerializerMethodField()
+
+    def get_is_member(self, obj):
+        user = self.context.get('user_id')
+        try:
+            if link := UserCircleLink.objects.get(user=user, circle=obj, accepted=True):
+                return True
+        except UserCircleLink.DoesNotExist:
+            return False
 
     def get_is_lead(self, obj):
         user = self.context.get('user_id')
@@ -164,6 +168,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
                 'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
                 'karma': total_ig_karma,
+                'is_lead': member.lead,
             })
 
         return member_info
@@ -213,7 +218,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "pending_members",
             "rank",
             "total_karma",
-            "is_lead"
+            "is_lead",
+            "is_member",
         ]
 
 
@@ -328,6 +334,59 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
                 'username': f'{member.user.first_name} {member.user.last_name}'
                 if member.user.last_name
                 else member.user.first_name,
+            }
+            for member in members
+        ]
+
+
+class LearningCircleDataSerializer(serializers.ModelSerializer):
+    state = serializers.SerializerMethodField()
+    district = serializers.SerializerMethodField()
+    interest_group = serializers.SerializerMethodField()
+    college = serializers.SerializerMethodField()
+    learning_circle = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "state",
+            "district",
+            "interest_group",
+            "college",
+            "learning_circle",
+        ]
+
+    def get_learning_circle(self, obj):
+        return LearningCircle.objects.all().count()
+
+    def get_college(self, obj):
+        return LearningCircle.objects.values('org_id').distinct().count()
+
+    def get_interest_group(self, obj):
+        return LearningCircle.objects.values('ig_id').distinct().count()
+
+    def get_district(self, obj):
+        return LearningCircle.objects.values('org__district_id').distinct().count()
+
+    def get_state(self, obj):
+        return LearningCircle.objects.values('org__district__zone__state_id').distinct().count()
+
+
+class LearningCircleMemberlistSerializer(serializers.ModelSerializer):
+    members = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            'members',
+        ]
+
+    def get_members(self, obj):
+        members = UserCircleLink.objects.filter(circle=obj, accepted=True)
+        return [
+            {
+                'full_name': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
+                'discord_id': member.user.discord_id,
             }
             for member in members
         ]

@@ -10,7 +10,8 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
-    LearningCircleMainSerializer, LearningCircleNoteSerializer
+    LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
+    LearningCircleMemberlistSerializer
 
 domain = config("FR_DOMAIN_NAME")
 
@@ -122,12 +123,35 @@ class LearningCircleHomeApi(APIView):
 
     def delete(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
-        if usr_circle_link := UserCircleLink.objects.filter(
-            circle__id=circle_id, user__id=user_id
-        ).first():
-            usr_circle_link.delete()
-            return CustomResponse(general_message='Leaved').get_success_response()
-        return CustomResponse(general_message='Learning Circle Not Available For This User').get_failure_response()
+        usr_circle_link = UserCircleLink.objects.filter(
+            circle__id=circle_id,
+            user__id=user_id
+        ).first()
+
+        if not usr_circle_link:
+            return CustomResponse(general_message='User not part of circle').get_error_response()
+
+        if usr_circle_link.lead:
+            if (
+                    next_lead := UserCircleLink.objects.filter(
+                        circle__id=circle_id, accepted=1
+                    )
+                            .exclude(user__id=user_id)
+                            .order_by('accepted_at')
+                            .first()
+            ):
+                next_lead.lead = True
+                next_lead.save()
+                usr_circle_link.delete()
+                return CustomResponse(general_message='Leadership transferred').get_success_response()
+
+        usr_circle_link.delete()
+
+        if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
+            LearningCircle.objects.filter(id=circle_id).delete()
+            return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
+
+        return CustomResponse(general_message='Left').get_success_response()
 
 
 class LearningCircleMainApi(APIView):
@@ -151,4 +175,18 @@ class LearningCircleMainApi(APIView):
         else:
             random_circles = all_circles.order_by('?')[:9]
             serializer = LearningCircleMainSerializer(random_circles, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LearningCircleDataAPI(APIView):
+    def get(self, request):
+        all_circles = LearningCircle.objects.all()
+        serializer = LearningCircleDataSerializer(all_circles, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LearningCircleListMembersApi(APIView):
+    def get(self, request, circle_id):
+        lc = LearningCircle.objects.filter(id=circle_id).first()
+        serializer = LearningCircleMemberlistSerializer(lc, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
