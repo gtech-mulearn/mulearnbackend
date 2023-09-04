@@ -25,8 +25,17 @@ class RoleAPI(APIView):
                 "description",
                 "updated_by__first_name",
                 "updated_by__last_name",
+                "created_by__first_name",
+                "created_by__last_name",
             ],
-            {"updated_by": "updated_by", "created_at": "created_at"},
+            {
+                "title": "title",
+                "description": "description",
+                "updated_by": "updated_by__first_name",
+                "created_by": "created_by__first_name",
+                "updated_at": "updated_at",
+                "created_at": "created_at",
+            },
         )
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             queryset.get("queryset"), many=True
@@ -187,11 +196,11 @@ class UserRole(APIView):
                 return CustomResponse(
                     general_message=serializer.errors
                 ).get_failure_response()
-                
+
             user_id = request.data.get("user_id")
             role_id = request.data.get("role_id")
             user_role_link = UserRoleLink.objects.get(role_id=role_id, user_id=user_id)
-                
+
             user_role_link.delete()
 
             DiscordWebhooks.general_updates(
