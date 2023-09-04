@@ -129,7 +129,7 @@ class LearningCircleHomeApi(APIView):
         ).first()
 
         if not usr_circle_link:
-            return CustomResponse(general_message='User not part of circle').get_error_response()
+            return CustomResponse(general_message='User not part of circle').get_failure_response()
 
         if usr_circle_link.lead:
             if (
