@@ -117,6 +117,15 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     pending_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     is_lead = serializers.SerializerMethodField()
+    is_member = serializers.SerializerMethodField()
+
+    def get_is_member(self, obj):
+        user = self.context.get('user_id')
+        try:
+            if link := UserCircleLink.objects.get(user=user, circle=obj, accepted=True):
+                return True
+        except UserCircleLink.DoesNotExist:
+            return False
 
     def get_is_lead(self, obj):
         user = self.context.get('user_id')
@@ -209,7 +218,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "pending_members",
             "rank",
             "total_karma",
-            "is_lead"
+            "is_lead",
+            "is_member",
         ]
 
 
