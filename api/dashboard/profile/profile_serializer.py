@@ -323,14 +323,14 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
 
 class LinkSocials(ModelSerializer):
-    github = serializers.CharField(required=False, allow_blank=True)
-    facebook = serializers.CharField(required=False, allow_blank=True)
-    instagram = serializers.CharField(required=False, allow_blank=True)
-    linkedin = serializers.CharField(required=False, allow_blank=True)
-    dribble = serializers.CharField(required=False, allow_blank=True)
-    behance = serializers.CharField(required=False, allow_blank=True)
-    stackoverflow = serializers.CharField(required=False, allow_blank=True)
-    medium = serializers.CharField(required=False, allow_blank=True)
+    github = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    facebook = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    instagram = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    linkedin = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    dribble = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    behance = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    stackoverflow = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    medium = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Socials
