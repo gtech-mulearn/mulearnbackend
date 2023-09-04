@@ -159,6 +159,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
                 'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
                 'karma': total_ig_karma,
+                'is_lead': member.lead,
             })
 
         return member_info
