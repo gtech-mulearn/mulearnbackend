@@ -159,6 +159,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
                 'username': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
                 'profile_pic': member.user.profile_pic or None,
                 'karma': total_ig_karma,
+                'is_lead': member.lead,
             })
 
         return member_info
@@ -359,3 +360,23 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
 
     def get_state(self, obj):
         return LearningCircle.objects.values('org__district__zone__state_id').distinct().count()
+
+
+class LearningCircleMemberlistSerializer(serializers.ModelSerializer):
+    members = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            'members',
+        ]
+
+    def get_members(self, obj):
+        members = UserCircleLink.objects.filter(circle=obj, accepted=True)
+        return [
+            {
+                'full_name': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
+                'discord_id': member.user.discord_id,
+            }
+            for member in members
+        ]

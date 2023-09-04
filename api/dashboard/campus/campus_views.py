@@ -16,7 +16,7 @@ from .dash_campus_helper import get_user_college_link
 class CampusDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -37,7 +37,7 @@ class CampusDetailsAPI(APIView):
 class CampusStudentInEachLevelAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -61,7 +61,7 @@ class CampusStudentInEachLevelAPI(APIView):
 class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
@@ -129,7 +129,7 @@ class CampusStudentDetailsAPI(APIView):
 class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
@@ -178,7 +178,7 @@ class CampusStudentDetailsCSVAPI(APIView):
 class WeeklyKarmaAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
