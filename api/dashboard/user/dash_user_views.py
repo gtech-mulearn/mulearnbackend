@@ -211,7 +211,11 @@ class UserVerificationAPI(APIView):
             user_queryset,
             request,
             ["user__first_name", "user__last_name", "role__title"],
-            {"fullname": "fullname"},
+            {
+                "first_name": "user__first_name",
+                "role_title": "role__title",
+                "muid": "user__mu_id",
+            },
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
             queryset.get("queryset"), many=True
@@ -274,9 +278,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(mu_id=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -356,8 +360,8 @@ class UserInviteAPI(APIView):
             ).get_failure_response()
 
         email_host_user = decouple.config("EMAIL_HOST_USER")
-        domain = decouple.config('FR_DOMAIN_NAME')
-        from_mail = decouple.config('FROM_MAIL')
+        domain = decouple.config("FR_DOMAIN_NAME")
+        from_mail = decouple.config("FROM_MAIL")
         to = [email]
         message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
         send_mail(
