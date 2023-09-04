@@ -9,6 +9,7 @@ from django.db.models import Case, CharField, F, Q, Value, When
 from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
+from db.task import UserLvlLink, TotalKarma
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
@@ -89,55 +90,31 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = User.objects.filter(active=True).annotate(
-            total_karma=Case(
-                When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
-                default=Value(0),
-            ),
-            company=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    user_organization_link_user__org__org_type=OrganizationType.COMPANY.value,
-                    then=F("user_organization_link_user__org__title"),
-                ),
-                default=Value(None),
-                output_field=CharField(),
-            ),
-            department=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    then=F("user_organization_link_user__department__title"),
-                ),
-                default=Value(""),
-                output_field=CharField(),
-            ),
-            graduation_year=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    then=F("user_organization_link_user__graduation_year"),
-                ),
-                default=Value(""),
-                output_field=CharField(),
-            ),
-            college=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F("user_organization_link_user__org__title"),
-                ),
-                default=Value(None),
-                output_field=CharField(),
-            ),
+        user_queryset = (
+            User.objects.all()
+            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
+            .annotate(
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
         )
 
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
+            [
+                "mu_id",
+                "first_name",
+                "last_name",
+                "email",
+                "mobile",
+                "user_lvl_link_user__level__name",
+            ],
             {
                 "first_name": "first_name",
-                "total_karma": "total_karma",
-                "email": "email",
+                "last_name": "last_name",
+                "karma": "total_karma_user__karma",
                 "created_at": "created_at",
             },
         )
@@ -155,50 +132,21 @@ class UserManagementCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = User.objects.annotate(
-            total_karma=Case(
-                When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
-                default=Value(0),
-            ),
-            company=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    user_organization_link_user__org__org_type=OrganizationType.COMPANY.value,
-                    then=F("user_organization_link_user__org__title"),
-                ),
-                default=Value(None),
-                output_field=CharField(),
-            ),
-            department=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    then=F("user_organization_link_user__department__title"),
-                ),
-                default=Value(""),
-                output_field=CharField(),
-            ),
-            graduation_year=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    then=F("user_organization_link_user__graduation_year"),
-                ),
-                default=Value(""),
-                output_field=CharField(),
-            ),
-            college=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F("user_organization_link_user__org__title"),
-                ),
-                default=Value(None),
-                output_field=CharField(),
-            ),
+        user_queryset = (
+            User.objects.all()
+            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
+            .annotate(
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
         )
-        user_serializer_data = dash_user_serializer.UserDashboardSerializer(
+
+        serializer = dash_user_serializer.UserDashboardSerializer(
             user_queryset, many=True
-        ).data
-        return CommonUtils.generate_csv(user_serializer_data, "User")
+        )
+        
+        return CommonUtils.generate_csv(serializer.data, "User")
 
 
 class UserVerificationAPI(APIView):
@@ -211,7 +159,11 @@ class UserVerificationAPI(APIView):
             user_queryset,
             request,
             ["user__first_name", "user__last_name", "role__title"],
-            {"fullname": "fullname"},
+            {
+                "first_name": "user__first_name",
+                "role_title": "role__title",
+                "muid": "user__mu_id",
+            },
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
             queryset.get("queryset"), many=True
@@ -274,9 +226,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(mu_id=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -356,8 +308,8 @@ class UserInviteAPI(APIView):
             ).get_failure_response()
 
         email_host_user = decouple.config("EMAIL_HOST_USER")
-        domain = decouple.config('FR_DOMAIN_NAME')
-        from_mail = decouple.config('FROM_MAIL')
+        domain = decouple.config("FR_DOMAIN_NAME")
+        from_mail = decouple.config("FROM_MAIL")
         to = [email]
         message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
         send_mail(
