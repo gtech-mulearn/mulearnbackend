@@ -22,32 +22,15 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        try:
-            user = User.objects.get(mu_id=user_muid)
+        user = User.objects.filter(mu_id=user_muid).first()
 
-            user_level_link = UserLvlLink.objects.filter(user=user).first()
-            user_level = user_level_link.level if user_level_link else None
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
 
-            user_karma = TotalKarma.objects.filter(user=user).first()
-
-            level_data = dash_user_serializer.LevelSerializer(user_level).data if user_level else {}
-            karma_data = dash_user_serializer.TotalKarmaSerializer(user_karma).data if user_karma else {}
-
-            karma = karma_data.get("karma") if karma_data else 0
-            level = level_data.get("name") if level_data else "No Level"
-
-            response = {
-                "name": user.first_name + " " + user.last_name,
-                "email": user.email,
-                "mu_id": user.mu_id,
-                "mobile": user.mobile,
-                "level": level,
-                "karma": karma
-            }
-
-            return CustomResponse(response=response).get_success_response()
-        except User.DoesNotExist:
-            return CustomResponse(general_message="No user data available").get_failure_response()
+        response = dash_user_serializer.UserSerializer(user, many=False).data
+        return CustomResponse(response=response).get_success_response()
 
 
 class UserEditAPI(APIView):
@@ -103,59 +86,24 @@ class UserEditAPI(APIView):
 
 
 class UserAPI(APIView):
-    authentication_classes = [CustomizePermission]
+    # authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    # @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = User.objects.filter(active=True).annotate(
-            total_karma=Case(
-                When(total_karma_user__isnull=False, then=F("total_karma_user__karma")),
-                default=Value(0),
-            ),
-            company=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    user_organization_link_user__org__org_type=OrganizationType.COMPANY.value,
-                    then=F("user_organization_link_user__org__title"),
-                ),
-                default=Value(None),
-                output_field=CharField(),
-            ),
-            department=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    then=F("user_organization_link_user__department__title"),
-                ),
-                default=Value(""),
-                output_field=CharField(),
-            ),
-            graduation_year=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    then=F("user_organization_link_user__graduation_year"),
-                ),
-                default=Value(""),
-                output_field=CharField(),
-            ),
-            college=Case(
-                When(
-                    user_organization_link_user__verified=True,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    then=F("user_organization_link_user__org__title"),
-                ),
-                default=Value(None),
-                output_field=CharField(),
-            ),
-        )
+        user = User.objects.all().values("id", "first_name", "last_name", "email", "mobile", "created_at").annotate(
+                muid=F("mu_id"),
+                karma=F("total_karma_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+            )
 
         queryset = CommonUtils.get_paginated_queryset(
-            user_queryset,
+            user,
             request,
-            ["mu_id", "first_name", "last_name", "email", "mobile", "discord_id"],
+            ["mu_id", "first_name", "last_name", "email", "mobile", "user_lvl_link_user__level__name"],
             {
                 "first_name": "first_name",
-                "total_karma": "total_karma",
-                "email": "email",
+                "last_name": "last_name",
+                "karma": "total_karma_user__karma",
                 "created_at": "created_at",
             },
         )

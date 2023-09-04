@@ -11,35 +11,25 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
 
-class UserDashboardSerializer(serializers.ModelSerializer):
-    total_karma = serializers.IntegerField()
-    company = serializers.CharField()
-    college = serializers.CharField()
-    department = serializers.CharField()
-    graduation_year = serializers.CharField()
+class UserDashboardSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    email = serializers.CharField()
+    mobile = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    karma = serializers.IntegerField()
+    level = serializers.CharField()
 
     class Meta:
-        model = User
         fields = [
             "id",
-            "discord_id",
             "first_name",
             "last_name",
             "email",
             "mobile",
-            "gender",
-            "dob",
-            "admin",
-            "active",
-            "exist_in_guild",
-            "created_at",
-            "company",
-            "college",
-            "total_karma",
-            "department",
-            "graduation_year",
+            "created_at"
         ]
-        read_only_fields = ["id", "created_at", "total_karma"]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -367,13 +357,4 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
 
-class LevelSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Level
-        fields = '__all__'
 
-
-class TotalKarmaSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = TotalKarma
-        fields = '__all__'
