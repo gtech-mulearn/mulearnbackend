@@ -10,5 +10,7 @@ urlpatterns = [
     path('meet/<str:circle_id>/', dash_lc_view.LearningCircleMeetAPI.as_view()),
     path('join/<str:circle_id>/', dash_lc_view.LearningCircleJoinApi.as_view()),
     path('<str:circle_id>/', dash_lc_view.LearningCircleHomeApi.as_view()),
-    path('<str:circle_id>/<str:member_id>/', dash_lc_view.LearningCircleHomeApi.as_view())
+    # path('<str:circle_id>/<str:member_id>/', dash_lc_view.LearningCircleHomeApi.as_view()),
+    path('list-members/<str:circle_id>/', dash_lc_view.LearningCircleListMembersApi.as_view()),
+
 ]
