@@ -24,12 +24,10 @@ class CampusDetailsAPI(APIView):
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
-        serializer = serializers.CampusDetailsSerializer(
-            user_org_link, many=False
-        )
+        serializer = serializers.CampusDetailsSerializer(user_org_link, many=False)
 
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -45,15 +43,17 @@ class CampusStudentInEachLevelAPI(APIView):
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
         level_with_student_count = Level.objects.annotate(
-                    students=Count(
-                        'user_lvl_link_level__user',
-                        filter=Q(user_lvl_link_level__user__user_organization_link_user__org=user_org_link.org)
-                    )).values(level=F('level_order'),
-                              students=F('students'))
+            students=Count(
+                "user_lvl_link_level__user",
+                filter=Q(
+                    user_lvl_link_level__user__user_organization_link_user__org=user_org_link.org
+                ),
+            )
+        ).values(level=F("level_order"), students=F("students"))
 
         return CustomResponse(response=level_with_student_count).get_success_response()
 
@@ -68,7 +68,7 @@ class CampusStudentDetailsAPI(APIView):
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
         rank = (
@@ -111,6 +111,7 @@ class CampusStudentDetailsAPI(APIView):
                 "muid": "mu_id",
                 "karma": "total_karma_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
+                "joined_at" : "created_at"
             },
         )
 
@@ -136,7 +137,7 @@ class CampusStudentDetailsCSVAPI(APIView):
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
         rank = (
@@ -187,13 +188,10 @@ class WeeklyKarmaAPI(APIView):
 
             if user_org_link.org is None:
                 return CustomResponse(
-                    general_message='Campus lead has no college'
+                    general_message="Campus lead has no college"
                 ).get_failure_response()
 
-            serializer = serializers.WeeklyKarmaSerializer(
-                user_org_link
-            )
+            serializer = serializers.WeeklyKarmaSerializer(user_org_link)
             return CustomResponse(response=serializer.data).get_success_response()
         except Exception as e:
             return CustomResponse(response=str(e)).get_failure_response()
-

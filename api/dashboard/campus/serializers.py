@@ -45,12 +45,14 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         ).count()
 
     def get_total_karma(self, obj):
-        return obj.org.user_organization_link_org.filter(
-            org__org_type=OrganizationType.COLLEGE.value,
-            verified=True,
-            user__total_karma_user__isnull=False,
-        ).aggregate(total_karma=Sum(
-            "user__total_karma_user__karma"))["total_karma"] or 0
+        return (
+            obj.org.user_organization_link_org.filter(
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
+                user__total_karma_user__isnull=False,
+            ).aggregate(total_karma=Sum("user__total_karma_user__karma"))["total_karma"]
+            or 0
+        )
 
     def get_rank(self, obj):
         org_karma_dict = (
@@ -60,9 +62,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         )
 
         rank_dict = {
-            data["org"]: data["total_karma"]
-            if data["total_karma"] is not None
-            else 0
+            data["org"]: data["total_karma"] if data["total_karma"] is not None else 0
             for data in org_karma_dict
         }
 
@@ -86,14 +86,7 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     join_date = serializers.CharField()
 
     class Meta:
-        fields = ("user_id",
-                  "fullname",
-                  "karma",
-                  "muid",
-                  "rank",
-                  "level",
-                  "join_date"
-                  )
+        fields = ("user_id", "fullname", "karma", "muid", "rank", "level", "join_date")
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
