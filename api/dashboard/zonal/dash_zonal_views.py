@@ -17,7 +17,7 @@ from . import dash_zonal_helper, dash_zonal_serializer
 class ZonalDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -32,7 +32,7 @@ class ZonalDetailsAPI(APIView):
 class ZonalTopThreeDistrictAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value,])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -72,7 +72,7 @@ class ZonalTopThreeDistrictAPI(APIView):
 class ZonalStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value,])
     def get(self, request):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -91,7 +91,7 @@ class ZonalStudentLevelStatusAPI(APIView):
 class ZonalStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -154,7 +154,7 @@ class ZonalStudentDetailsAPI(APIView):
 class ZonalStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -198,7 +198,7 @@ class ZonalStudentDetailsCSVAPI(APIView):
 class ZonalCollegeDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -262,7 +262,7 @@ class ZonalCollegeDetailsAPI(APIView):
 class ZonalCollegeDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
