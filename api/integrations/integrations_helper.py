@@ -35,7 +35,7 @@ def get_authorization_id(token: str) -> str | None:
 
 def generate_confirmation_token(authorization_id: str) -> str:
     """
-    The function generates a confirmation token using the authorization ID and expiration time.
+    The function generates a confirmation token using the authorization ID with an expiration time.
 
     :param authorization_id: The `authorization_id` parameter is the unique identifier for the
     authorization. It is used to associate the token with a specific authorization in your system
