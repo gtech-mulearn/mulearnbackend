@@ -4,42 +4,32 @@ from django.db import transaction
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import UserIgLink
+from db.task import UserIgLink, Level, TotalKarma
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
 
-class UserDashboardSerializer(serializers.ModelSerializer):
-    total_karma = serializers.IntegerField()
-    company = serializers.CharField()
-    college = serializers.CharField()
-    department = serializers.CharField()
-    graduation_year = serializers.CharField()
+class UserDashboardSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    first_name = serializers.CharField()
+    last_name = serializers.CharField()
+    email = serializers.CharField()
+    mobile = serializers.CharField()
+    created_at = serializers.DateTimeField()
+    karma = serializers.IntegerField()
+    level = serializers.CharField()
 
     class Meta:
-        model = User
         fields = [
             "id",
-            "discord_id",
             "first_name",
             "last_name",
             "email",
             "mobile",
-            "gender",
-            "dob",
-            "admin",
-            "active",
-            "exist_in_guild",
-            "created_at",
-            "company",
-            "college",
-            "total_karma",
-            "department",
-            "graduation_year",
+            "created_at"
         ]
-        read_only_fields = ["id", "created_at", "total_karma"]
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -365,3 +355,6 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             return super().update(instance, validated_data)
+
+
+

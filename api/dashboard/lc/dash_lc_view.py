@@ -10,7 +10,8 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
-    LearningCircleMainSerializer, LearningCircleNoteSerializer , LearningCircleDataSerializer
+    LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
+    LearningCircleMemberlistSerializer
 
 domain = config("FR_DOMAIN_NAME")
 
@@ -91,6 +92,12 @@ class LearningCircleHomeApi(APIView):
 
     def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        if not UserCircleLink.objects.filter(user_id=member_id,
+                                             circle_id=circle_id).exists() or not LearningCircle.objects.filter(
+            id=circle_id).exists():
+            return CustomResponse(general_message='Learning Circle Not Available').get_failure_response()
+
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
                                                     context={'user_id': user_id})
@@ -128,7 +135,7 @@ class LearningCircleHomeApi(APIView):
         ).first()
 
         if not usr_circle_link:
-            return CustomResponse(general_message='User not part of circle').get_error_response()
+            return CustomResponse(general_message='User not part of circle').get_failure_response()
 
         if usr_circle_link.lead:
             if (
@@ -176,8 +183,18 @@ class LearningCircleMainApi(APIView):
             serializer = LearningCircleMainSerializer(random_circles, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
+
 class LearningCircleDataAPI(APIView):
     def get(self, request):
         all_circles = LearningCircle.objects.all()
         serializer = LearningCircleDataSerializer(all_circles, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LearningCircleListMembersApi(APIView):
+    def get(self, request, circle_name):
+        lc = LearningCircle.objects.filter(name=circle_name)
+        if lc is None:
+            return CustomResponse(general_message='Learning Circle Not Exists').get_failure_response()
+        serializer = LearningCircleMemberlistSerializer(lc, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

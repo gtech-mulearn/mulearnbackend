@@ -16,7 +16,7 @@ from .dash_campus_helper import get_user_college_link
 class CampusDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -24,12 +24,10 @@ class CampusDetailsAPI(APIView):
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
-        serializer = serializers.CampusDetailsSerializer(
-            user_org_link, many=False
-        )
+        serializer = serializers.CampusDetailsSerializer(user_org_link, many=False)
 
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -37,7 +35,7 @@ class CampusDetailsAPI(APIView):
 class CampusStudentInEachLevelAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -45,15 +43,17 @@ class CampusStudentInEachLevelAPI(APIView):
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
         level_with_student_count = Level.objects.annotate(
-                    students=Count(
-                        'user_lvl_link_level__user',
-                        filter=Q(user_lvl_link_level__user__user_organization_link_user__org=user_org_link.org)
-                    )).values(level=F('level_order'),
-                              students=F('students'))
+            students=Count(
+                "user_lvl_link_level__user",
+                filter=Q(
+                    user_lvl_link_level__user__user_organization_link_user__org=user_org_link.org
+                ),
+            )
+        ).values(level=F("level_order"), students=F("students"))
 
         return CustomResponse(response=level_with_student_count).get_success_response()
 
@@ -61,14 +61,14 @@ class CampusStudentInEachLevelAPI(APIView):
 class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
         rank = (
@@ -111,6 +111,7 @@ class CampusStudentDetailsAPI(APIView):
                 "muid": "mu_id",
                 "karma": "total_karma_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
+                "joined_at" : "created_at"
             },
         )
 
@@ -129,14 +130,14 @@ class CampusStudentDetailsAPI(APIView):
 class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
         if user_org_link.org is None:
             return CustomResponse(
-                general_message='Campus lead has no college'
+                general_message="Campus lead has no college"
             ).get_failure_response()
 
         rank = (
@@ -178,7 +179,7 @@ class CampusStudentDetailsCSVAPI(APIView):
 class WeeklyKarmaAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
@@ -187,13 +188,10 @@ class WeeklyKarmaAPI(APIView):
 
             if user_org_link.org is None:
                 return CustomResponse(
-                    general_message='Campus lead has no college'
+                    general_message="Campus lead has no college"
                 ).get_failure_response()
 
-            serializer = serializers.WeeklyKarmaSerializer(
-                user_org_link
-            )
+            serializer = serializers.WeeklyKarmaSerializer(user_org_link)
             return CustomResponse(response=serializer.data).get_success_response()
         except Exception as e:
             return CustomResponse(response=str(e)).get_failure_response()
-
