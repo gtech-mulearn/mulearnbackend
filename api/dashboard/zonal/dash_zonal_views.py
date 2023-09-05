@@ -17,10 +17,12 @@ from . import dash_zonal_helper, dash_zonal_serializer
 class ZonalDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
         serializer = dash_zonal_serializer.ZonalDetailsSerializer(
             user_org_link, many=False
         )
@@ -30,9 +32,10 @@ class ZonalDetailsAPI(APIView):
 class ZonalTopThreeDistrictAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         district_karma_dict = (
@@ -69,10 +72,13 @@ class ZonalTopThreeDistrictAPI(APIView):
 class ZonalStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
+
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
         zone = user_org_link.org.district.zone
 
         levels = Level.objects.all()
@@ -85,9 +91,10 @@ class ZonalStudentLevelStatusAPI(APIView):
 class ZonalStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         rank = (
@@ -147,9 +154,10 @@ class ZonalStudentDetailsAPI(APIView):
 class ZonalStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         rank = (
@@ -190,15 +198,15 @@ class ZonalStudentDetailsCSVAPI(APIView):
 class ZonalCollegeDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         organizations = (
             Organization.objects.filter(
-                district__zone=user_org_links.org.district.zone,
+                district__zone=user_org_link.org.district.zone,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -209,7 +217,7 @@ class ZonalCollegeDetailsAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
@@ -254,15 +262,15 @@ class ZonalCollegeDetailsAPI(APIView):
 class ZonalCollegeDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = dash_zonal_helper.get_user_college_link(user_id)
+        user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
         organizations = (
             Organization.objects.filter(
-                district__zone=user_org_links.org.district.zone,
+                district__zone=user_org_link.org.district.zone,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -273,7 +281,7 @@ class ZonalCollegeDetailsCSVAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district__zone=user_org_links.org.district.zone,
+                user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )

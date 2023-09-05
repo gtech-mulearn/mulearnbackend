@@ -323,14 +323,14 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
 
 class LinkSocials(ModelSerializer):
-    github = serializers.CharField(required=False)
-    facebook = serializers.CharField(required=False)
-    instagram = serializers.CharField(required=False)
-    linkedin = serializers.CharField(required=False)
-    dribble = serializers.CharField(required=False)
-    behance = serializers.CharField(required=False)
-    stackoverflow = serializers.CharField(required=False)
-    medium = serializers.CharField(required=False)
+    github = serializers.CharField(required=False, allow_blank=True)
+    facebook = serializers.CharField(required=False, allow_blank=True)
+    instagram = serializers.CharField(required=False, allow_blank=True)
+    linkedin = serializers.CharField(required=False, allow_blank=True)
+    dribble = serializers.CharField(required=False, allow_blank=True)
+    behance = serializers.CharField(required=False, allow_blank=True)
+    stackoverflow = serializers.CharField(required=False, allow_blank=True)
+    medium = serializers.CharField(required=False, allow_blank=True)
 
     class Meta:
         model = Socials
@@ -344,24 +344,6 @@ class LinkSocials(ModelSerializer):
             "stackoverflow",
             "medium",
         ]
-
-    def create(self, validated_data):
-        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        validated_data['user_id'] = user_id
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['created_by_id'] = user_id
-        validated_data['github'] = self.data.get('github')
-        validated_data['facebook'] = self.data.get('facebook')
-        validated_data['instagram'] = self.data.get('instagram')
-        validated_data['linkedin'] = self.data.get('linkedin')
-        validated_data['dribble'] = self.data.get('dribble')
-        validated_data['behance'] = self.data.get('behance')
-        validated_data['stackoverflow'] = self.data.get('stackoverflow')
-        validated_data['medium'] = self.data.get('medium')
-        return Socials.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))

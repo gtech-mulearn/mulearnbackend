@@ -17,7 +17,7 @@ from .dash_district_helper import get_user_college_link
 class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -33,7 +33,7 @@ class DistrictDetailAPI(APIView):
 class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -71,10 +71,12 @@ class DistrictTopThreeCampusAPI(APIView):
 class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = get_user_college_link(user_id)
+
         district = user_org_link.org.district
 
         levels = Level.objects.all()
@@ -88,9 +90,10 @@ class DistrictStudentLevelStatusAPI(APIView):
 class DistrictStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = get_user_college_link(user_id)
 
         rank = (
@@ -150,9 +153,10 @@ class DistrictStudentDetailsAPI(APIView):
 class DistrictStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         user_org_link = get_user_college_link(user_id)
 
         rank = (
@@ -193,15 +197,15 @@ class DistrictStudentDetailsCSVAPI(APIView):
 class DistrictsCollageDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = get_user_college_link(user_id)
+        user_org_link = get_user_college_link(user_id)
 
         organizations = (
             Organization.objects.filter(
-                district=user_org_links.org.district,
+                district=user_org_link.org.district,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -212,7 +216,7 @@ class DistrictsCollageDetailsAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district=user_org_links.org.district,
+                user_organization_link_user__org__district=user_org_link.org.district,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )
@@ -257,15 +261,15 @@ class DistrictsCollageDetailsAPI(APIView):
 class DistrictsCollageDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_links = get_user_college_link(user_id)
+        user_org_link = get_user_college_link(user_id)
 
         organizations = (
             Organization.objects.filter(
-                district=user_org_links.org.district,
+                district=user_org_link.org.district,
                 org_type=OrganizationType.COLLEGE.value,
             )
             .values("title", "code", "id")
@@ -276,7 +280,7 @@ class DistrictsCollageDetailsCSVAPI(APIView):
 
         leads = (
             User.objects.filter(
-                user_organization_link_user__org__district=user_org_links.org.district,
+                user_organization_link_user__org__district=user_org_link.org.district,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
             )

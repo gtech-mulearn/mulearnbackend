@@ -127,3 +127,16 @@ class UserSettings(models.Model):
     class Meta:
         managed = False
         db_table = 'user_settings'
+
+class DynamicRole(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    type = models.CharField(max_length=50)
+    role = models.ForeignKey(Role,on_delete=models.CASCADE, db_column='role', related_name='dynamic_role_role')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='dynamic_role_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='dynamic_role_created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'dynamic_role'

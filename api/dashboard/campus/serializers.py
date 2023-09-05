@@ -79,10 +79,11 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 class CampusStudentDetailsSerializer(serializers.Serializer):
     user_id = serializers.CharField()
     fullname = serializers.SerializerMethodField()
-    muid = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
     level = serializers.CharField()
+    join_date = serializers.CharField()
 
     class Meta:
         fields = ("user_id",
@@ -91,6 +92,7 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
                   "muid",
                   "rank",
                   "level",
+                  "join_date"
                   )
 
     def get_rank(self, obj):
