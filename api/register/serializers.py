@@ -170,14 +170,14 @@ class RegisterSerializer(serializers.ModelSerializer):
                 updated_at=DateTimeUtils.get_current_utc_time(),
             )
 
-            # Socials.objects.create(
-            #     id=uuid4(),
-            #     user=user,
-            #     created_by=user,
-            #     created_at=DateTimeUtils.get_current_utc_time(),
-            #     updated_by=user,
-            #     updated_at=DateTimeUtils.get_current_utc_time(),
-            # )
+            Socials.objects.create(
+                id=uuid4(),
+                user=user,
+                created_by=user,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
 
             if role_id:
                 UserRoleLink.objects.create(
