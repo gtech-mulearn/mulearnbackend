@@ -78,6 +78,8 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 headers={"Authorization": f"Bearer {integration.token}"},
             )
             response_data = response.json()
+            
+            print(response_data)
 
             if (
                 "response" not in response_data
@@ -88,6 +90,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
             kkem_link = IntegrationAuthorization.objects.create(
                 integration=integration,
                 user=user,
+                addition_field=response_data["response"]["data"]["registration"]["dwms_id"],
                 verified=validated_data["verified"],
                 integration_value=validated_data["integration_value"],
                 created_at=DateTimeUtils.get_current_utc_time(),

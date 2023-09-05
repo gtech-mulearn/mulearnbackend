@@ -272,6 +272,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 referrer_karma.save()
                 
             if jsid:
+                
                 IntegrationAuthorization.objects.create(
                     id=uuid4(),
                     user=user,
