@@ -92,6 +92,12 @@ class LearningCircleHomeApi(APIView):
 
     def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        if not UserCircleLink.objects.filter(user_id=member_id,
+                                             circle_id=circle_id).exists() or not LearningCircle.objects.filter(
+            id=circle_id).exists():
+            return CustomResponse(general_message='Learning Circle Not Available').get_failure_response()
+
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
                                                     context={'user_id': user_id})
@@ -186,7 +192,9 @@ class LearningCircleDataAPI(APIView):
 
 
 class LearningCircleListMembersApi(APIView):
-    def get(self, request, circle_id):
-        lc = LearningCircle.objects.filter(id=circle_id).first()
-        serializer = LearningCircleMemberlistSerializer(lc, many=False)
+    def get(self, request, circle_name):
+        lc = LearningCircle.objects.filter(name=circle_name)
+        if lc is None:
+            return CustomResponse(general_message='Learning Circle Not Exists').get_failure_response()
+        serializer = LearningCircleMemberlistSerializer(lc, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

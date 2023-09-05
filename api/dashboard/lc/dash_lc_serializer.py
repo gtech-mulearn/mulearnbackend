@@ -84,7 +84,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
         i = 1
         while code in existing_codes:
-            code = org_link.org.code + ig.code + validated_data.get('name')[:2] + str(i)
+            code = code + str(i)
             i += 1
 
         lc = LearningCircle.objects.create(
