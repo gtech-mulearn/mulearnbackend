@@ -4,7 +4,7 @@ from . import dash_lc_view
 
 urlpatterns = [
     path('', dash_lc_view.LearningCircleListApi.as_view()),
-    path('list-members/<str:circle_code>/', dash_lc_view.LearningCircleListMembersApi.as_view()),
+    path('list-members/<str:circle_name>/', dash_lc_view.LearningCircleListMembersApi.as_view()),
     path('list/', dash_lc_view.LearningCircleMainApi.as_view()),
     path('data/', dash_lc_view.LearningCircleDataAPI.as_view()),
     path('create/', dash_lc_view.LearningCircleAPI.as_view()),
