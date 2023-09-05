@@ -163,3 +163,13 @@ class VoucherLogAPI(APIView):
         voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=voucher_serializer,
                                                    pagination=paginated_queryset.get('pagination'))
+    
+class ExportVoucherLogAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        voucher_serializer = VoucherLog.objects.all()
+        voucher_serializer_data = VoucherLogSerializer(voucher_serializer, many=True).data
+
+        return CommonUtils.generate_csv(voucher_serializer_data, 'Voucher Log')

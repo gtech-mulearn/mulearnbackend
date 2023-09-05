@@ -106,6 +106,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             counter += 1
             mu_id = f"{full_name}-{counter}@mulearn"
         role_id = validated_data.pop("role")
+        email = validated_data.pop("email").replace(" ", "")
         organization_ids = validated_data.pop("organizations")
         dept = validated_data.pop("dept")
         year_of_graduation = validated_data.pop("year_of_graduation")
@@ -153,6 +154,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 **validated_data,
                 id=uuid4(),
                 mu_id=mu_id,
+                email=email,
                 password=hashed_password,
                 created_at=DateTimeUtils.get_current_utc_time(),
             )
