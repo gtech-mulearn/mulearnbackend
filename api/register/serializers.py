@@ -1,3 +1,4 @@
+import json
 from uuid import uuid4
 
 from django.contrib.auth.hashers import make_password
@@ -112,7 +113,7 @@ class RegisterSerializer(serializers.ModelSerializer):
         area_of_interests = validated_data.pop("area_of_interests")
         password = validated_data.pop("password")
         hashed_password = make_password(password)
-        referral_id = validated_data.pop("referral_id")
+        referral_id = validated_data.pop("referral_id", None)
 
         if jsid := validated_data.pop("jsid", None):
             if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
@@ -136,7 +137,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         referral_provider = None
         user_role_verified = True
-        
+
         if role_id:
             role = Role.objects.get(id=role_id)
             user_role_verified = role.title == RoleType.STUDENT.value
@@ -167,14 +168,14 @@ class RegisterSerializer(serializers.ModelSerializer):
                 updated_at=DateTimeUtils.get_current_utc_time(),
             )
 
-            Socials.objects.create(
-                id=uuid4(),
-                user=user,
-                created_by=user,
-                created_at=DateTimeUtils.get_current_utc_time(),
-                updated_by=user,
-                updated_at=DateTimeUtils.get_current_utc_time(),
-            )
+            # Socials.objects.create(
+            #     id=uuid4(),
+            #     user=user,
+            #     created_by=user,
+            #     created_at=DateTimeUtils.get_current_utc_time(),
+            #     updated_by=user,
+            #     updated_at=DateTimeUtils.get_current_utc_time(),
+            # )
 
             if role_id:
                 UserRoleLink.objects.create(
@@ -270,19 +271,60 @@ class RegisterSerializer(serializers.ModelSerializer):
                 referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
                 referrer_karma.updated_by = user
                 referrer_karma.save()
-                
+
             if jsid:
-                
-                IntegrationAuthorization.objects.create(
+                dwms_id = self.handle_dwms_id(jsid, integration)
+                kkem_link = IntegrationAuthorization.objects.create( 
                     id=uuid4(),
                     user=user,
                     integration=integration,
                     integration_value=jsid,
+                    addition_field=dwms_id,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
 
+                response_data = self.send_data_to_kkem(integration, kkem_link)
+
+                if (
+                    "req_status" not in response_data
+                    or not response_data["req_status"]
+                ):
+                    raise ValueError("Invalid jsid")
+
+
         return user, password
+    
+    def handle_dwms_id(self, jsid, integration):
+        response = requests.post(
+                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                data=json.dumps(
+                    {"job_seeker_id": int(jsid)}
+                ),
+                headers={"Authorization": f"Bearer {integration.token}"},
+            )
+        response_data = response.json()
+
+        if "response" not in response_data or not response_data["response"].get(
+                "req_status", False
+            ):
+            raise ValueError("Invalid jsid")
+
+        return response_data["response"]["data"]["dwms_id"]
+    
+    def send_data_to_kkem(self, integration, kkem_link):
+        response = requests.post(
+            url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/update/muLearnId",
+            data=json.dumps(
+                {
+                    "mu_id": kkem_link.user.mu_id,
+                    "jsid": int(kkem_link.integration_value),
+                    "email_id": kkem_link.user.email,
+                }
+            ),
+            headers={"Authorization": f"Bearer {integration.token}"},
+        )
+        return response.json()
 
     class Meta:
         model = User
