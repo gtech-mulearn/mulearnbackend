@@ -38,6 +38,7 @@ class IntegrationAuthorization(models.Model):
         unique=True,
     )
     integration_value = models.CharField(max_length=255, unique=True, null=False)
+    addition_field =  models.CharField(max_length=255)
     verified = models.BooleanField(default=False, null=False)
     updated_at = models.DateTimeField(null=False)
     created_at = models.DateTimeField(null=False)
