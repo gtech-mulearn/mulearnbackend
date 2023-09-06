@@ -7,6 +7,8 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
 class DynamicRoleCreateSerializer(serializers.ModelSerializer):
+    role = serializers.CharField(required=True)
+
     class Meta:
         model = DynamicRole
         fields = ["type", "role"]
@@ -22,6 +24,17 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
 
         return DynamicRole.objects.create(**validated_data)
     
+    def validate(self, data):
+        if DynamicRole.objects.filter(type=data['type'], role=data['role']).first():
+            raise serializers.ValidationError("Dynamic Role already exists")
+        return data
+    
+    def validate_role(self, value):
+        role = Role.objects.filter(title=value).first()
+        if role is None:
+            raise serializers.ValidationError("Enter a valid role name")
+        return role
+    
 class DynamicRoleListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
 
@@ -32,3 +45,21 @@ class DynamicRoleListSerializer(serializers.ModelSerializer):
     class Meta:
         model = DynamicRole
         fields = ["type", "roles"]
+
+class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
+        
+    class Meta:
+        model = DynamicRole
+        fields = ["type"]
+
+    def update(self, instance, validated_data):
+        instance.updated_by_id = self.context.get('user_id')
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        role = Role.objects.filter(title=self.context.get('new_role')).first()
+        if role is None:
+            raise serializers.ValidationError("Enter a valid role name")
+        if DynamicRole.objects.filter(type=instance.type, role=role).first():
+            raise serializers.ValidationError("Dynamic Role already exists")
+        instance.role = role if role else instance.role
+        instance.save()
+        return instance       

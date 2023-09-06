@@ -127,6 +127,7 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
             .annotate(total_karma=Sum("karma"))
             .values_list("total_karma", flat=True)
         ) or []
+        
         karma_data = {
             i + 1: karma_logs[i] if i < len(karma_logs) else 0
             for i in range(len(date_range))
