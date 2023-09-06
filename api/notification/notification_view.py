@@ -41,10 +41,10 @@ class NotificationDeleteAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         notification = Notification.objects.filter(user_id=user_id, id=notification_id)
         if not notification:
-            return CustomResponse(response='Notification not found').get_failure_response()
+            return CustomResponse(general_message='Notification not found').get_failure_response()
 
         notification.delete()
-        return CustomResponse(response='Notification deleted successfully').get_success_response()
+        return CustomResponse(general_message='Notification deleted successfully').get_success_response()
 
 
 class NotificationDeleteAllAPI(APIView):
@@ -64,7 +64,7 @@ class NotificationDeleteAllAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         notification = Notification.objects.filter(user_id=user_id)
         if not notification:
-            return CustomResponse(response='Notifications are empty').get_failure_response()
+            return CustomResponse(general_message='Notifications are empty').get_failure_response()
 
         notification.delete()
-        return CustomResponse(response='All notification deleted successfully').get_success_response()
+        return CustomResponse(general_message='All notification deleted successfully').get_success_response()
