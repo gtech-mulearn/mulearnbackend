@@ -154,9 +154,8 @@ class LearningCircleHomeApi(APIView):
         usr_circle_link.delete()
 
         if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
-            LearningCircle.objects.filter(id=circle_id).delete()
+            LearningCircle.objects.filter(id=circle_id).first().delete()
             return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
-
         return CustomResponse(general_message='Left').get_success_response()
 
 
