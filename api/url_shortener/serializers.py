@@ -13,7 +13,7 @@ class ShowShortenUrlsSerializer(ModelSerializer):
     class Meta:
         model = UrlShortener
 
-        fields = ["id", "title", "long_url", "short_url"]
+        fields = ["id", "title", "long_url", "short_url", "created_at"]
 
 
 class ShortenUrlsCreateUpdateSerializer(ModelSerializer):
