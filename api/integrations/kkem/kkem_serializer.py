@@ -61,6 +61,10 @@ class KKEMAuthorization(serializers.ModelSerializer):
     emailOrMuid = serializers.CharField(source="user.mu_id")
     jsid = serializers.CharField(source="integration_value")
 
+    class Meta:
+        model = IntegrationAuthorization
+        fields = ("emailOrMuid", "jsid", "verified")
+
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
 
@@ -79,11 +83,11 @@ class KKEMAuthorization(serializers.ModelSerializer):
                 updated_at=DateTimeUtils.get_current_utc_time(),
             )
 
-        except IntegrityError as e:
+        except Exception as e:
             kkem_link = IntegrationAuthorization.objects.filter(
                 user=user, integration=integration
             ).first()
-
+            
             if (
                 not kkem_link
                 and IntegrationAuthorization.objects.filter(
@@ -109,46 +113,26 @@ class KKEMAuthorization(serializers.ModelSerializer):
             else:
                 raise ValueError("Something went wrong") from e
 
-        response_data = self.send_data_to_kkem(integration, kkem_link)
-
-        if "req_status" in response_data and response_data["req_status"]:
-            
-            return {
-                "email": kkem_link.user.email,
-                "fullname": kkem_link.user.fullname,
-                "mu_id": kkem_link.user.mu_id,
-                "link_id": kkem_link.id,
-            }
-            
-        raise ValueError("Something went wrong")
-
-    def send_data_to_kkem(self, integration, kkem_link):
-        response = requests.post(
-            url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/update/muLearnId",
-            data=json.dumps(
-                {
-                    "mu_id": kkem_link.user.mu_id,
-                    "jsid": int(kkem_link.integration_value),
-                    "email_id": kkem_link.user.email,
-                }
-            ),
-            headers={"Authorization": f"Bearer {integration.token}"},
-        )
-        return response.json()
+        return {
+            "email": kkem_link.user.email,
+            "fullname": kkem_link.user.fullname,
+            "mu_id": kkem_link.user.mu_id,
+            "link_id": kkem_link.id,
+        }
 
     def handle_dwms_id(self, validated_data, integration):
         response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
-                data=json.dumps(
-                    {"job_seeker_id": int(validated_data["integration_value"])}
-                ),
-                headers={"Authorization": f"Bearer {integration.token}"},
-            )
+            url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+            data=json.dumps(
+                {"job_seeker_id": int(validated_data["integration_value"])}
+            ),
+            headers={"Authorization": f"Bearer {integration.token}"},
+        )
         response_data = response.json()
 
         if "response" not in response_data or not response_data["response"].get(
-                "req_status", False
-            ):
+            "req_status", False
+        ):
             raise ValueError("Invalid jsid")
 
         return response_data["response"]["data"]["dwms_id"]
@@ -168,8 +152,3 @@ class KKEMAuthorization(serializers.ModelSerializer):
         kkem_link.verified = validated_data["verified"]
         kkem_link.addition_field = dwms_id
         kkem_link.save()
-
-
-    class Meta:
-        model = IntegrationAuthorization
-        fields = ["emailOrMuid", "jsid", "verified"]
