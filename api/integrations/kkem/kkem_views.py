@@ -1,4 +1,5 @@
 from datetime import datetime
+import json
 
 
 from django.db.models import Prefetch
@@ -11,6 +12,8 @@ from db.user import User
 from utils.response import CustomResponse
 from utils.utils import DateTimeUtils, send_template_mail
 from utils.types import IntegrationType
+
+from . import kkem_helper
 
 from .. import integrations_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
@@ -119,6 +122,7 @@ class KKEMAuthorizationAPI(APIView):
 
             authorization.verified = True
             authorization.updated_at = DateTimeUtils.get_current_utc_time()
+            kkem_helper.send_data_to_kkem(authorization)
 
             user_id = authorization.user.id
             response = integrations_helper.get_access_token(token=user_id)
