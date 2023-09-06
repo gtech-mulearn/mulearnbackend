@@ -5,6 +5,7 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction
 import requests
 from rest_framework import serializers
+from api.integrations.kkem.kkem_helper import send_data_to_kkem
 from db.integrations import Integration, IntegrationAuthorization
 
 from db.organization import Country, State, Zone
@@ -282,18 +283,12 @@ class RegisterSerializer(serializers.ModelSerializer):
                     integration=integration,
                     integration_value=jsid,
                     addition_field=dwms_id,
+                    verified=True,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
 
-                response_data = self.send_data_to_kkem(integration, kkem_link)
-
-                if (
-                    "req_status" not in response_data
-                    or not response_data["req_status"]
-                ):
-                    raise ValueError("Invalid jsid")
-
+                send_data_to_kkem(kkem_link)
 
         return user, password
     
@@ -314,20 +309,6 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         return response_data["response"]["data"]["dwms_id"]
     
-    def send_data_to_kkem(self, integration, kkem_link):
-        response = requests.post(
-            url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/update/muLearnId",
-            data=json.dumps(
-                {
-                    "mu_id": kkem_link.user.mu_id,
-                    "jsid": int(kkem_link.integration_value),
-                    "email_id": kkem_link.user.email,
-                }
-            ),
-            headers={"Authorization": f"Bearer {integration.token}"},
-        )
-        return response.json()
-
     class Meta:
         model = User
         fields = [
