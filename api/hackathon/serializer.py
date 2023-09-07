@@ -303,13 +303,16 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
         fields = ("status",)
 
     def validate(self, attrs):
-        fields = Hackathon._meta.get_fields()
-        null_instances = [
-            field.attname
-            for field in fields
-            if field.get_internal_type() not in ("ForeignKey", "OneToOneField")
-               and getattr(self.instance, field.attname) is None
-        ]
+        model_fields = Hackathon._meta.get_fields()
+        null_instances = []
+
+        for field in model_fields:
+            if field.many_to_many or field.one_to_many or field.one_to_one:
+                continue
+
+            if getattr(self.instance, field.name) is None:
+                null_instances.append(field.name)
+
         if not null_instances:
             return super().validate(attrs)
 
