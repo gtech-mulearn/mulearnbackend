@@ -17,6 +17,16 @@ class KKEMUserSerializer(serializers.ModelSerializer):
     interest_groups = serializers.SerializerMethodField()
     jsid = serializers.SerializerMethodField()
 
+    class Meta:
+        model = User
+        fields = [
+            "mu_id",
+            "email",
+            "jsid",
+            "total_karma",
+            "interest_groups",
+        ]
+
     def get_total_karma(self, obj):
         karma = (
             obj.total_karma_user.karma
@@ -43,18 +53,11 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         return interest_groups
 
     def get_jsid(self, obj):
-        return IntegrationAuthorization.objects.get(
-            user=obj, verified=True
-        ).integration_value
-
-    class Meta:
-        model = User
-        fields = [
-            "mu_id",
-            "jsid",
-            "total_karma",
-            "interest_groups",
-        ]
+        return int(
+            IntegrationAuthorization.objects.get(
+                user=obj, verified=True, integration__name=IntegrationType.KKEM.value
+            ).integration_value
+        )
 
 
 class KKEMAuthorization(serializers.ModelSerializer):
@@ -87,7 +90,7 @@ class KKEMAuthorization(serializers.ModelSerializer):
             kkem_link = IntegrationAuthorization.objects.filter(
                 user=user, integration=integration
             ).first()
-            
+
             if (
                 not kkem_link
                 and IntegrationAuthorization.objects.filter(
