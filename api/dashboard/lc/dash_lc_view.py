@@ -86,6 +86,8 @@ class LearningCircleHomeApi(APIView):
     def post(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        if learning_circle_link is None:
+            return CustomResponse(general_message='User not part of circle').get_failure_response()
         serializer = LearningCircleUpdateSerializer()
         serializer.destroy(learning_circle_link)
         return CustomResponse(general_message='Removed successfully').get_success_response()
@@ -154,8 +156,11 @@ class LearningCircleHomeApi(APIView):
         usr_circle_link.delete()
 
         if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
-            LearningCircle.objects.filter(id=circle_id).first().delete()
-            return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
+            learning_circle = LearningCircle.objects.filter(id=circle_id).first()
+            if learning_circle:
+                learning_circle.delete()
+                return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
+
         return CustomResponse(general_message='Left').get_success_response()
 
 
