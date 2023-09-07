@@ -155,7 +155,7 @@ class VoucherLogAPI(APIView):
                             'task':'task__title',
                             'week':'week',
                             'month':'month',
-                            'updated_by': 'updated_by',
+                            'updated_by': 'updated_by__first_name',
                             'updated_at': 'updated_at',
                             'created_at': 'created_at'
                             }
