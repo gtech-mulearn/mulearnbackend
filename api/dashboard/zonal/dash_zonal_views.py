@@ -103,7 +103,7 @@ class ZonalStudentDetailsAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma")
+            .order_by("-karma", "-created_at")
             .values(
                 "user_id",
                 "karma",
@@ -166,7 +166,7 @@ class ZonalStudentDetailsCSVAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma")
+            .order_by("-karma", "-created_at")
             .values(
                 "user_id",
                 "karma",
