@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.user import Role, DynamicRole
+from db.user import Role, DynamicRole, DynamicUser
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 

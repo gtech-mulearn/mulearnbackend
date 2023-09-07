@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
 
-from db.user import DynamicRole, Role
+from db.user import DynamicRole, Role, DynamicUser
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from .dynamic_role_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer, DynamicRoleUpdateSerializer, DynamicTypeDropDownSerializer, RoleDropDownSerializer
+from .dynamic_management_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer, DynamicRoleUpdateSerializer, DynamicTypeDropDownSerializer, RoleDropDownSerializer
 from utils.utils import CommonUtils
 from utils.types import RoleType
 
