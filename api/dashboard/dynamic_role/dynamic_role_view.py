@@ -34,30 +34,23 @@ class DynamicRoleAPI(APIView):
                                                    pagination=paginated_queryset.get('pagination')) 
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request): # delete
-        type = request.data['type']
-        role = request.data['role']
-        if dynamic_role := DynamicRole.objects.filter(type=type, role__title=role).first():
-            dynamic_role.delete()
+    def delete(self, request, type_id): # delete
+        if dynamic_role := DynamicRole.objects.filter(id=type_id).first():
+            DynamicRoleUpdateSerializer().destroy(dynamic_role)
             return CustomResponse(
-                general_message=f'Dynamic Role of type {type} and role {role} deleted successfully'
+                general_message=f'Dynamic Role successfully deleted'
                 ).get_success_response()
         return CustomResponse(
-            general_message=f'No such Dynamic Role of type {type} and role {role} present'
+            general_message=f'Invalid Dynamic Role'
             ).get_failure_response()
-
+    
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request):
+    def patch(self, request, type_id):
         user_id = JWTUtils.fetch_user_id(request)
-        type = request.data['type']
-        role = request.data['role']
-        new_role = request.data['new_role']
-        context = {'user_id': user_id, 'new_role': new_role}
-        dynamic_role = DynamicRole.objects.filter(type=type, role__title=role).first()
-        if dynamic_role is None:
-            return CustomResponse(general_message='Dynamic Role does not exist').get_failure_response()
-        serializer = DynamicRoleUpdateSerializer(dynamic_role, data={'type': type}, context=context)
+        context = {'user_id': user_id}
+        dynamic_role = DynamicRole.objects.filter(id=type_id).first()
+        serializer = DynamicRoleUpdateSerializer(dynamic_role, data=request.data, context=context)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message='Dynamic Role updated successfully', response=serializer.data).get_success_response()
+            return CustomResponse(general_message='Dynamic Role updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()

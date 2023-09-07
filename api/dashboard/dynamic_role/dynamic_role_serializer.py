@@ -7,7 +7,12 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
 class DynamicRoleCreateSerializer(serializers.ModelSerializer):
-    role = serializers.CharField(required=True)
+    type = serializers.CharField(required=True, error_messages={
+        'required': 'type field must not be left blank.'
+        })
+    role = serializers.CharField(required=True, error_messages={
+        'required': 'role field must not be left blank.'
+        })
 
     class Meta:
         model = DynamicRole
@@ -44,22 +49,32 @@ class DynamicRoleListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DynamicRole
-        fields = ["type", "roles"]
+        fields = ["type", "roles"]    
 
 class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
-        
+    new_role = serializers.CharField(required=True, error_messages={
+        'required': 'new_role field must not be left blank.'
+    })
+
     class Meta:
         model = DynamicRole
-        fields = ["type"]
+        fields = ["new_role"]
 
     def update(self, instance, validated_data):
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-        role = Role.objects.filter(title=self.context.get('new_role')).first()
-        if role is None:
-            raise serializers.ValidationError("Enter a valid role name")
-        if DynamicRole.objects.filter(type=instance.type, role=role).first():
+        new_role = validated_data.get('new_role')
+        if DynamicRole.objects.filter(type=instance.type, role=new_role).first():
             raise serializers.ValidationError("Dynamic Role already exists")
-        instance.role = role if role else instance.role
+        instance.role = new_role if new_role else instance.role
         instance.save()
-        return instance       
+        return instance 
+
+    def validate_new_role(self, value):
+        new_role = Role.objects.filter(title=value).first()
+        if new_role is None:
+            raise serializers.ValidationError("Enter a valid role name")
+        return new_role
+
+    def destroy(self, obj):
+        obj.delete()
