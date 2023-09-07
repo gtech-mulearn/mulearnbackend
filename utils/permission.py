@@ -14,7 +14,7 @@ from utils.utils import DateTimeUtils
 from .exception import CustomException
 from .response import CustomResponse
 
-from db.user import DynamicRole
+from db.user import DynamicRole, DynamicUser
 
 
 # def get_current_utc_time():
@@ -177,8 +177,13 @@ def dynamic_role_required(type):
         def wrapped_view_func(obj, request, *args, **kwargs):
             dynamic_roles = DynamicRole.objects.filter(type=type).values_list('role__title', flat=True)
             roles = set(dynamic_roles)
+            dynamic_users = DynamicUser.objects.filter(type=type).values_list('user__id', flat=True)
             for role in JWTUtils.fetch_role(request):
                 if role in roles:
+                    response = view_func(obj, request, *args, **kwargs)
+                    return response
+            for user in JWTUtils.fetch_user_id(request):
+                if user in dynamic_users:
                     response = view_func(obj, request, *args, **kwargs)
                     return response
             res = CustomResponse(
