@@ -108,29 +108,16 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
 
         today = DateTimeUtils.get_current_utc_time().date()
         date_range = [today - timedelta(days=i) for i in range(7)]
-
-        karma_logs = (
-            KarmaActivityLog.objects.filter(
-                user__user_organization_link_user__org=instance.org,
-                created_at__date__in=date_range,
-            )
-            .annotate(
-                date_index=Case(
-                    *[
-                        When(created_at__date=date, then=Value(i))
-                        for i, date in enumerate(date_range)
-                    ],
-                    output_field=IntegerField(),
+        
+        for date in date_range:
+            karma_logs = (
+                KarmaActivityLog.objects.filter(
+                    user__user_organization_link_user__org=instance.org,
+                    created_at__date=date,
+                ).aggregate(
+                    karma=Sum("karma"),
                 )
             )
-            .values("date_index")
-            .annotate(total_karma=Sum("karma"))
-            .values_list("total_karma", flat=True)
-        ) or []
-        karma_data = {
-            i + 1: karma_logs[i] if i < len(karma_logs) else 0
-            for i in range(len(date_range))
-        }
-        response["karma"] = karma_data
+            response[str(date)] = karma_logs.get("karma", 0)
 
         return response

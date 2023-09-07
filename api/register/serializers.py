@@ -1,9 +1,11 @@
+import json
 from uuid import uuid4
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 import requests
 from rest_framework import serializers
+from api.integrations.kkem.kkem_helper import send_data_to_kkem
 from db.integrations import Integration, IntegrationAuthorization
 
 from db.organization import Country, State, Zone
@@ -106,13 +108,14 @@ class RegisterSerializer(serializers.ModelSerializer):
             counter += 1
             mu_id = f"{full_name}-{counter}@mulearn"
         role_id = validated_data.pop("role")
+        email = validated_data.pop("email").replace(" ", "")
         organization_ids = validated_data.pop("organizations")
         dept = validated_data.pop("dept")
         year_of_graduation = validated_data.pop("year_of_graduation")
         area_of_interests = validated_data.pop("area_of_interests")
         password = validated_data.pop("password")
         hashed_password = make_password(password)
-        referral_id = validated_data.pop("referral_id")
+        referral_id = validated_data.pop("referral_id", None)
 
         if jsid := validated_data.pop("jsid", None):
             if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
@@ -136,7 +139,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         referral_provider = None
         user_role_verified = True
-        
+
         if role_id:
             role = Role.objects.get(id=role_id)
             user_role_verified = role.title == RoleType.STUDENT.value
@@ -153,6 +156,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 **validated_data,
                 id=uuid4(),
                 mu_id=mu_id,
+                email=email,
                 password=hashed_password,
                 created_at=DateTimeUtils.get_current_utc_time(),
             )
@@ -270,19 +274,41 @@ class RegisterSerializer(serializers.ModelSerializer):
                 referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
                 referrer_karma.updated_by = user
                 referrer_karma.save()
-                
+
             if jsid:
-                IntegrationAuthorization.objects.create(
+                dwms_id = self.handle_dwms_id(jsid, integration)
+                kkem_link = IntegrationAuthorization.objects.create( 
                     id=uuid4(),
                     user=user,
                     integration=integration,
                     integration_value=jsid,
+                    addition_field=dwms_id,
+                    verified=True,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
 
-        return user, password
+                send_data_to_kkem(kkem_link)
 
+        return user, password
+    
+    def handle_dwms_id(self, jsid, integration):
+        response = requests.post(
+                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                data=json.dumps(
+                    {"job_seeker_id": int(jsid)}
+                ),
+                headers={"Authorization": f"Bearer {integration.token}"},
+            )
+        response_data = response.json()
+
+        if "response" not in response_data or not response_data["response"].get(
+                "req_status", False
+            ):
+            raise ValueError("Invalid jsid")
+
+        return response_data["response"]["data"]["dwms_id"]
+    
     class Meta:
         model = User
         fields = [
