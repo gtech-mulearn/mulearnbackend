@@ -2,12 +2,12 @@ import json
 import uuid
 
 from django.conf import settings
+from django.db import models
 from django.db import transaction
 from rest_framework import serializers
 
 from db.hackathon import Hackathon, HackathonForm, HackathonOrganiserLink, HackathonUserSubmission
 from db.organization import Organization, District, UserOrganizationLink
-from db.user import User
 from utils.permission import JWTUtils
 from utils.types import DEFAULT_HACKATHON_FORM_FIELDS
 from utils.utils import DateTimeUtils
@@ -310,8 +310,12 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
             if field.many_to_many or field.one_to_many or field.one_to_one:
                 continue
 
-            if getattr(self.instance, field.name) is None:
-                null_instances.append(field.name)
+            if isinstance(field, models.ImageField):
+                if not getattr(self.instance, field.name):
+                    null_instances.append(field.name)
+            else:
+                if getattr(self.instance, field.name) is None:
+                    null_instances.append(field.name)
 
         if not null_instances:
             return super().validate(attrs)
