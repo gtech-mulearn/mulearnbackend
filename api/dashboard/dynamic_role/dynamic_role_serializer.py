@@ -78,3 +78,13 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+
+class DynamicTypeDropDownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = DynamicRole
+        fields = ["type"]
+
+class RoleDropDownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ["id", "title"]
