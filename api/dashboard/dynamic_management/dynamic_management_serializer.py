@@ -79,17 +79,6 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
     def destroy(self, obj):
         obj.delete()
 
-class DynamicTypeDropDownSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = DynamicRole
-        fields = ["type"]
-
-class RoleDropDownSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = Role
-        fields = ["id", "title"]
-
-
 class DynamicUserCreateSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=True, error_messages={
         'required': 'type field must not be left blank.'
@@ -129,8 +118,10 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
 
     def get_users(self, obj):
         dynamic_users = DynamicUser.objects.filter(type=obj['type'])
-        full_names = [f"{user.user.first_name} {user.user.last_name if user.user.last_name else ''}" for user in dynamic_users]
-        return full_names
+        user_data = [{'name': f"{user.user.first_name} {user.user.last_name if user.user.last_name else ''}",
+                    'muid': user.user.mu_id,  # Replace 'muid' with the actual field name in your model
+                    'email': user.user.email} for user in dynamic_users]
+        return user_data
 
     class Meta:
         model = DynamicUser
@@ -163,3 +154,8 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+
+class RoleDropDownSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Role
+        fields = ["title"]

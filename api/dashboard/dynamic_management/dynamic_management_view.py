@@ -3,9 +3,9 @@ from rest_framework.views import APIView
 from db.user import DynamicRole, Role, DynamicUser
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from .dynamic_management_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer, DynamicRoleUpdateSerializer, DynamicTypeDropDownSerializer, RoleDropDownSerializer, DynamicUserCreateSerializer, DynamicUserListSerializer, DynamicUserUpdateSerializer
+from .dynamic_management_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer, DynamicRoleUpdateSerializer,RoleDropDownSerializer, DynamicUserCreateSerializer, DynamicUserListSerializer, DynamicUserUpdateSerializer
 from utils.utils import CommonUtils
-from utils.types import RoleType
+from utils.types import RoleType, ManagementType
 
 class DynamicRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -54,26 +54,7 @@ class DynamicRoleAPI(APIView):
             serializer.save()
             return CustomResponse(general_message='Dynamic Role updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
-    
-
-class DynamicTypeDropDownAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.ADMIN.value])
-    def get(self, request):
-        dynamic_types = DynamicRole.objects.values('type').distinct()
-        serializer = DynamicTypeDropDownSerializer(dynamic_types, many=True)
-        return CustomResponse(response=serializer.data).get_success_response() 
-    
-class RoleDropDownAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.ADMIN.value])
-    def get(self, request):
-        roles = Role.objects.all()
-        serializer = RoleDropDownSerializer(roles, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
-    
+       
 
 class DynamicUserAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -87,7 +68,7 @@ class DynamicUserAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request):
+    def get(self, request): # list
         dynamic_users = DynamicUser.objects.values('type').distinct()
         data = [{'type': user['type']} for user in dynamic_users]
 
@@ -113,7 +94,7 @@ class DynamicUserAPI(APIView):
             ).get_failure_response()
     
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request, type_id):
+    def patch(self, request, type_id): # update
         user_id = JWTUtils.fetch_user_id(request)
         context = {'user_id': user_id}
         dynamic_user = DynamicUser.objects.filter(id=type_id).first()
@@ -122,3 +103,19 @@ class DynamicUserAPI(APIView):
             serializer.save()
             return CustomResponse(general_message='Dynamic User updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+    
+
+class DynamicTypeDropDownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        dynamic_types = ManagementType.get_all_values()
+        return CustomResponse(response=dynamic_types).get_success_response()
+    
+class RoleDropDownAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        roles = Role.objects.all()
+        serializer = RoleDropDownSerializer(roles, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
