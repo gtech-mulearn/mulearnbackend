@@ -177,15 +177,15 @@ def dynamic_role_required(type):
         def wrapped_view_func(obj, request, *args, **kwargs):
             dynamic_roles = DynamicRole.objects.filter(type=type).values_list('role__title', flat=True)
             roles = set(dynamic_roles)
-            dynamic_users = DynamicUser.objects.filter(type=type).values_list('user__id', flat=True)
             for role in JWTUtils.fetch_role(request):
                 if role in roles:
                     response = view_func(obj, request, *args, **kwargs)
                     return response
-            for user in JWTUtils.fetch_user_id(request):
-                if user in dynamic_users:
-                    response = view_func(obj, request, *args, **kwargs)
-                    return response
+            dynamic_users = DynamicUser.objects.filter(type=type).values_list('user__id', flat=True)
+            user = JWTUtils.fetch_user_id(request)
+            if user in dynamic_users:
+                response = view_func(obj, request, *args, **kwargs)
+                return response
             res = CustomResponse(
                 general_message="You do not have the required role to access this page."
                 ).get_failure_response()
