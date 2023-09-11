@@ -92,7 +92,7 @@ class UserAPI(APIView):
     def get(self, request):
         user_queryset = (
             User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
+            .values("id", "first_name", "last_name", "discord_id", "email", "mobile", "created_at")
             .annotate(
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
@@ -105,6 +105,7 @@ class UserAPI(APIView):
             request,
             [
                 "mu_id",
+                "discord_id",
                 "first_name",
                 "last_name",
                 "email",
@@ -116,6 +117,8 @@ class UserAPI(APIView):
                 "last_name": "last_name",
                 "karma": "total_karma_user__karma",
                 "created_at": "created_at",
+                "level" : "user_lvl_link_user__level__name",
+                "muid": "mu_id",
             },
         )
         serializer = dash_user_serializer.UserDashboardSerializer(
@@ -134,7 +137,7 @@ class UserManagementCSV(APIView):
     def get(self, request):
         user_queryset = (
             User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
+            .values("id", "first_name", "last_name", "email", "mobile", "created_at", "discord_id")
             .annotate(
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
