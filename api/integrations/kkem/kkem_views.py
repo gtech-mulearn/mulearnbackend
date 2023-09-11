@@ -19,6 +19,8 @@ from .. import integrations_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 
+
+
 class KKEMBulkKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
     def get(self, request):

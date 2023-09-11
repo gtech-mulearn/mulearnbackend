@@ -11,6 +11,11 @@ from db.user import User
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils
 
+from Crypto.Cipher import AES
+from Crypto.Util.Padding import unpad
+from Crypto.Protocol.KDF import PBKDF2
+from base64 import b64decode
+
 
 class KKEMUserSerializer(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
@@ -67,7 +72,21 @@ class KKEMAuthorization(serializers.ModelSerializer):
     class Meta:
         model = IntegrationAuthorization
         fields = ("emailOrMuid", "jsid", "verified")
-
+        
+def validate(self, attrs):
+    password = b'DWM$MuLe@rnKey23'
+    data = 'Yxg--jjZGgQQiAC-2306bU_c5845o9kVqqOTQ7I5nc3cHYKBvq7eOtYrPCeAJGw3trUNpb1u_cmMQnpFrRfzumreBxSYDDVHCMdZMo7mw9c'
+    b64_decoded = b64decode(data)
+    salt = b64_decoded[:16]
+    encrypted_data = b64_decoded[16:]
+    key = PBKDF2(password, salt, dkLen=32, count=10000)
+    cipher = AES.new(key, AES.MODE_CBC, iv=salt) 
+    original_data = unpad(cipher.decrypt(encrypted_data), AES.block_size)
+    decrypted_text = original_data.decode('utf-8')
+    print(decrypted_text)
+    return decrypted_text
+    
+    
     def create(self, validated_data):
         user_mu_id = validated_data["user"]["mu_id"]
 

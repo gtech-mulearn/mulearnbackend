@@ -25,3 +25,4 @@ pytz==2022.7.1
 openpyxl==3.1.2
 Pillow==9.5.0
 django-debug-toolbar==4.1.0
+pycryptodome==3.18.0
