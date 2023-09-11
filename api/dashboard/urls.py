@@ -16,5 +16,5 @@ urlpatterns = [
     path('karma-voucher/', include('api.dashboard.karma_voucher.urls')),
     path('location/', include('api.dashboard.location.urls')),
     path('organisation/', include('api.dashboard.organisation.urls')),
-    path('dynamic-role/', include('api.dashboard.dynamic_role.urls')),
+    path('dynamic-management/', include('api.dashboard.dynamic_management.urls')),
 ]

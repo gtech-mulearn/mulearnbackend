@@ -11,6 +11,7 @@ from db.organization import (
     State,
     District,
     Zone,
+    Department,
 )
 from db.task import TotalKarma
 from utils.permission import CustomizePermission, JWTUtils
@@ -25,6 +26,7 @@ from .serializers import (
     AffiliationSerializer,
     OrganisationSerializer,
     PostOrganizationSerializer,
+    DepartmentSerializer,
 )
 
 
@@ -534,3 +536,48 @@ class GetInstitutionsNamesAPI(APIView):
             org_type=organisation_type
         ).values_list("title", flat=True)
         return CustomResponse(response=organisations).get_success_response()
+
+
+class DepartmentAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        serializer = DepartmentSerializer(data=request.data, context={"request": request})
+
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message="Department created successfully").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def put(self, request, department_id):
+        try:
+            department = Department.objects.get(id=department_id)
+        except Department.DoesNotExist:
+            return CustomResponse(general_message='Department not found').get_failure_response()
+
+        serializer = DepartmentSerializer(department, data=request.data, context={"request": request})
+
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Department updated successfully').get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        departments = Department.objects.all()
+        serializer = DepartmentSerializer(departments, many=True)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def delete(self, request, department_id):
+        try:
+            department = Department.objects.get(id=department_id)
+        except Department.DoesNotExist:
+            return CustomResponse(general_message='Department not found').get_failure_response()
+
+        department.delete()
+        return CustomResponse(general_message='Department deleted successfully').get_success_response()

@@ -1,5 +1,4 @@
-import uuid
-
+from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.organization import Country, District, State, Zone
@@ -7,14 +6,13 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-
 from .location_serializer import (
     CountrySerializer,
     StateSerializer,
     ZoneSerializer,
     DistrictSerializer,
+CountryRetrivalSerializer
 )
-from django.db.models import Q
 
 
 class CountryDataAPI(APIView):
@@ -32,7 +30,7 @@ class CountryDataAPI(APIView):
                 countries, request, ["name"], {"name": "name"}
             )
 
-            serializer = CountrySerializer(
+            serializer = CountryRetrivalSerializer(
                 paginated_queryset.get("queryset"), many=True
             )
             return CustomResponse().paginated_response(
