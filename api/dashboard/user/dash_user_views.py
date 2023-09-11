@@ -113,12 +113,12 @@ class UserAPI(APIView):
                 "user_lvl_link_user__level__name",
             ],
             {
-                "muid": "muid",
-                "discord_id": "discord_id",
                 "first_name": "first_name",
                 "last_name": "last_name",
                 "karma": "total_karma_user__karma",
                 "created_at": "created_at",
+                "level" : "user_lvl_link_user__level__name",
+                "muid": "mu_id",
             },
         )
         serializer = dash_user_serializer.UserDashboardSerializer(
