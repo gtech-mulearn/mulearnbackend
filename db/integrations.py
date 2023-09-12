@@ -11,6 +11,7 @@ class Integration(models.Model):
     )
     name = models.CharField(max_length=255, null=False)
     token = models.CharField(max_length=400, null=False)
+    auth_token = models.CharField(max_length=255, null=False)
     created_at = models.DateTimeField(null=False)
     updated_at = models.DateTimeField(null=False)
 
@@ -38,7 +39,7 @@ class IntegrationAuthorization(models.Model):
         unique=True,
     )
     integration_value = models.CharField(max_length=255, unique=True, null=False)
-    addition_field =  models.CharField(max_length=255)
+    additional_field =  models.CharField(max_length=255)
     verified = models.BooleanField(default=False, null=False)
     updated_at = models.DateTimeField(null=False)
     created_at = models.DateTimeField(null=False)
