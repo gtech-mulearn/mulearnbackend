@@ -1,5 +1,26 @@
 from enum import Enum
 
+class ManagementType(Enum):
+    CAMPUS = 'Campus'
+    COLLEGE = 'College'
+    DISTRICT = 'District'
+    DYNAMIC_MANAGEMENT = 'Dynamic Management'
+    INTEREST_GROUP = 'Interest Group'
+    KARMA_VOUCHER = 'Karma Voucher'
+    LEARNING_CIRCLE = 'Learning Circle'
+    LOCATION = 'Location'
+    ORGANIZATION = 'Organization'
+    PROFILE = 'Profile'
+    REFERRAL = 'Referral'
+    ROLE = 'Role'
+    TASK = 'Task'
+    USER = 'User'
+    ZONAL = 'Zonal'
+    HACKATHON = 'Hackathon'
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
 
 class RoleType(Enum):
     ADMIN = "Admins"

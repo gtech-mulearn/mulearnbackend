@@ -15,6 +15,8 @@ class UserDashboardSerializer(serializers.Serializer):
     id = serializers.CharField()
     first_name = serializers.CharField()
     last_name = serializers.CharField()
+    muid = serializers.CharField()
+    discord_id = serializers.CharField()
     email = serializers.CharField()
     mobile = serializers.CharField()
     created_at = serializers.DateTimeField()
@@ -26,6 +28,8 @@ class UserDashboardSerializer(serializers.Serializer):
             "id",
             "first_name",
             "last_name",
+            "muid",
+            "discord_id"
             "email",
             "mobile",
             "created_at"
