@@ -118,6 +118,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     is_lead = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
+    ig_code = serializers.CharField(source='ig.code')
 
     def get_is_member(self, obj):
         user = self.context.get('user_id')
@@ -220,6 +221,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "total_karma",
             "is_lead",
             "is_member",
+            "ig_code"
         ]
 
 
