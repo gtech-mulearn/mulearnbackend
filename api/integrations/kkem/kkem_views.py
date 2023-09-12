@@ -19,8 +19,6 @@ from .. import integrations_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 
-
-
 class KKEMBulkKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
     def get(self, request):
@@ -90,7 +88,9 @@ class KKEMIndividualKarmaAPI(APIView):
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
         request.data["verified"] = False
-        serialized_set = KKEMAuthorization(data=request.data, context={"type": "register"})
+        serialized_set = KKEMAuthorization(
+            data=request.data, context={"type": "register"}
+        )
 
         try:
             if not serialized_set.is_valid():
@@ -103,7 +103,7 @@ class KKEMAuthorizationAPI(APIView):
             kkem_link["token"] = integrations_helper.generate_confirmation_token(
                 str(kkem_link["link_id"])
             )
-            
+
             send_template_mail(
                 context=kkem_link,
                 subject="KKEM integration request!",
@@ -175,8 +175,11 @@ class KKEMIntegrationLogin(APIView):
 
 
 class KKEMdetailsFetchAPI(APIView):
-    def get(self, request, jsid):
+    def get(self, request, encrypted_data):
         try:
+            details = kkem_helper.decrypt_kkem_data(encrypted_data)
+            jsid = details["jsid"][0]
+
             token = Integration.objects.get(name=IntegrationType.KKEM.value).token
 
             response = requests.post(
@@ -186,23 +189,30 @@ class KKEMdetailsFetchAPI(APIView):
             )
             response_data = response.json()
 
-            if (
-                "request_status" in response_data
-                and not response_data["request_status"]
-            ):
+            if not response_data["request_status"]:
                 error_message = response_data.get("msg", "Unknown Error")
                 return CustomResponse(
                     general_message=error_message
                 ).get_failure_response()
 
-            elif "response" in response_data and response_data["response"].get(
-                "req_status", False
-            ):
-                result_data = response_data["response"]["data"]
             else:
-                raise ValueError("Something went wrong!")
+                result_data = response_data["response"]["data"]
 
             return CustomResponse(response=result_data).get_success_response()
 
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+
+class KKEMUserStatusAPI(APIView):
+    def get(self, request, encrypted_data):
+        try:
+            details = kkem_helper.decrypt_kkem_data(encrypted_data)
+            if "mu_id" in details:
+                return CustomResponse(
+                    response={"mu_id": details["mu_id"][0]}
+                ).get_success_response()
+            else:
+                return CustomResponse(response={"mu_id": None}).get_failure_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
