@@ -12,7 +12,7 @@ class User(models.Model):
     last_name = models.CharField(max_length=75, blank=True, null=True)
     email = models.CharField(unique=True, max_length=200)
     password = models.CharField(max_length=200, blank=True, null=True)
-    mobile = models.CharField(max_length=15)
+    mobile = models.CharField(unique=True, max_length=15)
     gender = models.CharField(max_length=10, blank=True, null=True)
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
