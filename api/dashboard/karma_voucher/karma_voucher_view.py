@@ -32,7 +32,7 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['karma', 'mail', 'task', 'month', 'week']
+        temp_headers = ['karma', 'mail', 'hashtag', 'month', 'week']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -47,7 +47,7 @@ class ImportVoucherLogAPI(APIView):
         tasks_to_fetch = set()
 
         for row in excel_data[1:]:
-            task_hashtag = row.get('task')
+            task_hashtag = row.get('hashtag')
             mail = row.get('mail')
             
             users_to_fetch.add(mail)
@@ -66,7 +66,7 @@ class ImportVoucherLogAPI(APIView):
 
         count = 1
         for row in excel_data[1:]:
-            task_hashtag = row.get('task')
+            task_hashtag = row.get('hashtag')
             karma = row.get('karma')
             mail = row.get('mail')
             month = row.get('month')
