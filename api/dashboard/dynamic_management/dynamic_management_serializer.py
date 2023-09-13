@@ -21,25 +21,23 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-
+        validated_data['role_id'] = validated_data.pop('role')
         validated_data['id'] = uuid.uuid4()
         validated_data['updated_by_id'] = user_id
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['created_by_id'] = user_id
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-
         return DynamicRole.objects.create(**validated_data)
     
     def validate(self, data):
-        if DynamicRole.objects.filter(type=data['type'], role=data['role']).first():
+        if DynamicRole.objects.filter(type=data['type'], role=data['role']).exists():
             raise serializers.ValidationError("Dynamic Role already exists")
         return data
     
     def validate_role(self, value):
-        role = Role.objects.filter(title=value).first()
-        if role is None:
-            raise serializers.ValidationError("Enter a valid role name")
-        return role
+        if not Role.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Enter a valid role")
+        return value
     
     def validate_type(self, value):
         if value not in [type for type in ManagementType.get_all_values()]:
@@ -68,20 +66,19 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
         fields = ["new_role"]
 
     def update(self, instance, validated_data):
+        new_role = validated_data.get('new_role')
+        if DynamicRole.objects.filter(type=instance.type, role=new_role).exists():
+            raise serializers.ValidationError("Dynamic Role already exists")
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-        new_role = validated_data.get('new_role')
-        if DynamicRole.objects.filter(type=instance.type, role=new_role).first():
-            raise serializers.ValidationError("Dynamic Role already exists")
-        instance.role = new_role if new_role else instance.role
+        instance.role_id = new_role if new_role else instance.role_id
         instance.save()
         return instance 
 
     def validate_new_role(self, value):
-        new_role = Role.objects.filter(title=value).first()
-        if new_role is None:
-            raise serializers.ValidationError("Enter a valid role name")
-        return new_role
+        if not Role.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Enter a valid role")
+        return value
 
     def destroy(self, obj):
         obj.delete()
@@ -100,13 +97,11 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-
         validated_data['id'] = uuid.uuid4()
         validated_data['updated_by_id'] = user_id
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['created_by_id'] = user_id
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-
         return DynamicUser.objects.create(**validated_data)
     
     def validate(self, data):
@@ -117,7 +112,7 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
     def validate_user(self, value):
         user = User.objects.filter(Q(mu_id=value) | Q(email=value)).first()
         if user is None:
-            raise serializers.ValidationError("Enter a valid user email")
+            raise serializers.ValidationError("Enter a valid user")
         return user
     
     def validate_type(self, value):
@@ -149,11 +144,11 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
         fields = ["new_user"]
 
     def update(self, instance, validated_data):
-        instance.updated_by_id = self.context.get('user_id')
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
         new_user = validated_data.get('new_user')
         if DynamicUser.objects.filter(type=instance.type, user=new_user).first():
             raise serializers.ValidationError("Dynamic User already exists")
+        instance.updated_by_id = self.context.get('user_id')
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.user = new_user if new_user else instance.user
         instance.save()
         return instance 
@@ -161,7 +156,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
     def validate_new_user(self, value):
         new_user = User.objects.filter(Q(mu_id=value) | Q(email=value)).first()
         if new_user is None:
-            raise serializers.ValidationError("Enter a valid user email")
+            raise serializers.ValidationError("Enter a valid user")
         return new_user
 
     def destroy(self, obj):
