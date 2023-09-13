@@ -101,6 +101,9 @@ class LearningCircleHomeApi(APIView):
             return CustomResponse(general_message='Learning Circle Not Available').get_failure_response()
 
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        if learning_circle_link.accepted is not None:
+            return CustomResponse(general_message='Already evaluated').get_failure_response()
+
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
                                                     context={'user_id': user_id})
         if serializer.is_valid():
@@ -156,8 +159,9 @@ class LearningCircleHomeApi(APIView):
         usr_circle_link.delete()
 
         if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
-            learning_circle = LearningCircle.objects.filter(id=circle_id).first()
-            if learning_circle:
+            if learning_circle := LearningCircle.objects.filter(
+                    id=circle_id
+            ).first():
                 learning_circle.delete()
                 return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
 
