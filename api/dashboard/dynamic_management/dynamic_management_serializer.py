@@ -5,6 +5,7 @@ from django.db.models import Q
 from db.user import Role, DynamicRole, DynamicUser, User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
+from utils.types import ManagementType
 
 class DynamicRoleCreateSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=True, error_messages={
@@ -39,6 +40,11 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         if role is None:
             raise serializers.ValidationError("Enter a valid role name")
         return role
+    
+    def validate_type(self, value):
+        if value not in [type for type in ManagementType.get_all_values()]:
+            raise serializers.ValidationError("Enter a valid type")
+        return value
     
 class DynamicRoleListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
@@ -113,6 +119,11 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         if user is None:
             raise serializers.ValidationError("Enter a valid user email")
         return user
+    
+    def validate_type(self, value):
+        if value not in [type for type in ManagementType.get_all_values()]:
+            raise serializers.ValidationError("Enter a valid type")
+        return value
     
 class DynamicUserListSerializer(serializers.ModelSerializer):
     users = serializers.SerializerMethodField()
