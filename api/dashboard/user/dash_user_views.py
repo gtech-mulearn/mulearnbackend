@@ -69,11 +69,11 @@ class UserEditAPI(APIView):
             )
             if serializer.is_valid():
                 serializer.save()
-                DiscordWebhooks.general_updates(
-                    WebHookCategory.USER.value,
-                    WebHookActions.UPDATE.value,
-                    user_id,
-                )
+                # DiscordWebhooks.general_updates(
+                #     WebHookCategory.USER.value,
+                #     WebHookActions.UPDATE.value,
+                #     user_id,
+                # )
 
                 return CustomResponse(
                     general_message=serializer.data
@@ -144,7 +144,7 @@ class UserManagementCSV(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = (
-            User.objects.all()
+            User.objects.filter(active=True)
             .values(
                 "id",
                 "first_name",
@@ -173,7 +173,7 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.filter(verified=False)
+        user_queryset = UserRoleLink.objects.filter(verified=False, user__active=True)
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
