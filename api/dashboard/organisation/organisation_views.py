@@ -566,11 +566,19 @@ class DepartmentAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request):
-        departments = Department.objects.all()
-        serializer = DepartmentSerializer(departments, many=True)
+    def get(self, request, dept_id=None):
+        try:
+            if dept_id:
+                departments = Department.objects.filter(id=dept_id)
+            else:
+                departments = Department.objects.all()
+            paginated_queryset = CommonUtils.get_paginated_queryset(departments, request, ["title"], {"title": "title"})
+            serializer = DepartmentSerializer(paginated_queryset.get("queryset"), many=True)
 
-        return CustomResponse(response=serializer.data).get_success_response()
+            return CustomResponse().paginated_response(
+                data=serializer.data, pagination=paginated_queryset.get("pagination"))
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, department_id):
