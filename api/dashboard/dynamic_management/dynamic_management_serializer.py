@@ -44,8 +44,9 @@ class DynamicRoleListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
 
     def get_roles(self, obj):
-        dynamic_roles = DynamicRole.objects.filter(type=obj['type']).values_list('role__title', flat=True)
-        return list(dynamic_roles)
+        dynamic_roles = DynamicRole.objects.filter(type=obj['type']).values_list('id', 'role__title')
+        dynamic_roles_list = [{'id': dynamic_role[0], 'role': dynamic_role[1]} for dynamic_role in dynamic_roles]
+        return dynamic_roles_list
 
     class Meta:
         model = DynamicRole
@@ -158,4 +159,4 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
 class RoleDropDownSerializer(serializers.ModelSerializer):
     class Meta:
         model = Role
-        fields = ["title"]
+        fields = ["id", "title"]
