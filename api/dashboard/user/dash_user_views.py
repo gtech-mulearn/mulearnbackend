@@ -91,8 +91,16 @@ class UserAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = (
-            User.objects.all()
-            .values("id", "first_name", "last_name", "discord_id", "email", "mobile", "created_at")
+            User.objects.filter(active=True)
+            .values(
+                "id",
+                "first_name",
+                "last_name",
+                "discord_id",
+                "email",
+                "mobile",
+                "created_at",
+            )
             .annotate(
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
@@ -117,7 +125,7 @@ class UserAPI(APIView):
                 "last_name": "last_name",
                 "karma": "total_karma_user__karma",
                 "created_at": "created_at",
-                "level" : "user_lvl_link_user__level__name",
+                "level": "user_lvl_link_user__level__name",
                 "muid": "mu_id",
             },
         )
@@ -137,7 +145,15 @@ class UserManagementCSV(APIView):
     def get(self, request):
         user_queryset = (
             User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "created_at", "discord_id")
+            .values(
+                "id",
+                "first_name",
+                "last_name",
+                "email",
+                "mobile",
+                "created_at",
+                "discord_id",
+            )
             .annotate(
                 muid=F("mu_id"),
                 karma=F("total_karma_user__karma"),
@@ -148,7 +164,7 @@ class UserManagementCSV(APIView):
         serializer = dash_user_serializer.UserDashboardSerializer(
             user_queryset, many=True
         )
-        
+
         return CommonUtils.generate_csv(serializer.data, "User")
 
 
