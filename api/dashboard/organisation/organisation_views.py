@@ -91,7 +91,7 @@ class InstitutionsAPI(APIView):
         serializer = OrganisationSerializer(paginated_organizations, many=True)
         return {"data": serializer.data, "pagination": organizations.get("pagination")}
 
-    @role_required([RoleType.ADMIN.value,])
+    @role_required([RoleType.ADMIN.value, ])
     def post(self, request, org_code):
         org_obj = Organization.objects.filter(code=org_code).first()
         if org_obj is None:
@@ -221,10 +221,10 @@ class PostInstitutionAPI(APIView):
         district_id = district.id
 
         if request.data.get("affiliation") and (
-            request.data.get("orgType") == OrganizationType.COLLEGE.value
+                request.data.get("orgType") == OrganizationType.COLLEGE.value
         ):
             if affiliation := OrgAffiliation.objects.filter(
-                title=request.data.get("affiliation")
+                    title=request.data.get("affiliation")
             ).first():
                 affiliation_id = affiliation.id
             else:
@@ -287,7 +287,7 @@ class PostInstitutionAPI(APIView):
 
         if request.data.get("code") and (request.data.get("code") != org_code):
             if org_code_exist := Organization.objects.filter(
-                code=request.data.get("code")
+                    code=request.data.get("code")
             ):
                 return CustomResponse(
                     general_message="Organisation with this code already exist"
@@ -365,8 +365,8 @@ class PostInstitutionAPI(APIView):
             organisation_serializer.save()
 
             if (
-                request.data.get("title") != old_name
-                and old_type == OrganizationType.COMMUNITY.value
+                    request.data.get("title") != old_name
+                    and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -376,9 +376,9 @@ class PostInstitutionAPI(APIView):
                 )
 
             if request.data.get("orgType") and (
-                                request.data.get("orgType") != OrganizationType.COMMUNITY.value
-                                and old_type == OrganizationType.COMMUNITY.value
-                            ):
+                    request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                    and old_type == OrganizationType.COMMUNITY.value
+            ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.DELETE.value,
@@ -386,8 +386,8 @@ class PostInstitutionAPI(APIView):
                 )
 
             if (
-                old_type != OrganizationType.COMMUNITY.value
-                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+                    old_type != OrganizationType.COMMUNITY.value
+                    and request.data.get("orgType") == OrganizationType.COMMUNITY.value
             ):
                 title = request.data.get("title") or old_name
                 DiscordWebhooks.general_updates(
@@ -404,7 +404,7 @@ class PostInstitutionAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, org_code):
         if not (
-            organisation := Organization.objects.filter(code=org_code).first()
+                organisation := Organization.objects.filter(code=org_code).first()
         ):
             return CustomResponse(
                 general_message=f"Org with code '{org_code}', does not exist"
@@ -567,18 +567,15 @@ class DepartmentAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, dept_id=None):
-        try:
-            if dept_id:
-                departments = Department.objects.filter(id=dept_id)
-            else:
-                departments = Department.objects.all()
-            paginated_queryset = CommonUtils.get_paginated_queryset(departments, request, ["title"], {"title": "title"})
-            serializer = DepartmentSerializer(paginated_queryset.get("queryset"), many=True)
+        if dept_id:
+            departments = Department.objects.filter(id=dept_id)
+        else:
+            departments = Department.objects.all()
+        paginated_queryset = CommonUtils.get_paginated_queryset(departments, request, ["title"], {"title": "title"})
+        serializer = DepartmentSerializer(paginated_queryset.get("queryset"), many=True)
 
-            return CustomResponse().paginated_response(
-                data=serializer.data, pagination=paginated_queryset.get("pagination"))
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        return CustomResponse().paginated_response(data=serializer.data,
+                                                   pagination=paginated_queryset.get("pagination"))
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, department_id):
