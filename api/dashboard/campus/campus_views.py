@@ -1,7 +1,6 @@
 from django.db.models import Count, Q, F
 from rest_framework.views import APIView
 
-from db.organization import UserOrganizationLink
 from db.task import Level, TotalKarma
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -14,21 +13,41 @@ from .dash_campus_helper import get_user_college_link
 
 
 class CampusDetailsAPI(APIView):
+    """
+    Campus Details API
+
+    This API view allows authorized users with specific roles (Campus Lead or Enabler)
+    to access details about their campus
+
+    Attributes:
+        authentication_classes (list): A list containing the CustomizePermission class for authentication.
+
+    Method:
+        get(request): Handles GET requests to retrieve campus details for the authenticated user.
+    """
     authentication_classes = [CustomizePermission]
 
+    # Use the role_required decorator to specify the allowed roles for this view
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
+
+        # Fetch the user's ID from the request using JWTUtils
         user_id = JWTUtils.fetch_user_id(request)
 
+        # Get the user's organization link using the user ID
         user_org_link = get_user_college_link(user_id)
 
+        # Check if the user's organization link is None
         if user_org_link.org is None:
+            # If it is None, return a failure response with a specific message
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
 
+        # Serialize the user's organization link using the CampusDetailsSerializer
         serializer = serializers.CampusDetailsSerializer(user_org_link, many=False)
 
+        # Return a success response with the serialized data
         return CustomResponse(response=serializer.data).get_success_response()
 
 
@@ -111,7 +130,7 @@ class CampusStudentDetailsAPI(APIView):
                 "muid": "mu_id",
                 "karma": "total_karma_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
-                "joined_at" : "created_at"
+                "joined_at": "created_at"
             },
         )
 
