@@ -319,22 +319,21 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                     organizations.exists()
                     and organizations.first().org_type != OrganizationType.COLLEGE.value
                 ):
-                    validated_data.pop("department", None), validated_data.pop(
-                        "graduation_year", None
-                    )
+                    validated_data.pop("department", None)
+                    validated_data.pop("graduation_year", None)
 
                 UserOrganizationLink.objects.bulk_create(
                     [
                         UserOrganizationLink(
                             user=instance,
-                            org_id=org_id.pk,
+                            org=org,
                             created_by=admin,
                             created_at=current_time,
                             verified=True,
                             department_id=validated_data.pop("department", None),
                             graduation_year=validated_data.pop("graduation_year", None),
                         )
-                        for org_id in organizations
+                        for org in organizations
                     ]
                 )
 
