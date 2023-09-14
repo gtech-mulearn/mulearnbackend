@@ -189,7 +189,7 @@ class KKEMdetailsFetchAPI(APIView):
             )
             response_data = response.json()
 
-            if not response_data["request_status"]:
+            if ("response" in response_data and not response_data["response"]["request_status"]) or (not response_data["request_status"]):
                 error_message = response_data.get("msg", "Unknown Error")
                 return CustomResponse(
                     general_message=error_message
