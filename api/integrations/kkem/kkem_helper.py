@@ -61,5 +61,4 @@ def decrypt_kkem_data(ciphertext):
 
         return parse_qs(decrypted.decode("utf-8"))
     except Exception as e:
-        raise e
         raise ValueError("Invalid or missing Token")
