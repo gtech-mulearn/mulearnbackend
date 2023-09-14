@@ -105,7 +105,7 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         return DynamicUser.objects.create(**validated_data)
     
     def validate(self, data):
-        if DynamicUser.objects.filter(type=data['type'], user=data['user']).first():
+        if DynamicUser.objects.filter(type=data['type'], user=data['user']).exists():
             raise serializers.ValidationError("Dynamic User already exists")
         return data
     
@@ -145,7 +145,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         new_user = validated_data.get('new_user')
-        if DynamicUser.objects.filter(type=instance.type, user=new_user).first():
+        if DynamicUser.objects.filter(type=instance.type, user=new_user).exists():
             raise serializers.ValidationError("Dynamic User already exists")
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
