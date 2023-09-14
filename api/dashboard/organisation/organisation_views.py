@@ -1,6 +1,6 @@
 import uuid
 
-from django.db.models import Sum, Q, F, Window
+from django.db.models import Sum, Q, F, Window, Case, When, IntegerField
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
 
@@ -142,9 +142,7 @@ class InstitutionsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
 
-        organization = Organization.objects.filter(
-            code=org_code
-        ).values(
+        organizations = Organization.objects.all().values(
             "id",
             "title",
             "code",
@@ -155,9 +153,21 @@ class InstitutionsAPI(APIView):
             state_name=F("district__zone__state__name"),
             country_name=F("district__zone__state__country__name")
         ).annotate(
-            score=Sum(
+            karma=Sum(
                 'user_organization_link_org__user__total_karma_user__karma'
-            ))
+            )).order_by(
+            '-karma'
+        ).annotate(
+            rank=Case(
+                When(
+                    Q(karma__isnull=True) | Q(karma=0),
+                    then=None),
+                default=Window(
+                    expression=Rank(),
+                    order_by=F('karma').desc()
+                )))
+
+        organization = organizations.filter(code=org_code)
 
         return CustomResponse(response=organization).get_success_response()
 
