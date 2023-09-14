@@ -14,8 +14,8 @@ urlpatterns = [
     path('institutes/org/affiliation/', organisation_views.AffiliationAPI.as_view()),
     path('institutes/names/<str:organisation_type>/', organisation_views.GetInstitutionsNamesAPI.as_view()),
 
-    path('departments/', organisation_views.DepartmentAPI.as_view()),  # Create Department
-    path('departments/<str:dept_id>/', organisation_views.DepartmentAPI.as_view()),  # Get Department by ID
-    path('departments/edit/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),  # Edit Departments
-    path('departments/delete/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),  # Delete Department
+    path('departments/', organisation_views.DepartmentAPI.as_view(), name="Create Department"),
+    path('departments/<str:dept_id>/', organisation_views.DepartmentAPI.as_view(), name="Get Department by ID"),
+    path('departments/edit/<str:department_id>/', organisation_views.DepartmentAPI.as_view(), name="Edit Departments"),
+    path('departments/delete/<str:department_id>/', organisation_views.DepartmentAPI.as_view(), name="Delete Department"),
 ]
