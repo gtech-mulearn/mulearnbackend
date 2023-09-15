@@ -1,13 +1,13 @@
 from datetime import datetime
 import json
-
+from django.db.models import Q, Subquery, OuterRef, F
 
 from django.db.models import Prefetch
 import requests
 from rest_framework.views import APIView
 
 from db.integrations import Integration, IntegrationAuthorization
-from db.task import UserIgLink
+from db.task import KarmaActivityLog, UserIgLink
 from db.user import User
 from utils.response import CustomResponse
 from utils.utils import DateTimeUtils, send_template_mail
@@ -22,48 +22,41 @@ from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 class KKEMBulkKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
     def get(self, request):
+        base_queryset = (
+            User.objects.filter(
+                integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                integration_authorization_user__verified=True,
+                karma_activity_log_user__appraiser_approved=True,
+            )
+            .annotate(jsid=F("integration_authorization_user__integration_value"))
+            .select_related("total_karma_user")
+            .prefetch_related(
+                Prefetch(
+                    "user_ig_link_user",
+                    queryset=UserIgLink.objects.select_related("ig"),
+                ),
+                Prefetch(
+                    "karma_activity_log_user",
+                    queryset=KarmaActivityLog.objects.all(),
+                ),
+            )
+            .distinct()
+        )
+
         if from_datetime_str := request.GET.get("from_datetime"):
             try:
                 from_datetime = datetime.strptime(
                     from_datetime_str, "%Y-%m-%dT%H:%M:%S"
+                )
+                base_queryset = base_queryset.filter(
+                    karma_activity_log_user__updated_at__gte=from_datetime
                 )
             except ValueError:
                 return CustomResponse(
                     general_message="Invalid datetime format",
                 ).get_failure_response()
 
-            queryset = (
-                User.objects.filter(
-                    integration_authorization_user__integration__name=IntegrationType.KKEM.value,
-                    integration_authorization_user__verified=True,
-                    karma_activity_log_user__appraiser_approved=True,
-                    karma_activity_log_user__updated_at__gte=from_datetime,
-                )
-                .prefetch_related(
-                    Prefetch(
-                        "user_ig_link_created_by",
-                        queryset=UserIgLink.objects.select_related("ig"),
-                    )
-                )
-                .distinct()
-            )
-        else:
-            queryset = (
-                User.objects.filter(
-                    integration_authorization_user__integration__name=IntegrationType.KKEM.value,
-                    integration_authorization_user__verified=True,
-                    karma_activity_log_user__appraiser_approved=True,
-                )
-                .prefetch_related(
-                    Prefetch(
-                        "user_ig_link_created_by",
-                        queryset=UserIgLink.objects.select_related("ig"),
-                    )
-                )
-                .distinct()
-            )
-
-        serialized_users = KKEMUserSerializer(queryset, many=True)
+        serialized_users = KKEMUserSerializer(base_queryset, many=True)
 
         return CustomResponse(response=serialized_users.data).get_success_response()
 
@@ -71,17 +64,22 @@ class KKEMBulkKarmaAPI(APIView):
 class KKEMIndividualKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
     def get(self, request, mu_id):
-        kkem_user = IntegrationAuthorization.objects.filter(
-            user__mu_id=mu_id,
-            verified=True,
-            integration__name=IntegrationType.KKEM.value,
-        ).first()
+        kkem_user = (
+            User.objects.filter(
+                integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                integration_authorization_user__verified=True,
+                mu_id=mu_id,
+            )
+            .annotate(jsid=F("integration_authorization_user__integration_value"))
+            .get()
+        )
+
         if not kkem_user:
             return CustomResponse(
                 general_message="User not found"
             ).get_failure_response()
 
-        serializer = KKEMUserSerializer(kkem_user.user)
+        serializer = KKEMUserSerializer(kkem_user)
         return CustomResponse(response=serializer.data).get_success_response()
 
 

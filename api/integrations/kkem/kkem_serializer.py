@@ -38,27 +38,25 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         return karma
 
     def get_interest_groups(self, obj):
-        interest_groups = []
-        for ig_link in UserIgLink.objects.filter(user=obj):
-            total_ig_karma = (
-                0
-                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
-                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj)
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-            )
-            interest_groups.append({"name": ig_link.ig.name, "karma": total_ig_karma})
-        return interest_groups
+        user_ig_links = obj.user_ig_link_user.all()
+
+        # Extract ig_ids for filtering KarmaActivityLog in one go
+        ig_ids = [ig_link.ig.id for ig_link in user_ig_links]
+
+        # Aggregate karma for each interest group in one query
+        aggregated_karma = (
+            obj.karma_activity_log_user.filter(task__ig__id__in=ig_ids)
+            .values("task__ig__id", "task__ig__name")  # Group by interest group
+            .annotate(total_karma=Sum("karma"))
+        )
+
+        return [
+            {"name": karma["task__ig__name"], "karma": karma["total_karma"] or 0}
+            for karma in aggregated_karma
+        ]
 
     def get_jsid(self, obj):
-        return int(
-            IntegrationAuthorization.objects.get(
-                user=obj, verified=True, integration__name=IntegrationType.KKEM.value
-            ).integration_value
-        )
+        return int(obj.jsid) if obj.jsid else None
 
 
 class KKEMAuthorization(serializers.Serializer):
@@ -129,7 +127,6 @@ class KKEMAuthorization(serializers.Serializer):
             kkem_link = self.create_kkem_link(
                 user, integration, dwms_id, jsid, validated_data["verified"]
             )
-            
         if validated_data["verified"]:
             kkem_helper.send_data_to_kkem(kkem_link)
 
