@@ -88,17 +88,18 @@ class KKEMIndividualKarmaAPI(APIView):
 class KKEMAuthorizationAPI(APIView):
     def post(self, request):
         request.data["verified"] = False
-        serialized_set = KKEMAuthorization(
+        kkem_auth_serializer = KKEMAuthorization(
             data=request.data, context={"type": "register"}
         )
 
         try:
-            if not serialized_set.is_valid():
+            if not kkem_auth_serializer.is_valid():
                 return CustomResponse(
-                    general_message=serialized_set.errors
+                    general_message=kkem_auth_serializer.errors
                 ).get_failure_response()
 
-            kkem_link = serialized_set.save()
+            kkem_auth_serializer.save()
+            kkem_link = kkem_auth_serializer.data
 
             kkem_link["token"] = integrations_helper.generate_confirmation_token(
                 str(kkem_link["link_id"])
@@ -111,7 +112,7 @@ class KKEMAuthorizationAPI(APIView):
             )
 
             return CustomResponse(
-                general_message="Authorization created successfully. Email sent."
+                general_message="We've set up your authorization! Please check your email for further instructions."
             ).get_success_response()
 
         except Exception as e:
@@ -131,7 +132,8 @@ class KKEMAuthorizationAPI(APIView):
 
             authorization.save()
             return CustomResponse(
-                general_message="User authenticated successfully", response=response
+                general_message="Successfully connected your KKEM & μLearn accounts!",
+                response=response,
             ).get_success_response()
 
         except IntegrationAuthorization.DoesNotExist:
@@ -148,11 +150,16 @@ class KKEMIntegrationLogin(APIView):
         try:
             email_or_muid = request.data.get("emailOrMuid")
             password = request.data.get("password")
+
             response = integrations_helper.get_access_token(
                 email_or_muid=email_or_muid, password=password
             )
 
+            general_message = "You have been logged in successfully"
+
             if request.data.get("param", None):
+                general_message = "Successfully connected your KKEM & μLearn accounts!"
+
                 request.data["verified"] = True
                 serialized_set = KKEMAuthorization(
                     data=request.data, context={"type": "login"}
@@ -166,7 +173,9 @@ class KKEMIntegrationLogin(APIView):
                 serialized_set.save()
                 response["data"] = serialized_set.data
 
-            return CustomResponse(response=response).get_success_response()
+            return CustomResponse(
+                general_message=general_message, response=response
+            ).get_success_response()
 
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
