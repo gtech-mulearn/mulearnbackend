@@ -166,12 +166,6 @@ class ImportTaskListCSV(APIView):
             ig_id = igs_dict.get(ig) if ig is not None else None
             org_id = orgs_dict.get(org) if org is not None else None
 
-            # channel_obj = Channel.objects.filter(name=channel).first()
-            # task_type_obj = TaskType.objects.filter(title=task_type).first()
-            # level_obj = Level.objects.filter(name=level).first() if level is not None else None
-            # ig_obj = InterestGroup.objects.filter(name=ig).first() if ig is not None else None
-            # org_obj = Organization.objects.filter(code=org).first() if org is not None else None
-
             if TaskList.objects.filter(hashtag=hashtag).exists():
                 row['error'] = f"Hashtag already exists: {hashtag}"
                 error_rows.append(row)
