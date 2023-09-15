@@ -3,7 +3,6 @@ from rest_framework.views import APIView
 
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink
-from db.organization import UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
@@ -105,9 +104,8 @@ class LearningCircleHomeApi(APIView):
         if learning_circle_link.accepted is not None:
             return CustomResponse(general_message='Already evaluated').get_failure_response()
 
-        serializer = LearningCircleUpd
-        ateSerializer(learning_circle_link, data=request.data,
-                      context={'user_id': user_id})
+        serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
+                                                    context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
             is_accepted = request.data.get('is_accepted')
