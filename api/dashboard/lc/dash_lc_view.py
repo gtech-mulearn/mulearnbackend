@@ -17,14 +17,15 @@ domain = config("FR_DOMAIN_NAME")
 
 
 class LearningCircleAPI(APIView):
-    def get(self, request):  # lists the learning circle in the user's college
+    def get(self, request, circle_code):  # lists the learning circle in the user's college
         user_id = JWTUtils.fetch_user_id(request)
-        org_id = UserOrganizationLink.objects.filter(user_id=user_id,
-                                                     org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
-                                                                                                               flat=True).first()
-        learning_queryset = LearningCircle.objects.filter(org=org_id).exclude(
+        learning_queryset = LearningCircle.objects.all.exclude(
             usercirclelink__accepted=1, usercirclelink__user_id=user_id
         )
+        if circle_code:
+            if not LearningCircle.objects.filter(code=circle_code).exists():
+                return CustomResponse(general_message='invalid circle code').get_failure_response()
+            learning_queryset = learning_queryset.filter(code=circle_code)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
@@ -104,8 +105,9 @@ class LearningCircleHomeApi(APIView):
         if learning_circle_link.accepted is not None:
             return CustomResponse(general_message='Already evaluated').get_failure_response()
 
-        serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
-                                                    context={'user_id': user_id})
+        serializer = LearningCircleUpd
+        ateSerializer(learning_circle_link, data=request.data,
+                      context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
             is_accepted = request.data.get('is_accepted')
