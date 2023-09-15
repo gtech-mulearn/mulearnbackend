@@ -1,13 +1,11 @@
-import json
 from uuid import uuid4
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
-import requests
 from rest_framework import serializers
+
 from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
 from db.integrations import Integration, IntegrationAuthorization
-
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
@@ -79,9 +77,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=False, allow_null=True)
     organizations = serializers.ListField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
-    year_of_graduation = serializers.CharField(
-        required=False, allow_null=True, max_length=4
-    )
+    year_of_graduation = serializers.CharField(required=False, allow_null=True, max_length=4)
     area_of_interests = serializers.ListField(required=True, max_length=3)
     first_name = serializers.CharField(required=True, max_length=75)
     last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
@@ -116,13 +112,13 @@ class RegisterSerializer(serializers.ModelSerializer):
         password = validated_data.pop("password")
         hashed_password = make_password(password)
         referral_id = validated_data.pop("referral_id", None)
-        
+
         jsid = None
         if param := validated_data.pop("param", None):
             details = decrypt_kkem_data(param)
             jsid = details["jsid"][0]
             dwms_id = details["dwms_id"][0]
-            
+
             if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
                 raise ValueError(
                     "This KKEM account is already connected to another user"
@@ -251,7 +247,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                     created_by=user,
                     user=referral_provider,
                     created_at=DateTimeUtils.get_current_utc_time(),
-                    appraiser_approved=True,
+                    appraiser_approved=False,
                     peer_approved=True,
                     appraiser_approved_by=user,
                     peer_approved_by=user,
@@ -269,7 +265,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 referrer_karma.save()
 
             if jsid:
-                kkem_link = IntegrationAuthorization.objects.create( 
+                kkem_link = IntegrationAuthorization.objects.create(
                     id=uuid4(),
                     user=user,
                     integration=integration,
@@ -283,7 +279,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 send_data_to_kkem(kkem_link)
 
         return user, password
-    
+
     class Meta:
         model = User
         fields = [

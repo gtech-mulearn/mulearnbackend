@@ -1,4 +1,3 @@
-import decouple
 from rest_framework.views import APIView
 
 from db.user import UserReferralLink, User
@@ -15,7 +14,7 @@ class Referral(APIView):
         try:
             receiver_email = request.data.get("email")
             if (not receiver_email) or (
-                User.objects.filter(email=receiver_email).exists()
+                    User.objects.filter(email=receiver_email).exists()
             ):
                 return CustomResponse(
                     general_message=(
@@ -57,7 +56,6 @@ class ReferralListAPI(APIView):
                 referral_id=user_id
             ).all()
             serializer = ReferralListSerializer(user_referral_link, many=True)
-            serializer.data
             return CustomResponse(response=serializer.data).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
