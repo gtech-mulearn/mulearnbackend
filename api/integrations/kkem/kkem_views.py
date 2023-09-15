@@ -188,6 +188,9 @@ class KKEMdetailsFetchAPI(APIView):
                 headers={"Authorization": f"Bearer {token}"},
             )
             response_data = response.json()
+            
+            if "response" in response_data: 
+                response_data = response_data["response"]
 
             if not response_data["request_status"]:
                 error_message = response_data.get("msg", "Unknown Error")
@@ -196,7 +199,7 @@ class KKEMdetailsFetchAPI(APIView):
                 ).get_failure_response()
 
             else:
-                result_data = response_data["response"]["data"]
+                result_data = response_data["data"]
 
             return CustomResponse(response=result_data).get_success_response()
 

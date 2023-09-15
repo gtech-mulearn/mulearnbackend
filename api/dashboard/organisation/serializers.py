@@ -94,3 +94,24 @@ class DepartmentSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
+
+class InstitutionSerializer(serializers.ModelSerializer):
+    affiliation = serializers.ReadOnlyField(source="affiliation.title")
+    district = serializers.ReadOnlyField(source="district.name")
+    zone = serializers.ReadOnlyField(source="district.zone.name")
+    state = serializers.ReadOnlyField(source="district.zone.state.name")
+    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+
+    class Meta:
+        model = Organization
+        fields = ["id",
+                  "title",
+                  "code",
+                  "org_type",
+                  "affiliation",
+                  "district",
+                  "zone",
+                  "state",
+                  "country"
+                  ]
