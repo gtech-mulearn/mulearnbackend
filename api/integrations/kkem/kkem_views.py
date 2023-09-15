@@ -146,15 +146,13 @@ class KKEMAuthorizationAPI(APIView):
 class KKEMIntegrationLogin(APIView):
     def post(self, request):
         try:
-            email_or_muid = request.data.get(
-                "emailOrMuid", request.data.get("mu_id", None)
-            )
+            email_or_muid = request.data.get("emailOrMuid")
             password = request.data.get("password")
             response = integrations_helper.get_access_token(
                 email_or_muid=email_or_muid, password=password
             )
 
-            if request.data.get("jsid", None):
+            if request.data.get("param", None):
                 request.data["verified"] = True
                 serialized_set = KKEMAuthorization(
                     data=request.data, context={"type": "login"}
@@ -188,8 +186,8 @@ class KKEMdetailsFetchAPI(APIView):
                 headers={"Authorization": f"Bearer {token}"},
             )
             response_data = response.json()
-            
-            if "response" in response_data: 
+
+            if "response" in response_data:
                 response_data = response_data["response"]
 
             if not response_data["request_status"]:
