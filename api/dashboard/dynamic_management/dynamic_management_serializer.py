@@ -125,9 +125,12 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
 
     def get_users(self, obj):
         dynamic_users = DynamicUser.objects.filter(type=obj['type'])
-        user_data = [{'name': f"{user.user.first_name} {user.user.last_name if user.user.last_name else ''}",
-                    'muid': user.user.mu_id,  # Replace 'muid' with the actual field name in your model
-                    'email': user.user.email} for user in dynamic_users]
+        user_data = [{
+            'dynamic_user_id': dynamic_user.id,
+            'user_id': dynamic_user.user.id,
+            'name': f"{dynamic_user.user.first_name} {dynamic_user.user.last_name if dynamic_user.user.last_name else ''}",
+            'muid': dynamic_user.user.mu_id,
+            'email': dynamic_user.user.email} for dynamic_user in dynamic_users]
         return user_data
 
     class Meta:
