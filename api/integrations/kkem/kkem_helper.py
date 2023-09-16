@@ -10,6 +10,7 @@ from urllib.parse import parse_qs
 from db.integrations import Integration
 
 from utils.types import IntegrationType
+from utils.utils import send_template_mail
 
 
 def send_data_to_kkem(kkem_link):
@@ -30,6 +31,7 @@ def send_data_to_kkem(kkem_link):
     if not response_data["request_status"]:
         raise ValueError("Invalid jsid")
 
+    send_connection_successful_email(kkem_link.user)
     return response.json()
 
 
@@ -49,7 +51,11 @@ def decrypt_kkem_data(ciphertext):
         encrypted = salt_and_encrypted[SALT_SIZE:]
 
         secret = PBKDF2(
-            secret_key, salt, dkLen=KEY_SIZE // 8, count=ITERATIONS, hmac_hash_module=SHA256
+            secret_key,
+            salt,
+            dkLen=KEY_SIZE // 8,
+            count=ITERATIONS,
+            hmac_hash_module=SHA256,
         )
 
         cipher = AES.new(secret, AES.MODE_ECB)
@@ -62,3 +68,11 @@ def decrypt_kkem_data(ciphertext):
         return parse_qs(decrypted.decode("utf-8"))
     except Exception as e:
         raise ValueError("Invalid or missing Token")
+
+
+def send_connection_successful_email(user):
+    send_template_mail(
+        context=user,
+        subject="Integration Successfully Completed!",
+        address=["KKEM", "integration_successful.html"],
+    )

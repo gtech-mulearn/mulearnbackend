@@ -69,11 +69,11 @@ class UserEditAPI(APIView):
             )
             if serializer.is_valid():
                 serializer.save()
-                # DiscordWebhooks.general_updates(
-                #     WebHookCategory.USER.value,
-                #     WebHookActions.UPDATE.value,
-                #     user_id,
-                # )
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER.value,
+                    WebHookActions.UPDATE.value,
+                    user_id,
+                )
 
                 return CustomResponse(
                     general_message=serializer.data
