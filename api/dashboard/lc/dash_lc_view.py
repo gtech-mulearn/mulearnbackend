@@ -1,6 +1,6 @@
 from decouple import config
 from rest_framework.views import APIView
-
+from django.db.models import Q
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink
 from db.user import User
@@ -15,19 +15,31 @@ from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSe
 domain = config("FR_DOMAIN_NAME")
 
 
-class LearningCircleAPI(APIView):
-    def get(self, request):  # lists the learning circle in the user's college
+class TotalLearningCircleListApi(APIView):
+    def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
-        learning_queryset = LearningCircle.objects.all.exclude(
-            usercirclelink__accepted=1, usercirclelink__user_id=user_id
-        )
-        # if circle_code:
-        #     if not LearningCircle.objects.filter(code=circle_code).exists():
-        #         return CustomResponse(general_message='invalid circle code').get_failure_response()
-        #     learning_queryset = learning_queryset.filter(code=circle_code)
+        filters = Q()
+
+        filters &= ~Q(usercirclelink__accepted=1, usercirclelink__user_id=user_id)
+        if district_id := request.data.get('district_id'):
+            filters &= Q(org__district_id=district_id)
+        if org_id := request.data.get('org_id'):
+            filters &= Q(org_id=org_id)
+        if interest_group_id := request.data.get('ig_id'):
+            filters &= Q(ig_id=interest_group_id)
+
+        if circle_code:
+            if not LearningCircle.objects.filter(circle_code=circle_code).exists():
+                return CustomResponse(general_message='invalid circle code').get_failure_response()
+            filters &= Q(circle_code=circle_code)
+
+        learning_queryset = LearningCircle.objects.filter(filters)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
+
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
+
+class LearningCircleCreateApi(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = LearningCircleCreateSerializer(data=request.data, context={'user_id': user_id})
@@ -58,7 +70,7 @@ class LearningCircleJoinApi(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
-class LearningCircleListApi(APIView):
+class UserLearningCircleListApi(APIView):
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
         learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id, usercirclelink__accepted=1)
