@@ -67,15 +67,18 @@ class RegisterDataAPI(APIView):
                 "refreshToken": refresh_token,
             }
 
+
+            response_data = serializers.UserDetailSerializer(
+                user_obj, many=False
+            ).data
+            
             send_template_mail(
-                context=user_obj,
+                context=response_data,
                 subject="YOUR TICKET TO µFAM IS HERE!",
                 address=["user_registration.html"],
             )
-
-            response["data"] = serializers.UserDetailSerializer(
-                user_obj, many=False
-            ).data
+            
+            response["data"] = response_data
 
             return CustomResponse(response=response).get_success_response()
         except Exception as e:

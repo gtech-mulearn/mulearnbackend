@@ -64,20 +64,38 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(required=True)
-    last_name = serializers.CharField(required=True)
-    mu_id = serializers.CharField(required=True)
+    role = serializers.SerializerMethodField()
+    fullname = serializers.SerializerMethodField()
+
+    def get_fullname(self, obj):
+        return obj.fullname
+
+    def get_role(self, obj):
+        role = obj.user_role_link_user.filter(
+            role__title__in=[RoleType.MENTOR.value, RoleType.ENABLER.value]
+        ).first().role
+        return role.title if role else None
 
     class Meta:
         model = User
-        fields = ["id", "mu_id", "first_name", "last_name", "email"]
+        fields = [
+            "id",
+            "mu_id",
+            "first_name",
+            "last_name",
+            "email",
+            "role",
+            "fullname",
+        ]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
     role = serializers.CharField(required=False, allow_null=True)
     organizations = serializers.ListField(required=True, allow_null=True)
     dept = serializers.CharField(required=False, allow_null=True)
-    year_of_graduation = serializers.CharField(required=False, allow_null=True, max_length=4)
+    year_of_graduation = serializers.CharField(
+        required=False, allow_null=True, max_length=4
+    )
     area_of_interests = serializers.ListField(required=True, max_length=3)
     first_name = serializers.CharField(required=True, max_length=75)
     last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
