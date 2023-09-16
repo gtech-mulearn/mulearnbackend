@@ -1,6 +1,6 @@
 from decouple import config
 from rest_framework.views import APIView
-
+from django.db.models import Q
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink
 from db.user import User
@@ -16,16 +16,26 @@ domain = config("FR_DOMAIN_NAME")
 
 
 class TotalLearningCircleListApi(APIView):
-    def get(self, request, circle_code=None):
+    def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
-        learning_queryset = LearningCircle.objects.all().exclude(
-            usercirclelink__accepted=1, usercirclelink__user_id=user_id
-        )
+        filters = Q()
+
+        filters &= ~Q(usercirclelink__accepted=1, usercirclelink__user_id=user_id)
+        if district_id := request.data.get('district_id'):
+            filters &= Q(org__district_id=district_id)
+        if org_id := request.data.get('org_id'):
+            filters &= Q(org_id=org_id)
+        if interest_group_id := request.data.get('ig_id'):
+            filters &= Q(interest_group_id=interest_group_id)
+
         if circle_code:
             if not LearningCircle.objects.filter(circle_code=circle_code).exists():
                 return CustomResponse(general_message='invalid circle code').get_failure_response()
-            learning_queryset = learning_queryset.filter(circle_code=circle_code)
+            filters &= Q(circle_code=circle_code)
+
+        learning_queryset = LearningCircle.objects.filter(filters)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
+
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
 
