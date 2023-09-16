@@ -26,7 +26,7 @@ def get_authorization_id(token: str) -> str | None:
     exp_timestamp = payload.get("exp", 0)
 
     if exp_timestamp and datetime.now(pytz.utc) < datetime.fromtimestamp(
-            exp_timestamp, tz=pytz.utc
+        exp_timestamp, tz=pytz.utc
     ):
         return authorization_id
     else:
@@ -73,7 +73,7 @@ def token_required(integration_name: str):
                 token = auth_header.split(" ")[1]
 
                 if not Integration.objects.filter(
-                        token=token, name=integration_name
+                    token=token, name=integration_name
                 ).first():
                     raise ValueError("Invalid Authorization header")
                 else:
@@ -88,7 +88,7 @@ def token_required(integration_name: str):
 
 
 def get_access_token(
-        email_or_muid: str = None, password: str = None, token: str = None
+    email_or_muid: str = None, password: str = None, token: str = None
 ) -> dict | None:
     """
     The `get_access_token` function is used to authenticate a user and retrieve an access token and
@@ -102,21 +102,27 @@ def get_access_token(
     :return: a dictionary with two keys: "accessToken" and "refreshToken".
     """
 
-    auth_domain = decouple.config("AUTH_DOMAIN")
+    AUTH_DOMAIN = f"{decouple.config('AUTH_DOMAIN')}/api/v1/auth/"
 
     if password or email_or_muid:
         response = requests.post(
-            f"{auth_domain}/api/v1/auth/user-authentication/",
+            f"{AUTH_DOMAIN}user-authentication/",
             data={"emailOrMuid": email_or_muid, "password": password},
-        )
+        ).json()
+
+        if response.get("statusCode") != 200:
+            raise ValueError(
+                "Oops! The username or password didn't match our records. Please double-check and try again."
+            )
     else:
         response = requests.post(
-            f"{auth_domain}/api/v1/auth/token-verification/{token}/",
-        )
+            f"{AUTH_DOMAIN}token-verification/{token}/",
+        ).json()
 
-    response = response.json()
-    if response.get("statusCode") != 200:
-        raise ValueError(response.get("message").get("general")[0])
+        if response.get("statusCode") != 200:
+            raise ValueError(
+                "Oops! We couldn't find that account. Please double-check your details and try again."
+            )
 
     res_data = response.get("response")
     access_token = res_data.get("accessToken")
@@ -126,3 +132,15 @@ def get_access_token(
         "accessToken": access_token,
         "refreshToken": refresh_token,
     }
+
+
+def handle_response(response: dict) -> None:
+    if response.get("statusCode") != 200:
+        if "emailOrMuid" in response:
+            raise ValueError(
+                "Oops! The username or password didn't match our records. Please double-check and try again."
+            )
+        else:
+            raise ValueError(
+                "Oops! We couldn't find that account. Please double-check your details and try again."
+            )
