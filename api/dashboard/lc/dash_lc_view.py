@@ -26,7 +26,7 @@ class TotalLearningCircleListApi(APIView):
         if org_id := request.data.get('org_id'):
             filters &= Q(org_id=org_id)
         if interest_group_id := request.data.get('ig_id'):
-            filters &= Q(interest_group_id=interest_group_id)
+            filters &= Q(ig_id=interest_group_id)
 
         if circle_code:
             if not LearningCircle.objects.filter(circle_code=circle_code).exists():
