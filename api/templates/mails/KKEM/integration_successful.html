@@ -1,0 +1,30 @@
+{% extends "mails/KKEM/base_kkem.html" %} {% block content %}
+<div style="background: transparent; width: 100%; height: auto">
+  <center>
+    <h1
+      style="color: black; font-weight: 600; font-size: 30px; line-height: 1.1"
+    >
+    INTEGRATION SUCCESSFULLY COMPLETED!
+    </h1>
+    <p>
+      Hey {{ user.fullname }}, <br />
+      We're delighted to let you know that your μID has been successfully
+      integrated with your DWMS ID. Now, you can view your karma points both
+      overall and by interest group directly on your DWMS portal too.
+    </p>
+    <div>
+      <a
+        href="https://mulearn.org/"
+        style="
+          text-decoration: none;
+          color: rgb(120, 84, 241);
+          line-height: 1.2;
+          font-size: 14px;
+        "
+      >
+        {{ user.mu_id }}
+      </a>
+    </div>
+  </center>
+</div>
+{% endblock %}
