@@ -1,7 +1,7 @@
 from django.db.models import Count, Q, F
 from rest_framework.views import APIView
 
-from db.task import Level, TotalKarma
+from db.task import Level, Wallet
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -91,7 +91,7 @@ class CampusStudentDetailsAPI(APIView):
             ).get_failure_response()
 
         rank = (
-            TotalKarma.objects.filter(
+            Wallet.objects.filter(
                 user__user_organization_link_user__org=user_org_link.org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
@@ -114,7 +114,7 @@ class CampusStudentDetailsAPI(APIView):
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
-                karma=F("total_karma_user__karma"),
+                karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
             )
@@ -128,7 +128,7 @@ class CampusStudentDetailsAPI(APIView):
                 "first_name": "first_name",
                 "last_name": "last_name",
                 "muid": "mu_id",
-                "karma": "total_karma_user__karma",
+                "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
                 "joined_at": "created_at"
             },
@@ -160,7 +160,7 @@ class CampusStudentDetailsCSVAPI(APIView):
             ).get_failure_response()
 
         rank = (
-            TotalKarma.objects.filter(
+            Wallet.objects.filter(
                 user__user_organization_link_user__org=user_org_link.org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
@@ -183,7 +183,7 @@ class CampusStudentDetailsCSVAPI(APIView):
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
-                karma=F("total_karma_user__karma"),
+                karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
             )

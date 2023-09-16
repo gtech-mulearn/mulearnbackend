@@ -165,30 +165,31 @@ class TaskList(models.Model):
         db_table = "task_list"
 
 
-class TotalKarma(models.Model):
+class Wallet(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="total_karma_user"
+        User, on_delete=models.CASCADE, related_name="wallet_user"
     )
     karma = models.IntegerField()
+    coin = models.FloatField()
     updated_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="updated_by",
-        related_name="total_karma_updated_by",
+        related_name="wallet_updated_by",
     )
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="created_by",
-        related_name="total_karma_created_by",
+        related_name="wallet_created_by",
     )
     created_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = "total_karma"
+        db_table = "wallet"
 
 
 class KarmaActivityLog(models.Model):

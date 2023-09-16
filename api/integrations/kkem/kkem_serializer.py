@@ -30,9 +30,9 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         karma = (
-            obj.total_karma_user.karma
-            if hasattr(obj, "total_karma_user")
-            and hasattr(obj.total_karma_user, "karma")
+            obj.wallet_user.karma
+            if hasattr(obj, "wallet_user")
+            and hasattr(obj.wallet_user, "karma")
             else 0
         )
         return karma

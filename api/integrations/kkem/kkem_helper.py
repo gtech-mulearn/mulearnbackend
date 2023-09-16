@@ -1,14 +1,14 @@
 import json
-import requests
 from base64 import urlsafe_b64decode
-from Crypto.Cipher import AES
-from Crypto.Protocol.KDF import PBKDF2
-from Crypto.Random import get_random_bytes
-from Crypto.Util.Padding import unpad
-from Crypto.Hash import SHA256
 from urllib.parse import parse_qs
-from db.integrations import Integration
 
+import requests
+from Crypto.Cipher import AES
+from Crypto.Hash import SHA256
+from Crypto.Protocol.KDF import PBKDF2
+from Crypto.Util.Padding import unpad
+
+from db.integrations import Integration
 from utils.types import IntegrationType
 
 

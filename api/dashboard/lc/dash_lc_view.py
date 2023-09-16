@@ -1,4 +1,5 @@
 from decouple import config
+from django.core.mail import send_mail
 from rest_framework.views import APIView
 
 from api.notification.notifications_utils import NotificationUtils
@@ -6,13 +7,13 @@ from db.learning_circle import LearningCircle, UserCircleLink
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
-from utils.types import OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberlistSerializer
 
 domain = config("FR_DOMAIN_NAME")
+from_mail = config("FROM_MAIL")
 
 
 class LearningCircleAPI(APIView):
@@ -84,7 +85,6 @@ class LearningCircleHomeApi(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     def post(self, request, member_id, circle_id):
-        user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
         if learning_circle_link is None:
             return CustomResponse(general_message='User not part of circle').get_failure_response()
@@ -206,3 +206,31 @@ class LearningCircleListMembersApi(APIView):
             return CustomResponse(general_message='Learning Circle Not Exists').get_failure_response()
         serializer = LearningCircleMemberlistSerializer(lc, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LearningCircleInviteLeadAPI(APIView):
+
+    def post(self, request):
+        circle_id = request.POST.get('lc')
+        muid = request.POST.get('muid')
+        user_id = JWTUtils.fetch_user_id(request)
+        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=user_id).first()
+        if not usr_circle_link:
+            return CustomResponse(general_message='User not part of circle').get_failure_response()
+        if usr_circle_link.lead:
+            user = User.objects.filter(mu_id=muid).first()
+            if not user:
+                return CustomResponse(general_message='Muid is Invalid').get_failure_response()
+            # send_template_mail(
+            #     context=user,
+            #     subject="LC µFAM IS HERE!",
+            #     address=["user_registration.html"],
+            # )
+            send_mail(
+                "LC Invite",
+                f"Join our lc",
+                from_mail,
+                [user.email],
+                fail_silently=False,
+            )
+            return CustomResponse(general_message='User Invited').get_success_response()

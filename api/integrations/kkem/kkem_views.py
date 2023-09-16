@@ -1,22 +1,19 @@
 from datetime import datetime
-import json
-from django.db.models import Q, Subquery, OuterRef, F
 
-from django.db.models import Prefetch
 import requests
+from django.db.models import F
+from django.db.models import Prefetch
 from rest_framework.views import APIView
 
 from db.integrations import Integration, IntegrationAuthorization
 from db.task import KarmaActivityLog, UserIgLink
 from db.user import User
 from utils.response import CustomResponse
-from utils.utils import DateTimeUtils, send_template_mail
 from utils.types import IntegrationType
-
+from utils.utils import DateTimeUtils, send_template_mail
 from . import kkem_helper
-
-from .. import integrations_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
+from .. import integrations_helper
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -29,7 +26,7 @@ class KKEMBulkKarmaAPI(APIView):
                 karma_activity_log_user__appraiser_approved=True,
             )
             .annotate(jsid=F("integration_authorization_user__integration_value"))
-            .select_related("total_karma_user")
+            .select_related("wallet_user")
             .prefetch_related(
                 Prefetch(
                     "user_ig_link_user",
@@ -149,9 +146,7 @@ class KKEMIntegrationLogin(APIView):
             email_or_muid = request.data.get("emailOrMuid")
             password = request.data.get("password")
 
-            response = integrations_helper.get_access_token(
-                email_or_muid=email_or_muid, password=password
-            )
+            response = integrations_helper.get_access_token(email_or_muid=email_or_muid, password=password)
 
             general_message = "You have been logged in successfully"
 
@@ -159,14 +154,10 @@ class KKEMIntegrationLogin(APIView):
                 general_message = "Successfully connected your KKEM & μLearn accounts!"
 
                 request.data["verified"] = True
-                serialized_set = KKEMAuthorization(
-                    data=request.data, context={"type": "login"}
-                )
+                serialized_set = KKEMAuthorization(data=request.data, context={"type": "login"})
 
                 if not serialized_set.is_valid():
-                    return CustomResponse(
-                        general_message=serialized_set.errors
-                    ).get_failure_response()
+                    return CustomResponse(general_message=serialized_set.errors).get_failure_response()
 
                 serialized_set.save()
                 response["data"] = serialized_set.data
@@ -199,10 +190,7 @@ class KKEMdetailsFetchAPI(APIView):
 
             if not response_data["request_status"]:
                 error_message = response_data.get("msg", "Unknown Error")
-                return CustomResponse(
-                    general_message=error_message
-                ).get_failure_response()
-
+                return CustomResponse(general_message=error_message).get_failure_response()
             else:
                 result_data = response_data["data"]
 

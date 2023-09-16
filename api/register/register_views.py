@@ -73,9 +73,7 @@ class RegisterDataAPI(APIView):
                 address=["user_registration.html"],
             )
 
-            response["data"] = serializers.UserDetailSerializer(
-                user_obj, many=False
-            ).data
+            response["data"] = serializers.UserDetailSerializer(user_obj, many=False).data
 
             return CustomResponse(response=response).get_success_response()
         except Exception as e:

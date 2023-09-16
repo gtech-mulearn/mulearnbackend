@@ -5,14 +5,13 @@ import decouple
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
-from django.db.models import Case, CharField, F, Q, Value, When
+from django.db.models import F, Q
 from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
-from db.task import UserLvlLink, TotalKarma
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 
@@ -69,11 +68,11 @@ class UserEditAPI(APIView):
             )
             if serializer.is_valid():
                 serializer.save()
-                # DiscordWebhooks.general_updates(
-                #     WebHookCategory.USER.value,
-                #     WebHookActions.UPDATE.value,
-                #     user_id,
-                # )
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.USER.value,
+                    WebHookActions.UPDATE.value,
+                    user_id,
+                )
 
                 return CustomResponse(
                     general_message=serializer.data
@@ -91,19 +90,11 @@ class UserAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = (
-            User.objects.filter(active=True)
-            .values(
-                "id",
-                "first_name",
-                "last_name",
-                "discord_id",
-                "email",
-                "mobile",
-                "created_at",
-            )
+            User.objects.all()
+            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
             .annotate(
                 muid=F("mu_id"),
-                karma=F("total_karma_user__karma"),
+                karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
         )
@@ -113,7 +104,6 @@ class UserAPI(APIView):
             request,
             [
                 "mu_id",
-                "discord_id",
                 "first_name",
                 "last_name",
                 "email",
@@ -123,10 +113,8 @@ class UserAPI(APIView):
             {
                 "first_name": "first_name",
                 "last_name": "last_name",
-                "karma": "total_karma_user__karma",
+                "karma": "wallet_user__karma",
                 "created_at": "created_at",
-                "level": "user_lvl_link_user__level__name",
-                "muid": "mu_id",
             },
         )
         serializer = dash_user_serializer.UserDashboardSerializer(
@@ -144,19 +132,11 @@ class UserManagementCSV(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = (
-            User.objects.filter(active=True)
-            .values(
-                "id",
-                "first_name",
-                "last_name",
-                "email",
-                "mobile",
-                "created_at",
-                "discord_id",
-            )
+            User.objects.all()
+            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
             .annotate(
                 muid=F("mu_id"),
-                karma=F("total_karma_user__karma"),
+                karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
         )
@@ -173,7 +153,7 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.filter(verified=False, user__active=True)
+        user_queryset = UserRoleLink.objects.filter(verified=False)
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -245,9 +225,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(mu_id=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(mu_id=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

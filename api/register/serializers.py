@@ -8,7 +8,7 @@ from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_da
 from db.integrations import Integration, IntegrationAuthorization
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
-from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
+from db.task import InterestGroup, Wallet, UserIgLink, KarmaActivityLog, TaskList
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
 from utils.types import IntegrationType, RoleType, TasksTypesHashtag
@@ -150,7 +150,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 created_at=DateTimeUtils.get_current_utc_time(),
             )
 
-            TotalKarma.objects.create(
+            Wallet.objects.create(
                 id=uuid4(),
                 user=user,
                 karma=0,
@@ -255,7 +255,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
 
-                referrer_karma = TotalKarma.objects.filter(
+                referrer_karma = Wallet.objects.filter(
                     user=referral_provider
                 ).first()
 
