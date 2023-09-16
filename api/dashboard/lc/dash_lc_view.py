@@ -16,15 +16,15 @@ domain = config("FR_DOMAIN_NAME")
 
 
 class LearningCircleAPI(APIView):
-    def get(self, request, circle_code):  # lists the learning circle in the user's college
+    def get(self, request):  # lists the learning circle in the user's college
         user_id = JWTUtils.fetch_user_id(request)
         learning_queryset = LearningCircle.objects.all.exclude(
             usercirclelink__accepted=1, usercirclelink__user_id=user_id
         )
-        if circle_code:
-            if not LearningCircle.objects.filter(code=circle_code).exists():
-                return CustomResponse(general_message='invalid circle code').get_failure_response()
-            learning_queryset = learning_queryset.filter(code=circle_code)
+        # if circle_code:
+        #     if not LearningCircle.objects.filter(code=circle_code).exists():
+        #         return CustomResponse(general_message='invalid circle code').get_failure_response()
+        #     learning_queryset = learning_queryset.filter(code=circle_code)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
