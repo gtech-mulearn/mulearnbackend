@@ -62,10 +62,12 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 class KKEMAuthorization(serializers.Serializer):
     emailOrMuid = serializers.CharField(write_only=True)
     param = serializers.CharField(write_only=True)
+    
     email = serializers.CharField(read_only=True)
     fullname = serializers.CharField(read_only=True)
     mu_id = serializers.CharField(read_only=True)
     link_id = serializers.CharField(read_only=True)
+    
     verified = serializers.BooleanField()
 
     class Meta:
