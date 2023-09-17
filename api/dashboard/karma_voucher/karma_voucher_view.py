@@ -20,13 +20,13 @@ from utils.utils import DateTimeUtils
 class ImportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def post(self, request):
         try:
             file_obj = request.FILES['voucher_log']
         except KeyError:
             return CustomResponse(general_message={'File not found.'}).get_failure_response()
-        
+
         excel_data = ImportCSV()
         excel_data = excel_data.read_excel_file(file_obj)
         if not excel_data:
@@ -37,19 +37,19 @@ class ImportVoucherLogAPI(APIView):
         for key in temp_headers:
             if key not in first_entry:
                 return CustomResponse(general_message={f'{key} does not exist in the file.'}).get_failure_response()
-            
+
         current_user = JWTUtils.fetch_user_id(request)
-        
+
         valid_rows = []
         error_rows = []
-        
+
         users_to_fetch = set()
         tasks_to_fetch = set()
 
         for row in excel_data[1:]:
             task_hashtag = row.get('hashtag')
             mail = row.get('mail')
-            
+
             users_to_fetch.add(mail)
             tasks_to_fetch.add(task_hashtag)
 
@@ -61,7 +61,7 @@ class ImportVoucherLogAPI(APIView):
             user_dict = {user['email']: (
                 user['id'],
                 user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}"
-                )}
+            )}
         task_dict = {task['hashtag']: task['id'] for task in tasks}
 
         count = 1
@@ -80,7 +80,7 @@ class ImportVoucherLogAPI(APIView):
                 user_id, full_name = user_info
 
                 task_id = task_dict.get(task_hashtag)
-                
+
                 if task_id is None:
                     row['error'] = f"Invalid task hashtag: {task_hashtag}"
                     error_rows.append(row)
@@ -112,7 +112,8 @@ class ImportVoucherLogAPI(APIView):
 
                     month_week = month + '/' + week
                     karma_voucher_image = generate_karma_voucher(
-                        name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag, month=month_week)
+                        name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
+                        month=month_week)
                     karma_voucher_image.seek(0)
                     email = EmailMessage(
                         subject=subject,
@@ -125,22 +126,22 @@ class ImportVoucherLogAPI(APIView):
                     email.attach(attachment)
                     email.send(fail_silently=False)
 
-
         # Serialize and save valid voucher rows
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
         if voucher_serializer.is_valid():
             voucher_serializer.save()
         else:
             error_rows.append(voucher_serializer.errors)
-                
-        return CustomResponse(response={"Success": voucher_serializer.data, "Failed": error_rows}).get_success_response()
+
+        return CustomResponse(
+            response={"Success": voucher_serializer.data, "Failed": error_rows}).get_success_response()
 
 
 class VoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
-    def get(self, request): 
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    def get(self, request):
         voucher_queryset = VoucherLog.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             voucher_queryset, request,
@@ -148,26 +149,27 @@ class VoucherLogAPI(APIView):
                            "task__title", "karma", "month", "week", "claimed",
                            "updated_by__first_name", "updated_by__last_name",
                            "created_by__first_name", "created_by__last_name"],
-            sort_fields={'user':'user__first_name',
-                            'code':'code',
-                            'karma': 'karma',
-                            'claimed':'claimed',
-                            'task':'task__title',
-                            'week':'week',
-                            'month':'month',
-                            'updated_by': 'updated_by__first_name',
-                            'updated_at': 'updated_at',
-                            'created_at': 'created_at'
-                            }
+            sort_fields={'user': 'user__first_name',
+                         'code': 'code',
+                         'karma': 'karma',
+                         'claimed': 'claimed',
+                         'task': 'task__title',
+                         'week': 'week',
+                         'month': 'month',
+                         'updated_by': 'updated_by__first_name',
+                         'updated_at': 'updated_at',
+                         'created_at': 'created_at'
+                         }
         )
         voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=voucher_serializer,
                                                    pagination=paginated_queryset.get('pagination'))
-    
+
+
 class ExportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def get(self, request):
         voucher_serializer = VoucherLog.objects.all()
         voucher_serializer_data = VoucherLogSerializer(voucher_serializer, many=True).data
