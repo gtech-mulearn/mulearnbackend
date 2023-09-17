@@ -71,10 +71,10 @@ class UserDetailSerializer(serializers.ModelSerializer):
         return obj.fullname
 
     def get_role(self, obj):
-        role = obj.user_role_link_user.filter(
+        role_link = obj.user_role_link_user.filter(
             role__title__in=[RoleType.MENTOR.value, RoleType.ENABLER.value]
-        ).first().role
-        return role.title if role else None
+        ).first()
+        return role_link.role.title if role_link else None
 
     class Meta:
         model = User
