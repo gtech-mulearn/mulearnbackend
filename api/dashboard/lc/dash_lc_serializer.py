@@ -81,6 +81,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             code = validated_data.get('name')[:2] + ig.code + org_link.org.code[:4]
         else:
             code = validated_data.get('name')[:2] + ig.code + org_link.org.code
+
         existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
         i = 1
         while code.upper() in existing_codes:
@@ -118,6 +119,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     is_lead = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
+    ig_code = serializers.CharField(source='ig.code')
 
     def get_is_member(self, obj):
         user = self.context.get('user_id')
@@ -220,6 +222,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "total_karma",
             "is_lead",
             "is_member",
+            "ig_code"
         ]
 
 

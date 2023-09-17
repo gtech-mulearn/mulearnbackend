@@ -1,13 +1,11 @@
-import json
 from uuid import uuid4
 
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
-import requests
 from rest_framework import serializers
-from api.integrations.kkem.kkem_helper import send_data_to_kkem
-from db.integrations import Integration, IntegrationAuthorization
 
+from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
+from db.integrations import Integration, IntegrationAuthorization
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
@@ -66,13 +64,29 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(required=True)
-    last_name = serializers.CharField(required=True)
-    mu_id = serializers.CharField(required=True)
+    role = serializers.SerializerMethodField()
+    fullname = serializers.SerializerMethodField()
+
+    def get_fullname(self, obj):
+        return obj.fullname
+
+    def get_role(self, obj):
+        role_link = obj.user_role_link_user.filter(
+            role__title__in=[RoleType.MENTOR.value, RoleType.ENABLER.value]
+        ).first()
+        return role_link.role.title if role_link else None
 
     class Meta:
         model = User
-        fields = ["id", "mu_id", "first_name", "last_name", "email"]
+        fields = [
+            "id",
+            "mu_id",
+            "first_name",
+            "last_name",
+            "email",
+            "role",
+            "fullname",
+        ]
 
 
 class RegisterSerializer(serializers.ModelSerializer):
@@ -87,7 +101,7 @@ class RegisterSerializer(serializers.ModelSerializer):
     last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
     password = serializers.CharField(required=True, max_length=200)
     referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
-    jsid = serializers.CharField(required=False, allow_null=True, max_length=100)
+    param = serializers.CharField(required=False, allow_null=True)
 
     def validate_referral_id(self, value):
         if value:
@@ -117,25 +131,18 @@ class RegisterSerializer(serializers.ModelSerializer):
         hashed_password = make_password(password)
         referral_id = validated_data.pop("referral_id", None)
 
-        if jsid := validated_data.pop("jsid", None):
+        jsid = None
+        if param := validated_data.pop("param", None):
+            details = decrypt_kkem_data(param)
+            jsid = details["jsid"][0]
+            dwms_id = details["dwms_id"][0]
+
             if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
                 raise ValueError(
                     "This KKEM account is already connected to another user"
                 )
 
             integration = Integration.objects.get(name=IntegrationType.KKEM.value)
-
-            response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
-                data=f'{{"job_seeker_id": {jsid}}}',
-                headers={"Authorization": f"Bearer {integration.token}"},
-            )
-            response_data = response.json()
-
-            if "response" not in response_data or not response_data["response"].get(
-                "req_status", False
-            ):
-                raise ValueError("Invalid jsid")
 
         referral_provider = None
         user_role_verified = True
@@ -258,7 +265,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                     created_by=user,
                     user=referral_provider,
                     created_at=DateTimeUtils.get_current_utc_time(),
-                    appraiser_approved=True,
+                    appraiser_approved=False,
                     peer_approved=True,
                     appraiser_approved_by=user,
                     peer_approved_by=user,
@@ -276,13 +283,12 @@ class RegisterSerializer(serializers.ModelSerializer):
                 referrer_karma.save()
 
             if jsid:
-                dwms_id = self.handle_dwms_id(jsid, integration)
-                kkem_link = IntegrationAuthorization.objects.create( 
+                kkem_link = IntegrationAuthorization.objects.create(
                     id=uuid4(),
                     user=user,
                     integration=integration,
                     integration_value=jsid,
-                    addition_field=dwms_id,
+                    additional_field=dwms_id,
                     verified=True,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_at=DateTimeUtils.get_current_utc_time(),
@@ -291,24 +297,7 @@ class RegisterSerializer(serializers.ModelSerializer):
                 send_data_to_kkem(kkem_link)
 
         return user, password
-    
-    def handle_dwms_id(self, jsid, integration):
-        response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
-                data=json.dumps(
-                    {"job_seeker_id": int(jsid)}
-                ),
-                headers={"Authorization": f"Bearer {integration.token}"},
-            )
-        response_data = response.json()
 
-        if "response" not in response_data or not response_data["response"].get(
-                "req_status", False
-            ):
-            raise ValueError("Invalid jsid")
-
-        return response_data["response"]["data"]["dwms_id"]
-    
     class Meta:
         model = User
         fields = [
@@ -325,7 +314,7 @@ class RegisterSerializer(serializers.ModelSerializer):
             "area_of_interests",
             "password",
             "referral_id",
-            "jsid",
+            "param",
         ]
 
 

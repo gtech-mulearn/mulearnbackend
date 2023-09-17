@@ -1,9 +1,8 @@
 from decouple import config
 from rest_framework.views import APIView
-
+from django.db.models import Q
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink
-from db.organization import UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
@@ -16,18 +15,31 @@ from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSe
 domain = config("FR_DOMAIN_NAME")
 
 
-class LearningCircleAPI(APIView):
-    def get(self, request):  # lists the learning circle in the user's college
+class TotalLearningCircleListApi(APIView):
+    def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
-        org_id = UserOrganizationLink.objects.filter(user_id=user_id,
-                                                     org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
-                                                                                                               flat=True).first()
-        learning_queryset = LearningCircle.objects.filter(org=org_id).exclude(
-            usercirclelink__accepted=1, usercirclelink__user_id=user_id
-        )
+        filters = Q()
+
+        filters &= ~Q(usercirclelink__accepted=1, usercirclelink__user_id=user_id)
+        if district_id := request.data.get('district_id'):
+            filters &= Q(org__district_id=district_id)
+        if org_id := request.data.get('org_id'):
+            filters &= Q(org_id=org_id)
+        if interest_group_id := request.data.get('ig_id'):
+            filters &= Q(ig_id=interest_group_id)
+
+        if circle_code:
+            if not LearningCircle.objects.filter(circle_code=circle_code).exists():
+                return CustomResponse(general_message='invalid circle code').get_failure_response()
+            filters &= Q(circle_code=circle_code)
+
+        learning_queryset = LearningCircle.objects.filter(filters)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
+
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
+
+class LearningCircleCreateApi(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = LearningCircleCreateSerializer(data=request.data, context={'user_id': user_id})
@@ -58,7 +70,7 @@ class LearningCircleJoinApi(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
-class LearningCircleListApi(APIView):
+class UserLearningCircleListApi(APIView):
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
         learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id, usercirclelink__accepted=1)
@@ -86,6 +98,8 @@ class LearningCircleHomeApi(APIView):
     def post(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        if learning_circle_link is None:
+            return CustomResponse(general_message='User not part of circle').get_failure_response()
         serializer = LearningCircleUpdateSerializer()
         serializer.destroy(learning_circle_link)
         return CustomResponse(general_message='Removed successfully').get_success_response()
@@ -99,6 +113,9 @@ class LearningCircleHomeApi(APIView):
             return CustomResponse(general_message='Learning Circle Not Available').get_failure_response()
 
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        if learning_circle_link.accepted is not None:
+            return CustomResponse(general_message='Already evaluated').get_failure_response()
+
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
                                                     context={'user_id': user_id})
         if serializer.is_valid():
@@ -154,8 +171,12 @@ class LearningCircleHomeApi(APIView):
         usr_circle_link.delete()
 
         if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
-            LearningCircle.objects.filter(id=circle_id).first().delete()
-            return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
+            if learning_circle := LearningCircle.objects.filter(
+                    id=circle_id
+            ).first():
+                learning_circle.delete()
+                return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
+
         return CustomResponse(general_message='Left').get_success_response()
 
 

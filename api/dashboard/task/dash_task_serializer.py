@@ -120,6 +120,22 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
         return ig
 
 
+class TaskImportSerializer(serializers.ModelSerializer):
+    created_by_id = serializers.CharField(required=True, allow_null=False)
+    updated_by_id = serializers.CharField(required=True, allow_null=False)
+    channel_id = serializers.CharField(required=False, allow_null=True)
+    type_id = serializers.CharField(required=False, allow_null=True)
+    org_id = serializers.CharField(required=False, allow_null=True)
+    level_id = serializers.CharField(required=False, allow_null=True)
+    ig_id = serializers.CharField(required=False, allow_null=True)
+
+    class Meta:
+        model = TaskList
+        fields = ("id", "hashtag", "title", "description", "karma", "channel_id", "type_id", "org_id", "event",
+                  "level_id", "ig_id", "active", "variable_karma", "usage_count", "created_by_id", "updated_by_id",
+                  "created_at", "updated_at")
+
+
 class ChannelDropdownSerializer(serializers.ModelSerializer):
     class Meta:
         model = Channel

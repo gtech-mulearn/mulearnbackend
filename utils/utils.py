@@ -15,6 +15,7 @@ from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 from django.core.mail import EmailMessage
+from datetime import timedelta
 
 
 class CommonUtils:
@@ -117,6 +118,15 @@ class DateTimeUtils:
 
         formatted_time = date_time.strftime("%Y-%m-%d %H:%M:%S %z")
         return datetime.datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S %z")
+
+    @staticmethod
+    def get_start_and_end_of_previous_month():
+        today = DateTimeUtils.get_current_utc_time()
+        start_date = today.replace(day=1)
+        end_date = start_date.replace(
+            day=1, month=start_date.month % 12 + 1
+        ) - timedelta(days=1)
+        return start_date, end_date
 
 
 class _CustomHTTPHandler:

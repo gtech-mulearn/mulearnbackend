@@ -1,18 +1,14 @@
 import decouple
 import requests
-from django.core.mail import send_mail
 from django.db.models import Q
-from django.utils.html import strip_tags
 from rest_framework.views import APIView
 
-from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 from db.organization import Country, Department, District, Organization, State, Zone
 from db.task import InterestGroup
 from db.user import Role, User
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import send_template_mail
-
 from . import serializers
 
 
@@ -71,16 +67,19 @@ class RegisterDataAPI(APIView):
                 "refreshToken": refresh_token,
             }
 
-            send_template_mail(
-                context=user_obj,
-                subject="YOUR TICKET TO µFAM IS HERE!",
-                address=["user_registration.html"],
-            )
 
-            response["data"] = serializers.UserDetailSerializer(
+            response_data = serializers.UserDetailSerializer(
                 user_obj, many=False
             ).data
             
+            send_template_mail(
+                context=response_data,
+                subject="YOUR TICKET TO µFAM IS HERE!",
+                address=["user_registration.html"],
+            )
+            
+            response["data"] = response_data
+
             return CustomResponse(response=response).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()

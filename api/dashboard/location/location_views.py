@@ -1,5 +1,4 @@
-import uuid
-
+from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.organization import Country, District, State, Zone
@@ -8,13 +7,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 
-from .location_serializer import (
-    CountrySerializer,
-    StateSerializer,
-    ZoneSerializer,
-    DistrictSerializer,
-)
-from django.db.models import Q
+from . import location_serializer
 
 
 class CountryDataAPI(APIView):
@@ -32,7 +25,7 @@ class CountryDataAPI(APIView):
                 countries, request, ["name"], {"name": "name"}
             )
 
-            serializer = CountrySerializer(
+            serializer = location_serializer.CountryRetrievalSerializer(
                 paginated_queryset.get("queryset"), many=True
             )
             return CustomResponse().paginated_response(
@@ -45,7 +38,7 @@ class CountryDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = CountrySerializer(
+            serializer = location_serializer.CountrySerializer(
                 data=request.data, context={"user_id": user_id}
             )
 
@@ -66,7 +59,7 @@ class CountryDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             country = Country.objects.get(id=country_id)
-            serializer = CountrySerializer(
+            serializer = location_serializer.CountrySerializer(
                 country, data=request.data, context={"user_id": user_id}
             )
 
@@ -111,7 +104,9 @@ class StateDataAPI(APIView):
                 states, request, ["name"], {"name": "name"}
             )
 
-            serializer = StateSerializer(paginated_queryset.get("queryset"), many=True)
+            serializer = location_serializer.StateSerializer(
+                paginated_queryset.get("queryset"), many=True
+            )
 
             return CustomResponse().paginated_response(
                 data=serializer.data, pagination=paginated_queryset.get("pagination")
@@ -123,7 +118,7 @@ class StateDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = StateSerializer(
+            serializer = location_serializer.StateSerializer(
                 data=request.data, context={"user_id": user_id}
             )
             if serializer.is_valid():
@@ -143,7 +138,7 @@ class StateDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             state = State.objects.get(id=state_id)
-            serializer = StateSerializer(
+            serializer = location_serializer.StateSerializer(
                 state, data=request.data, context={"user_id": user_id}
             )
 
@@ -188,7 +183,9 @@ class ZoneDataAPI(APIView):
                 zones, request, ["name"], {"name": "name"}
             )
 
-            serializer = ZoneSerializer(paginated_queryset.get("queryset"), many=True)
+            serializer = location_serializer.ZoneSerializer(
+                paginated_queryset.get("queryset"), many=True
+            )
             return CustomResponse().paginated_response(
                 data=serializer.data, pagination=paginated_queryset.get("pagination")
             )
@@ -199,7 +196,9 @@ class ZoneDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = ZoneSerializer(data=request.data, context={"user_id": user_id})
+            serializer = location_serializer.ZoneSerializer(
+                data=request.data, context={"user_id": user_id}
+            )
             if serializer.is_valid():
                 serializer.save()
                 return CustomResponse(
@@ -217,7 +216,7 @@ class ZoneDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             zone = Zone.objects.get(id=zone_id)
-            serializer = ZoneSerializer(
+            serializer = location_serializer.ZoneSerializer(
                 zone, data=request.data, context={"user_id": user_id}
             )
 
@@ -265,7 +264,7 @@ class DistrictDataAPI(APIView):
                 districts, request, ["name"], {"name": "name"}
             )
 
-            serializer = DistrictSerializer(
+            serializer = location_serializer.DistrictSerializer(
                 paginated_queryset.get("queryset"), many=True
             )
             return CustomResponse().paginated_response(
@@ -278,7 +277,7 @@ class DistrictDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = DistrictSerializer(
+            serializer = location_serializer.DistrictSerializer(
                 data=request.data, context={"user_id": user_id}
             )
             if serializer.is_valid():
@@ -298,7 +297,7 @@ class DistrictDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             district = District.objects.get(id=district_id)
-            serializer = DistrictSerializer(
+            serializer = location_serializer.DistrictSerializer(
                 district, data=request.data, context={"user_id": user_id}
             )
 

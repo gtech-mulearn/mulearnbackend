@@ -12,7 +12,7 @@ class User(models.Model):
     last_name = models.CharField(max_length=75, blank=True, null=True)
     email = models.CharField(unique=True, max_length=200)
     password = models.CharField(max_length=200, blank=True, null=True)
-    mobile = models.CharField(max_length=15)
+    mobile = models.CharField(unique=True, max_length=15)
     gender = models.CharField(max_length=10, blank=True, null=True)
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
@@ -140,3 +140,16 @@ class DynamicRole(models.Model):
     class Meta:
         managed = False
         db_table = 'dynamic_role'
+
+class DynamicUser(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    type = models.CharField(max_length=50)
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='dynamic_user_user')
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by', related_name='dynamic_user_updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by', related_name='dynamic_user_created_by')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'dynamic_user'
