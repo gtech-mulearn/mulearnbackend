@@ -135,9 +135,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         if referral_id:
             referral_provider = User.objects.get(mu_id=referral_id)
-            task_list = TaskList.objects.filter(
-                hashtag=TasksTypesHashtag.REFERRAL.value
-            ).first()
+            task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
             karma_amount = getattr(task_list, "karma", 0)
 
         with transaction.atomic():
@@ -234,30 +232,27 @@ class RegisterSerializer(serializers.ModelSerializer):
                 UserReferralLink.objects.create(
                     id=uuid4(),
                     referral=referral_provider,
+                    is_coin=False,
                     user=user,
                     created_by=user,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_by=user,
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
-                KarmaActivityLog.objects.create(
-                    id=uuid4(),
-                    karma=karma_amount,
-                    task=task_list,
-                    created_by=user,
-                    user=referral_provider,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    appraiser_approved=False,
-                    peer_approved=True,
-                    appraiser_approved_by=user,
-                    peer_approved_by=user,
-                    updated_by=user,
-                    updated_at=DateTimeUtils.get_current_utc_time(),
-                )
 
-                referrer_karma = Wallet.objects.filter(
-                    user=referral_provider
-                ).first()
+                KarmaActivityLog.objects.create(id=uuid4(), karma=karma_amount, task=task_list,
+                                                created_by=user,
+                                                user=referral_provider,
+                                                created_at=DateTimeUtils.get_current_utc_time(),
+                                                appraiser_approved=False,
+                                                peer_approved=True,
+                                                appraiser_approved_by=user,
+                                                peer_approved_by=user,
+                                                updated_by=user,
+                                                updated_at=DateTimeUtils.get_current_utc_time(),
+                                                )
+
+                referrer_karma = Wallet.objects.filter(user=referral_provider).first()
 
                 referrer_karma.karma += karma_amount
                 referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()

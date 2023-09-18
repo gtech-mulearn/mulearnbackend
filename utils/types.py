@@ -1,5 +1,6 @@
 from enum import Enum
 
+
 class ManagementType(Enum):
     CAMPUS = 'Campus'
     COLLEGE = 'College'
@@ -21,6 +22,7 @@ class ManagementType(Enum):
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
 
 class RoleType(Enum):
     ADMIN = "Admins"
@@ -64,15 +66,20 @@ class WebHookCategory(Enum):
     USER_ROLE = 'user-role'
     USER = 'user'
     USER_NAME = 'user-name'
-    
 
-    
+
+class RefferalType(Enum):
+    KARMA = 'Karma'
+    MUCOIN = 'Mucoin'
+
+
 class IntegrationType(Enum):
     KKEM = 'DWMS'
 
 
 class TasksTypesHashtag(Enum):
     REFERRAL = 'referral'
+    MUCOIN = 'mucoin'
 
 
 DEFAULT_HACKATHON_FORM_FIELDS = {

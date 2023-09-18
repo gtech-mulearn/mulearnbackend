@@ -42,7 +42,7 @@ class TaskApi(APIView):
         return CustomResponse().paginated_response(data=task_serializer_data,
                                                    pagination=paginated_queryset.get('pagination'))
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def post(self, request):  # create
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -54,7 +54,7 @@ class TaskApi(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def put(self, request, task_id):  # edit
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -70,7 +70,7 @@ class TaskApi(APIView):
             return CustomResponse(general_message='Task Edited Successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def patch(self, request, pk):  # delete
         user_id = JWTUtils.fetch_user_id(request)
         taskData = TaskList.objects.filter(id=pk).first()
@@ -87,7 +87,7 @@ class TaskApi(APIView):
 class TaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request):
         task_serializer = TaskList.objects.all()
         task_serializer_data = TaskListSerializer(task_serializer, many=True).data
@@ -98,7 +98,7 @@ class TaskListCSV(APIView):
 class ImportTaskListCSV(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def post(self, request):
         try:
             file_obj = request.FILES['task_list']
@@ -205,12 +205,14 @@ class ImportTaskListCSV(APIView):
         else:
             error_rows.append(task_list_serializer.errors)
 
-        return CustomResponse(response={"Success": task_list_serializer.data, "Failed": error_rows}).get_success_response()
+        return CustomResponse(
+            response={"Success": task_list_serializer.data, "Failed": error_rows}).get_success_response()
+
 
 class TaskGetAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request, pk):
         task_serializer = TaskList.objects.get(id=pk)
         serializer = TaskListSerializer(task_serializer)
@@ -220,7 +222,7 @@ class TaskGetAPI(APIView):
 class ChannelDropdownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request):
         channel = Channel.objects.all()
         serializer = ChannelDropdownSerializer(channel, many=True)
@@ -230,7 +232,7 @@ class ChannelDropdownAPI(APIView):
 class IGDropdownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request):
         ig = InterestGroup.objects.all()
         serializer = IGDropdownSerializer(ig, many=True)
@@ -240,7 +242,7 @@ class IGDropdownAPI(APIView):
 class OrganizationDropdownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request):
         organization = Organization.objects.all()
         serializer = OrganizationDropdownSerialize(organization, many=True)
@@ -250,7 +252,7 @@ class OrganizationDropdownAPI(APIView):
 class LevelDropdownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request):
         level = Level.objects.all()
         serializer = LevelDropdownSerialize(level, many=True)
@@ -260,7 +262,7 @@ class LevelDropdownAPI(APIView):
 class TaskTypesDropDownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value, ])
     def get(self, request):
         task_types = TaskType.objects.all()
         serializer = TaskTypeDropdownSerializer(task_types, many=True)

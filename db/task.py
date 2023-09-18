@@ -83,7 +83,7 @@ class Level(models.Model):
 class UserLvlLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_lvl_link_user")
-    level = models.ForeignKey(Level, on_delete=models.CASCADE,  related_name="user_lvl_link_level")
+    level = models.ForeignKey(Level, on_delete=models.CASCADE, related_name="user_lvl_link_level")
     updated_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
@@ -167,24 +167,14 @@ class TaskList(models.Model):
 
 class Wallet(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.OneToOneField(
-        User, on_delete=models.CASCADE, related_name="wallet_user"
-    )
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="wallet_user")
     karma = models.IntegerField()
     coin = models.FloatField()
-    updated_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="updated_by",
-        related_name="wallet_updated_by",
-    )
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+                                   related_name="wallet_updated_by")
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="created_by",
-        related_name="wallet_created_by",
-    )
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+                                   related_name="wallet_created_by")
     created_at = models.DateTimeField()
 
     class Meta:
@@ -200,64 +190,48 @@ class KarmaActivityLog(models.Model):
     lobby_message_id = models.CharField(max_length=36, blank=True, null=True)
     dm_message_id = models.CharField(max_length=36, blank=True, null=True)
     peer_approved = models.BooleanField(blank=True, null=True)
-    peer_approved_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="peer_approved_by",
-        blank=True,
-        null=True,
-        related_name="karma_activity_log_peer_approved_by",
-    )
+    peer_approved_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="peer_approved_by", blank=True,
+                                         null=True, related_name="karma_activity_log_peer_approved_by")
     appraiser_approved = models.BooleanField(blank=True, null=True)
-    appraiser_approved_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="appraiser_approved_by",
-        blank=True,
-        null=True,
-        related_name="karma_activity_log_appraiser_approved_by",
-    )
-    updated_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="updated_by",
-        related_name="karma_activity_log_updated_by",
-    )
+    appraiser_approved_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="appraiser_approved_by",
+                                              blank=True, null=True,
+                                              related_name="karma_activity_log_appraiser_approved_by")
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+                                   related_name="karma_activity_log_updated_by", )
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="created_by",
-        related_name="karma_activity_log_created_by",
-    )
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+                                   related_name="karma_activity_log_created_by")
     created_at = models.DateTimeField()
-    user = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        blank=True,
-        null=True,
-        related_name="karma_activity_log_user",
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True,
+                             related_name="karma_activity_log_user")
 
     class Meta:
         managed = False
         db_table = "karma_activity_log"
 
 
+class MucoinActivityLog(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    coin = models.FloatField()
+    status = models.CharField(max_length=36)
+    task = models.ForeignKey(TaskList, on_delete=models.CASCADE)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', blank=True, null=True)
+    updated_at = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', blank=True, null=True)
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mucoin_activity_log'
+
+
 class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(
-        User, on_delete=models.CASCADE, related_name="user_ig_link_user"
-    )
-    ig = models.ForeignKey(
-        InterestGroup, on_delete=models.CASCADE, related_name="user_ig_link_ig"
-    )
-    created_by = models.ForeignKey(
-        User,
-        on_delete=models.CASCADE,
-        db_column="created_by",
-        related_name="user_ig_link_created_by",
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_ig_link_user")
+    ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name="user_ig_link_ig")
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+                                   related_name="user_ig_link_created_by")
     created_at = models.DateTimeField()
 
     class Meta:
@@ -269,33 +243,33 @@ class VoucherLog(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     code = models.CharField(unique=True, max_length=255)
     user = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
+        User,
+        on_delete=models.CASCADE,
         related_name='voucher_log_user'
-        )
+    )
     task = models.ForeignKey(
-        TaskList, 
-        on_delete=models.CASCADE, 
+        TaskList,
+        on_delete=models.CASCADE,
         related_name='voucher_log_task'
-        )
+    )
     karma = models.IntegerField()
     mail = models.CharField(max_length=255)
     week = models.CharField(max_length=2)
     month = models.CharField(max_length=10)
     claimed = models.BooleanField()
     updated_by = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        db_column='updated_by', 
+        User,
+        on_delete=models.CASCADE,
+        db_column='updated_by',
         related_name='voucher_log_updated_by'
-        )
+    )
     updated_at = models.DateTimeField()
     created_by = models.ForeignKey(
-        User, 
-        on_delete=models.CASCADE, 
-        db_column='created_by', 
+        User,
+        on_delete=models.CASCADE,
+        db_column='created_by',
         related_name='voucher_log_created_by'
-        )
+    )
     created_at = models.DateTimeField()
 
     class Meta:
