@@ -55,14 +55,10 @@ class InstitutionCSV(APIView):
 
 
 class GetAllInstitutionAPI(APIView):
-    def get(self, request):
+    def get(self, request, org_type):
 
-        organizations = Organization.objects.filter(Q(
-            org_type__in=[
-                OrganizationType.COLLEGE.value,
-                OrganizationType.COMMUNITY.value,
-                OrganizationType.COMPANY.value
-            ])
+        organizations = Organization.objects.filter(
+            org_type=org_type
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -71,7 +67,6 @@ class GetAllInstitutionAPI(APIView):
             [
                 "title",
                 "code",
-                "org_type"
                 "affiliation__name",
                 "district__name",
                 "district__zone__name",
@@ -81,7 +76,6 @@ class GetAllInstitutionAPI(APIView):
             {
                 "title": "title",
                 "code": "code",
-                "org_type": "org_type",
                 "affiliation": "affiliation__name",
                 "district": "district__name",
                 "zone": "district__zone__name",
