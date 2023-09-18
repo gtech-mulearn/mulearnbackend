@@ -108,7 +108,6 @@ class InstitutionSerializer(serializers.ModelSerializer):
         fields = ["id",
                   "title",
                   "code",
-                  "org_type",
                   "affiliation",
                   "district",
                   "zone",
