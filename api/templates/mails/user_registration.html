@@ -19,7 +19,7 @@
         font-size: 13px;
       "
     >
-      Hey there {{user.fullname }}! A hearty welcome to the MuLearn Family.<br />
+      Hey there {{ user.fullname }}! A hearty welcome to the MuLearn Family.<br />
       We are delighted to have you on board and we hereby acknowledge as well as
       appreciate your interest to join our community and to take part in our
       initiatives.<br /><br />
@@ -59,8 +59,25 @@
       "
     >
       Stay tuned for our events and notifications. Remember, you are not just
-      any learner; you're a μLearner 😉.<br /><br />Happy Learning!
+      any learner; you're a μLearner 😉
     </p>
+
+    <p
+      style="
+        color: black;
+        font-family: 'Poppins';
+        line-height: 1.3;
+        font-size: 13px;
+      "
+    >
+      Happy Learning!
+    </p>
+    {% if user.role %}
+    <p>
+      Please be aware that your role as an {{ user.role }} will only be granted
+      following a verification process.
+    </p>
+    {% endif %}
   </center>
 </div>
 {% endblock %}

@@ -119,6 +119,7 @@ class TaskUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Enter a valid interest group id")
         return ig
 
+
 class TaskImportSerializer(serializers.ModelSerializer):
     created_by_id = serializers.CharField(required=True, allow_null=False)
     updated_by_id = serializers.CharField(required=True, allow_null=False)
@@ -130,8 +131,9 @@ class TaskImportSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = TaskList
-        fields = ("id", "hashtag", "title", "description", "karma", "channel_id", "type_id", "org_id",
-                  "level_id", "ig_id", "active", "variable_karma", "usage_count", "created_by_id", "updated_by_id", "created_at", "updated_at")
+        fields = ("id", "hashtag", "title", "description", "karma", "channel_id", "type_id", "org_id", "event",
+                  "level_id", "ig_id", "active", "variable_karma", "usage_count", "created_by_id", "updated_by_id",
+                  "created_at", "updated_at")
 
 
 class ChannelDropdownSerializer(serializers.ModelSerializer):

@@ -111,7 +111,7 @@ class ImportTaskListCSV(APIView):
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
         temp_headers = ['hashtag', 'title', 'description', 'karma', 'usage_count', 'variable_karma', 'level', 'channel',
-                        'type', 'ig', 'org']
+                        'type', 'ig', 'org', 'event']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
