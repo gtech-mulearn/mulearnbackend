@@ -139,6 +139,7 @@ class TaskList(models.Model):
         Organization, on_delete=models.CASCADE, blank=True, null=True
     )
     level = models.ForeignKey(Level, on_delete=models.CASCADE, blank=True, null=True)
+    event = models.CharField(max_length=50)
     ig = models.ForeignKey(
         InterestGroup, on_delete=models.CASCADE, blank=True, null=True
     )
