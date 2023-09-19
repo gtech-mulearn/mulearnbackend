@@ -12,6 +12,7 @@ class Integration(models.Model):
     name = models.CharField(max_length=255, null=False)
     token = models.CharField(max_length=400, null=False)
     auth_token = models.CharField(max_length=255, null=False)
+    base_url = models.CharField(max_length=255, null=False)
     created_at = models.DateTimeField(null=False)
     updated_at = models.DateTimeField(null=False)
 
