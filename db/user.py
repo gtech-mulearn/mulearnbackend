@@ -1,13 +1,14 @@
 import uuid
 
 from django.db import models
+from django.db.models import Max, F
 
 
 class User(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     discord_id = models.CharField(
         unique=True, max_length=36, blank=True, null=True)
-    mu_id = models.CharField(unique=True, max_length=100)
+    mu_id = models.CharField(unique=True, max_length=100, default=None)
     first_name = models.CharField(max_length=75)
     last_name = models.CharField(max_length=75, blank=True, null=True)
     email = models.CharField(unique=True, max_length=200)
@@ -19,7 +20,7 @@ class User(models.Model):
     active = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic = models.CharField(max_length=200, blank=True, null=True)
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -31,17 +32,40 @@ class User(models.Model):
             return self.first_name
 
         return f"{self.first_name} {self.last_name}"
+    
+
+    def get_full_name(self):
+        return f"{self.first_name}{self.last_name or ''}".replace(" ", "").lower()[:85]
+
+
+    def generate_mu_id(self):
+        base_mu_id = f"{self.get_full_name()}@mulearn"
+
+        return (
+            f"{base_mu_id}-{max_counter + 1}"
+            if (
+                max_counter := User.objects.filter(mu_id__startswith=base_mu_id).aggregate(
+                    max_counter=Max(F("mu_id").split("@")[0].split("-")[-1])
+                )["max_counter"]
+                or 0
+            )
+            else base_mu_id
+        )
+
+
+    def save(self, *args, **kwargs):
+        if not self.pk or not self.mu_id:
+            self.mu_id = self.generate_mu_id()
+        super(User, self).save(*args, **kwargs)
 
 
 class UserReferralLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')
     referral = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_referral')
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by',
-                                   db_column='updated_by')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by', db_column='updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by',
-                                   db_column='created_by')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by', db_column='created_by')
     created_at = models.DateTimeField()
 
     class Meta:

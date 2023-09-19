@@ -5,6 +5,7 @@ from django.db import transaction
 from rest_framework import serializers
 
 from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
+from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 from db.integrations import Integration, IntegrationAuthorization
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
@@ -340,3 +341,137 @@ class UserZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zone
         fields = ["zone_name"]
+
+
+class UserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = "__all__"
+
+
+class RegisterNewSerializer(serializers.Serializer):
+    user = UserSerializer()
+
+    referral_id = serializers.CharField(required=False, allow_null=True)
+    param = serializers.CharField(required=False, allow_null=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "first_name",
+            "last_name",
+            "email",
+            "mobile",
+            "password",
+            "referral_id",
+            "param",
+        ]
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            user_data = validated_data.pop('user')
+            serializer_user = UserSerializer(data=user_data)
+            if not serializer_user.is_valid():
+                raise serializers.ValidationError(serializer_user.errors)
+            user = serializer_user.save()
+            
+            return 
+
+            # self.handle_dwms(validated_data, user)
+            # self.handle_referral(validated_data, user)
+
+            # TotalKarma.objects.create(
+            #     id=uuid4(),
+            #     user=user,
+            #     karma=0,
+            #     created_by=user,
+            #     created_at=DateTimeUtils.get_current_utc_time(),
+            #     updated_by=user,
+            #     updated_at=DateTimeUtils.get_current_utc_time(),
+            # )
+
+            # Socials.objects.create(
+            #     id=uuid4(),
+            #     user=user,
+            #     created_by=user,
+            #     created_at=DateTimeUtils.get_current_utc_time(),
+            #     updated_by=user,
+            #     updated_at=DateTimeUtils.get_current_utc_time(),
+            # )
+
+            # UserSettings.objects.create(
+            #     id=uuid4(),
+            #     user=user,
+            #     is_public=0,
+            #     created_by=user,
+            #     created_at=DateTimeUtils.get_current_utc_time(),
+            #     updated_by=user,
+            #     updated_at=DateTimeUtils.get_current_utc_time(),
+            # )
+
+        return user, validated_data["password"]
+
+    def handle_referral(self, validated_data, user):
+        if referral_id := validated_data.pop("referral_id", None):
+            referral_provider = User.objects.get(mu_id=referral_id)
+            task_list = TaskList.objects.filter(
+                hashtag=TasksTypesHashtag.REFERRAL.value
+            ).first()
+            karma_amount = getattr(task_list, "karma", 0)
+
+            UserReferralLink.objects.create(
+                id=uuid4(),
+                referral=referral_provider,
+                user=user,
+                created_by=user,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
+            KarmaActivityLog.objects.create(
+                id=uuid4(),
+                karma=karma_amount,
+                task=task_list,
+                created_by=user,
+                user=referral_provider,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                appraiser_approved=False,
+                peer_approved=True,
+                appraiser_approved_by=user,
+                peer_approved_by=user,
+                updated_by=user,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
+
+            referrer_karma = TotalKarma.objects.filter(user=referral_provider).first()
+
+            referrer_karma.karma += karma_amount
+            referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
+            referrer_karma.updated_by = user
+            referrer_karma.save()
+            return referral_id
+
+    def handle_dwms(self, validated_data, user):
+        validated_data["user"] = user.id
+
+        serialized_kkem = KKEMAuthorization(validated_data)
+        if not serialized_kkem.is_valid():
+            raise serializers.ValidationError(serialized_kkem.errors)
+
+        serialized_kkem.save()
+
+    def get_mu_id(self, full_name):
+        full_name = full_name.replace(" ", "").lower()[:85]
+        mu_id = f"{full_name}@mulearn"
+        counter = 0
+        while User.objects.filter(mu_id=mu_id).exists():
+            counter += 1
+            mu_id = f"{full_name}-{counter}@mulearn"
+        return mu_id
+
+    def get_full_name(self, validated_data):
+        return (
+            validated_data["first_name"]
+            if validated_data["last_name"] is None
+            else validated_data["first_name"] + validated_data["last_name"]
+        )

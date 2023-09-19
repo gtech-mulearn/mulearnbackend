@@ -4,6 +4,7 @@ from . import register_views
 
 urlpatterns = [
     path("", register_views.RegisterDataAPI.as_view()),
+    path("new/", register_views.RegisterAPI.as_view()),
     path("role/list/", register_views.RoleAPI.as_view()),
     path("country/list/", register_views.CountryAPI.as_view()),
     path("state/list/", register_views.StateAPI.as_view()),

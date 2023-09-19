@@ -12,6 +12,52 @@ from utils.utils import send_template_mail
 from . import serializers
 
 
+class RegisterAPI(APIView):
+    def post(self, request):
+        try:
+            serialized_user = serializers.RegisterNewSerializer(data=request.data)
+
+            if not serialized_user.is_valid():
+                return CustomResponse(
+                    general_message=serialized_user.errors
+                ).get_failure_response()
+
+            user_obj, password = serialized_user.save()
+            auth_domain = decouple.config("AUTH_DOMAIN")
+            response = requests.post(
+                f"{auth_domain}/api/v1/auth/user-authentication/",
+                data={"emailOrMuid": user_obj.mu_id, "password": password},
+            )
+            response = response.json()
+            if response.get("statusCode") != 200:
+                return CustomResponse(
+                    message=response.get("message")
+                ).get_failure_response()
+
+            res_data = response.get("response")
+            access_token = res_data.get("accessToken")
+            refresh_token = res_data.get("refreshToken")
+
+            response = {
+                "accessToken": access_token,
+                "refreshToken": refresh_token,
+            }
+
+            response_data = serializers.UserDetailSerializer(user_obj, many=False).data
+
+            send_template_mail(
+                context=response_data,
+                subject="YOUR TICKET TO µFAM IS HERE!",
+                address=["user_registration.html"],
+            )
+
+            response["data"] = response_data
+
+            return CustomResponse(response=response).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+
 class LearningCircleUserViewAPI(APIView):
     def post(self, request):
         mu_id = request.headers.get("muid")
@@ -67,17 +113,14 @@ class RegisterDataAPI(APIView):
                 "refreshToken": refresh_token,
             }
 
+            response_data = serializers.UserDetailSerializer(user_obj, many=False).data
 
-            response_data = serializers.UserDetailSerializer(
-                user_obj, many=False
-            ).data
-            
             send_template_mail(
                 context=response_data,
                 subject="YOUR TICKET TO µFAM IS HERE!",
                 address=["user_registration.html"],
             )
-            
+
             response["data"] = response_data
 
             return CustomResponse(response=response).get_success_response()
