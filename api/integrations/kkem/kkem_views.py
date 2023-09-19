@@ -188,7 +188,7 @@ class KKEMdetailsFetchAPI(APIView):
             token = Integration.objects.get(name=IntegrationType.KKEM.value).token
 
             response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                url="https://knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
                 data=f'{{"job_seeker_id": {jsid}}}',
                 headers={"Authorization": f"Bearer {token}"},
             )
