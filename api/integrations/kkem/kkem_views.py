@@ -190,7 +190,7 @@ class KKEMdetailsFetchAPI(APIView):
         try:
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
             jsid = details["jsid"][0]
-
+            
             integration = Integration.objects.get(name=IntegrationType.KKEM.value)
             token, BASE_URL = integration.token, integration.base_url
 

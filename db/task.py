@@ -178,14 +178,14 @@ class TotalKarma(models.Model):
         db_column="updated_by",
         related_name="total_karma_updated_by",
     )
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="created_by",
         related_name="total_karma_created_by",
     )
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -193,7 +193,7 @@ class TotalKarma(models.Model):
 
 
 class KarmaActivityLog(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(default=uuid.uuid4, primary_key=True, max_length=36)
     karma = models.IntegerField()
     task = models.ForeignKey(TaskList, on_delete=models.CASCADE)
     task_message_id = models.CharField(max_length=36)
@@ -223,14 +223,14 @@ class KarmaActivityLog(models.Model):
         db_column="updated_by",
         related_name="karma_activity_log_updated_by",
     )
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="created_by",
         related_name="karma_activity_log_created_by",
     )
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,

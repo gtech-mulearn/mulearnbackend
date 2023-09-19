@@ -1,15 +1,11 @@
-import json
 from django.db.models import Q
-from django.db.models import Sum
-from django.db.utils import IntegrityError
-import requests
 from rest_framework import serializers
 
-from db.integrations import IntegrationAuthorization, Integration
-from db.task import KarmaActivityLog, UserIgLink
+from db.integrations import Integration, IntegrationAuthorization
 from db.user import User
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils
+
 from . import kkem_helper
 
 

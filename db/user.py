@@ -1,10 +1,11 @@
 import uuid
 
 from django.db import models
+from django.db.models import Max, F
 
 
 class User(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     discord_id = models.CharField(
         unique=True, max_length=36, blank=True, null=True)
     mu_id = models.CharField(unique=True, max_length=100)
@@ -19,7 +20,7 @@ class User(models.Model):
     active = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic = models.CharField(max_length=200, blank=True, null=True)
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -37,12 +38,10 @@ class UserReferralLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')
     referral = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_referral')
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by',
-                                   db_column='updated_by')
-    updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by',
-                                   db_column='created_by')
-    created_at = models.DateTimeField()
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by', db_column='updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by', db_column='created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
