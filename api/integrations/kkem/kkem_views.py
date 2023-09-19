@@ -1,21 +1,18 @@
 from datetime import datetime
-import json
-from django.db.models import Q, Subquery, OuterRef, F
 
-from django.db.models import Prefetch
 import requests
+from django.db.models import F, Prefetch
 from rest_framework.views import APIView
 
 from db.integrations import Integration, IntegrationAuthorization
-from db.task import KarmaActivityLog, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, TaskList, UserIgLink
 from db.user import User
 from utils.response import CustomResponse
-from utils.utils import DateTimeUtils, send_template_mail
 from utils.types import IntegrationType
-
-from . import kkem_helper
+from utils.utils import DateTimeUtils, send_template_mail
 
 from .. import integrations_helper
+from . import kkem_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
 
 
@@ -26,8 +23,8 @@ class KKEMBulkKarmaAPI(APIView):
             User.objects.filter(
                 integration_authorization_user__integration__name=IntegrationType.KKEM.value,
                 integration_authorization_user__verified=True,
-                karma_activity_log_user__appraiser_approved=True,
             )
+            .distinct()
             .annotate(jsid=F("integration_authorization_user__integration_value"))
             .select_related("total_karma_user")
             .prefetch_related(
@@ -37,7 +34,16 @@ class KKEMBulkKarmaAPI(APIView):
                 ),
                 Prefetch(
                     "karma_activity_log_user",
-                    queryset=KarmaActivityLog.objects.all(),
+                    queryset=KarmaActivityLog.objects.filter(
+                        appraiser_approved=True
+                    ).prefetch_related(
+                        Prefetch(
+                            "task",
+                            queryset=TaskList.objects.all().prefetch_related(
+                                Prefetch("ig", queryset=InterestGroup.objects.all())
+                            ),
+                        )
+                    ),
                 ),
             )
             .distinct()
@@ -185,10 +191,11 @@ class KKEMdetailsFetchAPI(APIView):
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
             jsid = details["jsid"][0]
 
-            token = Integration.objects.get(name=IntegrationType.KKEM.value).token
+            integration = Integration.objects.get(name=IntegrationType.KKEM.value)
+            token, BASE_URL = integration.token, integration.base_url
 
             response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                url=f"{BASE_URL}/MuLearn/api/jobseeker-details",
                 data=f'{{"job_seeker_id": {jsid}}}',
                 headers={"Authorization": f"Bearer {token}"},
             )
