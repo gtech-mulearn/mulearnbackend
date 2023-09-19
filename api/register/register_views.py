@@ -2,6 +2,7 @@ import decouple
 import requests
 from django.db.models import Q
 from rest_framework.views import APIView
+from api.register.register_helper import generate_mu_id
 
 from db.organization import Country, Department, District, Organization, State, Zone
 from db.task import InterestGroup
@@ -15,7 +16,16 @@ from . import serializers
 class RegisterAPI(APIView):
     def post(self, request):
         try:
-            serialized_user = serializers.RegisterNewSerializer(data=request.data)
+            request_data = request.data
+            
+            request_data["user"]["mu_id"] = generate_mu_id(
+                request_data["user"]["first_name"], request_data["user"]["last_name"]
+            )
+            if "dwms" in request_data:
+                request_data["dwms"]["emailOrMuid"] = request_data["user"]["mu_id"]
+                request_data["dwms"]["verified"] = True
+            
+            serialized_user = serializers.RegisterNewSerializer(data=request_data)
 
             if not serialized_user.is_valid():
                 return CustomResponse(
