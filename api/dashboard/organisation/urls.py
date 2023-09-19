@@ -7,7 +7,7 @@ urlpatterns = [
     path('institutes/csv/<str:org_type>/', organisation_views.InstitutionCSV.as_view()),
     path('institutes/add/', organisation_views.PostInstitutionAPI.as_view()),
     path('institutes/<str:org_code>/', organisation_views.PostInstitutionAPI.as_view()),
-    path('institutes/info/all_inst/', organisation_views.GetAllInstitutionAPI.as_view()),
+    path('institutes/info/all/<str:org_type>/', organisation_views.GetAllInstitutionAPI.as_view()),
     path('institutes/info/<str:org_code>/', organisation_views.GetInstitutionDetailsAPI.as_view()),
     path('institutes/show/<str:organisation_type>/', organisation_views.GetInstitutionsAPI.as_view()),
     path('institutes/show/<str:organisation_type>/<str:district_id>/', organisation_views.GetInstitutionsAPI.as_view()),
