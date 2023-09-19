@@ -7,8 +7,10 @@ from .serializer import CollegeCreateDeleteSerializer, CollegeListSerializer, Co
 
 
 class CollegeApi(APIView):
-    def get(self, request):
+    def get(self, request, college_code=None):
         colleges = College.objects.all()
+        if college_code:
+            colleges = colleges.filter(org__code=college_code)
         serializer = CollegeListSerializer(colleges, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -20,6 +22,8 @@ class CollegeApi(APIView):
             return CustomResponse(general_message='Level added successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+
+class CollegeUpdateDeleteApi(APIView):
     def delete(self, request, college_id):
         if college := College.objects.filter(id=college_id).first():
             CollegeCreateDeleteSerializer().destroy(college)

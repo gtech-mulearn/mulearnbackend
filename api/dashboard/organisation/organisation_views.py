@@ -54,15 +54,11 @@ class InstitutionCSV(APIView):
         )
 
 
-class InstitutionsAPI(APIView):
-    def get(self, request):
+class GetAllInstitutionAPI(APIView):
+    def get(self, request, org_type):
 
-        organizations = Organization.objects.filter(Q(
-            org_type__in=[
-                OrganizationType.COLLEGE.value,
-                OrganizationType.COMMUNITY.value,
-                OrganizationType.COMPANY.value
-            ])
+        organizations = Organization.objects.filter(
+            org_type=org_type
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -71,7 +67,6 @@ class InstitutionsAPI(APIView):
             [
                 "title",
                 "code",
-                "org_type"
                 "affiliation__name",
                 "district__name",
                 "district__zone__name",
@@ -81,7 +76,6 @@ class InstitutionsAPI(APIView):
             {
                 "title": "title",
                 "code": "code",
-                "org_type": "org_type",
                 "affiliation": "affiliation__name",
                 "district": "district__name",
                 "zone": "district__zone__name",
@@ -149,6 +143,9 @@ class InstitutionsAPI(APIView):
     #     serializer = OrganisationSerializer(paginated_organizations, many=True)
     #     return {"data": serializer.data, "pagination": organizations.get("pagination")}
 
+
+class GetInstitutionDetailsAPI(APIView):
+
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
 
@@ -180,55 +177,6 @@ class InstitutionsAPI(APIView):
         organization = organizations.filter(code=org_code)
 
         return CustomResponse(response=organization).get_success_response()
-
-        # org_obj = Organization.objects.filter(code=org_code).first()
-        # if org_obj is None:
-        #     return CustomResponse(
-        #         general_message="Invalid Org Code"
-        #     ).get_failure_response()
-        # org_type = org_obj.org_type
-        #
-        # if org_type != OrganizationType.COLLEGE.value:
-        #     return CustomResponse(
-        #         response={"institution": OrganisationSerializer(org_obj).data}
-        #     ).get_success_response()
-        # org_id_list = Organization.objects.filter(org_type=org_type).values_list(
-        #     "id", flat=True
-        # )
-        # organisations = UserOrganizationLink.objects.filter(org__in=org_id_list)
-        # college_users = {}
-        # total_karma_by_college = {}
-        # for user_link in organisations:
-        #     college_users.setdefault(user_link.org.id, []).append(user_link.user)
-        #
-        #     total_karma = total_karma_by_college.get(user_link.org.id, 0)
-        #     total_karma += (
-        #         TotalKarma.objects.filter(user=user_link.user)
-        #         .aggregate(total_karma=Sum("karma"))
-        #         .get("total_karma", 0)
-        #     )
-        #     total_karma_by_college[user_link.org.id] = total_karma
-        #
-        # sorted_college_karma = sorted(
-        #     total_karma_by_college.items(), key=lambda x: x[1], reverse=True
-        # )
-        # rank = next(
-        #     (
-        #         i + 1
-        #         for i, (college_id, _) in enumerate(sorted_college_karma)
-        #         if college_id == org_obj.id
-        #     ),
-        #     0,
-        # )
-        # score = sorted_college_karma[rank - 1][1] if rank > 0 else 0
-        #
-        # return CustomResponse(
-        #     response={
-        #         "institution": OrganisationSerializer(org_obj).data,
-        #         "rank": str(rank),
-        #         "score": str(score),
-        #     }
-        # ).get_success_response()
 
 
 class GetInstitutionsAPI(APIView):

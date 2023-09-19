@@ -1,4 +1,4 @@
-from django.db.models import Count, Q, F
+from django.db.models import Count, Q, F, Case, When, Value
 from rest_framework.views import APIView
 
 from db.task import Level, TotalKarma
@@ -6,7 +6,7 @@ from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
-from utils.utils import CommonUtils
+from utils.utils import CommonUtils, DateTimeUtils
 
 from . import serializers
 from .dash_campus_helper import get_user_college_link
@@ -30,7 +30,6 @@ class CampusDetailsAPI(APIView):
     # Use the role_required decorator to specify the allowed roles for this view
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
-
         # Fetch the user's ID from the request using JWTUtils
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -85,6 +84,8 @@ class CampusStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
+        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
+
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
@@ -118,8 +119,17 @@ class CampusStudentDetailsAPI(APIView):
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
             )
-        )
-
+            .annotate(
+                is_active=Case(
+                    When(
+                        Q(
+                            karma_activity_log_user__created_at__range=(
+                                start_date,
+                                end_date)),
+                        then=Value("Active")),
+                    default=Value("Not Active")
+                    )
+            ))
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
@@ -130,6 +140,7 @@ class CampusStudentDetailsAPI(APIView):
                 "muid": "mu_id",
                 "karma": "total_karma_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
+                "is_active": "karma_activity_log_user__created_at",
                 "joined_at": "created_at"
             },
         )
@@ -154,6 +165,8 @@ class CampusStudentDetailsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
 
+        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
+
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
@@ -187,7 +200,17 @@ class CampusStudentDetailsCSVAPI(APIView):
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
             )
-        )
+            .annotate(
+                is_active=Case(
+                    When(
+                        Q(
+                            karma_activity_log_user__created_at__range=(
+                                start_date,
+                                end_date)),
+                        then=Value("Active")),
+                    default=Value("Not Active")
+                )
+            ))
 
         serializer = serializers.CampusStudentDetailsSerializer(
             user_org_links, many=True, context={"ranks": ranks}
