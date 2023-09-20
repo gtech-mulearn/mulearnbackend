@@ -67,7 +67,7 @@ class GetAllInstitutionAPI(APIView):
             [
                 "title",
                 "code",
-                "affiliation__name",
+                "affiliation__title",
                 "district__name",
                 "district__zone__name",
                 "district__zone__state__name",
@@ -76,7 +76,7 @@ class GetAllInstitutionAPI(APIView):
             {
                 "title": "title",
                 "code": "code",
-                "affiliation": "affiliation__name",
+                "affiliation": "affiliation__title",
                 "district": "district__name",
                 "zone": "district__zone__name",
                 "state": "district__zone__state__name",
@@ -94,54 +94,6 @@ class GetAllInstitutionAPI(APIView):
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
-
-    #     colleges = self.get_organizations_by_type(
-    #         OrganizationType.COLLEGE.value, request
-    #     )
-    #     companies = self.get_organizations_by_type(
-    #         OrganizationType.COMPANY.value, request
-    #     )
-    #     communities = self.get_organizations_by_type(
-    #         OrganizationType.COMMUNITY.value, request
-    #     )
-    #
-    #     college_data = self.serialize_and_paginate(colleges)
-    #     print(college_data["data"])
-    #     company_data = self.serialize_and_paginate(companies)
-    #     community_data = self.serialize_and_paginate(communities)
-    #
-    #     data = {
-    #         "colleges": college_data["data"],
-    #         "companies": company_data["data"],
-    #         "communities": community_data["data"],
-    #     }
-    #
-    #     pagination = {
-    #         "colleges": college_data["pagination"],
-    #         "companies": company_data["pagination"],
-    #         "communities": community_data["pagination"],
-    #     }
-    #
-    #     return CustomResponse().paginated_response(data=data, pagination=pagination)
-    #
-    # def get_organizations_by_type(self, org_type, request):
-    #     organizations = Organization.objects.filter(org_type=org_type)
-    #     return CommonUtils.get_paginated_queryset(
-    #         organizations,
-    #         request,
-    #         ["title", "code", "affiliation__title", "district__name"],
-    #         {
-    #             "title": "title",
-    #             "affiliation": "affiliation",
-    #             "district": "district",
-    #             "zone": "district__zone__name",
-    #         },
-    #     )
-    #
-    # def serialize_and_paginate(self, organizations):
-    #     paginated_organizations = organizations.get("queryset")
-    #     serializer = OrganisationSerializer(paginated_organizations, many=True)
-    #     return {"data": serializer.data, "pagination": organizations.get("pagination")}
 
 
 class GetInstitutionDetailsAPI(APIView):
@@ -213,34 +165,6 @@ class GetInstitutionsAPI(APIView):
                 "pagination"
             ),
         )
-
-    # @role_required([RoleType.ADMIN.value])
-    # def get(self, request, organisation_type, district_id):
-    #
-    #     organisations = Organization.objects.filter(
-    #         org_type=organisation_type,
-    #         district_id=district_id
-    #     )
-    #
-    #     paginated_organisations = CommonUtils.get_paginated_queryset(
-    #         organisations,
-    #         request,
-    #         [
-    #             "title",
-    #             "code"
-    #         ]
-    #     )
-    #     organisation_serializer = OrganisationSerializer(
-    #         paginated_organisations.get(
-    #             "queryset"),
-    #         many=True
-    #     )
-    #
-    #     return CustomResponse().paginated_response(
-    #         data=organisation_serializer.data,
-    #         pagination=paginated_organisations.get(
-    #             "pagination"),
-    #     )
 
 
 class PostInstitutionAPI(APIView):
