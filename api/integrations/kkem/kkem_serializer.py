@@ -41,14 +41,15 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
         # Aggregate karma for each interest group in one query
         aggregated_karma = obj.karma_activity_log_user.all()
-        
+
         aggregated_karma = [
             {
                 "task__ig__id": karma.task.ig.id,
                 "task__ig__name": karma.task.ig.name,
                 "karma": karma.karma,
             }
-            for karma in aggregated_karma if hasattr(karma.task, "ig")
+            for karma in aggregated_karma
+            if hasattr(karma.task, "ig") and karma.task.ig
         ]
 
         ig_details = {ig.name: 0 for ig in interest_groups}
