@@ -167,11 +167,11 @@ class TaskList(models.Model):
 
 
 class TotalKarma(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name="total_karma_user"
     )
-    karma = models.IntegerField()
+    karma = models.IntegerField(default=0)
     updated_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
