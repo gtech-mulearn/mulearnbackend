@@ -9,7 +9,7 @@ from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
 from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType
+from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
 
 
@@ -63,11 +63,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
 
     def get_college_id(self, obj):
-        if user_org_link := obj.user_organization_link_user.filter(
-                org__org_type=OrganizationType.COLLEGE.value
-        ).first():
-            return user_org_link.org.id
-        return None
+        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.context.get(
+            "roles") else OrganizationType.COLLEGE.value
+        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        return user_org_link.org.id if user_org_link else None
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
