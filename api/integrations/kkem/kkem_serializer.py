@@ -1,15 +1,11 @@
-import json
 from django.db.models import Q
-from django.db.models import Sum
-from django.db.utils import IntegrityError
-import requests
 from rest_framework import serializers
 
-from db.integrations import IntegrationAuthorization, Integration
-from db.task import KarmaActivityLog, UserIgLink
+from db.integrations import Integration, IntegrationAuthorization
 from db.user import User
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils
+
 from . import kkem_helper
 
 
@@ -41,19 +37,30 @@ class KKEMUserSerializer(serializers.ModelSerializer):
         user_ig_links = obj.user_ig_link_user.all()
 
         # Extract ig_ids for filtering KarmaActivityLog in one go
-        ig_ids = [ig_link.ig.id for ig_link in user_ig_links]
+        interest_groups = [ig_link.ig for ig_link in user_ig_links]
 
         # Aggregate karma for each interest group in one query
-        aggregated_karma = (
-            obj.karma_activity_log_user.filter(task__ig__id__in=ig_ids)
-            .values("task__ig__id", "task__ig__name")  # Group by interest group
-            .annotate(total_karma=Sum("karma"))
-        )
+        aggregated_karma = obj.karma_activity_log_user.all()
 
-        return [
-            {"name": karma["task__ig__name"], "karma": karma["total_karma"] or 0}
+        aggregated_karma = [
+            {
+                "task__ig__id": karma.task.ig.id,
+                "task__ig__name": karma.task.ig.name,
+                "karma": karma.karma,
+            }
             for karma in aggregated_karma
+            if hasattr(karma.task, "ig") and karma.task.ig
         ]
+
+        ig_details = {ig.name: 0 for ig in interest_groups}
+
+        # Update the karma if a match is found
+        for karma in aggregated_karma:
+            ig_name = karma["task__ig__name"]
+            if ig_name in ig_details:
+                ig_details[ig_name] += karma["karma"]
+
+        return ig_details
 
     def get_jsid(self, obj):
         return int(obj.jsid) if obj.jsid else None
@@ -62,12 +69,12 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 class KKEMAuthorization(serializers.Serializer):
     emailOrMuid = serializers.CharField(write_only=True)
     param = serializers.CharField(write_only=True)
-    
+
     email = serializers.CharField(read_only=True)
     fullname = serializers.CharField(read_only=True)
     mu_id = serializers.CharField(read_only=True)
     link_id = serializers.CharField(read_only=True)
-    
+
     verified = serializers.BooleanField()
 
     class Meta:
