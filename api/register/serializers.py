@@ -3,6 +3,7 @@ from uuid import uuid4
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.fields import empty
 
 from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
 from api.integrations.kkem.kkem_serializer import KKEMAuthorization
@@ -344,6 +345,19 @@ class UserZoneSerializer(serializers.ModelSerializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        with transaction.atomic():
+            validated_data["password"] = make_password(validated_data["password"])
+            user = super().create(validated_data)
+
+            additional_values = {"user": user, "created_by": user, "updated_by": user}
+
+            TotalKarma.objects.create(**additional_values)
+            Socials.objects.create(**additional_values)
+            UserSettings.objects.create(**additional_values)
+
+        return user
+
     class Meta:
         model = User
         fields = "__all__"
@@ -386,10 +400,16 @@ class TotalKarmaSerializer(serializers.ModelSerializer):
 
 class ReferralSerializer(serializers.ModelSerializer):
     referral = serializers.CharField(source="referral.mu_id")
-    user = serializers.CharField(required=False)
+    user = serializers.CharField(source="user.mu_id")
 
     karma_activity_log = KarmaActivityLogSerializer(required=False)
     total_karma = TotalKarmaSerializer(required=False)
+
+    def validate(self, attrs):
+        values = super().validate(attrs)
+        values["referral"] = User.objects.get(mu_id=values["referral"]["mu_id"]).pk
+        values["user"] = User.objects.get(mu_id=values["user"]["mu_id"]).pk
+        return values
 
     class Meta:
         model = UserReferralLink
@@ -402,9 +422,7 @@ class ReferralSerializer(serializers.ModelSerializer):
         }
 
         validated_data.update(creation)
-        validated_data["referral"] = User.objects.get(
-            mu_id=validated_data["referral"]["mu_id"]
-        )
+
         user_referral_link = super().create(validated_data)
 
         validated_data["karma_activity_log"]["user"] = user_referral_link.referral
@@ -435,74 +453,25 @@ class ReferralSerializer(serializers.ModelSerializer):
 
 
 class RegisterNewSerializer(serializers.Serializer):
-    user = UserSerializer()
     dwms = KKEMAuthorization(required=False)
     referral = ReferralSerializer(required=False)
 
     class Meta:
-        fields = ["user", "dwms", "referral"]
+        fields = ["dwms", "referral"]
 
     def create(self, validated_data):
-        with transaction.atomic():
-            # Save user first
-            user_data = validated_data.pop("user")
-            serializer_user = UserSerializer(data=user_data)
-            if not serializer_user.is_valid():
-                raise serializers.ValidationError(serializer_user.errors)
-            user = serializer_user.save()
+        # After saving the user and getting mu_id from the database
+        # update the dwms data if it exists
+        if "dwms" in validated_data:
+            dwms_data = validated_data.pop("dwms")
+            # Now validate and save dwms data with the updated values
+            serializer_dwms = KKEMAuthorization().create(dwms_data)
 
-            # After saving the user and getting mu_id from the database
-            # update the dwms data if it exists
-            if "dwms" in validated_data:
-                dwms_data = validated_data.pop("dwms")
-                dwms_data["emailOrMuid"] = user.mu_id
-                dwms_data["verified"] = True
-
-                # Now validate and save dwms data with the updated values
-                serializer_dwms = KKEMAuthorization(data=dwms_data)
-                if not serializer_dwms.is_valid():
-                    raise serializers.ValidationError(serializer_dwms.errors)
-                serializer_dwms.save()
-
-            if "referral" in validated_data:
-                referral_data = validated_data.pop("referral")
-                referral_data["user"] = user.id
-
-                # Now validate and save dwms data with the updated values
-                serializer_referral = ReferralSerializer(data=referral_data)
-                if not serializer_referral.is_valid():
-                    raise serializers.ValidationError(serializer_referral.errors)
-                serializer_referral.save()
+        if "referral" in validated_data:
+            referral_data = validated_data.pop("referral")
+            # Now validate and save dwms data with the updated values
+            serializer_referral = ReferralSerializer().create(referral_data)
 
             # self.handle_referral(validated_data, user)
-
-            # TotalKarma.objects.create(
-            #     id=uuid4(),
-            #     user=user,
-            #     karma=0,
-            #     created_by=user,
-            #     created_at=DateTimeUtils.get_current_utc_time(),
-            #     updated_by=user,
-            #     updated_at=DateTimeUtils.get_current_utc_time(),
-            # )
-
-            # Socials.objects.create(
-            #     id=uuid4(),
-            #     user=user,
-            #     created_by=user,
-            #     created_at=DateTimeUtils.get_current_utc_time(),
-            #     updated_by=user,
-            #     updated_at=DateTimeUtils.get_current_utc_time(),
-            # )
-
-            # UserSettings.objects.create(
-            #     id=uuid4(),
-            #     user=user,
-            #     is_public=0,
-            #     created_by=user,
-            #     created_at=DateTimeUtils.get_current_utc_time(),
-            #     updated_by=user,
-            #     updated_at=DateTimeUtils.get_current_utc_time(),
-            # )
 
         return user, validated_data["password"]

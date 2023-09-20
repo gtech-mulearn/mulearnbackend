@@ -79,7 +79,7 @@ class UserRoleLink(models.Model):
 
 
 class Socials(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     github = models.CharField(max_length=60, blank=True, null=True)
     facebook = models.CharField(max_length=60, blank=True, null=True)
@@ -93,8 +93,8 @@ class Socials(models.Model):
                                    related_name='socials_created_by')
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='socials_updated_by')
-    created_at = models.DateTimeField()
-    updated_at = models.DateTimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(blank=True, null=True, auto_now=True)
 
     class Meta:
         managed = False
@@ -113,15 +113,15 @@ class ForgotPassword(models.Model):
 
 
 class UserSettings(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     is_public = models.BooleanField(default=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='user_settings_updated_by')
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='user_settings_created_by')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
