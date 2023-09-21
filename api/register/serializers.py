@@ -8,7 +8,7 @@ from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_da
 from db.integrations import Integration, IntegrationAuthorization
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
-from db.task import InterestGroup, Wallet, UserIgLink, KarmaActivityLog, TaskList
+from db.task import InterestGroup, Wallet, UserIgLink, TaskList, MuCoinInviteLog
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
 from utils.types import IntegrationType, RoleType, TasksTypesHashtag
@@ -129,7 +129,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         area_of_interests = validated_data.pop("area_of_interests")
         password = validated_data.pop("password")
         hashed_password = make_password(password)
+
         referral_id = validated_data.pop("referral_id", None)
+        mucoin = validated_data.pop('mucoin', None)
+        invite_code = validated_data.pop('invite_code', None)
 
         jsid = None
         if param := validated_data.pop("param", None):
@@ -258,24 +261,39 @@ class RegisterSerializer(serializers.ModelSerializer):
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
 
-                KarmaActivityLog.objects.create(id=uuid4(), karma=karma_amount, task=task_list,
-                                                created_by=user,
-                                                user=referral_provider,
-                                                created_at=DateTimeUtils.get_current_utc_time(),
-                                                appraiser_approved=False,
-                                                peer_approved=True,
-                                                appraiser_approved_by=user,
-                                                peer_approved_by=user,
-                                                updated_by=user,
-                                                updated_at=DateTimeUtils.get_current_utc_time(),
-                                                )
+                # KarmaActivityLog.objects.create(id=uuid4(), karma=karma_amount, task=task_list,
+                #                                 created_by=user,
+                #                                 user=referral_provider,
+                #                                 created_at=DateTimeUtils.get_current_utc_time(),
+                #                                 appraiser_approved=False,
+                #                                 peer_approved=True,
+                #                                 appraiser_approved_by=user,
+                #                                 peer_approved_by=user,
+                #                                 updated_by=user,
+                #                                 updated_at=DateTimeUtils.get_current_utc_time(),
+                #                                 )
+                #
+                # referrer_karma = Wallet.objects.filter(user=referral_provider).first()
+                #
+                # referrer_karma.karma += karma_amount
+                # referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
+                # referrer_karma.updated_by = user
+                # referrer_karma.save()
 
-                referrer_karma = Wallet.objects.filter(user=referral_provider).first()
-
-                referrer_karma.karma += karma_amount
-                referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
-                referrer_karma.updated_by = user
-                referrer_karma.save()
+            if mucoin:
+                mucoin_invite_log = MuCoinInviteLog.objects.filter(invite_code=invite_code).first()
+                if mucoin_invite_log:
+                    referral_provider = User.objects.get(mu_id=mucoin)
+                    UserReferralLink.objects.create(
+                        id=uuid4(),
+                        referral=referral_provider,
+                        is_coin=True,
+                        user=user,
+                        created_by=user,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                        updated_by=user,
+                        updated_at=DateTimeUtils.get_current_utc_time(),
+                    )
 
             if jsid:
                 kkem_link = IntegrationAuthorization.objects.create(

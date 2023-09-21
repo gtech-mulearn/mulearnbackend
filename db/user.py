@@ -38,6 +38,7 @@ class UserReferralLink(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')
     referral = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_referral')
     is_coin = models.BooleanField(blank=True, null=True)
+    is_accepted = models.BooleanField()
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by',
                                    db_column='updated_by')
     updated_at = models.DateTimeField()

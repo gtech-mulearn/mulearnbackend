@@ -1,12 +1,14 @@
+import uuid
+
 from decouple import config
-from django.core.mail import send_mail
 from rest_framework.views import APIView
 
-from db.task import Wallet
+from db.task import Wallet, MuCoinInviteLog
 from db.user import UserReferralLink, User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RefferalType
+from utils.utils import DateTimeUtils
 from utils.utils import send_template_mail
 from .referral_serializer import ReferralListSerializer
 
@@ -22,13 +24,11 @@ class Referral(APIView):
             invite_type = request.data.get('invite_type')
             if (not receiver_email) or (User.objects.filter(email=receiver_email).exists()):
                 return CustomResponse(
-                    general_message="Sorry, but it seems like this email is either invalid "
-                                    "or already associated with an existing user.").get_failure_response()
+                    general_message="Sorry, but it seems like this email is either invalid or already associated with an existing user.").get_failure_response()
 
             user_id = JWTUtils.fetch_user_id(request)
             user = User.objects.filter(id=user_id).first()
             if RefferalType.KARMA.value == invite_type:
-
                 user = {
                     "full_name": user.fullname,
                     "email": receiver_email,
@@ -40,13 +40,21 @@ class Referral(APIView):
                 wallet = Wallet.objects.filter(user=user_id).first()
 
                 if wallet.coin >= 1:
-                    send_mail(
-                        "Invite Via Mu-coin",
-                        f" Here is the message. {wallet.coin}",
-                        FROM_MAIL,
-                        [user.email],
-                        fail_silently=False)
-                    wallet.coin -= 1
+                    invite_log = MuCoinInviteLog.objects.create(id=uuid.uuid4(), user=user, email=receiver_email,
+                                                                invite_code=uuid.uuid4(),
+                                                                created_by=user,
+                                                                created_at=DateTimeUtils.get_current_utc_time())
+
+                    user = {
+                        "full_name": user.fullname,
+                        "email": receiver_email,
+                        "mu_id": user.mu_id,
+                        'invite_code': invite_log.invite_code,
+                    }
+                    send_template_mail(context=user, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])
+                else:
+                    return CustomResponse(general_message="You Don't have enough mucoins").get_failure_response()
+
                     # task = TaskList.objects.filter(title=TasksTypesHashtag.MUCOIN.value).first()
                     #
                     # UserReferralLink.objects.create(
@@ -65,7 +73,6 @@ class Referral(APIView):
                     #                                  created_by=wallet.user,
                     #                                  created_at=DateTimeUtils.get_current_utc_time())
                     # wallet.save()
-                    print('Mucoin', wallet.coin)
             return CustomResponse(general_message="Invited successfully").get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
