@@ -15,6 +15,67 @@ from utils.utils import send_template_mail
 from . import serializers
 
 
+class UserRegisterValidateAPI(APIView):
+    def put(self, request):
+        try:
+            serialized_user = serializers.RegisterNewSerializer(
+                data=request.data, context={"request_data": request.data}
+            )
+
+            if not serialized_user.is_valid():
+                return CustomResponse(
+                    general_message=serialized_user.errors
+                ).get_failure_response()
+            return CustomResponse(response=serialized_user.data).get_success_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
+
+class RoleAPI(APIView):
+    def get(self, request):
+        role = Role.objects.all().values("id", "title")
+        role_serializer_data = serializers.BaseSerializer(role, many=True).data
+        return CustomResponse(
+            response={"roles": role_serializer_data}
+        ).get_success_response()
+
+
+class CollegesAPI(APIView):
+    def get(self, request):
+        college = Organization.objects.filter(
+            org_type=OrganizationType.COLLEGE.value
+        ).values("id", "title")
+
+        college_serializer_data = serializers.BaseSerializer(college, many=True).data
+        return CustomResponse(
+            response={"colleges": college_serializer_data}
+        ).get_success_response()
+
+
+class DepartmentAPI(APIView):
+    def get(self, request):
+        department_serializer = Department.objects.all().values("id", "title")
+        department_serializer_data = serializers.BaseSerializer(
+            department_serializer, many=True
+        ).data
+        return CustomResponse(
+            response={"departments": department_serializer_data}
+        ).get_success_response()
+        
+class CompanyAPI(APIView):
+    def get(self, request):
+        company_queryset = Organization.objects.filter(
+            org_type=OrganizationType.COMPANY.value
+        ).values("id", "title")
+        
+        company_serializer_data = serializers.BaseSerializer(
+            company_queryset, many=True
+        ).data
+        return CustomResponse(
+            response={"companies": company_serializer_data}
+        ).get_success_response()
+
+
 class RegisterAPI(APIView):
     def post(self, request):
         try:
@@ -24,7 +85,7 @@ class RegisterAPI(APIView):
                 request_data["last_name"],
             )
 
-            serialized_user = serializers.UserSerializer(
+            serialized_user = serializers.RegisterNewSerializer(
                 data=request_data, context={"request_data": request_data}
             )
 
@@ -135,7 +196,6 @@ class RegisterAPI(APIView):
 #             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
-
 class LearningCircleUserViewAPI(APIView):
     def post(self, request):
         mu_id = request.headers.get("muid")
@@ -206,26 +266,6 @@ class RegisterDataAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
-class RoleAPI(APIView):
-    def get(self, request):
-        role = Role.objects.all()
-        role_serializer_data = serializers.RoleSerializer(role, many=True).data
-        return CustomResponse(
-            response={"roles": role_serializer_data}
-        ).get_success_response()
-
-
-class DepartmentAPI(APIView):
-    def get(self, request):
-        department_serializer = Department.objects.all()
-        department_serializer_data = serializers.DepartmentSerializer(
-            department_serializer, many=True
-        ).data
-        return CustomResponse(
-            response={"department": department_serializer_data}
-        ).get_success_response()
-
-
 class CountryAPI(APIView):
     def get(self, request):
         countries = Country.objects.all()
@@ -278,20 +318,6 @@ class CollegeAPI(APIView):
                 "departments": department_serializer_data,
             }
         ).get_success_response()
-
-
-class CompanyAPI(APIView):
-    def get(self, request):
-        company_queryset = Organization.objects.filter(
-            org_type=OrganizationType.COMPANY.value
-        )
-        company_serializer_data = serializers.OrgSerializer(
-            company_queryset, many=True
-        ).data
-        return CustomResponse(
-            response={"companies": company_serializer_data}
-        ).get_success_response()
-
 
 class CommunityAPI(APIView):
     def get(self, request):
