@@ -8,7 +8,7 @@ from db.task import TaskList, Channel, TaskType, Level, InterestGroup
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import RoleType, Events
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import TaskListSerializer, TaskUpdateSerializer, TaskCreateSerializer, \
     ChannelDropdownSerializer, IGDropdownSerializer, OrganizationDropdownSerialize, LevelDropdownSerialize, \
@@ -194,9 +194,9 @@ class ImportTaskListCSV(APIView):
                 row['active'] = True
                 row['channel_id'] = channel_id
                 row['type_id'] = task_type_id
-                row['level_id'] = level_id if level_id else None
-                row['ig_id'] = ig_id if ig_id else None
-                row['org_id'] = org_id if org_id else None
+                row['level_id'] = level_id or None
+                row['ig_id'] = ig_id or None
+                row['org_id'] = org_id or None
                 valid_rows.append(row)
 
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
@@ -267,3 +267,12 @@ class TaskTypesDropDownAPI(APIView):
         task_types = TaskType.objects.all()
         serializer = TaskTypeDropdownSerializer(task_types, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class EventDropDownApi(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, ])
+    def get(self, request):
+        events = Events.get_all_values()
+        return CustomResponse(response=events).get_success_response()

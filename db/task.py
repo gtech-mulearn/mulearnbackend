@@ -139,6 +139,7 @@ class TaskList(models.Model):
         Organization, on_delete=models.CASCADE, blank=True, null=True
     )
     level = models.ForeignKey(Level, on_delete=models.CASCADE, blank=True, null=True)
+    event = models.CharField(max_length=50)
     ig = models.ForeignKey(
         InterestGroup, on_delete=models.CASCADE, blank=True, null=True
     )
@@ -183,7 +184,7 @@ class Wallet(models.Model):
 
 
 class KarmaActivityLog(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(default=uuid.uuid4, primary_key=True, max_length=36)
     karma = models.IntegerField()
     task = models.ForeignKey(TaskList, on_delete=models.CASCADE)
     task_message_id = models.CharField(max_length=36)
@@ -204,6 +205,35 @@ class KarmaActivityLog(models.Model):
     created_at = models.DateTimeField()
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True,
                              related_name="karma_activity_log_user")
+    appraiser_approved_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column="appraiser_approved_by",
+        blank=True,
+        null=True,
+        related_name="karma_activity_log_appraiser_approved_by",
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column="updated_by",
+        related_name="karma_activity_log_updated_by",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column="created_by",
+        related_name="karma_activity_log_created_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        blank=True,
+        null=True,
+        related_name="karma_activity_log_user",
+    )
 
     class Meta:
         managed = False

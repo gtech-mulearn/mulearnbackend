@@ -116,8 +116,8 @@ class DateTimeUtils:
             datetime.datetime: The formatted datetime object.
         """
 
-        formatted_time = date_time.strftime("%Y-%m-%d %H:%M:%S %z")
-        return datetime.datetime.strptime(formatted_time, "%Y-%m-%d %H:%M:%S %z")
+        return date_time.replace(microsecond=0)
+
 
     @staticmethod
     def get_start_and_end_of_previous_month():

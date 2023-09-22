@@ -59,6 +59,12 @@ class WebHookActions(Enum):
     UPDATE = 'update'
 
 
+class MainRoles(Enum):
+    STUDENT = "Student"
+    MENTOR = "Mentor"
+    ENABLER = "Enabler"
+
+
 class WebHookCategory(Enum):
     INTEREST_GROUP = 'ig'
     COMMUNITY = 'community'
@@ -80,6 +86,14 @@ class IntegrationType(Enum):
 class TasksTypesHashtag(Enum):
     REFERRAL = 'referral'
     MUCOIN = 'mucoin'
+
+
+class Events(Enum):
+    LEARNING_FEST = 'LearningFest'
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
 
 
 DEFAULT_HACKATHON_FORM_FIELDS = {

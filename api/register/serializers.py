@@ -3,15 +3,17 @@ from uuid import uuid4
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
+from rest_framework.fields import empty
 
 from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
+from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 from db.integrations import Integration, IntegrationAuthorization
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
 from db.task import InterestGroup, Wallet, UserIgLink, TaskList, MuCoinInviteLog
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
-from utils.types import IntegrationType, RoleType, TasksTypesHashtag
+from utils.types import IntegrationType, OrganizationType, RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 
 
@@ -19,6 +21,11 @@ class LearningCircleUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "mu_id", "first_name", "last_name", "email", "mobile"]
+
+
+class BaseSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -260,40 +267,29 @@ class RegisterSerializer(serializers.ModelSerializer):
                     updated_by=user,
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
+                # KarmaActivityLog.objects.create(
+                #     id=uuid4(),
+                #     karma=karma_amount,
+                #     task=task_list,
+                #     created_by=user,
+                #     user=referral_provider,
+                #     created_at=DateTimeUtils.get_current_utc_time(),
+                #     appraiser_approved=False,
+                #     peer_approved=True,
+                #     appraiser_approved_by=user,
+                #     peer_approved_by=user,
+                #     updated_by=user,
+                #     updated_at=DateTimeUtils.get_current_utc_time(),
+                # )
 
-                # KarmaActivityLog.objects.create(id=uuid4(), karma=karma_amount, task=task_list,
-                #                                 created_by=user,
-                #                                 user=referral_provider,
-                #                                 created_at=DateTimeUtils.get_current_utc_time(),
-                #                                 appraiser_approved=False,
-                #                                 peer_approved=True,
-                #                                 appraiser_approved_by=user,
-                #                                 peer_approved_by=user,
-                #                                 updated_by=user,
-                #                                 updated_at=DateTimeUtils.get_current_utc_time(),
-                #                                 )
-                #
-                # referrer_karma = Wallet.objects.filter(user=referral_provider).first()
-                #
+                # referrer_karma = TotalKarma.objects.filter(
+                #     user=referral_provider
+                # ).first()
+
                 # referrer_karma.karma += karma_amount
                 # referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
                 # referrer_karma.updated_by = user
                 # referrer_karma.save()
-
-            if mucoin:
-                mucoin_invite_log = MuCoinInviteLog.objects.filter(invite_code=invite_code).first()
-                if mucoin_invite_log:
-                    referral_provider = User.objects.get(mu_id=mucoin)
-                    UserReferralLink.objects.create(
-                        id=uuid4(),
-                        referral=referral_provider,
-                        is_coin=True,
-                        user=user,
-                        created_by=user,
-                        created_at=DateTimeUtils.get_current_utc_time(),
-                        updated_by=user,
-                        updated_at=DateTimeUtils.get_current_utc_time(),
-                    )
 
             if jsid:
                 kkem_link = IntegrationAuthorization.objects.create(
@@ -353,3 +349,198 @@ class UserZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zone
         fields = ["zone_name"]
+
+
+class UserOrgLinkSerializer(serializers.ModelSerializer):
+    org = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(), many=True, required=True
+    )
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(), many=False, required=False
+    )
+    graduation_year = serializers.DateField(
+        required=False, allow_null=True, format="%Y"
+    )
+
+    def create(self, validated_data):
+        organizations = Organization.filter.objects.filter(id__in=validated_data["org"])
+        # user = User.objects.get(id=validated_data["user"])
+        Organization.objects.bulk_create(
+            {
+                UserOrganizationLink(
+                    user=validated_data["user"],
+                    org=org,
+                    created_by=validated_data["user"],
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                    department=validated_data["department"]
+                    if org.type == OrganizationType.COLLEGE.value
+                    else None,
+                    graduation_year=validated_data["graduation_year"]
+                    if org.type == OrganizationType.COLLEGE.value
+                    else None,
+                )
+                for org in organizations
+            }
+        )
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = ["user", "org", "verified", "department", "graduation_year"]
+
+class UserRoleLinkSerializer(serializers.ModelSerializer):
+    org = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(), many=True, required=True
+    )
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(), many=False, required=False
+    )
+    graduation_year = serializers.DateField(
+        required=False, allow_null=True, format="%Y"
+    )
+
+    def create(self, validated_data):
+        organizations = Organization.filter.objects.filter(id__in=validated_data["org"])
+        # user = User.objects.get(id=validated_data["user"])
+        Organization.objects.bulk_create(
+            {
+                UserOrganizationLink(
+                    user=validated_data["user"],
+                    org=org,
+                    created_by=validated_data["user"],
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                    department=validated_data["department"]
+                    if org.type == OrganizationType.COLLEGE.value
+                    else None,
+                    graduation_year=validated_data["graduation_year"]
+                    if org.type == OrganizationType.COLLEGE.value
+                    else None,
+                )
+                for org in organizations
+            }
+        )
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = ["user", "org", "verified", "department", "graduation_year"]
+
+
+class RegisterNewSerializer(serializers.ModelSerializer):
+    roles = serializers.PrimaryKeyRelatedField(
+        queryset=Role.objects.all(), many=True, required=False
+    )
+    password = serializers.CharField(write_only=True, required=True)
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            roles = validated_data.pop("roles", None)
+            validated_data["password"] = make_password(validated_data["password"])
+            user = super().create(validated_data)
+
+            additional_values = {"user": user, "created_by": user, "updated_by": user}
+
+            TotalKarma.objects.create(**additional_values)
+            Socials.objects.create(**additional_values)
+            UserSettings.objects.create(**additional_values)
+
+            if roles:
+                pass
+                # UserRoleLink.objects.bulk_create(
+                #     UserRoleLink(role, verified=**additional_values) for role in roles
+                # )
+
+        return user
+
+    class Meta:
+        model = User
+        fields = ["first_name", "last_name", "email", "mobile", "roles", "password"]
+
+
+class KarmaActivityLogSerializer(serializers.ModelSerializer):
+    def create(self, validated_data):
+        validated_data["appraiser_approved_by"] = validated_data[
+            "peer_approved_by"
+        ] = validated_data["created_by"]
+
+        validated_data["appraiser_approved"] = False
+        validated_data["peer_approved"] = True
+
+        task_list = TaskList.objects.filter(
+            hashtag=TasksTypesHashtag.REFERRAL.value
+        ).first()
+
+        karma_amount = getattr(task_list, "karma", 0)
+
+        validated_data["karma"] = karma_amount
+        validated_data["task"] = task_list
+
+        super().create(validated_data)
+
+    class Meta:
+        model = KarmaActivityLog
+        fields = ["created_by", "user", "updated_by"]
+
+
+class TotalKarmaSerializer(serializers.ModelSerializer):
+    def update(self, instance, validated_data):
+        validated_data["karma"] = validated_data["karma"] + instance.karma
+        return super().update(instance, validated_data)
+
+    class Meta:
+        model = TotalKarma
+        fields = ["karma", "updated_by"]
+
+
+class ReferralSerializer(serializers.ModelSerializer):
+    referral = serializers.CharField(source="referral.mu_id")
+    user = serializers.CharField(source="user.mu_id")
+
+    karma_activity_log = KarmaActivityLogSerializer(required=False)
+    total_karma = TotalKarmaSerializer(required=False)
+
+    def validate(self, attrs):
+        values = super().validate(attrs)
+        values["referral"] = User.objects.get(mu_id=values["referral"]["mu_id"]).pk
+        values["user"] = User.objects.get(mu_id=values["user"]["mu_id"]).pk
+        return values
+
+    class Meta:
+        model = UserReferralLink
+        fields = ["referral", "user", "karma_activity_log", "total_karma"]
+
+    def create(self, validated_data):
+        creation = {
+            "created_by": validated_data["user"],
+            "updated_by": validated_data["user"],
+        }
+
+        validated_data.update(creation)
+
+        user_referral_link = super().create(validated_data)
+
+        validated_data["karma_activity_log"]["user"] = user_referral_link.referral
+        validated_data["karma_activity_log"]["created_by"] = user_referral_link.user
+        validated_data["karma_activity_log"]["updated_by"] = user_referral_link.user
+
+        karma_activity_log_serializer = KarmaActivityLogSerializer(data=validated_data)
+
+        if not karma_activity_log_serializer.is_valid():
+            return serializers.ValidationError(karma_activity_log_serializer.errors)
+
+        karma_activity_log_serializer.save()
+
+        referrer_karma = TotalKarma.objects.filter(
+            user=user_referral_link.referral
+        ).first()
+
+        total_karma_serializer = TotalKarmaSerializer(
+            referrer_karma, data=validated_data
+        )
+
+        if not total_karma_serializer.is_valid():
+            return serializers.ValidationError(total_karma_serializer.errors)
+
+        total_karma_serializer.save()
+
+        return user_referral_link

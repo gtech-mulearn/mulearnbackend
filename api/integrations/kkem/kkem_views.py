@@ -1,19 +1,19 @@
 from datetime import datetime
 
 import requests
-from django.db.models import F
-from django.db.models import Prefetch
+from django.db.models import F, Prefetch
 from rest_framework.views import APIView
 
 from db.integrations import Integration, IntegrationAuthorization
-from db.task import KarmaActivityLog, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, TaskList, UserIgLink
 from db.user import User
 from utils.response import CustomResponse
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils, send_template_mail
+
+from .. import integrations_helper
 from . import kkem_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
-from .. import integrations_helper
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -23,8 +23,8 @@ class KKEMBulkKarmaAPI(APIView):
             User.objects.filter(
                 integration_authorization_user__integration__name=IntegrationType.KKEM.value,
                 integration_authorization_user__verified=True,
-                karma_activity_log_user__appraiser_approved=True,
             )
+            .distinct()
             .annotate(jsid=F("integration_authorization_user__integration_value"))
             .select_related("wallet_user")
             .prefetch_related(
@@ -34,7 +34,16 @@ class KKEMBulkKarmaAPI(APIView):
                 ),
                 Prefetch(
                     "karma_activity_log_user",
-                    queryset=KarmaActivityLog.objects.all(),
+                    queryset=KarmaActivityLog.objects.filter(
+                        appraiser_approved=True
+                    ).prefetch_related(
+                        Prefetch(
+                            "task",
+                            queryset=TaskList.objects.all().prefetch_related(
+                                Prefetch("ig", queryset=InterestGroup.objects.all())
+                            ),
+                        )
+                    ),
                 ),
             )
             .distinct()
@@ -146,7 +155,9 @@ class KKEMIntegrationLogin(APIView):
             email_or_muid = request.data.get("emailOrMuid")
             password = request.data.get("password")
 
-            response = integrations_helper.get_access_token(email_or_muid=email_or_muid, password=password)
+            response = integrations_helper.get_access_token(
+                email_or_muid=email_or_muid, password=password
+            )
 
             general_message = "You have been logged in successfully"
 
@@ -154,10 +165,14 @@ class KKEMIntegrationLogin(APIView):
                 general_message = "Successfully connected your KKEM & μLearn accounts!"
 
                 request.data["verified"] = True
-                serialized_set = KKEMAuthorization(data=request.data, context={"type": "login"})
+                serialized_set = KKEMAuthorization(
+                    data=request.data, context={"type": "login"}
+                )
 
                 if not serialized_set.is_valid():
-                    return CustomResponse(general_message=serialized_set.errors).get_failure_response()
+                    return CustomResponse(
+                        general_message=serialized_set.errors
+                    ).get_failure_response()
 
                 serialized_set.save()
                 response["data"] = serialized_set.data
@@ -176,10 +191,11 @@ class KKEMdetailsFetchAPI(APIView):
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
             jsid = details["jsid"][0]
 
-            token = Integration.objects.get(name=IntegrationType.KKEM.value).token
+            integration = Integration.objects.get(name=IntegrationType.KKEM.value)
+            token, BASE_URL = integration.token, integration.base_url
 
             response = requests.post(
-                url="https://stagging.knowledgemission.kerala.gov.in/MuLearn/api/jobseeker-details",
+                url=f"{BASE_URL}/MuLearn/api/jobseeker-details",
                 data=f'{{"job_seeker_id": {jsid}}}',
                 headers={"Authorization": f"Bearer {token}"},
             )
@@ -190,7 +206,10 @@ class KKEMdetailsFetchAPI(APIView):
 
             if not response_data["request_status"]:
                 error_message = response_data.get("msg", "Unknown Error")
-                return CustomResponse(general_message=error_message).get_failure_response()
+                return CustomResponse(
+                    general_message=error_message
+                ).get_failure_response()
+
             else:
                 result_data = response_data["data"]
 
@@ -209,6 +228,6 @@ class KKEMUserStatusAPI(APIView):
                     response={"mu_id": details["mu_id"][0]}
                 ).get_success_response()
             else:
-                return CustomResponse(response={"mu_id": None}).get_failure_response()
+                return CustomResponse(response={"mu_id": None}).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
