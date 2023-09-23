@@ -32,7 +32,7 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['karma', 'mail', 'hashtag', 'month', 'week']
+        temp_headers = ['karma', 'muid', 'hashtag', 'month', 'week']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -48,19 +48,19 @@ class ImportVoucherLogAPI(APIView):
 
         for row in excel_data[1:]:
             task_hashtag = row.get('hashtag')
-            mail = row.get('mail')
-
-            users_to_fetch.add(mail)
+            muid = row.get('muid')
+            users_to_fetch.add(muid)
             tasks_to_fetch.add(task_hashtag)
 
         # Fetch users and tasks in bulk
-        users = User.objects.filter(email__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name')
+        users = User.objects.filter(muid__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name')
         tasks = TaskList.objects.filter(hashtag__in=tasks_to_fetch).values('id', 'hashtag')
 
         for user in users:
-            user_dict = {user['email']: (
+            user_dict = {user['muid']: (
                 user['id'],
-                user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}"
+                user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}",
+                user['email']
             )}
         task_dict = {task['hashtag']: task['id'] for task in tasks}
 
@@ -68,16 +68,15 @@ class ImportVoucherLogAPI(APIView):
         for row in excel_data[1:]:
             task_hashtag = row.get('hashtag')
             karma = row.get('karma')
-            mail = row.get('mail')
             month = row.get('month')
             week = row.get('week')
 
-            user_info = user_dict.get(mail)
+            user_info = user_dict.get(muid)
             if user_info is None:
-                row['error'] = f"Invalid email: {mail}"
+                row['error'] = f"Invalid muid: {muid}"
                 error_rows.append(row)
             else:
-                user_id, full_name = user_info
+                user_id, full_name, email = user_info
 
                 task_id = task_dict.get(task_hashtag)
 
@@ -85,7 +84,7 @@ class ImportVoucherLogAPI(APIView):
                     row['error'] = f"Invalid task hashtag: {task_hashtag}"
                     error_rows.append(row)
                 elif karma == 0:
-                    row['error'] = f"Karma cannot be 0"
+                    row['error'] = "Karma cannot be 0"
                     error_rows.append(row)
                 else:
                     # Prepare valid row data
@@ -108,9 +107,9 @@ class ImportVoucherLogAPI(APIView):
 
                     Great news! You are just one step away from claiming your internship/contribution Karma points. Simply post the Karma card attached to this email in the #task-dropbox channel and include the specified hashtag to redeem your points.
                     Name: {}
-                    Email: {}""".format(full_name, mail)
+                    Email: {}""".format(full_name, email)
 
-                    month_week = month + '/' + week
+                    month_week = f'{month}/{week}'
                     karma_voucher_image = generate_karma_voucher(
                         name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
                         month=month_week)
@@ -119,10 +118,14 @@ class ImportVoucherLogAPI(APIView):
                         subject=subject,
                         body=text,
                         from_email=from_mail,
-                        to=[mail],
+                        to=[email],
                     )
                     attachment = MIMEImage(karma_voucher_image.read())
-                    attachment.add_header('Content-Disposition', 'attachment', filename=str(full_name) + '.jpg')
+                    attachment.add_header(
+                        'Content-Disposition',
+                        'attachment',
+                        filename=f'{str(full_name)}.jpg',
+                    )
                     email.attach(attachment)
                     email.send(fail_silently=False)
 
