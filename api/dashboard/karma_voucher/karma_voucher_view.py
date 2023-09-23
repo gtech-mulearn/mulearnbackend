@@ -77,7 +77,6 @@ class ImportVoucherLogAPI(APIView):
                 error_rows.append(row)
             else:
                 user_id, full_name, email = user_info
-
                 task_id = task_dict.get(task_hashtag)
 
                 if task_id is None:
@@ -87,6 +86,9 @@ class ImportVoucherLogAPI(APIView):
                     row['error'] = "Karma cannot be 0"
                     error_rows.append(row)
                 else:
+                    existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
+                    while generate_ordered_id(count) in existing_codes:
+                        count += 1
                     # Prepare valid row data
                     row['user_id'] = user_id
                     row['task_id'] = task_id
@@ -103,11 +105,18 @@ class ImportVoucherLogAPI(APIView):
                     # Prepare email context and attachment
                     from_mail = decouple.config("FROM_MAIL")
                     subject = "Congratulations on earning Karma points!"
-                    text = """Greetings from GTech µLearn!
+                    text = f"""Greetings from GTech µLearn!
 
+                    Great news! You are just one step away from claiming your internship/contribution Karma points.
+                    
+                    Name: {full_name}
+                    Email: {mail}
+                    
+                    To claim your karma points copy this `voucher {row["code"]}` and paste it #task-dropbox channel along with your voucher image.
                     Great news! You are just one step away from claiming your internship/contribution Karma points. Simply post the Karma card attached to this email in the #task-dropbox channel and include the specified hashtag to redeem your points.
                     Name: {}
                     Email: {}""".format(full_name, email)
+                    """
 
                     month_week = f'{month}/{week}'
                     karma_voucher_image = generate_karma_voucher(
