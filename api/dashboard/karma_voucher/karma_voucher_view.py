@@ -78,7 +78,6 @@ class ImportVoucherLogAPI(APIView):
                 error_rows.append(row)
             else:
                 user_id, full_name = user_info
-
                 task_id = task_dict.get(task_hashtag)
 
                 if task_id is None:
@@ -88,6 +87,9 @@ class ImportVoucherLogAPI(APIView):
                     row['error'] = f"Karma cannot be 0"
                     error_rows.append(row)
                 else:
+                    existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
+                    while generate_ordered_id(count) in existing_codes:
+                        count += 1
                     # Prepare valid row data
                     row['user_id'] = user_id
                     row['task_id'] = task_id
