@@ -24,9 +24,8 @@ from utils.utils import DiscordWebhooks
 from .serializers import (
     AffiliationSerializer,
     OrganisationSerializer,
-    OrganizationSerializerCreateUpdate,
     DepartmentSerializer,
-    InstitutionSerializer, CollegeSerializerCreate
+    InstitutionSerializer, InstitutionCreateUpdateSerializer
 )
 
 
@@ -167,46 +166,42 @@ class GetInstitutionsAPI(APIView):
         )
 
 
-class PostInstitutionAPI(APIView):
+class InstitutionPostUpdateDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        if request.data.get('affiliation') and request.data.get('org_type') == OrganizationType.COLLEGE.value:
+        user_id = JWTUtils.fetch_user_id(request)
+        serializer = InstitutionCreateUpdateSerializer(
+            data=request.data,
+            context={
+                "user_id": user_id
+            }
+        )
 
-            affiliation = OrgAffiliation.objects.filter(
-                id=request.data.get('affiliation')
-            ).first()
+        if serializer.is_valid():
+            serializer.save()
 
-            if affiliation is None:
-                organisation_serializer = OrganizationSerializerCreateUpdate(
-                    data=request.data,
-                    context={"request": request}
+            if request.data.get("org_type") == OrganizationType.COMMUNITY.value:
+
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.COMMUNITY.value,
+                    WebHookActions.CREATE.value,
+                    request.data.get("title"),
                 )
-            else:
-                organisation_serializer = CollegeSerializerCreate(
-                    data=request.data,
-                    context={"request": request}
-                )
-
-            if organisation_serializer.is_valid():
-                organisation_serializer.save()
-                if request.data.get("org_type") == OrganizationType.COMMUNITY.value:
-                    DiscordWebhooks.general_updates(
-                        WebHookCategory.COMMUNITY.value,
-                        WebHookActions.CREATE.value,
-                        request.data.get("title"),
-                    )
-                return CustomResponse(
-                    general_message="Organisation Added Successfully"
-                ).get_success_response()
 
             return CustomResponse(
-                general_message=organisation_serializer.errors
-            ).get_failure_response()
+                general_message="Organisation Added Successfully"
+            ).get_success_response()
+
+        return CustomResponse(
+            general_message=serializer.errors
+        ).get_failure_response()
+
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, org_code):
+        user_id = JWTUtils.fetch_user_id(request)
         organization = Organization.objects.filter(
             code=org_code
         ).first()
@@ -219,33 +214,39 @@ class PostInstitutionAPI(APIView):
         old_title = organization.title
         old_type = organization.org_type
 
-        serializer = OrganizationSerializerCreateUpdate(
+        serializer = InstitutionCreateUpdateSerializer(
             organization,
             data=request.data,
             context={
-                "request": request
+                "user_id": user_id
             }
         )
 
         if serializer.is_valid():
             serializer.save()
-            if (request.data.get("title") != old_title
-                    and old_type == OrganizationType.COMMUNITY.value
-            ):
+
+            if (request.data.get("title") != old_title and
+                    old_type == OrganizationType.COMMUNITY.value):
+
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.EDIT.value,
                     request.data.get("title"),
                     old_title,
                 )
-            if request.data.get("orgType") != OrganizationType.COMMUNITY.value and old_type == OrganizationType.COMMUNITY.value:
+
+            if (request.data.get("orgType") != OrganizationType.COMMUNITY.value and
+                    old_type == OrganizationType.COMMUNITY.value):
+
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.DELETE.value,
                     old_title,
                 )
 
-            if old_type != OrganizationType.COMMUNITY.value and request.data.get("orgType") == OrganizationType.COMMUNITY.value:
+            if (old_type != OrganizationType.COMMUNITY.value and
+                    request.data.get("orgType") == OrganizationType.COMMUNITY.value):
+
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -269,14 +270,18 @@ class PostInstitutionAPI(APIView):
             return CustomResponse(
                 general_message=f"Org with code '{org_code}', does not exist"
             ).get_failure_response()
+
         organisation.delete()
         org_type = organisation.org_type
+
         if org_type == OrganizationType.COMMUNITY.value:
+
             DiscordWebhooks.general_updates(
                 WebHookCategory.COMMUNITY.value,
                 WebHookActions.DELETE.value,
                 organisation.title,
             )
+
         return CustomResponse(
             general_message="Deleted Successfully"
         ).get_success_response()
@@ -288,24 +293,23 @@ class AffiliationAPI(APIView):
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            affiliation, request, ["id", "title"]
+            affiliation,
+            request,
+            [
+                "id",
+                "title"
+            ])
+
+        serializer = AffiliationSerializer(
+            paginated_queryset.get("queryset"),
+            many=True
         )
-        affiliation_serializer = AffiliationSerializer(
-            paginated_queryset.get("queryset"), many=True
-        )
-        data = {
-            "affiliation": [
-                {
-                    "value": data["title"],
-                    "label": " ".join(data["title"].split("_")).title(),
-                }
-                for data in affiliation_serializer.data
-            ],
-        }
 
         return CustomResponse().paginated_response(
-            data=data, pagination=paginated_queryset.get("pagination")
-        )
+            data=serializer.data,
+            pagination=paginated_queryset.get(
+                "pagination"
+            ))
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
