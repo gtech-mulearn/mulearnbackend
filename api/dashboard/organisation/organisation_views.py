@@ -363,6 +363,7 @@ class AffiliationAPI(APIView):
 
         title = request.data.get("title")
 
+
         affiliation_obj = OrgAffiliation.objects.filter(
             title=title
         ).first()
