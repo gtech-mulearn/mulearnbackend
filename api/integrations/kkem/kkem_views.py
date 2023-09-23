@@ -228,6 +228,6 @@ class KKEMUserStatusAPI(APIView):
                     response={"mu_id": details["mu_id"][0]}
                 ).get_success_response()
             else:
-                return CustomResponse(response={"mu_id": None}).get_failure_response()
+                return CustomResponse(response={"mu_id": None}).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()

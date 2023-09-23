@@ -68,10 +68,10 @@ class UserRoleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_role_link_user')
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
-    verified = models.BooleanField()
+    verified = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='user_role_link_created_by')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False

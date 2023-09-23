@@ -9,7 +9,7 @@ from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
 from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType
+from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
 
 
@@ -26,6 +26,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     muid = serializers.CharField(source="mu_id")
     roles = serializers.SerializerMethodField()
+    college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -44,6 +45,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "gender",
             "muid",
             "roles",
+            "college_id",
             "college_code",
             "karma",
             "rank",
@@ -59,6 +61,12 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_roles(self, obj):
         return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
+
+    def get_college_id(self, obj):
+        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.context.get(
+            "roles") else OrganizationType.COLLEGE.value
+        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        return user_org_link.org.id if user_org_link else None
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
@@ -125,7 +133,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                    .get("karma__sum")
             )
             interest_groups.append(
-                {"id":ig_link.ig.id,"name": ig_link.ig.name, "karma": total_ig_karma})
+                {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma})
         return interest_groups
 
 
@@ -282,7 +290,6 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
 
 class UserIgListSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = InterestGroup
         fields = [
