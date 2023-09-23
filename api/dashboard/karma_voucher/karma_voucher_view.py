@@ -104,11 +104,16 @@ class ImportVoucherLogAPI(APIView):
                     # Prepare email context and attachment
                     from_mail = decouple.config("FROM_MAIL")
                     subject = "Congratulations on earning Karma points!"
-                    text = """Greetings from GTech µLearn!
+                    text = f"""Greetings from GTech µLearn!
 
-                    Great news! You are just one step away from claiming your internship/contribution Karma points. Simply post the Karma card attached to this email in the #task-dropbox channel and include the specified hashtag to redeem your points.
-                    Name: {}
-                    Email: {}""".format(full_name, mail)
+                    Great news! You are just one step away from claiming your internship/contribution Karma points.
+                    
+                    Name: {full_name}
+                    Email: {mail}
+                    
+                    To claim your karma points copy this `voucher {row["code"]}` and paste it #task-dropbox channel along with your voucher image.
+
+                    """
 
                     month_week = month + '/' + week
                     karma_voucher_image = generate_karma_voucher(
