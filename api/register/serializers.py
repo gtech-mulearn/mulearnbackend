@@ -16,6 +16,8 @@ from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, So
 from utils.types import IntegrationType, OrganizationType, RoleType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 
+from . import register_helper
+
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
     class Meta:
@@ -118,16 +120,10 @@ class RegisterSerializer(serializers.ModelSerializer):
         return None
 
     def create(self, validated_data):
-        if validated_data["last_name"] is None:
-            full_name = validated_data["first_name"]
-        else:
-            full_name = validated_data["first_name"] + validated_data["last_name"]
-        full_name = full_name.replace(" ", "").lower()[:85]
-        mu_id = f"{full_name}@mulearn"
-        counter = 0
-        while User.objects.filter(mu_id=mu_id).exists():
-            counter += 1
-            mu_id = f"{full_name}-{counter}@mulearn"
+        mu_id = register_helper.generate_muid(
+            validated_data["first_name"], validated_data["last_name"]
+        )
+
         role_id = validated_data.pop("role")
         email = validated_data.pop("email").replace(" ", "")
         organization_ids = validated_data.pop("organizations")
@@ -385,7 +381,8 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserOrganizationLink
         fields = ["user", "org", "verified", "department", "graduation_year"]
-        
+
+
 class UserRoleLinkSerializer(serializers.ModelSerializer):
     org = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.all(), many=True, required=True
@@ -424,35 +421,10 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
         fields = ["user", "org", "verified", "department", "graduation_year"]
 
 
-class RegisterNewSerializer(serializers.ModelSerializer):
-    roles = serializers.PrimaryKeyRelatedField(
-        queryset=Role.objects.all(), many=True, required=False
-    )
-    password = serializers.CharField(write_only=True, required=True)
-
-    def create(self, validated_data):
-        with transaction.atomic():
-            roles = validated_data.pop("roles", None)
-            validated_data["password"] = make_password(validated_data["password"])
-            user = super().create(validated_data)
-
-            additional_values = {"user": user, "created_by": user, "updated_by": user}
-
-            TotalKarma.objects.create(**additional_values)
-            Socials.objects.create(**additional_values)
-            UserSettings.objects.create(**additional_values)
-
-            if roles:
-                pass
-                # UserRoleLink.objects.bulk_create(
-                #     UserRoleLink(role, verified=**additional_values) for role in roles
-                # )
-
-        return user
-
+class RegisterValidationSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["first_name", "last_name", "email", "mobile", "roles", "password"]
+        fields = ["first_name", "last_name", "email", "mobile"]
 
 
 class KarmaActivityLogSerializer(serializers.ModelSerializer):
