@@ -1,24 +1,21 @@
-from rest_framework.views import APIView
-
-from django.db.models.functions import Concat
 from django.db.models import Sum, F, Value
-
-from utils.response import CustomResponse
-from utils.types import OrganizationType
-from utils.utils import DateTimeUtils
+from django.db.models.functions import Concat
+from rest_framework.views import APIView
 
 from db.organization import Organization
 from db.user import User
+from utils.response import CustomResponse
+from utils.types import OrganizationType
+from utils.utils import DateTimeUtils
 
 
 class StudentsLeaderboard(APIView):
 
     def get(self, request):
-
         students_leaderboard = User.objects.filter(
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
         ).values(
-            total_karma=F('total_karma_user__karma'),
+            total_karma=F('wallet_user__karma'),
             full_name=Concat(
                 F('first_name'),
                 Value(' '),
@@ -33,7 +30,6 @@ class StudentsLeaderboard(APIView):
 class StudentsMonthlyLeaderboard(APIView):
 
     def get(self, request):
-
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
 
         student_monthly_leaderboard = User.objects.filter(
@@ -61,14 +57,13 @@ class StudentsMonthlyLeaderboard(APIView):
 class CollegeLeaderboard(APIView):
 
     def get(self, request):
-
         college_leaderboard = Organization.objects.filter(
             org_type=OrganizationType.COLLEGE.value
         ).values(
             'code',
             instituion=F('title'),
             total_karma=Sum(
-                'user_organization_link_org__user__total_karma_user__karma')
+                'user_organization_link_org__user__wallet_user__karma')
         ).order_by(
             '-total_karma'
         )[:20]
@@ -79,7 +74,6 @@ class CollegeLeaderboard(APIView):
 class CollegeMonthlyLeaderboard(APIView):
 
     def get(self, request):
-
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
 
         college_monthly_leaderboard = Organization.objects.filter(
