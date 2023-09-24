@@ -16,7 +16,7 @@ urlpatterns = [
     path('institutes/org/affiliation/create/', organisation_views.AffiliationGetPostUpdateDeleteAPI.as_view()),
     path('institutes/org/affiliation/edit/<str:affiliation_id>/', organisation_views.AffiliationGetPostUpdateDeleteAPI.as_view()),
     path('institutes/org/affiliation/delete/<str:affiliation_id>/', organisation_views.AffiliationGetPostUpdateDeleteAPI.as_view()),
-    path('departments/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
+    path('departments/', organisation_views.DepartmentAPI.as_view()),
     path('departments/create/', organisation_views.DepartmentAPI.as_view()),
     path('departments/edit/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
     path('departments/delete/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
