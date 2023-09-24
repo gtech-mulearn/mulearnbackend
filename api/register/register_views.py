@@ -124,7 +124,7 @@ class RegisterAPI(APIView):
                 response=response.get("response"),
             ).get_success_response()
         except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+            return CustomResponse(general_message=str(e), response=request.data).get_failure_response()
 
 
 # class RegisterAPI(APIView):
