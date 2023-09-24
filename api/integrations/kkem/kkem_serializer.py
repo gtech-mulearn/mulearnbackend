@@ -26,9 +26,9 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         karma = (
-            obj.total_karma_user.karma
-            if hasattr(obj, "total_karma_user")
-               and hasattr(obj.total_karma_user, "karma")
+            obj.wallet_user.karma
+            if hasattr(obj, "wallet_user")
+            and hasattr(obj.wallet_user, "karma")
             else 0
         )
         return karma
@@ -51,6 +51,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             for karma in aggregated_karma
             if hasattr(karma.task, "ig") and karma.task.ig
         ]
+
         ig_details = {ig.name: 0 for ig in interest_groups}
 
         for karma in aggregated_karma:
@@ -58,7 +59,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             if ig_name in ig_details:
                 ig_details[ig_name] += karma["karma"]
 
-        return [{"name": key, "karma": value} for key, value in ig_details.items()]
+        return ig_details
 
     def get_jsid(self, obj):
         return int(obj.jsid) if obj.jsid else None

@@ -5,14 +5,10 @@ logs
 *.log
 *.pot
 *.pyc
+
 __pycache__/
 */__pycache__/
 */*/__pycache__/
-
-migrations/*.py
-*/migrations/*.py
-*/*/migrations/*.py
-
 
 media/
 
