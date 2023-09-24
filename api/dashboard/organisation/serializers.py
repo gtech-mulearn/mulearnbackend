@@ -8,6 +8,56 @@ from rest_framework import serializers
 from db.organization import Organization, District, Zone, State, OrgAffiliation, Department
 
 
+class InstitutionSerializer(serializers.ModelSerializer):
+
+    affiliation = serializers.ReadOnlyField(source="affiliation.title")
+    district = serializers.ReadOnlyField(source="district.name")
+    zone = serializers.ReadOnlyField(source="district.zone.name")
+    state = serializers.ReadOnlyField(source="district.zone.state.name")
+    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "affiliation",
+            "district",
+            "zone",
+            "state",
+            "country"
+        ]
+
+
+class InstitutionCsvSerializer(serializers.ModelSerializer):
+
+    affiliation = serializers.SlugRelatedField(
+        many=False,
+        read_only=True,
+        slug_field="title"
+    )
+
+    district = serializers.ReadOnlyField(source="district.name")
+    zone = serializers.ReadOnlyField(source="district.zone.name")
+    state = serializers.ReadOnlyField(source="district.zone.state.name")
+    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "affiliation",
+            "org_type",
+            "district",
+            "zone",
+            "state",
+            "country",
+        ]
+
+
 class StateSerializer(serializers.ModelSerializer):
     country = serializers.SlugRelatedField(many=False, read_only=True, slug_field="name")
 
@@ -32,31 +82,8 @@ class DistrictSerializer(serializers.ModelSerializer):
         fields = ["name", "zone"]
 
 
-class OrganisationSerializer(serializers.ModelSerializer):
-    affiliation = serializers.SlugRelatedField(
-        many=False, read_only=True, slug_field="title"
-    )
-    district = serializers.ReadOnlyField(source="district.name")
-    zone = serializers.ReadOnlyField(source="district.zone.name")
-    state = serializers.ReadOnlyField(source="district.zone.state.name")
-    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
-
-    class Meta:
-        model = Organization
-        fields = [
-            "id",
-            "title",
-            "code",
-            "affiliation",
-            "org_type",
-            "district",
-            "zone",
-            "state",
-            "country",
-        ]
-
-
 class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
+
     class Meta:
         model = Organization
         fields = [
@@ -90,7 +117,6 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
     def validate_org_type(self, organization):
         if organization == OrganizationType.COLLEGE.value:
             affiliation = self.initial_data.get('affiliation')
-
             org_affiliation = OrgAffiliation.objects.filter(
                 id=affiliation
             ).first()
@@ -99,10 +125,13 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Invalid organization affiliation"
                 )
+
         return organization
 
-    def validate_affiliation(self):
-        return None and self.initial_data.get('org_type') != OrganizationType.COLLEGE.value
+    def validate_affiliation(self, affiliation_id):
+        if self.initial_data.get('org_type') != OrganizationType.COLLEGE.value:
+            return None
+        return affiliation_id
 
 
 class AffiliationSerializer(serializers.ModelSerializer):
@@ -116,6 +145,46 @@ class AffiliationSerializer(serializers.ModelSerializer):
             "value",
             "label"
         ]
+
+
+class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = OrgAffiliation
+        fields = [
+            "title"
+        ]
+
+    def create(self, validated_data):
+        user_id = self.context.get('user_id')
+        validated_data['id'] = str(uuid.uuid4())
+        validated_data['created_by_id'] = user_id
+        validated_data['updated_by_id'] = user_id
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+
+        return OrgAffiliation.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        user_id = self.context.get('user_id')
+        instance.title = validated_data.get('title', instance.title)
+        instance.updated_by_id = user_id
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+
+        instance.save()
+        return instance
+
+    def validate_title(self, title):
+
+        org_afiliation = OrgAffiliation.objects.filter(
+            title=title
+        ).first()
+
+        if org_afiliation:
+            raise serializers.ValidationError(
+                "Affiliation already exist"
+            )
+        return title
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
@@ -147,21 +216,4 @@ class DepartmentSerializer(serializers.ModelSerializer):
         return instance
 
 
-class InstitutionSerializer(serializers.ModelSerializer):
-    affiliation = serializers.ReadOnlyField(source="affiliation.title")
-    district = serializers.ReadOnlyField(source="district.name")
-    zone = serializers.ReadOnlyField(source="district.zone.name")
-    state = serializers.ReadOnlyField(source="district.zone.state.name")
-    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
 
-    class Meta:
-        model = Organization
-        fields = ["id",
-                  "title",
-                  "code",
-                  "affiliation",
-                  "district",
-                  "zone",
-                  "state",
-                  "country"
-                  ]
