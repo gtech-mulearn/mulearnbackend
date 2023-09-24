@@ -296,7 +296,6 @@ class VoucherLog(models.Model):
         related_name='voucher_log_task'
     )
     karma = models.IntegerField()
-    mail = models.CharField(max_length=255)
     week = models.CharField(max_length=2)
     month = models.CharField(max_length=10)
     claimed = models.BooleanField()
