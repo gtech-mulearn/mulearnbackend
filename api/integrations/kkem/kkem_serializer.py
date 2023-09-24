@@ -54,7 +54,6 @@ class KKEMUserSerializer(serializers.ModelSerializer):
 
         ig_details = {ig.name: 0 for ig in interest_groups}
 
-        # Update the karma if a match is found
         for karma in aggregated_karma:
             ig_name = karma["task__ig__name"]
             if ig_name in ig_details:
@@ -117,9 +116,9 @@ class KKEMAuthorization(serializers.Serializer):
 
         if kkem_link:
             if (
-                self.context["type"] == "login"
-                and kkem_link.integration_value == jsid
-                and kkem_link.verified
+                    self.context["type"] == "login"
+                    and kkem_link.integration_value == jsid
+                    and kkem_link.verified
             ):
                 return kkem_link
 
@@ -143,7 +142,7 @@ class KKEMAuthorization(serializers.Serializer):
 
     def verify_user(self, user_mu_id):
         if user := User.objects.filter(
-            Q(mu_id=user_mu_id) | Q(email=user_mu_id)
+                Q(mu_id=user_mu_id) | Q(email=user_mu_id)
         ).first():
             return user
         else:
@@ -153,11 +152,11 @@ class KKEMAuthorization(serializers.Serializer):
 
     def get_kkem_link(self, user, integration, jsid):
         if kkem_link := IntegrationAuthorization.objects.filter(
-            user=user, integration=integration
+                user=user, integration=integration
         ).first():
             return kkem_link
         if IntegrationAuthorization.objects.filter(
-            integration_value=jsid, integration=integration
+                integration_value=jsid, integration=integration
         ).exists():
             raise ValueError("This KKEM account is already connected to another user")
 

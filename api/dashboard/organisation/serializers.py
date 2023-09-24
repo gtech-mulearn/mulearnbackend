@@ -1,5 +1,6 @@
 import uuid
 from utils.permission import JWTUtils
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
 from rest_framework import serializers
@@ -55,16 +56,66 @@ class OrganisationSerializer(serializers.ModelSerializer):
         ]
 
 
-class PostOrganizationSerializer(serializers.ModelSerializer):
+class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
-        fields = "__all__"
+        fields = [
+            "title",
+            "code",
+            "org_type",
+            "affiliation",
+            "district"
+        ]
+
+    def create(self, validated_data):
+        user_id = self.context.get('user_id')
+        validated_data['id'] = str(uuid.uuid4())
+        validated_data['created_by_id'] = user_id
+        validated_data['updated_by_id'] = user_id
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+
+        return Organization.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        user_id = self.context.get('user_id')
+        instance.title = validated_data.get('title', instance.title)
+        instance.code = validated_data.get('code', instance.code)
+        instance.updated_by_id = user_id
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+
+        instance.save()
+        return instance
+
+    def validate_org_type(self, organization):
+        if organization == OrganizationType.COLLEGE.value:
+            affiliation = self.initial_data.get('affiliation')
+
+            org_affiliation = OrgAffiliation.objects.filter(
+                id=affiliation
+            ).first()
+
+            if org_affiliation is None:
+                raise serializers.ValidationError(
+                    "Invalid organization affiliation"
+                )
+        return organization
+
+    def validate_affiliation(self):
+        return None and self.initial_data.get('org_type') != OrganizationType.COLLEGE.value
 
 
 class AffiliationSerializer(serializers.ModelSerializer):
+
+    label = serializers.ReadOnlyField(source='title')
+    value = serializers.ReadOnlyField(source='id')
+
     class Meta:
         model = OrgAffiliation
-        fields = "__all__"
+        fields = [
+            "value",
+            "label"
+        ]
 
 
 class DepartmentSerializer(serializers.ModelSerializer):
