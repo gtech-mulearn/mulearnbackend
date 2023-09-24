@@ -59,7 +59,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
             if ig_name in ig_details:
                 ig_details[ig_name] += karma["karma"]
 
-        return ig_details
+        return [{"name": key, "karma": value} for key, value in ig_details.items()]
 
     def get_jsid(self, obj):
         return int(obj.jsid) if obj.jsid else None
