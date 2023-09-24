@@ -110,12 +110,10 @@ class ImportVoucherLogAPI(APIView):
                     Great news! You are just one step away from claiming your internship/contribution Karma points.
                     
                     Name: {full_name}
-                    Email: {mail}
+                    Email: {email}
                     
                     To claim your karma points copy this `voucher {row["code"]}` and paste it #task-dropbox channel along with your voucher image.
                     Great news! You are just one step away from claiming your internship/contribution Karma points. Simply post the Karma card attached to this email in the #task-dropbox channel and include the specified hashtag to redeem your points.
-                    Name: {}
-                    Email: {}""".format(full_name, email)
                     """
 
                     month_week = f'{month}/{week}'
@@ -123,7 +121,7 @@ class ImportVoucherLogAPI(APIView):
                         name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
                         month=month_week)
                     karma_voucher_image.seek(0)
-                    email = EmailMessage(
+                    email_obj = EmailMessage(
                         subject=subject,
                         body=text,
                         from_email=from_mail,
@@ -135,8 +133,8 @@ class ImportVoucherLogAPI(APIView):
                         'attachment',
                         filename=f'{str(full_name)}.jpg',
                     )
-                    email.attach(attachment)
-                    email.send(fail_silently=False)
+                    email_obj.attach(attachment)
+                    email_obj.send(fail_silently=False)
 
         # Serialize and save valid voucher rows
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
