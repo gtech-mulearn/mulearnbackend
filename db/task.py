@@ -242,34 +242,31 @@ class KarmaActivityLog(models.Model):
 
 class MucoinActivityLog(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mucoin_activity_log_user")
+    user = models.CharField(max_length=36)
     coin = models.FloatField()
     status = models.CharField(max_length=36)
-    task = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name="mucoin_activity_log_task")
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', blank=True, null=True,
-                                   related_name="mucoin_activity_log_updated_by")
-    updated_at = models.DateTimeField(blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', blank=True, null=True,
-                                   related_name="mucoin_activity_log_created_by")
-    created_at = models.DateTimeField(blank=True, null=True)
+    task = models.ForeignKey(TaskList, on_delete=models.CASCADE)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by')
+    updated_at = models.DateTimeField()
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by')
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
         db_table = 'mucoin_activity_log'
 
 
-class MuCoinInviteLog(models.Model):
+class MucoinInviteLog(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    reffered_by = models.ForeignKey(User, on_delete=models.CASCADE) #change
+    user = models.ForeignKey(User, on_delete=models.CASCADE)
     email = models.CharField(max_length=200)
-    invite_code = models.CharField(max_length=36, blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
-                                   related_name="mu_coin_invite_log_created_by")
-    created_at = models.DateTimeField(blank=True, null=True)
+    invite_code = models.CharField(max_length=36)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by')
+    created_at = models.DateTimeField()
 
     class Meta:
         managed = False
-        db_table = 'mu_coin_invite_log'
+        db_table = 'mucoin_invite_log'
 
 
 class UserIgLink(models.Model):

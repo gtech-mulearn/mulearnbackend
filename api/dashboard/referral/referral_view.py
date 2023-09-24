@@ -3,11 +3,11 @@ import uuid
 from decouple import config
 from rest_framework.views import APIView
 
-from db.task import Wallet, MuCoinInviteLog
+from db.task import Wallet, MucoinInviteLog, MucoinActivityLog, TaskList
 from db.user import UserReferralLink, User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from utils.types import RefferalType
+from utils.types import RefferalType, TasksTypesHashtag
 from utils.utils import DateTimeUtils
 from utils.utils import send_template_mail
 from .referral_serializer import ReferralListSerializer
@@ -40,7 +40,7 @@ class Referral(APIView):
                 wallet = Wallet.objects.filter(user=user_id).first()
 
                 if wallet.coin >= 1:
-                    invite_log = MuCoinInviteLog.objects.create(id=uuid.uuid4(), user=user, email=receiver_email,
+                    invite_log = MucoinInviteLog.objects.create(id=uuid.uuid4(), user=user, email=receiver_email,
                                                                 invite_code=uuid.uuid4(),
                                                                 created_by=user,
                                                                 created_at=DateTimeUtils.get_current_utc_time())
@@ -52,27 +52,16 @@ class Referral(APIView):
                         'invite_code': invite_log.invite_code,
                     }
                     send_template_mail(context=user, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])
+                    task = TaskList.objects.filter(title=TasksTypesHashtag.MUCOIN.value).first()
+                    MucoinActivityLog.objects.create(id=uuid.uuid4(), user=user, coin=1, task=task, status='Debit',
+                                                     updated_by=user, updated_at=DateTimeUtils.get_current_utc_time(),
+                                                     created_by=user, created_at=DateTimeUtils.get_current_utc_time())
+                    wallet = Wallet.objects.filter(user=user).first()
+                    wallet.coin -= 1
+                    wallet.save()
+
                 else:
                     return CustomResponse(general_message="You Don't have enough mucoins").get_failure_response()
-
-                    # task = TaskList.objects.filter(title=TasksTypesHashtag.MUCOIN.value).first()
-                    #
-                    # UserReferralLink.objects.create(
-                    #     id=uuid.uuid4(),
-                    #     referral=referral_provider,
-                    #     is_coin=True,
-                    #     user=wallet.user,
-                    #     created_by=wallet.user,
-                    #     created_at=DateTimeUtils.get_current_utc_time(),
-                    #     updated_by=wallet.user,
-                    #     updated_at=DateTimeUtils.get_current_utc_time(),
-                    # )
-                    # MucoinActivityLog.objects.create(id=uuid.uuid4(), user=wallet.user, coin=1.0, status="Credit",
-                    #                                  task=task, updated_by=wallet.user,
-                    #                                  updated_at=DateTimeUtils.get_current_utc_time(),
-                    #                                  created_by=wallet.user,
-                    #                                  created_at=DateTimeUtils.get_current_utc_time())
-                    # wallet.save()
             return CustomResponse(general_message="Invited successfully").get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
