@@ -171,7 +171,7 @@ class UserOrganizationLink(models.Model):
     @property
     def total_karma(self):
         try:
-            return self.user.total_karma_user.karma
+            return self.user.wallet_user.karma
         except Exception as e:
             return 0
 

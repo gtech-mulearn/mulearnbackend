@@ -6,7 +6,7 @@ from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, TotalKarma, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink
 from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
@@ -70,30 +70,29 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
-                org__org_type=OrganizationType.COLLEGE.value
-        ).first():
+                org__org_type=OrganizationType.COLLEGE.value).first():
             return user_org_link.org.code
         return None
 
     def get_karma(self, obj):
-        return total_karma.karma if (total_karma := obj.total_karma_user) else None
+        return total_karma.karma if (total_karma := obj.wallet_user) else None
 
     def get_rank(self, obj):
         roles = self.context.get("roles")
-        user_karma = obj.total_karma_user.karma
+        user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
-            ranks = TotalKarma.objects.filter(
+            ranks = Wallet.objects.filter(
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
             ).count()
         elif RoleType.ENABLER.value in roles:
-            ranks = TotalKarma.objects.filter(
+            ranks = Wallet.objects.filter(
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
             ).count()
         else:
             ranks = (
-                TotalKarma.objects.filter(karma__gte=user_karma)
+                Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
@@ -189,20 +188,20 @@ class UserRankSerializer(ModelSerializer):
 
     def get_rank(self, obj):
         roles = self.context.get("roles")
-        user_karma = obj.total_karma_user.karma
+        user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
-            ranks = TotalKarma.objects.filter(
+            ranks = Wallet.objects.filter(
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
             ).count()
         elif RoleType.ENABLER.value in roles:
-            ranks = TotalKarma.objects.filter(
+            ranks = Wallet.objects.filter(
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
             ).count()
         else:
             ranks = (
-                TotalKarma.objects.filter(karma__gte=user_karma)
+                Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
@@ -216,7 +215,7 @@ class UserRankSerializer(ModelSerializer):
         return ranks if ranks > 0 else None
 
     def get_karma(self, obj):
-        return total_karma.karma if (total_karma := obj.total_karma_user) else None
+        return total_karma.karma if (total_karma := obj.wallet_user) else None
 
     def get_interest_groups(self, obj):
         return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]

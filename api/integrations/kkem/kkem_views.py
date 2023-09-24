@@ -26,7 +26,7 @@ class KKEMBulkKarmaAPI(APIView):
             )
             .distinct()
             .annotate(jsid=F("integration_authorization_user__integration_value"))
-            .select_related("total_karma_user")
+            .select_related("wallet_user")
             .prefetch_related(
                 Prefetch(
                     "user_ig_link_user",
@@ -190,7 +190,7 @@ class KKEMdetailsFetchAPI(APIView):
         try:
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
             jsid = details["jsid"][0]
-            
+
             integration = Integration.objects.get(name=IntegrationType.KKEM.value)
             token, BASE_URL = integration.token, integration.base_url
 

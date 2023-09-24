@@ -175,8 +175,7 @@ class ImportCSV:
 
 
 def send_template_mail(
-    context: dict, subject: str, address: list[str], attachment: str = None
-):
+    context: dict, subject: str, address: list[str], attachment: str = None):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.

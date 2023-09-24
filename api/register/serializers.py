@@ -3,14 +3,12 @@ from uuid import uuid4
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
-from rest_framework.fields import empty
 
 from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
-from api.integrations.kkem.kkem_serializer import KKEMAuthorization
 from db.integrations import Integration, IntegrationAuthorization
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
-from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
+from db.task import InterestGroup, Wallet, UserIgLink, TaskList, MucoinInviteLog, KarmaActivityLog
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
 from utils.types import IntegrationType, OrganizationType, RoleType, TasksTypesHashtag
@@ -136,7 +134,9 @@ class RegisterSerializer(serializers.ModelSerializer):
         area_of_interests = validated_data.pop("area_of_interests")
         password = validated_data.pop("password")
         hashed_password = make_password(password)
+
         referral_id = validated_data.pop("referral_id", None)
+        invite_code = validated_data.pop('invite_code', None)
 
         jsid = None
         if param := validated_data.pop("param", None):
@@ -160,9 +160,7 @@ class RegisterSerializer(serializers.ModelSerializer):
 
         if referral_id:
             referral_provider = User.objects.get(mu_id=referral_id)
-            task_list = TaskList.objects.filter(
-                hashtag=TasksTypesHashtag.REFERRAL.value
-            ).first()
+            task_list = TaskList.objects.filter(hashtag=TasksTypesHashtag.REFERRAL.value).first()
             karma_amount = getattr(task_list, "karma", 0)
 
         with transaction.atomic():
@@ -175,10 +173,11 @@ class RegisterSerializer(serializers.ModelSerializer):
                 created_at=DateTimeUtils.get_current_utc_time(),
             )
 
-            TotalKarma.objects.create(
+            Wallet.objects.create(
                 id=uuid4(),
                 user=user,
                 karma=0,
+                coin=0,
                 created_by=user,
                 created_at=DateTimeUtils.get_current_utc_time(),
                 updated_by=user,
@@ -259,35 +258,22 @@ class RegisterSerializer(serializers.ModelSerializer):
                 UserReferralLink.objects.create(
                     id=uuid4(),
                     referral=referral_provider,
+                    is_coin=False,
                     user=user,
                     created_by=user,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_by=user,
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
-                # KarmaActivityLog.objects.create(
-                #     id=uuid4(),
-                #     karma=karma_amount,
-                #     task=task_list,
-                #     created_by=user,
-                #     user=referral_provider,
-                #     created_at=DateTimeUtils.get_current_utc_time(),
-                #     appraiser_approved=False,
-                #     peer_approved=True,
-                #     appraiser_approved_by=user,
-                #     peer_approved_by=user,
-                #     updated_by=user,
-                #     updated_at=DateTimeUtils.get_current_utc_time(),
-                # )
 
-                # referrer_karma = TotalKarma.objects.filter(
-                #     user=referral_provider
-                # ).first()
-
-                # referrer_karma.karma += karma_amount
-                # referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
-                # referrer_karma.updated_by = user
-                # referrer_karma.save()
+            if invite_code:
+                mucoin_invite_log = MucoinInviteLog.objects.filter(invite_code=invite_code).first()
+                if mucoin_invite_log:
+                    referral_provider = User.objects.get(mu_id=mucoin_invite_log.user.mu_id)
+                    UserReferralLink.objects.create(id=uuid4(), referral=referral_provider,
+                                                    is_coin=True, user=user, created_by=user,
+                                                    created_at=DateTimeUtils.get_current_utc_time(),
+                                                    updated_by=user, updated_at=DateTimeUtils.get_current_utc_time())
 
             if jsid:
                 kkem_link = IntegrationAuthorization.objects.create(
@@ -385,7 +371,8 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserOrganizationLink
         fields = ["user", "org", "verified", "department", "graduation_year"]
-        
+
+
 class UserRoleLinkSerializer(serializers.ModelSerializer):
     org = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.all(), many=True, required=True
@@ -438,7 +425,7 @@ class RegisterNewSerializer(serializers.ModelSerializer):
 
             additional_values = {"user": user, "created_by": user, "updated_by": user}
 
-            TotalKarma.objects.create(**additional_values)
+            Wallet.objects.create(**additional_values)
             Socials.objects.create(**additional_values)
             UserSettings.objects.create(**additional_values)
 
@@ -486,7 +473,7 @@ class TotalKarmaSerializer(serializers.ModelSerializer):
         return super().update(instance, validated_data)
 
     class Meta:
-        model = TotalKarma
+        model = Wallet
         fields = ["karma", "updated_by"]
 
 
@@ -528,7 +515,7 @@ class ReferralSerializer(serializers.ModelSerializer):
 
         karma_activity_log_serializer.save()
 
-        referrer_karma = TotalKarma.objects.filter(
+        referrer_karma = Wallet.objects.filter(
             user=user_referral_link.referral
         ).first()
 

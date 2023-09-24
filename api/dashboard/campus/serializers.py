@@ -1,10 +1,10 @@
 from datetime import timedelta
 
-from django.db.models import Case, F, IntegerField, Sum, Value, When, Count, Q
+from django.db.models import Sum
 from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog, Level, TotalKarma, UserLvlLink
+from db.task import KarmaActivityLog
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
@@ -40,25 +40,25 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         return obj.org.user_organization_link_org.filter(
             verified=True,
             user__active=True,
-            user__total_karma_user__isnull=False,
-            user__total_karma_user__created_at__gte=last_month,
+            user__wallet_user__isnull=False,
+            user__wallet_user__created_at__gte=last_month,
         ).count()
 
     def get_total_karma(self, obj):
         return (
-            obj.org.user_organization_link_org.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-                user__total_karma_user__isnull=False,
-            ).aggregate(total_karma=Sum("user__total_karma_user__karma"))["total_karma"]
-            or 0
+                obj.org.user_organization_link_org.filter(
+                    org__org_type=OrganizationType.COLLEGE.value,
+                    verified=True,
+                    user__wallet_user__isnull=False,
+                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+                or 0
         )
 
     def get_rank(self, obj):
         org_karma_dict = (
             UserOrganizationLink.objects.all()
             .values("org")
-            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+            .annotate(total_karma=Sum("user__wallet_user__karma"))
         )
 
         rank_dict = {
@@ -109,7 +109,7 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
 
         today = DateTimeUtils.get_current_utc_time().date()
         date_range = [today - timedelta(days=i) for i in range(7)]
-        
+
         for date in date_range:
             karma_logs = (
                 KarmaActivityLog.objects.filter(

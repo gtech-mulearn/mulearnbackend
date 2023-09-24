@@ -61,13 +61,13 @@ class DepartmentAPI(APIView):
         return CustomResponse(
             response={"departments": department_serializer_data}
         ).get_success_response()
-        
+
 class CompanyAPI(APIView):
     def get(self, request):
         company_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMPANY.value
         ).values("id", "title")
-        
+
         company_serializer_data = serializers.BaseSerializer(
             company_queryset, many=True
         ).data
