@@ -244,29 +244,30 @@ class TaskList(models.Model):
 class Wallet(models.Model):
     id = models.CharField(
         primary_key=True,
-        max_length=36
+        max_length=36,
+        default=uuid.uuid4
     )
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
         related_name="wallet_user"
     )
-    karma = models.IntegerField()
-    coin = models.FloatField()
+    karma = models.IntegerField(default=0)
+    coin = models.FloatField(default=0)
     updated_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="updated_by",
         related_name="wallet_updated_by"
     )
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="created_by",
         related_name="wallet_created_by"
     )
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
