@@ -74,12 +74,18 @@ class WebHookCategory(Enum):
     USER_NAME = 'user-name'
 
 
+class RefferalType(Enum):
+    KARMA = 'Karma'
+    MUCOIN = 'Mucoin'
+
+
 class IntegrationType(Enum):
     KKEM = 'DWMS'
 
 
 class TasksTypesHashtag(Enum):
     REFERRAL = 'referral'
+    MUCOIN = 'mucoin'
 
 
 class Events(Enum):

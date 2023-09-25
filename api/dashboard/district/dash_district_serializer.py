@@ -36,7 +36,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
         org_karma_dict = (
             UserOrganizationLink.objects.all()
             .values("org__district")
-            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+            .annotate(total_karma=Sum("user__wallet_user__karma"))
         )
 
         rank_dict = {
@@ -65,7 +65,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
             org__district=obj.org.district
-        ).aggregate(total_karma=Sum("user__total_karma_user__karma"))["total_karma"]
+        ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
         return UserOrganizationLink.objects.filter(
