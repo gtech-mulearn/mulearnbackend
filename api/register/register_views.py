@@ -89,7 +89,7 @@ class UserRegisterValidateAPI(APIView):
                 ).get_failure_response()
             return CustomResponse(response=serialized_user.data).get_success_response()
         except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+            return CustomResponse(general_message=str(e), response=request.data).get_failure_response()
 
 
 class RoleAPI(APIView):
