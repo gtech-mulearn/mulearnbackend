@@ -106,7 +106,8 @@ class Level(models.Model):
 class UserLvlLink(models.Model):
     id = models.CharField(
         primary_key=True,
-        max_length=36
+        max_length=36,
+        default=uuid.uuid4
     )
     user = models.ForeignKey(
         User,
@@ -124,14 +125,14 @@ class UserLvlLink(models.Model):
         db_column="updated_by",
         related_name="user_lvl_link_updated_by",
     )
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="created_by",
         related_name="user_lvl_link_created_by",
     )
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
