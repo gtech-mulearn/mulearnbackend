@@ -353,7 +353,6 @@ class LinkSocials(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        instance.user_id = user_id
 
         instance.github = validated_data.get('github', instance.github)
         instance.facebook = validated_data.get('facebook', instance.facebook)
@@ -363,7 +362,6 @@ class LinkSocials(ModelSerializer):
         instance.behance = validated_data.get('behance', instance.behance)
         instance.stackoverflow = validated_data.get('stackoverflow', instance.stackoverflow)
         instance.medium = validated_data.get('medium', instance.medium)
-
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
