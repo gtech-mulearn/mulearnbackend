@@ -296,8 +296,6 @@ class RegisterSerializer(serializers.Serializer):
             if integration := validated_data.pop("integration", None):
                 integration.update({"user": user})
                 IntegrationSerializer().create(integration)
-                
-            1 / 0
 
         return user
 
