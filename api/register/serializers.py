@@ -141,26 +141,47 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
 
 class ReferralSerializer(serializers.ModelSerializer):
     user = serializers.CharField(required=False)
-    mu_id = serializers.CharField(required=True)
+    mu_id = serializers.CharField(required=False)
+    invite_code = serializers.CharField(required=False)
 
     class Meta:
         model = UserReferralLink
-        fields = ["mu_id", "user"]
+        fields = ["mu_id", "user", "invite_code"]
 
-    def validate_mu_id(self, attrs):
-        if referral := User.objects.filter(mu_id=attrs).first():
+    def validate(self, attrs):
+        if not attrs.get("mu_id", None) and not attrs.get("invite_code", None):
+            raise serializers.ValidationError(
+                "Please provide either a referral μID or an invite code"
+            )
+        return super().validate(attrs)
+
+    def validate_mu_id(self, mu_id):
+        if referral := User.objects.filter(mu_id=mu_id).first():
             return referral
 
         raise serializers.ValidationError(
             "The provided referrer's μID is not valid. Please double-check and try again."
         )
 
+    def validate_invite_code(self, invite_code):
+        try:
+            return MucoinInviteLog.objects.get(invite_code=invite_code).user.mu_id
+        except MucoinInviteLog.DoesNotExist as e:
+            raise serializers.ValidationError(
+                "The provided invite code is not valid."
+            ) from e
+
     def create(self, validated_data):
+        referral = validated_data.pop("invite_code", None) or validated_data.pop(
+            "mu_id", None
+        )
+
         validated_data.update(
             {
                 "created_by": validated_data["user"],
                 "updated_by": validated_data["user"],
-                "referral": validated_data.pop("mu_id"),
+                "referral": referral,
+                "is_coin": "invite_code" in validated_data,
             }
         )
 
@@ -275,27 +296,8 @@ class RegisterSerializer(serializers.Serializer):
             if integration := validated_data.pop("integration", None):
                 integration.update({"user": user})
                 IntegrationSerializer().create(integration)
-
-            # invite_code = validated_data.pop("invite_code", None)
-
-            # if invite_code:
-            #     mucoin_invite_log = MucoinInviteLog.objects.filter(
-            #         invite_code=invite_code
-            #     ).first()
-            #     if mucoin_invite_log:
-            #         referral_provider = User.objects.get(
-            #             mu_id=mucoin_invite_log.user.mu_id
-            #         )
-            #         UserReferralLink.objects.create(
-            #             id=uuid4(),
-            #             referral=referral_provider,
-            #             is_coin=True,
-            #             user=user,
-            #             created_by=user,
-            #             created_at=DateTimeUtils.get_current_utc_time(),
-            #             updated_by=user,
-            #             updated_at=DateTimeUtils.get_current_utc_time(),
-            #         )
+                
+            1 / 0
 
         return user
 
