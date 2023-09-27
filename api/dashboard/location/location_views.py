@@ -38,7 +38,7 @@ class CountryDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = location_serializer.CountrySerializer(
+            serializer = location_serializer.CountryCreateEditSerializer(
                 data=request.data, context={"user_id": user_id}
             )
 
@@ -59,7 +59,7 @@ class CountryDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             country = Country.objects.get(id=country_id)
-            serializer = location_serializer.CountrySerializer(
+            serializer = location_serializer.CountryCreateEditSerializer(
                 country, data=request.data, context={"user_id": user_id}
             )
 
@@ -104,7 +104,7 @@ class StateDataAPI(APIView):
                 states, request, ["name"], {"name": "name"}
             )
 
-            serializer = location_serializer.StateSerializer(
+            serializer = location_serializer.StateRetrievalSerializer(
                 paginated_queryset.get("queryset"), many=True
             )
 
@@ -118,7 +118,7 @@ class StateDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = location_serializer.StateSerializer(
+            serializer = location_serializer.StateCreateEditSerializer(
                 data=request.data, context={"user_id": user_id}
             )
             if serializer.is_valid():
@@ -138,7 +138,7 @@ class StateDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             state = State.objects.get(id=state_id)
-            serializer = location_serializer.StateSerializer(
+            serializer = location_serializer.StateCreateEditSerializer(
                 state, data=request.data, context={"user_id": user_id}
             )
 
@@ -183,7 +183,7 @@ class ZoneDataAPI(APIView):
                 zones, request, ["name"], {"name": "name"}
             )
 
-            serializer = location_serializer.ZoneSerializer(
+            serializer = location_serializer.ZoneRetrievalSerializer(
                 paginated_queryset.get("queryset"), many=True
             )
             return CustomResponse().paginated_response(
@@ -196,7 +196,7 @@ class ZoneDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = location_serializer.ZoneSerializer(
+            serializer = location_serializer.ZoneCreateEditSerializer(
                 data=request.data, context={"user_id": user_id}
             )
             if serializer.is_valid():
@@ -216,7 +216,7 @@ class ZoneDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             zone = Zone.objects.get(id=zone_id)
-            serializer = location_serializer.ZoneSerializer(
+            serializer = location_serializer.ZoneCreateEditSerializer(
                 zone, data=request.data, context={"user_id": user_id}
             )
 
@@ -264,7 +264,7 @@ class DistrictDataAPI(APIView):
                 districts, request, ["name"], {"name": "name"}
             )
 
-            serializer = location_serializer.DistrictSerializer(
+            serializer = location_serializer.DistrictRetrievalSerializer(
                 paginated_queryset.get("queryset"), many=True
             )
             return CustomResponse().paginated_response(
@@ -277,7 +277,7 @@ class DistrictDataAPI(APIView):
     def post(self, request):
         try:
             user_id = JWTUtils.fetch_user_id(request)
-            serializer = location_serializer.DistrictSerializer(
+            serializer = location_serializer.DistrictCreateEditSerializer(
                 data=request.data, context={"user_id": user_id}
             )
             if serializer.is_valid():
@@ -297,7 +297,7 @@ class DistrictDataAPI(APIView):
         try:
             user_id = JWTUtils.fetch_user_id(request)
             district = District.objects.get(id=district_id)
-            serializer = location_serializer.DistrictSerializer(
+            serializer = location_serializer.DistrictCreateEditSerializer(
                 district, data=request.data, context={"user_id": user_id}
             )
 
