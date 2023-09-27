@@ -5,7 +5,7 @@ from django.urls import path, include
 urlpatterns = [
     path('register/', include('api.register.urls')),
     path('leaderboard/', include('api.leaderboard.urls')),
-    path('dashboard/', include('api.dashboard.urls')),
+    path('dash board/', include('api.dashboard.urls')),
     path('integrations/', include('api.integrations.urls')),
     path('url-shortener/', include('api.url_shortener.urls')),
     path('protected/', include('api.protected.urls')),
