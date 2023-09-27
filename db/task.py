@@ -1,5 +1,7 @@
 import uuid
+
 from django.db import models
+
 from db.organization import Organization
 from .user import User
 
