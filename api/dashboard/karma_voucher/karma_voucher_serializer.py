@@ -7,6 +7,7 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
     task_id = serializers.CharField(required=True, allow_null=False)
     created_by_id = serializers.CharField(required=True, allow_null=False)
     updated_by_id = serializers.CharField(required=True, allow_null=False)
+    muid = serializers.CharField(source='user.muid')
 
     class Meta:
         model = VoucherLog
@@ -17,6 +18,7 @@ class VoucherLogSerializer(serializers.ModelSerializer):
     task = serializers.CharField(source='task.title')
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
+    muid = serializers.CharField(source='user.muid')
 
     class  Meta:
         model = VoucherLog
