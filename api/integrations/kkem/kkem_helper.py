@@ -34,7 +34,7 @@ def send_data_to_kkem(kkem_link):
         raise ValueError("Invalid jsid")
 
     send_connection_successful_email(kkem_link.user)
-    return response.json()
+    return response_data
 
 
 def decrypt_kkem_data(ciphertext):
@@ -69,7 +69,7 @@ def decrypt_kkem_data(ciphertext):
 
         return parse_qs(decrypted.decode("utf-8"))
     except Exception as e:
-        raise ValueError("Invalid or missing Token")
+        raise ValueError("The given token seems to be invalid do re-check and try again!")
 
 
 def send_connection_successful_email(user):

@@ -141,25 +141,47 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
 
 class ReferralSerializer(serializers.ModelSerializer):
     user = serializers.CharField(required=False)
-    referral = serializers.CharField(required=True)
+    mu_id = serializers.CharField(required=False)
+    invite_code = serializers.CharField(required=False)
 
     class Meta:
         model = UserReferralLink
-        fields = ["referral", "user"]
+        fields = ["mu_id", "user", "invite_code"]
 
-    def validate_referral(self, attrs):
-        if referral := User.objects.filter(mu_id=attrs).first():
+    def validate(self, attrs):
+        if not attrs.get("mu_id", None) and not attrs.get("invite_code", None):
+            raise serializers.ValidationError(
+                "Please provide either a referral μID or an invite code"
+            )
+        return super().validate(attrs)
+
+    def validate_mu_id(self, mu_id):
+        if referral := User.objects.filter(mu_id=mu_id).first():
             return referral
 
         raise serializers.ValidationError(
             "The provided referrer's μID is not valid. Please double-check and try again."
         )
 
+    def validate_invite_code(self, invite_code):
+        try:
+            return MucoinInviteLog.objects.get(invite_code=invite_code).user.mu_id
+        except MucoinInviteLog.DoesNotExist as e:
+            raise serializers.ValidationError(
+                "The provided invite code is not valid."
+            ) from e
+
     def create(self, validated_data):
+        referral = validated_data.pop("invite_code", None) or validated_data.pop(
+            "mu_id", None
+        )
+
         validated_data.update(
             {
                 "created_by": validated_data["user"],
                 "updated_by": validated_data["user"],
+                "referral": referral,
+                "is_coin": "invite_code" in validated_data,
             }
         )
 
@@ -215,12 +237,49 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
 
+class IntegrationSerializer(serializers.Serializer):
+    param = serializers.CharField()
+    title = serializers.CharField()
+
+    def validate_param(self, param):
+        try:
+            details = decrypt_kkem_data(param)
+            jsid = details["jsid"][0]
+            dwms_id = details["dwms_id"][0]
+
+            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
+                raise ValueError(
+                    "This KKEM account is already connected to another user"
+                )
+
+            return {"jsid": jsid, "dwms_id": dwms_id}
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def validate_title(self, integration):
+        try:
+            return Integration.objects.get(name=integration)
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def create(self, validated_data):
+        kkem_link = IntegrationAuthorization.objects.create(
+            user=validated_data["user"],
+            integration=validated_data["title"],
+            integration_value=validated_data["param"]["jsid"],
+            additional_field=validated_data["param"]["dwms_id"],
+            verified=True,
+        )
+
+        send_data_to_kkem(kkem_link)
+        return kkem_link
+
+
 class RegisterSerializer(serializers.Serializer):
     user = UserSerializer()
     organization = UserOrgLinkSerializer(required=False)
     referral = ReferralSerializer(required=False)
-
-    param = serializers.CharField(required=False, allow_null=True)
+    integration = IntegrationSerializer(required=False)
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -234,57 +293,9 @@ class RegisterSerializer(serializers.Serializer):
                 referral.update({"user": user})
                 ReferralSerializer().create(referral)
 
-            jsid = None
-            if param := validated_data.pop("param", None):
-                details = decrypt_kkem_data(param)
-                jsid = details["jsid"][0]
-                dwms_id = details["dwms_id"][0]
-
-                if IntegrationAuthorization.objects.filter(
-                    integration_value=jsid
-                ).exists():
-                    raise ValueError(
-                        "This KKEM account is already connected to another user"
-                    )
-
-                integration = Integration.objects.get(name=IntegrationType.KKEM.value)
-                
-
-            if jsid:
-                kkem_link = IntegrationAuthorization.objects.create(
-                    id=uuid4(),
-                    user=user,
-                    integration=integration,
-                    integration_value=jsid,
-                    additional_field=dwms_id,
-                    verified=True,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    updated_at=DateTimeUtils.get_current_utc_time(),
-                )
-
-                send_data_to_kkem(kkem_link)
-                
-
-            # invite_code = validated_data.pop("invite_code", None)
-
-            # if invite_code:
-            #     mucoin_invite_log = MucoinInviteLog.objects.filter(
-            #         invite_code=invite_code
-            #     ).first()
-            #     if mucoin_invite_log:
-            #         referral_provider = User.objects.get(
-            #             mu_id=mucoin_invite_log.user.mu_id
-            #         )
-            #         UserReferralLink.objects.create(
-            #             id=uuid4(),
-            #             referral=referral_provider,
-            #             is_coin=True,
-            #             user=user,
-            #             created_by=user,
-            #             created_at=DateTimeUtils.get_current_utc_time(),
-            #             updated_by=user,
-            #             updated_at=DateTimeUtils.get_current_utc_time(),
-            #         )
+            if integration := validated_data.pop("integration", None):
+                integration.update({"user": user})
+                IntegrationSerializer().create(integration)
 
         return user
 
