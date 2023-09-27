@@ -21,8 +21,7 @@ class InterestGroupAPI(APIView):
             'created_by__last_name',
             'updated_by__first_name',
             'updated_by__last_name'],
-
-                                                                {'name': 'name'})
+            {'name': 'name'})
         ig_serializer_data = InterestGroupSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(data=ig_serializer_data,
