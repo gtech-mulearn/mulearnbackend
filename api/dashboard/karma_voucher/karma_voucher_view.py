@@ -158,6 +158,7 @@ class VoucherLogAPI(APIView):
                            "task__title", "karma", "month", "week", "claimed",
                            "updated_by__first_name", "updated_by__last_name",
                            "created_by__first_name", "created_by__last_name"],
+
             sort_fields={'user': 'user__first_name',
                          'code': 'code',
                          'karma': 'karma',
