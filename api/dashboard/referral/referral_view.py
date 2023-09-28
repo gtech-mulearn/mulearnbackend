@@ -25,7 +25,7 @@ class Referral(APIView):
             return CustomResponse(
                 general_message="Sorry, but it seems like this email is either invalid or already associated with an existing user.").get_failure_response()
 
-            user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
         if RefferalType.KARMA.value == invite_type:
             user = {
