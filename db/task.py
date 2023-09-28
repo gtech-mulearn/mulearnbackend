@@ -384,9 +384,7 @@ class MucoinActivityLog(models.Model):
         primary_key=True,
         max_length=36
     )
-    user = models.CharField(
-        max_length=36
-    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='mucoin_activity_log_user')
     coin = models.FloatField()
     status = models.CharField(
         max_length=36
