@@ -44,13 +44,13 @@ class Referral(APIView):
                                                             created_by=user,
                                                             created_at=DateTimeUtils.get_current_utc_time())
 
-                user = {
+                user_context = {
                     "full_name": user.fullname,
                     "email": receiver_email,
                     "mu_id": user.mu_id,
                     'invite_code': invite_log.invite_code,
                 }
-                send_template_mail(context=user, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])
+                send_template_mail(context=user_context, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])
                 task = TaskList.objects.filter(title=TasksTypesHashtag.MUCOIN.value).first()
                 MucoinActivityLog.objects.create(id=uuid.uuid4(), user=user, coin=1, task=task, status='Debit',
                                                  updated_by=user, updated_at=DateTimeUtils.get_current_utc_time(),
