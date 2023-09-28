@@ -91,7 +91,7 @@ class UserAPI(APIView):
     def get(self, request):
         user_queryset = (
             User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
+            .values("id", "first_name", "last_name", "email", "mobile", "discord_id", "created_at")
             .annotate(
                 muid=F("mu_id"),
                 karma=F("wallet_user__karma"),

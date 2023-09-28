@@ -1,5 +1,3 @@
-from django.db.models import F, Max
-
 from db.user import User
 
 
@@ -15,5 +13,5 @@ def generate_mu_id(first_name, last_name):
     while User.objects.filter(mu_id=mu_id).exists():
         counter += 1
         mu_id = f"{full_name}-{counter}@mulearn"
-        
+
     return mu_id

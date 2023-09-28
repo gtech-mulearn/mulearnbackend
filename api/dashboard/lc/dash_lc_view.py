@@ -61,7 +61,7 @@ class LearningCircleJoinApi(APIView):
                                                   context={'user_id': user_id, 'circle_id': circle_id})
         if serializer.is_valid():
             serializer.save()
-            NotificationUtils.insert_notification(user_id=lc.user_id,
+            NotificationUtils.insert_notification(user_id=lc.user,
                                                   title="Member Request",
                                                   description=f"{full_name} has requested to join your learning circle",
                                                   button="LC",

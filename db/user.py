@@ -11,7 +11,7 @@ class User(models.Model):
     mu_id = models.CharField(unique=True, max_length=100)
     first_name = models.CharField(max_length=75)
     last_name = models.CharField(max_length=75, blank=True, null=True)
-    email = models.CharField(unique=True, max_length=200)
+    email = models.EmailField(unique=True, max_length=200)
     password = models.CharField(max_length=200, blank=True, null=True)
     mobile = models.CharField(unique=True, max_length=15)
     gender = models.CharField(max_length=10, blank=True, null=True)
@@ -35,9 +35,10 @@ class User(models.Model):
 
 
 class UserReferralLink(models.Model):
-    id = models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')
     referral = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_referral')
+    is_coin = models.BooleanField(default=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by', db_column='created_by')

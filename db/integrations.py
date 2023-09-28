@@ -6,15 +6,13 @@ from db.user import User
 
 
 class Integration(models.Model):
-    id = models.CharField(
-        max_length=36, primary_key=True, default=uuid.uuid4, editable=False
-    )
+    id = models.CharField(primary_key=True, default=uuid.uuid4, max_length=36)
     name = models.CharField(max_length=255, null=False)
     token = models.CharField(max_length=400, null=False)
     auth_token = models.CharField(max_length=255, null=False)
     base_url = models.CharField(max_length=255, null=False)
-    created_at = models.DateTimeField(null=False)
-    updated_at = models.DateTimeField(null=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         db_table = "integration"
@@ -22,9 +20,7 @@ class Integration(models.Model):
 
 #
 class IntegrationAuthorization(models.Model):
-    id = models.CharField(
-        max_length=36, primary_key=True, default=uuid.uuid4, editable=False
-    )
+    id = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
     integration = models.ForeignKey(
         Integration,
         on_delete=models.CASCADE,
@@ -40,8 +36,8 @@ class IntegrationAuthorization(models.Model):
     integration_value = models.CharField(max_length=255, unique=True, null=False)
     additional_field = models.CharField(max_length=255)
     verified = models.BooleanField(default=False, null=False)
-    updated_at = models.DateTimeField(null=False)
-    created_at = models.DateTimeField(null=False)
+    updated_at = models.DateTimeField(null=False, auto_now=True)
+    created_at = models.DateTimeField(null=False, auto_now_add=True)
 
     class Meta:
         constraints = [

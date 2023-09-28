@@ -1,5 +1,4 @@
 import uuid
-
 from django.db.models import Sum, Q, F, Window, Case, When
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
@@ -231,7 +230,7 @@ class InstitutionDetailsAPI(APIView):
             country_name=F("district__zone__state__country__name")
         ).annotate(
             karma=Sum(
-                'user_organization_link_org__user__total_karma_user__karma'
+                'user_organization_link_org__user__wallet_user__karma'
             )).order_by(
             '-karma'
         ).annotate(
