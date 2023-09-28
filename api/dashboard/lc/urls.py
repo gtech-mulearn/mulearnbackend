@@ -15,6 +15,7 @@ urlpatterns = [
     path('join/<str:circle_id>/', dash_lc_view.LearningCircleJoinApi.as_view()),
     path('<str:circle_id>/', dash_lc_view.LearningCircleHomeApi.as_view()),
     path('<str:circle_id>/<str:member_id>/', dash_lc_view.LearningCircleHomeApi.as_view()),
+    path('lead/<str:circle_id>/<str:lead_id>/', dash_lc_view.LearningCircleLeadTransfer.as_view()),
 
 
 ]
