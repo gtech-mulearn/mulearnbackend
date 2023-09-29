@@ -159,15 +159,14 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     def validate_invite_code(self, invite_code):
         try:
-            return MucoinInviteLog.objects.get(invite_code=invite_code).user.mu_id
+            return MucoinInviteLog.objects.get(invite_code=invite_code).user
         except MucoinInviteLog.DoesNotExist as e:
             raise serializers.ValidationError(
                 "The provided invite code is not valid."
             ) from e
 
     def create(self, validated_data):
-        print(validated_data)
-        referral = validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
+        referral = validated_data.get("invite_code", None) or validated_data.get("mu_id", None)
 
         validated_data.update(
             {
@@ -177,7 +176,7 @@ class ReferralSerializer(serializers.ModelSerializer):
                 "is_coin": "invite_code" in validated_data,
             }
         )
-
+        validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
         return super().create(validated_data)
 
 
@@ -275,7 +274,6 @@ class RegisterSerializer(serializers.Serializer):
     integration = IntegrationSerializer(required=False)
 
     def create(self, validated_data):
-        print(validated_data)
         with transaction.atomic():
             user = UserSerializer().create(validated_data.pop("user"))
 
