@@ -43,12 +43,13 @@ class LcDashboardAPI(APIView):
         if date:
             learning_circle_count = LearningCircle.objects.filter(created_at__gt=date).count()
             total_no_enrollment = UserCircleLink.objects.filter(lead=False, accepted=True, created_at__gt=date).count()
-            circle_count_by_ig = LearningCircle.objects.filter(created_at__gt=date).values('ig__name').annotate(
+            circle_count_by_ig = LearningCircle.objects.filter(created_at__gt=date).values(
+                ig_name=F('ig__name')).annotate(
                 total_circles=Count('id'))
         else:
             learning_circle_count = LearningCircle.objects.all().count()
             total_no_enrollment = UserCircleLink.objects.filter(lead=False, accepted=True).count()
-            circle_count_by_ig = LearningCircle.objects.all().values('ig__name').annotate(
+            circle_count_by_ig = LearningCircle.objects.all().values(ig_name=F('ig__name')).annotate(
                 total_circles=Count('id'))
         return CustomResponse(response={'lc_count': learning_circle_count, 'total_enrollment': total_no_enrollment,
                                         'circle_count_by_ig': circle_count_by_ig}).get_success_response()
@@ -58,11 +59,11 @@ class LcReportAPI(APIView):
 
     def get(self, request):
         student_info = UserCircleLink.objects.filter(lead=False, accepted=True).values(
-            'user__first_name', 'user__last_name','user__mu_id',
-            'circle__name', 'circle__ig__name',
-            'user__user_organization_link_user__org__title',
+            first_name=F('user__first_name'), last_name=F('user__last_name'), muid=F('user__mu_id'),
+            circle_name=F('circle__name'), circle_ig=F('circle__ig__name'),
+            organisation=F('user__user_organization_link_user__org__title') ,
         ).annotate(
-            karma_earned=Sum(F('user__wallet_user__karma')),
+            karam_earned=Sum(F('user__karma_activity_log_user__karma'))
         )
 
         return CustomResponse(response=student_info).get_success_response()
