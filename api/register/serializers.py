@@ -166,9 +166,8 @@ class ReferralSerializer(serializers.ModelSerializer):
             ) from e
 
     def create(self, validated_data):
-        referral = validated_data.pop("invite_code", None) or validated_data.pop(
-            "mu_id", None
-        )
+        print(validated_data)
+        referral = validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
 
         validated_data.update(
             {
@@ -276,6 +275,7 @@ class RegisterSerializer(serializers.Serializer):
     integration = IntegrationSerializer(required=False)
 
     def create(self, validated_data):
+        print(validated_data)
         with transaction.atomic():
             user = UserSerializer().create(validated_data.pop("user"))
 
