@@ -4,7 +4,7 @@ from django.db.models import Sum, F, Case, CharField, When
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink, Organization
-from db.task import Level, TotalKarma
+from db.task import Level, Wallet
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -45,7 +45,7 @@ class DistrictTopThreeCampusAPI(APIView):
                 verified=True,
             )
             .values("org")
-            .annotate(total_karma=Sum("user__total_karma_user__karma"))
+            .annotate(total_karma=Sum("user__wallet_user__karma"))
         )
 
         org_ranks = {
@@ -97,7 +97,7 @@ class DistrictStudentDetailsAPI(APIView):
         user_org_link = get_user_college_link(user_id)
 
         rank = (
-            TotalKarma.objects.filter(
+            Wallet.objects.filter(
                 user__user_organization_link_user__org__district=user_org_link.org.district,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
@@ -120,7 +120,7 @@ class DistrictStudentDetailsAPI(APIView):
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
-                karma=F("total_karma_user__karma"),
+                karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
         )
@@ -133,7 +133,7 @@ class DistrictStudentDetailsAPI(APIView):
                 "first_name": "first_name",
                 "last_name": "last_name",
                 "muid": "mu_id",
-                "karma": "total_karma_user__karma",
+                "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
             },
         )
@@ -160,7 +160,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
         user_org_link = get_user_college_link(user_id)
 
         rank = (
-            TotalKarma.objects.filter(
+            Wallet.objects.filter(
                 user__user_organization_link_user__org__district=user_org_link.org.district,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
@@ -183,7 +183,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
-                karma=F("total_karma_user__karma"),
+                karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
         )

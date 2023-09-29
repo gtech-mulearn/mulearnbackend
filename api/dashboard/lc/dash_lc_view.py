@@ -1,33 +1,46 @@
 from decouple import config
+from django.core.mail import send_mail
 from rest_framework.views import APIView
-
+from django.db.models import Q
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink
-from db.organization import UserOrganizationLink
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
-from utils.types import OrganizationType
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberlistSerializer
 
 domain = config("FR_DOMAIN_NAME")
+from_mail = config("FROM_MAIL")
 
 
-class LearningCircleAPI(APIView):
-    def get(self, request):  # lists the learning circle in the user's college
+class TotalLearningCircleListApi(APIView):
+    def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
-        org_id = UserOrganizationLink.objects.filter(user_id=user_id,
-                                                     org__org_type=OrganizationType.COLLEGE.value).values_list('org_id',
-                                                                                                               flat=True).first()
-        learning_queryset = LearningCircle.objects.filter(org=org_id).exclude(
-            usercirclelink__accepted=1, usercirclelink__user_id=user_id
-        )
+        filters = Q()
+
+        filters &= ~Q(usercirclelink__accepted=1, usercirclelink__user_id=user_id)
+        if district_id := request.data.get('district_id'):
+            filters &= Q(org__district_id=district_id)
+        if org_id := request.data.get('org_id'):
+            filters &= Q(org_id=org_id)
+        if interest_group_id := request.data.get('ig_id'):
+            filters &= Q(ig_id=interest_group_id)
+
+        if circle_code:
+            if not LearningCircle.objects.filter(circle_code=circle_code).exists():
+                return CustomResponse(general_message='invalid circle code').get_failure_response()
+            filters &= Q(circle_code=circle_code)
+
+        learning_queryset = LearningCircle.objects.filter(filters)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
+
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
+
+class LearningCircleCreateApi(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = LearningCircleCreateSerializer(data=request.data, context={'user_id': user_id})
@@ -48,7 +61,7 @@ class LearningCircleJoinApi(APIView):
                                                   context={'user_id': user_id, 'circle_id': circle_id})
         if serializer.is_valid():
             serializer.save()
-            NotificationUtils.insert_notification(user_id=lc.user_id,
+            NotificationUtils.insert_notification(user_id=lc.user,
                                                   title="Member Request",
                                                   description=f"{full_name} has requested to join your learning circle",
                                                   button="LC",
@@ -58,7 +71,7 @@ class LearningCircleJoinApi(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
-class LearningCircleListApi(APIView):
+class UserLearningCircleListApi(APIView):
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
         learning_queryset = LearningCircle.objects.filter(usercirclelink__user_id=user_id, usercirclelink__accepted=1)
@@ -76,6 +89,24 @@ class LearningCircleMeetAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
+class LearningCircleLeadTransfer(APIView):
+    def patch(self, request, circle_id, lead_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=user_id).first()
+        lead_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=lead_id).first()
+        if not LearningCircle.objects.filter(id=circle_id).exists():
+            return CustomResponse(general_message='Learning Circle not found').get_failure_response()
+        if usr_circle_link is None or usr_circle_link.lead != 1:
+            return CustomResponse(general_message='User is not lead').get_failure_response()
+        if lead_circle_link is None:
+            return CustomResponse(general_message='New lead not found in the circle').get_failure_response()
+        usr_circle_link.lead = None
+        lead_circle_link.lead = 1
+        usr_circle_link.save()
+        lead_circle_link.save()
+        return CustomResponse(general_message='Lead transferred successfully').get_success_response()
+
+
 class LearningCircleHomeApi(APIView):
     def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -84,7 +115,6 @@ class LearningCircleHomeApi(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     def post(self, request, member_id, circle_id):
-        user_id = JWTUtils.fetch_user_id(request)
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
         if learning_circle_link is None:
             return CustomResponse(general_message='User not part of circle').get_failure_response()
@@ -101,6 +131,9 @@ class LearningCircleHomeApi(APIView):
             return CustomResponse(general_message='Learning Circle Not Available').get_failure_response()
 
         learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+        if learning_circle_link.accepted is not None:
+            return CustomResponse(general_message='Already evaluated').get_failure_response()
+
         serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
                                                     context={'user_id': user_id})
         if serializer.is_valid():
@@ -156,8 +189,9 @@ class LearningCircleHomeApi(APIView):
         usr_circle_link.delete()
 
         if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
-            learning_circle = LearningCircle.objects.filter(id=circle_id).first()
-            if learning_circle:
+            if learning_circle := LearningCircle.objects.filter(
+                    id=circle_id
+            ).first():
                 learning_circle.delete()
                 return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
 
@@ -202,3 +236,31 @@ class LearningCircleListMembersApi(APIView):
             return CustomResponse(general_message='Learning Circle Not Exists').get_failure_response()
         serializer = LearningCircleMemberlistSerializer(lc, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class LearningCircleInviteLeadAPI(APIView):
+
+    def post(self, request):
+        circle_id = request.POST.get('lc')
+        muid = request.POST.get('muid')
+        user_id = JWTUtils.fetch_user_id(request)
+        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=user_id).first()
+        if not usr_circle_link:
+            return CustomResponse(general_message='User not part of circle').get_failure_response()
+        if usr_circle_link.lead:
+            user = User.objects.filter(mu_id=muid).first()
+            if not user:
+                return CustomResponse(general_message='Muid is Invalid').get_failure_response()
+            # send_template_mail(
+            #     context=user,
+            #     subject="LC µFAM IS HERE!",
+            #     address=["user_registration.html"],
+            # )
+            send_mail(
+                "LC Invite",
+                "Join our lc",
+                from_mail,
+                [user.email],
+                fail_silently=False,
+            )
+            return CustomResponse(general_message='User Invited').get_success_response()

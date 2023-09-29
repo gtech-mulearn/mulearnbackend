@@ -17,4 +17,5 @@ urlpatterns = [
     path('location/', include('api.dashboard.location.urls')),
     path('organisation/', include('api.dashboard.organisation.urls')),
     path('dynamic-management/', include('api.dashboard.dynamic_management.urls')),
+    path('error-log/', include('api.dashboard.error_log.urls')),
 ]

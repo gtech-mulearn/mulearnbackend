@@ -101,7 +101,7 @@ class UserProfileAPI(APIView):
             roles = JWTUtils.fetch_role(request)
 
         user = (
-            User.objects.select_related("total_karma_user")
+            User.objects.select_related("wallet_user")
             .prefetch_related(
                 "user_organization_link_user__org",
                 "user_organization_link_user__department",
@@ -137,18 +137,14 @@ class UserLogAPI(APIView):
         else:
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
-        karma_activity_log = KarmaActivityLog.objects.filter(
-            user=user_id, appraiser_approved=True
-        ).order_by("-created_at")
+
+        karma_activity_log = KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True).order_by(
+            "-created_at")
 
         if karma_activity_log is None:
-            return CustomResponse(
-                general_message="No karma details available for user"
-            ).get_success_response()
+            return CustomResponse(general_message="No karma details available for user").get_success_response()
 
-        serializer = profile_serializer.UserLogSerializer(
-            karma_activity_log, many=True
-        ).data
+        serializer = profile_serializer.UserLogSerializer(karma_activity_log, many=True).data
 
         return CustomResponse(response=serializer).get_success_response()
 
@@ -223,6 +219,16 @@ class UserRankAPI(APIView):
 class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        try:
+            social_instance = Socials.objects.filter(user_id=user_id).first()
+        except Socials.DoesNotExist:
+            return CustomResponse(general_message='No Socials Found for this User').get_failure_response()
+
+        serializer = LinkSocials(instance=social_instance)
+        return CustomResponse(response=serializer.data).get_success_response()
+
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         try:
@@ -235,13 +241,3 @@ class SocialsAPI(APIView):
             serializer.save()
             return CustomResponse(general_message="Socials Updated").get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
-
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        try:
-            social_instance = Socials.objects.filter(user_id=user_id).first()
-        except Socials.DoesNotExist:
-            return CustomResponse(general_message='No Socials Found for this User').get_failure_response()
-
-        serializer = LinkSocials(instance=social_instance)
-        return CustomResponse(response=serializer.data).get_success_response()

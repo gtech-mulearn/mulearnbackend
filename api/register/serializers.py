@@ -1,26 +1,32 @@
-import json
-from uuid import uuid4
-
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
-import requests
 from rest_framework import serializers
+
 from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
 from db.integrations import Integration, IntegrationAuthorization
-
 from db.organization import Country, State, Zone
 from db.organization import District, Department, Organization, UserOrganizationLink
-from db.task import InterestGroup, TotalKarma, UserIgLink, KarmaActivityLog, TaskList
+from db.task import (
+    InterestGroup,
+    Wallet,
+    MucoinInviteLog,
+)
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
-from utils.types import IntegrationType, RoleType, TasksTypesHashtag
+from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+from . import register_helper
 
 
 class LearningCircleUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ["id", "mu_id", "first_name", "last_name", "email", "mobile"]
+
+
+class BaseSerializer(serializers.Serializer):
+    id = serializers.CharField()
+    title = serializers.CharField()
 
 
 class RoleSerializer(serializers.ModelSerializer):
@@ -66,224 +72,151 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 
 class UserDetailSerializer(serializers.ModelSerializer):
-    first_name = serializers.CharField(required=True)
-    last_name = serializers.CharField(required=True)
-    mu_id = serializers.CharField(required=True)
+    role = serializers.SerializerMethodField()
+    fullname = serializers.SerializerMethodField()
+
+    def get_fullname(self, obj):
+        return obj.fullname
+
+    def get_role(self, obj):
+        role_link = obj.user_role_link_user.filter(
+            role__title__in=[RoleType.MENTOR.value, RoleType.ENABLER.value]
+        ).first()
+        return role_link.role.title if role_link else None
 
     class Meta:
         model = User
-        fields = ["id", "mu_id", "first_name", "last_name", "email"]
+        fields = [
+            "id",
+            "mu_id",
+            "first_name",
+            "last_name",
+            "email",
+            "role",
+            "fullname",
+        ]
 
 
-class RegisterSerializer(serializers.ModelSerializer):
-    role = serializers.CharField(required=False, allow_null=True)
-    organizations = serializers.ListField(required=True, allow_null=True)
-    dept = serializers.CharField(required=False, allow_null=True)
-    year_of_graduation = serializers.CharField(
-        required=False, allow_null=True, max_length=4
+class UserOrgLinkSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(required=False)
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(), required=False
     )
-    area_of_interests = serializers.ListField(required=True, max_length=3)
-    first_name = serializers.CharField(required=True, max_length=75)
-    last_name = serializers.CharField(required=False, allow_null=True, max_length=75)
-    password = serializers.CharField(required=True, max_length=200)
-    referral_id = serializers.CharField(required=False, allow_null=True, max_length=100)
-    param = serializers.CharField(required=False, allow_null=True)
-
-    def validate_referral_id(self, value):
-        if value:
-            if not User.objects.filter(mu_id=value).exists():
-                raise serializers.ValidationError("Muid does not exist")
-            return value
-        return None
+    graduation_year = serializers.CharField(required=False)
+    organizations = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(), many=True, required=True
+    )
 
     def create(self, validated_data):
-        if validated_data["last_name"] is None:
-            full_name = validated_data["first_name"]
-        else:
-            full_name = validated_data["first_name"] + validated_data["last_name"]
-        full_name = full_name.replace(" ", "").lower()[:85]
-        mu_id = f"{full_name}@mulearn"
-        counter = 0
-        while User.objects.filter(mu_id=mu_id).exists():
-            counter += 1
-            mu_id = f"{full_name}-{counter}@mulearn"
-        role_id = validated_data.pop("role")
-        email = validated_data.pop("email").replace(" ", "")
-        organization_ids = validated_data.pop("organizations")
-        dept = validated_data.pop("dept")
-        year_of_graduation = validated_data.pop("year_of_graduation")
-        area_of_interests = validated_data.pop("area_of_interests")
+        department = validated_data.get("department", None)
+        graduation_year = validated_data.get("graduation_year", None)
+
+        is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
+
+        UserOrganizationLink.objects.bulk_create(
+            {
+                UserOrganizationLink(
+                    user=validated_data["user"],
+                    org=org,
+                    created_by=validated_data["user"],
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                    department=department if is_college(org) else None,
+                    graduation_year=graduation_year if is_college(org) else None,
+                )
+                for org in validated_data["organizations"]
+            }
+        )
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = ["user", "organizations", "verified", "department", "graduation_year"]
+
+
+class ReferralSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(required=False)
+    mu_id = serializers.CharField(required=False)
+    invite_code = serializers.CharField(required=False)
+
+    class Meta:
+        model = UserReferralLink
+        fields = ["mu_id", "user", "invite_code", "is_coin"]
+
+    def validate(self, attrs):
+        if not attrs.get("mu_id", None) and not attrs.get("invite_code", None):
+            raise serializers.ValidationError(
+                "Please provide either a referral μID or an invite code"
+            )
+        return super().validate(attrs)
+
+    def validate_mu_id(self, mu_id):
+        if referral := User.objects.filter(mu_id=mu_id).first():
+            return referral
+
+        raise serializers.ValidationError(
+            "The provided referrer's μID is not valid. Please double-check and try again."
+        )
+
+    def validate_invite_code(self, invite_code):
+        try:
+            return MucoinInviteLog.objects.get(invite_code=invite_code).user
+        except MucoinInviteLog.DoesNotExist as e:
+            raise serializers.ValidationError(
+                "The provided invite code is not valid."
+            ) from e
+
+    def create(self, validated_data):
+        referral = validated_data.get("invite_code", None) or validated_data.get("mu_id", None)
+
+        validated_data.update(
+            {
+                "created_by": validated_data["user"],
+                "updated_by": validated_data["user"],
+                "referral": referral,
+                "is_coin": "invite_code" in validated_data,
+            }
+        )
+        validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
+        return super().create(validated_data)
+
+
+class UserSerializer(serializers.ModelSerializer):
+    role = serializers.PrimaryKeyRelatedField(
+        queryset=Role.objects.all(), required=False, write_only=True
+    )
+
+    def create(self, validated_data):
+        role = validated_data.pop("role", None)
+
+        validated_data["mu_id"] = register_helper.generate_mu_id(
+            validated_data["first_name"], validated_data["last_name"]
+        )
         password = validated_data.pop("password")
         hashed_password = make_password(password)
-        referral_id = validated_data.pop("referral_id", None)
-        
-        jsid = None
-        if param := validated_data.pop("param", None):
-            details = decrypt_kkem_data(param)
-            jsid = details["jsid"][0]
-            dwms_id = details["dwms_id"][0]
-            
-            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
-                raise ValueError(
-                    "This KKEM account is already connected to another user"
-                )
+        validated_data["password"] = hashed_password
 
-            integration = Integration.objects.get(name=IntegrationType.KKEM.value)
+        user = super().create(validated_data)
 
-        referral_provider = None
-        user_role_verified = True
+        additional_values = {"user": user, "created_by": user, "updated_by": user}
 
-        if role_id:
-            role = Role.objects.get(id=role_id)
-            user_role_verified = role.title == RoleType.STUDENT.value
+        Wallet.objects.create(**additional_values)
+        Socials.objects.create(**additional_values)
+        UserSettings.objects.create(**additional_values)
 
-        if referral_id:
-            referral_provider = User.objects.get(mu_id=referral_id)
-            task_list = TaskList.objects.filter(
-                hashtag=TasksTypesHashtag.REFERRAL.value
-            ).first()
-            karma_amount = getattr(task_list, "karma", 0)
+        if level := Level.objects.filter(level_order="1").first():
+            UserLvlLink.objects.create(level=level, **additional_values)
 
-        with transaction.atomic():
-            user = User.objects.create(
-                **validated_data,
-                id=uuid4(),
-                mu_id=mu_id,
-                email=email,
-                password=hashed_password,
-                created_at=DateTimeUtils.get_current_utc_time(),
+        if role:
+            additional_values.pop("updated_by")
+
+            UserRoleLink.objects.create(
+                role=role,
+                verified=role.title == RoleType.STUDENT.value,
+                **additional_values,
             )
 
-            TotalKarma.objects.create(
-                id=uuid4(),
-                user=user,
-                karma=0,
-                created_by=user,
-                created_at=DateTimeUtils.get_current_utc_time(),
-                updated_by=user,
-                updated_at=DateTimeUtils.get_current_utc_time(),
-            )
+        return user
 
-            Socials.objects.create(
-                id=uuid4(),
-                user=user,
-                created_by=user,
-                created_at=DateTimeUtils.get_current_utc_time(),
-                updated_by=user,
-                updated_at=DateTimeUtils.get_current_utc_time(),
-            )
-
-            if role_id:
-                UserRoleLink.objects.create(
-                    id=uuid4(),
-                    user=user,
-                    role_id=role_id,
-                    created_by=user,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    verified=user_role_verified,
-                )
-
-            if organization_ids is not None:
-                UserOrganizationLink.objects.bulk_create(
-                    [
-                        UserOrganizationLink(
-                            id=uuid4(),
-                            user=user,
-                            org_id=org_id,
-                            created_by=user,
-                            created_at=DateTimeUtils.get_current_utc_time(),
-                            verified=True,
-                            department_id=dept,
-                            graduation_year=year_of_graduation,
-                        )
-                        for org_id in organization_ids
-                    ]
-                )
-
-            UserIgLink.objects.bulk_create(
-                [
-                    UserIgLink(
-                        id=uuid4(),
-                        user=user,
-                        ig_id=ig,
-                        created_by=user,
-                        created_at=DateTimeUtils.get_current_utc_time(),
-                    )
-                    for ig in area_of_interests
-                ]
-            )
-
-            if level := Level.objects.filter(level_order="1").first():
-                UserLvlLink.objects.create(
-                    id=uuid4(),
-                    user=user,
-                    level=level,
-                    updated_by=user,
-                    updated_at=DateTimeUtils.get_current_utc_time(),
-                    created_by=user,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                )
-
-            UserSettings.objects.create(
-                id=uuid4(),
-                user=user,
-                is_public=0,
-                created_by=user,
-                created_at=DateTimeUtils.get_current_utc_time(),
-                updated_by=user,
-                updated_at=DateTimeUtils.get_current_utc_time(),
-            )
-
-            if referral_id:
-                UserReferralLink.objects.create(
-                    id=uuid4(),
-                    referral=referral_provider,
-                    user=user,
-                    created_by=user,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    updated_by=user,
-                    updated_at=DateTimeUtils.get_current_utc_time(),
-                )
-                KarmaActivityLog.objects.create(
-                    id=uuid4(),
-                    karma=karma_amount,
-                    task=task_list,
-                    created_by=user,
-                    user=referral_provider,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    appraiser_approved=True,
-                    peer_approved=True,
-                    appraiser_approved_by=user,
-                    peer_approved_by=user,
-                    updated_by=user,
-                    updated_at=DateTimeUtils.get_current_utc_time(),
-                )
-
-                referrer_karma = TotalKarma.objects.filter(
-                    user=referral_provider
-                ).first()
-
-                referrer_karma.karma += karma_amount
-                referrer_karma.updated_at = DateTimeUtils.get_current_utc_time()
-                referrer_karma.updated_by = user
-                referrer_karma.save()
-
-            if jsid:
-                kkem_link = IntegrationAuthorization.objects.create( 
-                    id=uuid4(),
-                    user=user,
-                    integration=integration,
-                    integration_value=jsid,
-                    additional_field=dwms_id,
-                    verified=True,
-                    created_at=DateTimeUtils.get_current_utc_time(),
-                    updated_at=DateTimeUtils.get_current_utc_time(),
-                )
-
-                send_data_to_kkem(kkem_link)
-
-        return user, password
-    
     class Meta:
         model = User
         fields = [
@@ -291,14 +224,78 @@ class RegisterSerializer(serializers.ModelSerializer):
             "last_name",
             "email",
             "mobile",
-            "gender",
-            "dob",
-            "role",
-            "organizations",
-            "dept",
-            "year_of_graduation",
-            "area_of_interests",
             "password",
+            "role",
+        ]
+
+
+class IntegrationSerializer(serializers.Serializer):
+    param = serializers.CharField()
+    title = serializers.CharField()
+
+    def validate_param(self, param):
+        try:
+            details = decrypt_kkem_data(param)
+            jsid = details["jsid"][0]
+            dwms_id = details["dwms_id"][0]
+
+            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
+                raise ValueError(
+                    "This KKEM account is already connected to another user"
+                )
+
+            return {"jsid": jsid, "dwms_id": dwms_id}
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def validate_title(self, integration):
+        try:
+            return Integration.objects.get(name=integration)
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def create(self, validated_data):
+        kkem_link = IntegrationAuthorization.objects.create(
+            user=validated_data["user"],
+            integration=validated_data["title"],
+            integration_value=validated_data["param"]["jsid"],
+            additional_field=validated_data["param"]["dwms_id"],
+            verified=True,
+        )
+
+        send_data_to_kkem(kkem_link)
+        return kkem_link
+
+
+class RegisterSerializer(serializers.Serializer):
+    user = UserSerializer()
+    organization = UserOrgLinkSerializer(required=False)
+    referral = ReferralSerializer(required=False)
+    integration = IntegrationSerializer(required=False)
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            user = UserSerializer().create(validated_data.pop("user"))
+
+            if organizations := validated_data.pop("organization", None):
+                organizations.update({"user": user})
+                UserOrgLinkSerializer().create(organizations)
+
+            if referral := validated_data.pop("referral", None):
+                referral.update({"user": user})
+                ReferralSerializer().create(referral)
+
+            if integration := validated_data.pop("integration", None):
+                integration.update({"user": user})
+                IntegrationSerializer().create(integration)
+
+        return user
+
+    class Meta:
+        model = User
+        fields = [
+            "user",
+            "organization",
             "referral_id",
             "param",
         ]

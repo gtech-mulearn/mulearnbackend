@@ -4,12 +4,16 @@ from . import register_views
 
 urlpatterns = [
     path("", register_views.RegisterDataAPI.as_view()),
+    path("validate/", register_views.UserRegisterValidateAPI.as_view()),
     path("role/list/", register_views.RoleAPI.as_view()),
+    path("colleges/", register_views.CollegesAPI.as_view()),
+    path("department/list/", register_views.DepartmentAPI.as_view()),
+    
+    
     path("country/list/", register_views.CountryAPI.as_view()),
     path("state/list/", register_views.StateAPI.as_view()),
     path("district/list/", register_views.DistrictAPI.as_view()),
     path("college/list/", register_views.CollegeAPI.as_view()),
-    path("department/list/", register_views.DepartmentAPI.as_view()),
     path("company/list/", register_views.CompanyAPI.as_view()),
     path("community/list/", register_views.CommunityAPI.as_view()),
     path("area-of-interest/list/", register_views.AreaOfInterestAPI.as_view()),

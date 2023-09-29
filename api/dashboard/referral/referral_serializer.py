@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from db.task import TotalKarma, UserLvlLink
+from db.task import Wallet, UserLvlLink
 from db.user import UserReferralLink
 
 
@@ -16,7 +16,7 @@ class ReferralListSerializer(serializers.ModelSerializer):
         fields = ["id", "full_name", "mu_id", "karma", "level"]
 
     def get_karma(self, obj):
-        total_karma = TotalKarma.objects.filter(user=obj.user).first()
+        total_karma = Wallet.objects.filter(user=obj.user).first()
         return total_karma.karma if total_karma else 0
 
     def get_level(self, obj):
