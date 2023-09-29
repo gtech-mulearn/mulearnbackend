@@ -1,6 +1,6 @@
 import os
 
-from django.db.models import Count, Sum, F
+from django.db.models import Count, Sum, F, Case, When, Value, CharField
 from django.http import StreamingHttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from db.learning_circle import LearningCircle, UserCircleLink
 from mulearnbackend.settings import BASE_DIR
 from utils.response import CustomResponse
+from utils.types import IntegrationType
 
 
 class CommonAPI(APIView):
@@ -59,11 +60,20 @@ class LcReportAPI(APIView):
 
     def get(self, request):
         student_info = UserCircleLink.objects.filter(lead=False, accepted=True).values(
-            first_name=F('user__first_name'), last_name=F('user__last_name'), muid=F('user__mu_id'),
-            circle_name=F('circle__name'), circle_ig=F('circle__ig__name'),
-            organisation=F('user__user_organization_link_user__org__title') ,
-        ).annotate(
-            karam_earned=Sum(F('user__karma_activity_log_user__karma'))
-        )
+            first_name=F('user__first_name'),
+            last_name=F('user__last_name'),
+            muid=F('user__mu_id'),
+            circle_name=F('circle__name'),
+            circle_ig=F('circle__ig__name'),
+            organisation=F('user__user_organization_link_user__org__title'),
+            dwms_id=Case(
+                When(
+                    user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                    then=F('user__integration_authorization_user__additional_field')
+                ),
+                default=Value(None, output_field=CharField()),
+                output_field=CharField()
+            )
+        ).annotate(karam_earned=Sum('user__karma_activity_log_user__karma'))
 
         return CustomResponse(response=student_info).get_success_response()
