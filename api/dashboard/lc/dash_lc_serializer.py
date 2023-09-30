@@ -14,7 +14,7 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
     ig = serializers.CharField(source='ig.name')
-    org = serializers.CharField(source='org.title')
+    org = serializers.CharField(source='org.title', allow_null=True)
     member_count = serializers.SerializerMethodField()
 
     def get_member_count(self, obj):
@@ -126,7 +126,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
 
 class LearningCircleHomeSerializer(serializers.ModelSerializer):
-    college = serializers.CharField(source='org.title')
+    college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     pending_members = serializers.SerializerMethodField()
