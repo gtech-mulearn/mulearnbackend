@@ -60,10 +60,10 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         if not InterestGroup.objects.filter(id=ig_id).exists():
             raise serializers.ValidationError("Invalid interest group")
 
-        org_link = UserOrganizationLink.objects.filter(user_id=user_id,
-                                                       org__org_type=OrganizationType.COLLEGE.value).first()
-        if not org_link:
-            raise serializers.ValidationError("User must be associated with a college organization")
+        # org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+        #                                                org__org_type=OrganizationType.COLLEGE.value).first()
+        # if not org_link:
+        #     raise serializers.ValidationError("User must be associated with a college organization")
 
         if UserCircleLink.objects.filter(user_id=user_id, circle__ig_id=ig_id, accepted=True).exists():
             raise serializers.ValidationError("Already a member of a learning circle with the same interest group")
