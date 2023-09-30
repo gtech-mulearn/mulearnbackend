@@ -115,7 +115,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
         UserCircleLink.objects.create(
             id=uuid.uuid4(),
-            user=user_id,
+            user_id=user_id,
             circle=lc,
             lead=True,
             accepted=1,
