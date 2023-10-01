@@ -4,7 +4,7 @@ from api.url_shortener.serializers import (
     ShowShortenUrlsSerializer,
     ShortenUrlsCreateUpdateSerializer,
 )
-from db.url_shortener import UrlShortener
+from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import CustomizePermission
 from utils.permission import role_required
 from utils.response import CustomResponse
@@ -87,3 +87,17 @@ class UrlShortenerAPI(APIView):
         return CustomResponse(
             general_message="Url deleted successfully.."
         ).get_success_response()
+
+class UrlAnalayticsAPI(APIView):
+    def get(self, request,url_id):
+        url_shortener_object = UrlShortener.objects.get(id=url_id)
+        url_data = UrlShortenerTracker.objects.filter(url_shortener_id=url_shortener_object.id)
+        print(url_data)
+        location_data = UrlShortenerTracker.objects.filter(url_shortener=url_shortener_object) \
+                .values('city', 'region', 'country') 
+        print(location_data) 
+            # Browsers through which users accessed
+        browsers_data = UrlShortenerTracker.objects.filter(url_shortener=url_shortener_object) \
+                .values('browser').count()
+        print(browsers_data)
+            

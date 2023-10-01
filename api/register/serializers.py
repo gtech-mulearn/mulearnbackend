@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
@@ -11,16 +9,12 @@ from db.organization import District, Department, Organization, UserOrganization
 from db.task import (
     InterestGroup,
     Wallet,
-    UserIgLink,
-    TaskList,
     MucoinInviteLog,
-    KarmaActivityLog,
 )
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
-from utils.types import IntegrationType, OrganizationType, RoleType, TasksTypesHashtag
+from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
-
 from . import register_helper
 
 
@@ -146,7 +140,7 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserReferralLink
-        fields = ["mu_id", "user", "invite_code"]
+        fields = ["mu_id", "user", "invite_code", "is_coin"]
 
     def validate(self, attrs):
         if not attrs.get("mu_id", None) and not attrs.get("invite_code", None):
@@ -165,16 +159,14 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     def validate_invite_code(self, invite_code):
         try:
-            return MucoinInviteLog.objects.get(invite_code=invite_code).user.mu_id
+            return MucoinInviteLog.objects.get(invite_code=invite_code).user
         except MucoinInviteLog.DoesNotExist as e:
             raise serializers.ValidationError(
                 "The provided invite code is not valid."
             ) from e
 
     def create(self, validated_data):
-        referral = validated_data.pop("invite_code", None) or validated_data.pop(
-            "mu_id", None
-        )
+        referral = validated_data.get("invite_code", None) or validated_data.get("mu_id", None)
 
         validated_data.update(
             {
@@ -184,7 +176,7 @@ class ReferralSerializer(serializers.ModelSerializer):
                 "is_coin": "invite_code" in validated_data,
             }
         )
-
+        validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
         return super().create(validated_data)
 
 

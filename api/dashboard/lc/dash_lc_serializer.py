@@ -14,7 +14,7 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
     ig = serializers.CharField(source='ig.name')
-    org = serializers.CharField(source='org.title')
+    org = serializers.CharField(source='org.title', allow_null=True)
     member_count = serializers.SerializerMethodField()
 
     def get_member_count(self, obj):
@@ -60,10 +60,10 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         if not InterestGroup.objects.filter(id=ig_id).exists():
             raise serializers.ValidationError("Invalid interest group")
 
-        org_link = UserOrganizationLink.objects.filter(user_id=user_id,
-                                                       org__org_type=OrganizationType.COLLEGE.value).first()
-        if not org_link:
-            raise serializers.ValidationError("User must be associated with a college organization")
+        # org_link = UserOrganizationLink.objects.filter(user_id=user_id,
+        #                                                org__org_type=OrganizationType.COLLEGE.value).first()
+        # if not org_link:
+        #     raise serializers.ValidationError("User must be associated with a college organization")
 
         if UserCircleLink.objects.filter(user_id=user_id, circle__ig_id=ig_id, accepted=True).exists():
             raise serializers.ValidationError("Already a member of a learning circle with the same interest group")
@@ -77,31 +77,45 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
         ig = InterestGroup.objects.filter(id=validated_data.get('ig')).first()
 
-        if len(org_link.org.code) > 4:
-            code = validated_data.get('name')[:2] + ig.code + org_link.org.code[:4]
+        if org_link:
+            if len(org_link.org.code) > 4:
+                code = validated_data.get('name')[:2] + ig.code + org_link.org.code[:4]
+            else:
+                code = validated_data.get('name')[:2] + ig.code + org_link.org.code
         else:
-            code = validated_data.get('name')[:2] + ig.code + org_link.org.code
+            code = validated_data.get('name')[:2] + ig.code
 
         existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
         i = 1
         while code.upper() in existing_codes:
             code = code + str(i)
             i += 1
-
-        lc = LearningCircle.objects.create(
-            id=uuid.uuid4(),
-            name=validated_data.get('name'),
-            circle_code=code.upper(),
-            ig=ig,
-            org=org_link.org,
-            updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time())
+        if org_link:
+            lc = LearningCircle.objects.create(
+                id=uuid.uuid4(),
+                name=validated_data.get('name'),
+                circle_code=code.upper(),
+                ig=ig,
+                org=org_link.org,
+                updated_by_id=user_id,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+                created_by_id=user_id,
+                created_at=DateTimeUtils.get_current_utc_time())
+        else:
+            lc = LearningCircle.objects.create(
+                id=uuid.uuid4(),
+                name=validated_data.get('name'),
+                circle_code=code.upper(),
+                ig=ig,
+                org=None,
+                updated_by_id=user_id,
+                updated_at=DateTimeUtils.get_current_utc_time(),
+                created_by_id=user_id,
+                created_at=DateTimeUtils.get_current_utc_time())
 
         UserCircleLink.objects.create(
             id=uuid.uuid4(),
-            user=org_link.user,
+            user_id=user_id,
             circle=lc,
             lead=True,
             accepted=1,
@@ -112,7 +126,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
 
 class LearningCircleHomeSerializer(serializers.ModelSerializer):
-    college = serializers.CharField(source='org.title')
+    college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     pending_members = serializers.SerializerMethodField()
@@ -319,10 +333,14 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.SerializerMethodField()
     member_count = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
+    lead_name = serializers.SerializerMethodField()
 
     class Meta:
         model = LearningCircle
-        fields = ['name', 'ig_name', 'member_count', 'members']
+        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time']
+
+    def get_lead_name(self, obj):
+        return UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first().user.fullname
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None

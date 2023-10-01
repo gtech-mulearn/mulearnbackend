@@ -99,6 +99,7 @@ class RegisterDataAPI(APIView):
     def post(self, request):
         try:
             data = request.data
+            data = {key: value for key, value in data.items() if value}
 
             create_user = serializers.RegisterSerializer(
                 data=data, context={"request": request}
