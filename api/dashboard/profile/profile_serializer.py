@@ -382,7 +382,7 @@ class LinkSocials(ModelSerializer):
                 if old_account_url is None:
 
                     task = TaskList.objects.filter(
-                        title=account
+                        title="social_"+account
                     ).first()
 
                     KarmaActivityLog.objects.create(
