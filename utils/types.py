@@ -86,6 +86,14 @@ class IntegrationType(Enum):
 class TasksTypesHashtag(Enum):
     REFERRAL = 'referral'
     MUCOIN = 'mucoin'
+    GITHUB = 'github'
+    FACEBOOK = 'facebook'
+    INSTAGRAM = 'instagram'
+    LINKEDIN = 'linkedin'
+    DRIBBLE = 'dribble'
+    BEHANCE = 'behance'
+    STACKOVERFLOW = 'stackoverflow'
+    MEDIUM = 'medium'
 
 
 class Events(Enum):

@@ -354,6 +354,17 @@ class LinkSocials(ModelSerializer):
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
 
+        old_accounts = {
+            "github": instance.github,
+            "facebook": instance.facebook,
+            "instagram": instance.instagram,
+            "linkedin": instance.linkedin,
+            "dribble": instance.dribble,
+            "behance": instance.behance,
+            "stackoverflow": instance.stackoverflow,
+            "medium": instance.medium,
+        }
+
         instance.github = validated_data.get('github', instance.github)
         instance.facebook = validated_data.get('facebook', instance.facebook)
         instance.instagram = validated_data.get('instagram', instance.instagram)
@@ -365,5 +376,41 @@ class LinkSocials(ModelSerializer):
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
 
+        for account, account_url in validated_data.items():
+            old_account_url = old_accounts[account]
+            if account_url != old_account_url:
+                if old_account_url is None:
+
+                    task = TaskList.objects.filter(
+                        title=account
+                    ).first()
+
+                    KarmaActivityLog.objects.create(
+                        id=uuid.uuid4(),
+                        task_id=task.id,
+                        karma=50,
+                        user_id=user_id,
+                        updated_by_id=user_id,
+                        updated_at=DateTimeUtils.get_current_utc_time(),
+                        created_by_id=user_id,
+                        created_at=DateTimeUtils.get_current_utc_time()
+                    )
+                elif account_url is None:
+
+                    task = TaskList.objects.filter(
+                        title=account
+                    ).first()
+
+                    KarmaActivityLog.objects.create(
+                        id=uuid.uuid4(),
+                        task_id=task.id,
+                        karma=-50,
+                        user_id=user_id,
+                        updated_by_id=user_id,
+                        updated_at=DateTimeUtils.get_current_utc_time(),
+                        created_by_id=user_id,
+                        created_at=DateTimeUtils.get_current_utc_time()
+                    )
         instance.save()
+
         return instance
