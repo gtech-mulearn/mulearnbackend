@@ -73,10 +73,7 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    fullname = serializers.SerializerMethodField()
-
-    def get_fullname(self, obj):
-        return obj.fullname
+    fullname = serializers.CharField(source="user.fullname")
 
     def get_role(self, obj):
         role_link = obj.user_role_link_user.filter(
