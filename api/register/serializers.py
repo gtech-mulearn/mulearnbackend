@@ -73,10 +73,7 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    fullname = serializers.SerializerMethodField()
-
-    def get_fullname(self, obj):
-        return obj.fullname
+    fullname = serializers.CharField(source="user.fullname")
 
     def get_role(self, obj):
         role_link = obj.user_role_link_user.filter(
@@ -178,12 +175,54 @@ class ReferralSerializer(serializers.ModelSerializer):
         )
         validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
         return super().create(validated_data)
+    
+
+
+class IntegrationSerializer(serializers.Serializer):
+    param = serializers.CharField()
+    title = serializers.CharField()
+
+    def validate_param(self, param):
+        try:
+            details = decrypt_kkem_data(param)
+            jsid = details["jsid"][0]
+            dwms_id = details["dwms_id"][0]
+
+            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
+                raise ValueError(
+                    "This KKEM account is already connected to another user"
+                )
+
+            return {"jsid": jsid, "dwms_id": dwms_id}
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def validate_title(self, integration):
+        try:
+            return Integration.objects.get(name=integration)
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def create(self, validated_data):
+        kkem_link = IntegrationAuthorization.objects.create(
+            user=validated_data["user"],
+            integration=validated_data["title"],
+            integration_value=validated_data["param"]["jsid"],
+            additional_field=validated_data["param"]["dwms_id"],
+            verified=True,
+        )
+
+        send_data_to_kkem(kkem_link)
+        return kkem_link
+
 
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), required=False, write_only=True
     )
+    referral = ReferralSerializer(required=False)
+    integration = IntegrationSerializer(required=False)
 
     def create(self, validated_data):
         role = validated_data.pop("role", None)
@@ -226,46 +265,10 @@ class UserSerializer(serializers.ModelSerializer):
             "mobile",
             "password",
             "role",
+            "integration",
+            "referral"
         ]
-
-
-class IntegrationSerializer(serializers.Serializer):
-    param = serializers.CharField()
-    title = serializers.CharField()
-
-    def validate_param(self, param):
-        try:
-            details = decrypt_kkem_data(param)
-            jsid = details["jsid"][0]
-            dwms_id = details["dwms_id"][0]
-
-            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
-                raise ValueError(
-                    "This KKEM account is already connected to another user"
-                )
-
-            return {"jsid": jsid, "dwms_id": dwms_id}
-        except Exception as e:
-            raise serializers.ValidationError(str(e)) from e
-
-    def validate_title(self, integration):
-        try:
-            return Integration.objects.get(name=integration)
-        except Exception as e:
-            raise serializers.ValidationError(str(e)) from e
-
-    def create(self, validated_data):
-        kkem_link = IntegrationAuthorization.objects.create(
-            user=validated_data["user"],
-            integration=validated_data["title"],
-            integration_value=validated_data["param"]["jsid"],
-            additional_field=validated_data["param"]["dwms_id"],
-            verified=True,
-        )
-
-        send_data_to_kkem(kkem_link)
-        return kkem_link
-
+        
 
 class RegisterSerializer(serializers.Serializer):
     user = UserSerializer()
@@ -296,7 +299,7 @@ class RegisterSerializer(serializers.Serializer):
         fields = [
             "user",
             "organization",
-            "referral_id",
+            "referral",
             "param",
         ]
 
