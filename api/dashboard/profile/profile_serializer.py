@@ -329,14 +329,6 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
 
 class LinkSocials(ModelSerializer):
-    github = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    facebook = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    instagram = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    linkedin = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    dribble = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    behance = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    stackoverflow = serializers.CharField(required=False, allow_blank=True, allow_null=True)
-    medium = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = Socials
@@ -353,17 +345,53 @@ class LinkSocials(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        accounts = [
+            "github",
+            "facebook",
+            "instagram",
+            "linkedin",
+            "dribble",
+            "behance",
+            "stackoverflow",
+            "medium",
+        ]
 
-        instance.github = validated_data.get('github', instance.github)
-        instance.facebook = validated_data.get('facebook', instance.facebook)
-        instance.instagram = validated_data.get('instagram', instance.instagram)
-        instance.linkedin = validated_data.get('linkedin', instance.linkedin)
-        instance.dribble = validated_data.get('dribble', instance.dribble)
-        instance.behance = validated_data.get('behance', instance.behance)
-        instance.stackoverflow = validated_data.get('stackoverflow', instance.stackoverflow)
-        instance.medium = validated_data.get('medium', instance.medium)
-        instance.updated_by_id = user_id
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        old_accounts = {
+            account: getattr(
+                instance,
+                account
+            )
+            for account in accounts
+        }
+
+        for account in accounts:
+            setattr(
+                instance,
+                account,
+                validated_data.get(
+                    account,
+                    old_accounts[account]
+                )
+            )
+
+        def create_karma_activity_log(task_title, karma_value):
+            task = TaskList.objects.filter(title=task_title).first()
+            if task:
+                KarmaActivityLog.objects.create(
+                    task_id=task.id,
+                    karma=karma_value,
+                    user_id=user_id,
+                    updated_by_id=user_id,
+                    created_by_id=user_id,
+                )
+
+        for account, account_url in validated_data.items():
+            old_account_url = old_accounts[account]
+            if account_url != old_account_url:
+                if old_account_url is None:
+                    create_karma_activity_log("social_"+account, 50)
+                elif account_url is None:
+                    create_karma_activity_log("social_"+account, -50)
 
         instance.save()
         return instance
