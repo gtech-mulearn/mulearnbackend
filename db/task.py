@@ -338,7 +338,7 @@ class KarmaActivityLog(models.Model):
         db_column="created_by",
         related_name="karma_activity_log_created_by"
     )
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now=True)
     user = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
