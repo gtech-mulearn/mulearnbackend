@@ -337,7 +337,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LearningCircle
-        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time']
+        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time', 'lead_name']
 
     def get_lead_name(self, obj):
         return UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first().user.fullname
