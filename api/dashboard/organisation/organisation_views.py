@@ -1,5 +1,5 @@
 import uuid
-from django.db.models import Sum, Q, F, Window, Case, When
+from django.db.models import Sum, Q, F, Window, Case, When, Value
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
 
@@ -19,7 +19,9 @@ from .serializers import (
     AffiliationSerializer,
     InstitutionCsvSerializer,
     DepartmentSerializer,
-    InstitutionSerializer, InstitutionCreateUpdateSerializer, AffiliationCreateUpdateSerializer
+    InstitutionSerializer,
+    InstitutionCreateUpdateSerializer,
+    AffiliationCreateUpdateSerializer,
 )
 
 
@@ -218,7 +220,9 @@ class InstitutionDetailsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
 
-        organizations = Organization.objects.all().values(
+        organization = Organization.objects.filter(
+            code=org_code
+        ).values(
             "id",
             "title",
             "code",
@@ -227,29 +231,17 @@ class InstitutionDetailsAPI(APIView):
             district_name=F("district__name"),
             zone_name=F("district__zone__name"),
             state_name=F("district__zone__state__name"),
-            country_name=F("district__zone__state__country__name")
+            country_name=F("district__zone__state__country__name"),
         ).annotate(
             karma=Sum(
                 'user_organization_link_org__user__wallet_user__karma'
             )).order_by(
             '-karma'
-        ).annotate(
-            rank=Case(
-                When(
-                    Q(karma__isnull=True) | Q(karma=0),
-                    then=None),
-                default=Window(
-                    expression=Rank(),
-                    order_by=F('karma').desc()
-                )))
-
-        organization = organizations.filter(
-            code=org_code
-        ).first()
+        )
 
         if organization is None:
             return CustomResponse(
-                general_message="Invalid organization code"
+                general_message='invalid organization code'
             ).get_failure_response()
 
         return CustomResponse(
@@ -493,5 +485,5 @@ class DepartmentAPI(APIView):
 
         department.delete()
         return CustomResponse(
-            general_message=f'{department.id} deleted successfully'
+            general_message=f'{department.title} deleted successfully'
         ).get_success_response()
