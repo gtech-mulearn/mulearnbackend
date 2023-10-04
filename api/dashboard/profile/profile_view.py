@@ -195,6 +195,7 @@ class UserLevelsAPI(APIView):
         else:
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
+
         user_levels_link_query = Level.objects.all().order_by("level_order")
         serializer = profile_serializer.UserLevelSerializer(
             user_levels_link_query, many=True, context={"user_id": user_id}

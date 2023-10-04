@@ -145,18 +145,13 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        tasks = TaskList.objects.filter(level=obj).prefetch_related(
-            Prefetch(
-                "karmaactivitylog_set",
-                queryset=KarmaActivityLog.objects.filter(
-                    user=user_id, appraiser_approved=True
-                ),
-            )
-        )
+        tasks = TaskList.objects.filter(level=obj)
 
         data = []
         for task in tasks:
-            completed = task.karmaactivitylog_set.exists()
+            completed = KarmaActivityLog.objects.filter(
+                user=user_id, task=task, appraiser_approved=True
+            ).exists()
             if task.active or completed:
                 data.append(
                     {
@@ -329,7 +324,6 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
 
 class LinkSocials(ModelSerializer):
-
     class Meta:
         model = Socials
         fields = [
@@ -389,9 +383,9 @@ class LinkSocials(ModelSerializer):
             old_account_url = old_accounts[account]
             if account_url != old_account_url:
                 if old_account_url is None:
-                    create_karma_activity_log("social_"+account, 50)
+                    create_karma_activity_log("social_" + account, 50)
                 elif account_url is None:
-                    create_karma_activity_log("social_"+account, -50)
+                    create_karma_activity_log("social_" + account, -50)
 
         instance.save()
         return instance
