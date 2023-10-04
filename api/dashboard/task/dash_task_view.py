@@ -3,15 +3,16 @@ import uuid
 from rest_framework.views import APIView
 
 from db.organization import Organization
-from db.task import TaskList, Channel, TaskType, Level, InterestGroup
+from db.task import Channel, InterestGroup, Level, TaskList, TaskType
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, Events
+from utils.types import Events, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
+
 from .dash_task_serializer import (
+    TaskImportSerializer,
     TaskListSerializer,
     TaskModifySerializer,
-    TaskImportSerializer,
 )
 
 
