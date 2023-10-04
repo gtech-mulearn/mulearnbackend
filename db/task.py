@@ -172,7 +172,8 @@ class TaskType(models.Model):
 class TaskList(models.Model):
     id = models.CharField(
         primary_key=True,
-        max_length=36
+        max_length=36,
+        default=uuid.uuid4
     )
     hashtag = models.CharField(
         max_length=75
