@@ -1,6 +1,5 @@
 import uuid
 
-from django.db.models import F
 from rest_framework.views import APIView
 
 from db.organization import Organization
@@ -12,8 +11,7 @@ from utils.types import RoleType, Events
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
     TaskListSerializer,
-    TaskUpdateSerializer,
-    TaskCreateSerializer,
+    TaskModifySerializer,
     ChannelDropdownSerializer,
     IGDropdownSerializer,
     OrganizationDropdownSerialize,
@@ -33,61 +31,68 @@ class TaskApi(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
-    def get(self, request):
-        task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-        ).all()
+    def get(self, request, task_id=None):
+        try:
+            task_queryset = TaskList.objects.select_related(
+                "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+            ).all()
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            task_queryset,
-            request,
-            search_fields=[
-                "hashtag",
-                "title",
-                "description",
-                "karma",
-                "channel__name",
-                "type__title",
-                "active",
-                "variable_karma",
-                "usage_count",
-                "level__name",
-                "org__title",
-                "ig__name",
-                "event",
-                "updated_at",
-                "updated_by__first_name",
-                "created_by__first_name",
-                "created_at",
-            ],
-            sort_fields={
-                "hashtag": "hashtag",
-                "title": "title",
-                "description": "description",
-                "karma": "karma",
-                "channel": "channel__name",
-                "type": "type__title",
-                "active": "active",
-                "variable_karma": "variable_karma",
-                "usage_count": "usage_count",
-                "level": "level__name",
-                "org": "org__title",
-                "ig": "ig__name",
-                "event": "event",
-                "updated_at": "updated_at",
-                "updated_by": "updated_by__first_name",
-                "created_by": "created_by__first_name",
-                "created_at": "created_at",
-            },
-        )
+            if task_id:
+                task_queryset = task_queryset.get(pk=task_id)
 
-        task_serializer_data = TaskListSerializer(
-            paginated_queryset.get("queryset"), many=True
-        ).data
+            paginated_queryset = CommonUtils.get_paginated_queryset(
+                task_queryset,
+                request,
+                search_fields=[
+                    "hashtag",
+                    "title",
+                    "description",
+                    "karma",
+                    "channel__name",
+                    "type__title",
+                    "active",
+                    "variable_karma",
+                    "usage_count",
+                    "level__name",
+                    "org__title",
+                    "ig__name",
+                    "event",
+                    "updated_at",
+                    "updated_by__first_name",
+                    "created_by__first_name",
+                    "created_at",
+                ],
+                sort_fields={
+                    "hashtag": "hashtag",
+                    "title": "title",
+                    "description": "description",
+                    "karma": "karma",
+                    "channel": "channel__name",
+                    "type": "type__title",
+                    "active": "active",
+                    "variable_karma": "variable_karma",
+                    "usage_count": "usage_count",
+                    "level": "level__name",
+                    "org": "org__title",
+                    "ig": "ig__name",
+                    "event": "event",
+                    "updated_at": "updated_at",
+                    "updated_by": "updated_by__first_name",
+                    "created_by": "created_by__first_name",
+                    "created_at": "created_at",
+                },
+            )
 
-        return CustomResponse().paginated_response(
-            data=task_serializer_data, pagination=paginated_queryset.get("pagination")
-        )
+            task_serializer_data = TaskListSerializer(
+                paginated_queryset.get("queryset"), many=True
+            ).data
+
+            return CustomResponse().paginated_response(
+                data=task_serializer_data,
+                pagination=paginated_queryset.get("pagination"),
+            )
+        except TaskList.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required(
         [
@@ -98,17 +103,16 @@ class TaskApi(APIView):
     )
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
+        request.data["created_by"] = request.data["updated_by"] = user_id
+        serializer = TaskModifySerializer(data=request.data)
 
-        serializer = TaskCreateSerializer(
-            data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(
-                general_message="Task Created Successfully"
-            ).get_success_response()
+        if not serializer.is_valid():
+            return CustomResponse(message=serializer.errors).get_failure_response()
 
-        return CustomResponse(message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(
+            general_message="Task Created Successfully"
+        ).get_success_response()
 
     @role_required(
         [
@@ -118,23 +122,23 @@ class TaskApi(APIView):
         ]
     )
     def put(self, request, task_id):  # edit
-        user_id = JWTUtils.fetch_user_id(request)
-        task_list = TaskList.objects.filter(id=task_id).first()
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            request.data["updated_by"] = user_id
 
-        if TaskList is None:
-            return CustomResponse(
-                general_message="Invalid task id"
-            ).get_failure_response()
+            task = TaskList.objects.get(pk=task_id)
 
-        serializer = TaskUpdateSerializer(
-            task_list, data=request.data, context={"request": request}
-        )
-        if serializer.is_valid():
+            serializer = TaskModifySerializer(task, data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(message=serializer.errors).get_failure_response()
+
             serializer.save()
             return CustomResponse(
-                general_message="Task Edited Successfully"
+                general_message="Task edited successfully"
             ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+
+        except TaskList.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required(
         [
@@ -143,17 +147,16 @@ class TaskApi(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
-    def patch(self, request, pk):  # delete
-        user_id = JWTUtils.fetch_user_id(request)
-        taskData = TaskList.objects.filter(id=pk).first()
-        taskData.active = False
-        taskData.updated_by = User.objects.filter(id=user_id).first()
-        taskData.updated_at = DateTimeUtils.get_current_utc_time()
-        taskData.save()
-        serializer = TaskListSerializer(taskData)
-        return CustomResponse(
-            response={"taskList": serializer.data}
-        ).get_success_response()
+    def delete(self, request, task_id):  # delete
+        try:
+            task = TaskList.objects.get(id=task_id)
+            task.delete()
+
+            return CustomResponse(
+                general_message="Task deleted successfully"
+            ).get_success_response()
+        except TaskList.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class TaskListCSV(APIView):
@@ -167,9 +170,11 @@ class TaskListCSV(APIView):
         ]
     )
     def get(self, request):
-        task_serializer = TaskList.objects.all()
-        task_serializer_data = TaskListSerializer(task_serializer, many=True).data
+        task_queryset = TaskList.objects.select_related(
+            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+        ).all()
 
+        task_serializer_data = TaskListSerializer(task_queryset, many=True).data
         return CommonUtils.generate_csv(task_serializer_data, "Task List")
 
 
@@ -316,22 +321,6 @@ class ImportTaskListCSV(APIView):
         return CustomResponse(
             response={"Success": task_list_serializer.data, "Failed": error_rows}
         ).get_success_response()
-
-
-class TaskGetAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-            RoleType.FELLOW.value,
-            RoleType.ASSOCIATE.value,
-        ]
-    )
-    def get(self, request, pk):
-        task_serializer = TaskList.objects.get(id=pk)
-        serializer = TaskListSerializer(task_serializer)
-        return CustomResponse(response={"Task": serializer.data}).get_success_response()
 
 
 class ChannelDropdownAPI(APIView):
