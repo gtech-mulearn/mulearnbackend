@@ -1,5 +1,3 @@
-from uuid import uuid4
-
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
@@ -11,16 +9,12 @@ from db.organization import District, Department, Organization, UserOrganization
 from db.task import (
     InterestGroup,
     Wallet,
-    UserIgLink,
-    TaskList,
     MucoinInviteLog,
-    KarmaActivityLog,
 )
 from db.task import UserLvlLink, Level
 from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
-from utils.types import IntegrationType, OrganizationType, RoleType, TasksTypesHashtag
+from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
-
 from . import register_helper
 
 
@@ -79,10 +73,7 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    fullname = serializers.SerializerMethodField()
-
-    def get_fullname(self, obj):
-        return obj.fullname
+    fullname = serializers.CharField(source="user.fullname")
 
     def get_role(self, obj):
         role_link = obj.user_role_link_user.filter(
@@ -146,7 +137,7 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserReferralLink
-        fields = ["mu_id", "user", "invite_code"]
+        fields = ["mu_id", "user", "invite_code", "is_coin"]
 
     def validate(self, attrs):
         if not attrs.get("mu_id", None) and not attrs.get("invite_code", None):
@@ -165,16 +156,14 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     def validate_invite_code(self, invite_code):
         try:
-            return MucoinInviteLog.objects.get(invite_code=invite_code).user.mu_id
+            return MucoinInviteLog.objects.get(invite_code=invite_code).user
         except MucoinInviteLog.DoesNotExist as e:
             raise serializers.ValidationError(
                 "The provided invite code is not valid."
             ) from e
 
     def create(self, validated_data):
-        referral = validated_data.pop("invite_code", None) or validated_data.pop(
-            "mu_id", None
-        )
+        referral = validated_data.get("invite_code", None) or validated_data.get("mu_id", None)
 
         validated_data.update(
             {
@@ -184,14 +173,56 @@ class ReferralSerializer(serializers.ModelSerializer):
                 "is_coin": "invite_code" in validated_data,
             }
         )
-
+        validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
         return super().create(validated_data)
+    
+
+
+class IntegrationSerializer(serializers.Serializer):
+    param = serializers.CharField()
+    title = serializers.CharField()
+
+    def validate_param(self, param):
+        try:
+            details = decrypt_kkem_data(param)
+            jsid = details["jsid"][0]
+            dwms_id = details["dwms_id"][0]
+
+            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
+                raise ValueError(
+                    "This KKEM account is already connected to another user"
+                )
+
+            return {"jsid": jsid, "dwms_id": dwms_id}
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def validate_title(self, integration):
+        try:
+            return Integration.objects.get(name=integration)
+        except Exception as e:
+            raise serializers.ValidationError(str(e)) from e
+
+    def create(self, validated_data):
+        kkem_link = IntegrationAuthorization.objects.create(
+            user=validated_data["user"],
+            integration=validated_data["title"],
+            integration_value=validated_data["param"]["jsid"],
+            additional_field=validated_data["param"]["dwms_id"],
+            verified=True,
+        )
+
+        send_data_to_kkem(kkem_link)
+        return kkem_link
+
 
 
 class UserSerializer(serializers.ModelSerializer):
     role = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), required=False, write_only=True
     )
+    referral = ReferralSerializer(required=False)
+    integration = IntegrationSerializer(required=False)
 
     def create(self, validated_data):
         role = validated_data.pop("role", None)
@@ -234,46 +265,10 @@ class UserSerializer(serializers.ModelSerializer):
             "mobile",
             "password",
             "role",
+            "integration",
+            "referral"
         ]
-
-
-class IntegrationSerializer(serializers.Serializer):
-    param = serializers.CharField()
-    title = serializers.CharField()
-
-    def validate_param(self, param):
-        try:
-            details = decrypt_kkem_data(param)
-            jsid = details["jsid"][0]
-            dwms_id = details["dwms_id"][0]
-
-            if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
-                raise ValueError(
-                    "This KKEM account is already connected to another user"
-                )
-
-            return {"jsid": jsid, "dwms_id": dwms_id}
-        except Exception as e:
-            raise serializers.ValidationError(str(e)) from e
-
-    def validate_title(self, integration):
-        try:
-            return Integration.objects.get(name=integration)
-        except Exception as e:
-            raise serializers.ValidationError(str(e)) from e
-
-    def create(self, validated_data):
-        kkem_link = IntegrationAuthorization.objects.create(
-            user=validated_data["user"],
-            integration=validated_data["title"],
-            integration_value=validated_data["param"]["jsid"],
-            additional_field=validated_data["param"]["dwms_id"],
-            verified=True,
-        )
-
-        send_data_to_kkem(kkem_link)
-        return kkem_link
-
+        
 
 class RegisterSerializer(serializers.Serializer):
     user = UserSerializer()
@@ -304,7 +299,7 @@ class RegisterSerializer(serializers.Serializer):
         fields = [
             "user",
             "organization",
-            "referral_id",
+            "referral",
             "param",
         ]
 

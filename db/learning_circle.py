@@ -11,9 +11,7 @@ class LearningCircle(models.Model):
     ig = models.ForeignKey(
         InterestGroup, on_delete=models.CASCADE, blank=True, null=True
     )
-    org = models.ForeignKey(
-        Organization, on_delete=models.CASCADE, blank=True, null=True
-    )
+    org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     meet_place = models.CharField(max_length=255, blank=True, null=True)
     meet_time = models.CharField(max_length=10, blank=True, null=True)
     day = models.CharField(max_length=20, blank=True, null=True)
