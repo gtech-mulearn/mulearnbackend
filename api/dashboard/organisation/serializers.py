@@ -96,11 +96,8 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
-        validated_data['id'] = str(uuid.uuid4())
         validated_data['created_by_id'] = user_id
         validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
 
         return Organization.objects.create(**validated_data)
 
@@ -109,7 +106,6 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         instance.title = validated_data.get('title', instance.title)
         instance.code = validated_data.get('code', instance.code)
         instance.updated_by_id = user_id
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
 
         instance.save()
         return instance

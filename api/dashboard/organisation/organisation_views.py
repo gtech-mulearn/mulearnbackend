@@ -50,7 +50,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             return CustomResponse(
-                general_message="Organisation Added Successfully"
+                general_message="Organisation added successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -115,7 +115,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             return CustomResponse(
-                general_message="Organization Edited Successfully"
+                general_message="Organization edited successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -144,7 +144,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             )
 
         return CustomResponse(
-            general_message="Deleted Successfully"
+            general_message="Organization deleted successfully"
         ).get_success_response()
 
 
