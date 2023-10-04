@@ -4,7 +4,6 @@ from rest_framework.views import APIView
 
 from db.organization import Organization
 from db.task import TaskList, Channel, TaskType, Level, InterestGroup
-from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, Events
