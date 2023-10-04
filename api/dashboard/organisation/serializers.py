@@ -1,6 +1,6 @@
 import uuid
 
-from django.db.models import Sum
+from django.db.models import Sum, Count
 
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
@@ -18,6 +18,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+    user_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -29,8 +30,16 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "district",
             "zone",
             "state",
-            "country"
+            "country",
+            "user_count"
         ]
+
+    def get_user_count(self, obj):
+        return obj.user_organization_link_org.annotate(
+            user_count=Count(
+                'user'
+            )
+        ).count()
 
 
 class InstitutionCsvSerializer(serializers.ModelSerializer):
@@ -45,6 +54,7 @@ class InstitutionCsvSerializer(serializers.ModelSerializer):
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+    user_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -58,7 +68,15 @@ class InstitutionCsvSerializer(serializers.ModelSerializer):
             "zone",
             "state",
             "country",
+            "user_count"
         ]
+
+    def get_user_count(self, obj):
+        return obj.user_organization_link_org.annotate(
+            user_count=Count(
+                'user'
+            )
+        ).count()
 
 
 class StateSerializer(serializers.ModelSerializer):
