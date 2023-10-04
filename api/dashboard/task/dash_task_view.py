@@ -12,11 +12,6 @@ from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
     TaskListSerializer,
     TaskModifySerializer,
-    ChannelDropdownSerializer,
-    IGDropdownSerializer,
-    OrganizationDropdownSerialize,
-    LevelDropdownSerialize,
-    TaskTypeDropdownSerializer,
     TaskImportSerializer,
 )
 
@@ -334,9 +329,8 @@ class ChannelDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        channel = Channel.objects.all()
-        serializer = ChannelDropdownSerializer(channel, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        channels = Channel.objects.values("id", "name")
+        return CustomResponse(response=channels).get_success_response()
 
 
 class IGDropdownAPI(APIView):
@@ -350,9 +344,8 @@ class IGDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        ig = InterestGroup.objects.all()
-        serializer = IGDropdownSerializer(ig, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        igs = InterestGroup.objects.values("id", "name")
+        return CustomResponse(response=igs).get_success_response()
 
 
 class OrganizationDropdownAPI(APIView):
@@ -366,9 +359,8 @@ class OrganizationDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        organization = Organization.objects.all()
-        serializer = OrganizationDropdownSerialize(organization, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        organizations = Organization.objects.values("id", "title")
+        return CustomResponse(response=organizations).get_success_response()
 
 
 class LevelDropdownAPI(APIView):
@@ -382,9 +374,8 @@ class LevelDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        level = Level.objects.all()
-        serializer = LevelDropdownSerialize(level, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        levels = Level.objects.values("id", "name")
+        return CustomResponse(response=levels).get_success_response()
 
 
 class TaskTypesDropDownAPI(APIView):
@@ -398,9 +389,8 @@ class TaskTypesDropDownAPI(APIView):
         ]
     )
     def get(self, request):
-        task_types = TaskType.objects.all()
-        serializer = TaskTypeDropdownSerializer(task_types, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        task_types = TaskType.objects.values("id", "title")
+        return CustomResponse(response=task_types).get_success_response()
 
 
 class EventDropDownApi(APIView):
