@@ -1,14 +1,19 @@
 import os
 
-from django.db.models import Count, Sum, F, Case, When, Value, CharField
+from django.db.models import Count
+from django.db.models import Q
+from django.db.models import Sum, F, Case, When, Value, CharField
 from django.http import StreamingHttpResponse
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from db.learning_circle import LearningCircle, UserCircleLink
+from db.learning_circle import LearningCircle
+from db.learning_circle import UserCircleLink
 from mulearnbackend.settings import BASE_DIR
 from utils.response import CustomResponse
-from utils.types import IntegrationType
+from utils.types import IntegrationType, OrganizationType
+from utils.utils import CommonUtils
+from .serializer import StudentInfoSerializer
 
 
 class CommonAPI(APIView):
@@ -46,7 +51,7 @@ class ViewCommonAPI(APIView):
             try:
                 with open(log_file_path, 'r') as log_file:
                     log_content = log_file.read()
-                
+
                 # You can return the log content as plain text or JSON, depending on your requirements.
                 # For plain text response:
                 return Response({'log_content': log_content}, content_type='text/plain')
@@ -59,21 +64,23 @@ class ViewCommonAPI(APIView):
         else:
             return Response({'detail': f'{log_type} log file not found'})
 
+
 class ClearCommonAPI(APIView):
-   def post(self,request,log_type):
+    def post(self, request, log_type):
         log_file_path = os.path.join(BASE_DIR, 'logs', f'{log_type}.log')
         print("log file path", log_file_path)
         if os.path.exists(log_file_path):
             try:
                 with open(log_file_path, 'w') as log_file:
                     log_file.truncate(0)
-                
+
                 return Response({'detail': f'{log_type} log cleared successfully'})
 
             except Exception as e:
                 return Response({'detail': f'Error reading log file: {str(e)}'})
         else:
             return Response({'detail': f'{log_type} log file not found'})
+
 
 class LcDashboardAPI(APIView):
 
@@ -97,7 +104,11 @@ class LcDashboardAPI(APIView):
 class LcReportAPI(APIView):
 
     def get(self, request):
-        student_info = UserCircleLink.objects.filter(lead=False, accepted=True).values(
+        student_info = UserCircleLink.objects.filter(
+            lead=False,
+            accepted=True,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
+        ).values(
             first_name=F('user__first_name'),
             last_name=F('user__last_name'),
             muid=F('user__mu_id'),
@@ -112,6 +123,13 @@ class LcReportAPI(APIView):
                 default=Value(None, output_field=CharField()),
                 output_field=CharField()
             )
-        ).annotate(karam_earned=Sum('user__karma_activity_log_user__karma'))
+        ).annotate(karma_earned=Sum('user__karma_activity_log_user__task__karma',
+                                    filter=Q(user__karma_activity_log_user__task__ig=F('circle__ig'))))
 
-        return CustomResponse(response=student_info).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request, search_fields=[],
+                                                                sort_fields={'name': 'name'})
+
+        student_info_data = StudentInfoSerializer(paginated_queryset.get('queryset'), many=True).data
+
+        return CustomResponse().paginated_response(data=student_info_data,
+                                                   pagination=paginated_queryset.get('pagination'))
