@@ -26,29 +26,6 @@ class TaskListAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
-    def get(self, request, task_id):
-        try:
-            task_queryset = TaskList.objects.get(pk=task_id)
-
-            task_serializer = TaskModifySerializer(task_queryset, many=False)
-            return CustomResponse(
-                response=task_serializer.data
-            ).get_success_response()
-
-        except TaskList.DoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
-
-
-class TaskAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-            RoleType.FELLOW.value,
-            RoleType.ASSOCIATE.value,
-        ]
-    )
     def get(self, request):
         try:
             task_queryset = TaskList.objects.select_related(
@@ -109,6 +86,27 @@ class TaskAPI(APIView):
         except TaskList.DoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
+
+class TaskAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.ASSOCIATE.value,
+        ]
+    )
+    def get(self, request, task_id):
+        try:
+            task_queryset = TaskList.objects.get(pk=task_id)
+
+            task_serializer = TaskModifySerializer(task_queryset, many=False)
+            return CustomResponse(response=task_serializer.data).get_success_response()
+
+        except TaskList.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+
     @role_required(
         [
             RoleType.ADMIN.value,
@@ -143,13 +141,14 @@ class TaskAPI(APIView):
 
             task = TaskList.objects.get(pk=task_id)
 
-            serializer = TaskModifySerializer(task, data=request.data)
+            serializer = TaskModifySerializer(task, data=request.data, partial=True)
             if not serializer.is_valid():
                 return CustomResponse(message=serializer.errors).get_failure_response()
 
             serializer.save()
+            
             return CustomResponse(
-                general_message="Task edited successfully"
+                general_message=serializer.data
             ).get_success_response()
 
         except TaskList.DoesNotExist as e:
