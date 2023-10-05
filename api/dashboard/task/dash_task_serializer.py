@@ -38,6 +38,12 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 class TaskModifySerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(required=False)
+    
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if instance.created_by:  # Check if the instance has a 'created_by' attribute
+            data["created_by"] = instance.created_by.id
+        return data
 
     class Meta:
         model = TaskList
