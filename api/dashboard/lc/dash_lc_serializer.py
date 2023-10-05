@@ -337,7 +337,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LearningCircle
-        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time']
+        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time', 'lead_name']
 
     def get_lead_name(self, obj):
         return UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first().user.fullname
@@ -364,6 +364,7 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
     interest_group = serializers.SerializerMethodField()
     college = serializers.SerializerMethodField()
     learning_circle = serializers.SerializerMethodField()
+    students = serializers.SerializerMethodField()
 
     class Meta:
         model = LearningCircle
@@ -371,7 +372,12 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
             "interest_group",
             "college",
             "learning_circle",
+            "students"
         ]
+
+    def get_students(self, obj):
+
+       None
 
     def get_learning_circle(self, obj):
         return LearningCircle.objects.all().count()
