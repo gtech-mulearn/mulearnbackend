@@ -126,7 +126,8 @@ class LcReportAPI(APIView):
         ).annotate(karma_earned=Sum('user__karma_activity_log_user__task__karma',
                                     filter=Q(user__karma_activity_log_user__task__ig=F('circle__ig'))))
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request, search_fields=[],
+        paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request,
+                                                                search_fields=['first_name', 'last_name', 'mu_id'],
                                                                 sort_fields={'name': 'name'})
 
         student_info_data = StudentInfoSerializer(paginated_queryset.get('queryset'), many=True).data
