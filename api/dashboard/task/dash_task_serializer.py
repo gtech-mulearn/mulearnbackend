@@ -37,8 +37,6 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
-    created_by = serializers.CharField(required=False)
-
     class Meta:
         model = TaskList
         fields = (
