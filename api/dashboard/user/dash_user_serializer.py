@@ -224,6 +224,7 @@ class UserVerificationSerializer(serializers.ModelSerializer):
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
     mu_id = serializers.ReadOnlyField(source="user.mu_id")
     email = serializers.ReadOnlyField(source="user.email")
+    mobile = serializers.ReadOnlyField(source="user.mobile")
     role_title = serializers.ReadOnlyField(source="role.title")
 
     class Meta:
@@ -238,6 +239,7 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "role_id",
             "role_title",
             "email",
+            "mobile",
         ]
 
 

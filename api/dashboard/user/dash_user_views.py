@@ -157,11 +157,14 @@ class UserVerificationAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["user__first_name", "user__last_name", "role__title"],
-            {
+            search_fields=["user__first_name", "user__last_name", "user__mobile", "user__email", "user__mu_id",
+                           "role__title"],
+            sort_fields={
                 "first_name": "user__first_name",
                 "role_title": "role__title",
                 "muid": "user__mu_id",
+                "email": "user__email",
+                "mobile": "user__mobile",
             },
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
