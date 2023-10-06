@@ -153,7 +153,7 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.filter(verified=False, role__title=RoleType.ENABLER)
+        user_queryset = UserRoleLink.objects.filter(verified=False, role__title__in=[RoleType.ENABLER,RoleType.MENTOR])
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
