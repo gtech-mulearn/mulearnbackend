@@ -364,7 +364,7 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
     interest_group = serializers.SerializerMethodField()
     college = serializers.SerializerMethodField()
     learning_circle = serializers.SerializerMethodField()
-    students = serializers.SerializerMethodField()
+    total_no_of_users = serializers.SerializerMethodField()
 
     class Meta:
         model = LearningCircle
@@ -372,12 +372,11 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
             "interest_group",
             "college",
             "learning_circle",
-            "students"
+            "total_no_of_users"
         ]
 
-    def get_students(self, obj):
-
-       None
+    def get_total_no_of_users(self, obj):
+        return UserCircleLink.objects.all().count()
 
     def get_learning_circle(self, obj):
         return LearningCircle.objects.all().count()
