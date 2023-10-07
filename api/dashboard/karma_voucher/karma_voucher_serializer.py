@@ -1,4 +1,5 @@
 from rest_framework import serializers
+
 from db.task import VoucherLog
 
 
@@ -10,7 +11,9 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VoucherLog
-        fields = ['id', 'code', 'user_id', 'task_id', 'karma', 'month', 'week', 'claimed', 'created_by_id', 'updated_by_id', 'created_at', 'updated_at']
+        fields = ['id', 'code', 'user_id', 'task_id', 'karma', 'month', 'week', 'claimed', 'created_by_id',
+                  'updated_by_id', 'created_at', 'updated_at']
+
 
 class VoucherLogSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source='user.fullname')
@@ -19,7 +22,7 @@ class VoucherLogSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source='updated_by.fullname')
     muid = serializers.CharField(source="user.muid")
 
-    class  Meta:
+    class Meta:
         model = VoucherLog
         fields = [
             "id",
@@ -33,5 +36,6 @@ class VoucherLogSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
             "created_at",
-            "updated_at"
-        ]    
+            "updated_at",
+            "muid"
+        ]

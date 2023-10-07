@@ -73,7 +73,13 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    fullname = serializers.CharField(source="user.fullname")
+    fullname = serializers.SerializerMethodField()
+
+    def get_fullname(self, obj):
+        if obj.last_name is None:
+            return obj.first_name
+
+        return f"{obj.first_name} {obj.last_name}"
 
     def get_role(self, obj):
         role_link = obj.user_role_link_user.filter(
@@ -175,7 +181,6 @@ class ReferralSerializer(serializers.ModelSerializer):
         )
         validated_data.pop("invite_code", None) or validated_data.pop("muid", None)
         return super().create(validated_data)
-    
 
 
 class IntegrationSerializer(serializers.Serializer):
@@ -214,7 +219,6 @@ class IntegrationSerializer(serializers.Serializer):
 
         send_data_to_kkem(kkem_link)
         return kkem_link
-
 
 
 class UserSerializer(serializers.ModelSerializer):
@@ -268,7 +272,7 @@ class UserSerializer(serializers.ModelSerializer):
             "integration",
             "referral"
         ]
-        
+
 
 class RegisterSerializer(serializers.Serializer):
     user = UserSerializer()
