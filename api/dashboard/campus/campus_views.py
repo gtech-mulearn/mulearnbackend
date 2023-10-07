@@ -9,7 +9,7 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 from . import serializers
 from .dash_campus_helper import get_user_college_link
-
+from django.db.models import Q, Case, When, Value, Subquery, OuterRef, Exists
 
 class CampusDetailsAPI(APIView):
     """
@@ -104,21 +104,42 @@ class CampusStudentDetailsAPI(APIView):
         )
 
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
-
+        #
+        # user_org_links = (
+        #     User.objects.filter(
+        #         user_organization_link_user__org=user_org_link.org,
+        #         user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        #     )
+        #     .distinct()
+        #     .annotate(
+        #         user_id=F("id"),
+        #         muid=F("mu_id"),
+        #         karma=F("wallet_user__karma"),
+        #         level=F("user_lvl_link_user__level__name"),
+        #         join_date=F("created_at"),
+        #     ))
         user_org_links = (
             User.objects.filter(
                 user_organization_link_user__org=user_org_link.org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
-            .distinct()
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
-            ))
-
+                is_active=Case(
+                    When(
+                        karma_activity_log_user__user=OuterRef('id'),
+                        karma_activity_log_user__created_at__range=(start_date, end_date),
+                        then=Value("Active")
+                    ),
+                    default=Value("Not Active")
+                )
+            )
+            .distinct()  # Remove duplicate users
+        )
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
