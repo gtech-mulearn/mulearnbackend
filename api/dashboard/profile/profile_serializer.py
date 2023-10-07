@@ -70,7 +70,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
         return user_org_link.org.id if user_org_link else None
 
-    def org_district_id(self, obj):
+    def get_org_district_id(self, obj):
         org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.context.get(
             "roles") else OrganizationType.COLLEGE.value
         user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
