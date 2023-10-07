@@ -24,7 +24,6 @@ class UserLogSerializer(ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
-    muid = serializers.CharField(source="muid")
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
