@@ -5,8 +5,9 @@ import decouple
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
 from django.core.mail import send_mail
-from django.db.models import F, Q
+from django.db.models import F, Q, Prefetch
 from rest_framework.views import APIView
+from db.task import Level
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -39,7 +40,7 @@ class UserEditAPI(APIView):
     def get(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
-            serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
+            serializer = dash_user_serializer.UserDetailsSerializer(user).data
             return CustomResponse(response=serializer).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
@@ -61,10 +62,9 @@ class UserEditAPI(APIView):
     def patch(self, request, user_id):
         try:
             user = User.objects.get(id=user_id)
-            admin_id = JWTUtils.fetch_user_id(request)
-            admin = User.objects.get(id=admin_id)
+            request.data["admin"] = JWTUtils.fetch_user_id(request)
             serializer = dash_user_serializer.UserDetailsEditSerializer(
-                user, data=request.data, partial=True, context={"admin": admin}
+                user, data=request.data, partial=True
             )
             if serializer.is_valid():
                 serializer.save()
@@ -89,16 +89,9 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = (
-            User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "discord_id", "created_at")
-            .annotate(
-                muid=F("muid"),
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name"),
-            )
-        )
-
+        user_queryset = User.objects.select_related(
+            "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
+        ).all()
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -131,16 +124,9 @@ class UserManagementCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = (
-            User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
-            .annotate(
-                muid=F("muid"),
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name"),
-            )
-        )
-
+        user_queryset = User.objects.select_related(
+            "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
+        ).all()
         serializer = dash_user_serializer.UserDashboardSerializer(
             user_queryset, many=True
         )
@@ -157,8 +143,14 @@ class UserVerificationAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            search_fields=["user__first_name", "user__last_name", "user__mobile", "user__email", "user__muid",
-                           "role__title"],
+            search_fields=[
+                "user__first_name",
+                "user__last_name",
+                "user__mobile",
+                "user__email",
+                "user__muid",
+                "role__title",
+            ],
             sort_fields={
                 "first_name": "user__first_name",
                 "role_title": "role__title",
@@ -228,9 +220,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(muid=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(muid=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -298,29 +290,4 @@ class ResetPasswordConfirmAPI(APIView):
         forget_user.delete()
         return CustomResponse(
             general_message="New Password Saved Successfully"
-        ).get_success_response()
-
-
-class UserInviteAPI(APIView):
-    def post(self, request):
-        email = request.data.get("email")
-        if User.objects.filter(email=email).exists():
-            return CustomResponse(
-                general_message="User already exist"
-            ).get_failure_response()
-
-        email_host_user = decouple.config("EMAIL_HOST_USER")
-        domain = decouple.config("FR_DOMAIN_NAME")
-        from_mail = decouple.config("FROM_MAIL")
-        to = [email]
-        message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
-        send_mail(
-            "Invitation to join MuLearn",
-            message,
-            from_mail,
-            to,
-            fail_silently=False,
-        )
-        return CustomResponse(
-            general_message="Invitation sent successfully"
         ).get_success_response()
