@@ -47,8 +47,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "muid",
             "roles",
             "college_id",
-            "org_district_id"
             "college_code",
+            "org_district_id",
             "karma",
             "rank",
             "karma_distribution",
