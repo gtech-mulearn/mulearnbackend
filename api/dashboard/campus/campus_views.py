@@ -96,7 +96,7 @@ class CampusStudentDetailsAPI(APIView):
                 user__user_organization_link_user__org=user_org_link.org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
-            .distinct('user_id')
+            .distinct()
             .order_by("-karma", "-created_at")
             .values(
                 "user_id",
@@ -111,7 +111,7 @@ class CampusStudentDetailsAPI(APIView):
                 user_organization_link_user__org=user_org_link.org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
-            .distinct('id')
+            .distinct()
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
