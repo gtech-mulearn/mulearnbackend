@@ -81,7 +81,7 @@ class UserIgEditView(APIView):
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
@@ -122,7 +122,7 @@ class UserProfileAPI(APIView):
 class UserLogAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
@@ -181,7 +181,7 @@ class ShareUserProfileAPI(APIView):
 class UserLevelsAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
@@ -206,7 +206,7 @@ class UserLevelsAPI(APIView):
 
 class UserRankAPI(APIView):
     def get(self, request, muid):
-        user = User.objects.filter(mu_id=muid).first()
+        user = User.objects.filter(muid=muid).first()
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
         roles = [

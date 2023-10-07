@@ -21,7 +21,7 @@ from . import register_helper
 class LearningCircleUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "mu_id", "first_name", "last_name", "email", "mobile"]
+        fields = ["id", "muid", "first_name", "last_name", "email", "mobile"]
 
 
 class BaseSerializer(serializers.Serializer):
@@ -91,7 +91,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
-            "mu_id",
+            "muid",
             "first_name",
             "last_name",
             "email",
@@ -138,22 +138,22 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
 
 class ReferralSerializer(serializers.ModelSerializer):
     user = serializers.CharField(required=False)
-    mu_id = serializers.CharField(required=False)
+    muid = serializers.CharField(required=False)
     invite_code = serializers.CharField(required=False)
 
     class Meta:
         model = UserReferralLink
-        fields = ["mu_id", "user", "invite_code", "is_coin"]
+        fields = ["muid", "user", "invite_code", "is_coin"]
 
     def validate(self, attrs):
-        if not attrs.get("mu_id", None) and not attrs.get("invite_code", None):
+        if not attrs.get("muid", None) and not attrs.get("invite_code", None):
             raise serializers.ValidationError(
                 "Please provide either a referral μID or an invite code"
             )
         return super().validate(attrs)
 
-    def validate_mu_id(self, mu_id):
-        if referral := User.objects.filter(mu_id=mu_id).first():
+    def validate_muid(self, muid):
+        if referral := User.objects.filter(muid=muid).first():
             return referral
 
         raise serializers.ValidationError(
@@ -169,7 +169,7 @@ class ReferralSerializer(serializers.ModelSerializer):
             ) from e
 
     def create(self, validated_data):
-        referral = validated_data.get("invite_code", None) or validated_data.get("mu_id", None)
+        referral = validated_data.get("invite_code", None) or validated_data.get("muid", None)
 
         validated_data.update(
             {
@@ -179,7 +179,7 @@ class ReferralSerializer(serializers.ModelSerializer):
                 "is_coin": "invite_code" in validated_data,
             }
         )
-        validated_data.pop("invite_code", None) or validated_data.pop("mu_id", None)
+        validated_data.pop("invite_code", None) or validated_data.pop("muid", None)
         return super().create(validated_data)
 
 
@@ -231,7 +231,7 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop("role", None)
 
-        validated_data["mu_id"] = register_helper.generate_mu_id(
+        validated_data["muid"] = register_helper.generate_muid(
             validated_data["first_name"], validated_data["last_name"]
         )
         password = validated_data.pop("password")

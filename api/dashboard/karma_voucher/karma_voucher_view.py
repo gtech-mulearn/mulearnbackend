@@ -48,14 +48,15 @@ class ImportVoucherLogAPI(APIView):
             users_to_fetch.add(muid)
             tasks_to_fetch.add(task_hashtag)
         # Fetching users and tasks in bulk
-        users = User.objects.filter(mu_id__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name','mu_id')
+        users = User.objects.filter(muid__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name','muid')
         tasks = TaskList.objects.filter(hashtag__in=tasks_to_fetch).values('id', 'hashtag')
         user_dict = {
-            user['mu_id']: (
+            user['muid']: (
                 user['id'], user['email'], 
                 user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}"
                 ) for user in users
                 }
+
         task_dict = {task['hashtag']: task['id'] for task in tasks}
 
         count = 1

@@ -362,14 +362,14 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
 
 
 class HackathonOrganiserSerializer(serializers.ModelSerializer):
-    mu_id = serializers.CharField(required=False)
+    muid = serializers.CharField(required=False)
 
     class Meta:
         model = HackathonOrganiserLink
-        fields = ("mu_id",)
+        fields = ("muid",)
 
-    def validate_mu_id(self, value):
-        user = User.objects.filter(mu_id=value).first()
+    def validate_muid(self, value):
+        user = User.objects.filter(muid=value).first()
         if not user:
             raise serializers.ValidationError("User Not Exists")
 
@@ -387,7 +387,7 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         with transaction.atomic():
-            organizer_id = validated_data.pop("mu_id")
+            organizer_id = validated_data.pop("muid")
             user_id = JWTUtils.fetch_user_id(self.context.get("request"))
             validated_data["id"] = uuid.uuid4()
             validated_data["hackathon_id"] = self.context.get("hackathon").id
@@ -505,7 +505,7 @@ class HackathonFormSerializer(serializers.ModelSerializer):
 class HackathonOrganiserSerializerRetrieval(serializers.ModelSerializer):
     full_name = serializers.CharField(source="organiser.fullname")
     email = serializers.CharField(source="organiser.email")
-    muid = serializers.CharField(source="organiser.mu_id")
+    muid = serializers.CharField(source="organiser.muid")
     profile_pic = serializers.CharField(source="organiser.profile_pic")
 
     class Meta:
