@@ -117,11 +117,6 @@ class CampusStudentDetailsAPI(APIView):
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
-                is_active=Case(
-                    When(Q(karma_activity_log_user__created_at__range=(start_date, end_date),
-                           karma_activity_log_user__user=F("id")), then=Value("Active")),
-                    default=Value("Not Active")
-                )
             ))
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
