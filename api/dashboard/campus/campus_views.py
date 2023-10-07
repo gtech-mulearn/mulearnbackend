@@ -7,7 +7,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
-
 from . import serializers
 from .dash_campus_helper import get_user_college_link
 
@@ -118,18 +117,8 @@ class CampusStudentDetailsAPI(APIView):
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
-            )
-            .annotate(
-                is_active=Case(
-                    When(
-                        Q(
-                            karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date)),
-                        then=Value("Active")),
-                    default=Value("Not Active")
-                    )
             ))
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,

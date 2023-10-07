@@ -340,7 +340,11 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
         fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time', 'lead_name']
 
     def get_lead_name(self, obj):
-        return UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first().user.fullname
+        user_circle_link = UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first()
+        if user_circle_link:
+            user = user_circle_link.user
+            return f'{user.first_name} {user.last_name}'
+        return None
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
