@@ -20,7 +20,7 @@ def send_data_to_kkem(kkem_link):
         url=f"{BASE_URL}/MuLearn/api/update/muLearnId",
         data=json.dumps(
             {
-                "mu_id": kkem_link.user.mu_id,
+                "muid": kkem_link.user.muid,
                 "jsid": int(kkem_link.integration_value),
                 "email_id": kkem_link.user.email,
             }

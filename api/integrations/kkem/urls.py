@@ -12,5 +12,5 @@ urlpatterns = [
     path('user/<str:encrypted_data>/', kkem_views.KKEMdetailsFetchAPI.as_view(), name="get-details"),
     
     path('users/', kkem_views.KKEMBulkKarmaAPI.as_view(), name="list-user"),
-    path('users/<str:mu_id>/', kkem_views.KKEMIndividualKarmaAPI.as_view(), name="get-user"),
+    path('users/<str:muid>/', kkem_views.KKEMIndividualKarmaAPI.as_view(), name="get-user"),
 ]

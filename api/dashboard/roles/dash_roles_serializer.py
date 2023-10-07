@@ -52,7 +52,7 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
 class UserRoleSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "fullname", "mu_id"]
+        fields = ["id", "fullname", "muid"]
 
 
 class UserRoleCreateSerializer(serializers.ModelSerializer):
