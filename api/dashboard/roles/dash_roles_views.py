@@ -142,8 +142,8 @@ class UserRoleSearchAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user,
             request,
-            ["mu_id", "first_name", "last_name"],
-            {"mu_id": "mu_id", "first_name": "first_name", "last_name": "last_name"},
+            ["muid", "first_name", "last_name"],
+            {"muid": "muid", "first_name": "first_name", "last_name": "last_name"},
         )
 
         serializer = dash_roles_serializer.UserRoleSearchSerializer(

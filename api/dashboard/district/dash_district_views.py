@@ -119,7 +119,7 @@ class DistrictStudentDetailsAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("mu_id"),
+                muid=F("muid"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
@@ -132,7 +132,7 @@ class DistrictStudentDetailsAPI(APIView):
             {
                 "first_name": "first_name",
                 "last_name": "last_name",
-                "muid": "mu_id",
+                "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
             },
@@ -182,7 +182,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("mu_id"),
+                muid=F("muid"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )

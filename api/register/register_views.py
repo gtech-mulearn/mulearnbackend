@@ -4,7 +4,7 @@ from django.db.models import Q
 from django.db import transaction
 
 from rest_framework.views import APIView
-from api.register.register_helper import generate_mu_id
+from api.register.register_helper import generate_muid
 
 from db.organization import Country, Department, District, Organization, State, Zone
 from db.task import InterestGroup
@@ -77,17 +77,17 @@ class CompanyAPI(APIView):
 
 class LearningCircleUserViewAPI(APIView):
     def post(self, request):
-        mu_id = request.headers.get("muid")
-        user = User.objects.filter(mu_id=mu_id).first()
+        muid = request.headers.get("muid")
+        user = User.objects.filter(muid=muid).first()
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
         serializer = serializers.LearningCircleUserSerializer(user)
-        id, mu_id, first_name, last_name, email, phone = serializer.data.values()
+        id, muid, first_name, last_name, email, phone = serializer.data.values()
         name = f"{first_name}{last_name or ''}"
         return CustomResponse(
             response={
                 "id": id,
-                "mu_id": mu_id,
+                "muid": muid,
                 "name": name,
                 "email": email,
                 "phone": phone,
@@ -114,7 +114,7 @@ class RegisterDataAPI(APIView):
             AUTH_DOMAIN = decouple.config("AUTH_DOMAIN")
             response = requests.post(
                 f"{AUTH_DOMAIN}/api/v1/auth/user-authentication/",
-                data={"emailOrMuid": user.mu_id, "password": password},
+                data={"emailOrMuid": user.muid, "password": password},
             )
             response = response.json()
             if response.get("statusCode") != 200:

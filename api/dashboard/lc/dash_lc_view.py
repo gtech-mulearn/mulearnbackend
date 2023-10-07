@@ -248,7 +248,7 @@ class LearningCircleInviteLeadAPI(APIView):
         if not usr_circle_link:
             return CustomResponse(general_message='User not part of circle').get_failure_response()
         if usr_circle_link.lead:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if not user:
                 return CustomResponse(general_message='Muid is Invalid').get_failure_response()
             # send_template_mail(

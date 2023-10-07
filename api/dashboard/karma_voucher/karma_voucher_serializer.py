@@ -17,7 +17,7 @@ class VoucherLogSerializer(serializers.ModelSerializer):
     task = serializers.CharField(source='task.title')
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
-    muid = serializers.CharField(source="user.mu_id")
+    muid = serializers.CharField(source="user.muid")
 
     class  Meta:
         model = VoucherLog

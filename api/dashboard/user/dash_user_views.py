@@ -21,7 +21,7 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        user = User.objects.filter(mu_id=user_muid).first()
+        user = User.objects.filter(muid=user_muid).first()
 
         if user is None:
             return CustomResponse(
@@ -93,7 +93,7 @@ class UserAPI(APIView):
             User.objects.all()
             .values("id", "first_name", "last_name", "email", "mobile", "discord_id", "created_at")
             .annotate(
-                muid=F("mu_id"),
+                muid=F("muid"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
@@ -103,7 +103,7 @@ class UserAPI(APIView):
             user_queryset,
             request,
             [
-                "mu_id",
+                "muid",
                 "first_name",
                 "last_name",
                 "email",
@@ -135,7 +135,7 @@ class UserManagementCSV(APIView):
             User.objects.all()
             .values("id", "first_name", "last_name", "email", "mobile", "created_at")
             .annotate(
-                muid=F("mu_id"),
+                muid=F("muid"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
@@ -157,12 +157,12 @@ class UserVerificationAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            search_fields=["user__first_name", "user__last_name", "user__mobile", "user__email", "user__mu_id",
+            search_fields=["user__first_name", "user__last_name", "user__mobile", "user__email", "user__muid",
                            "role__title"],
             sort_fields={
                 "first_name": "user__first_name",
                 "role_title": "role__title",
-                "muid": "user__mu_id",
+                "muid": "user__muid",
                 "email": "user__email",
                 "mobile": "user__mobile",
             },
@@ -229,7 +229,7 @@ class ForgotPasswordAPI(APIView):
 
         if not (
                 user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
+                    Q(muid=email_muid) | Q(email=email_muid)
                 ).first()
         ):
             return CustomResponse(
@@ -269,7 +269,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
         current_time = DateTimeUtils.get_current_utc_time()
 
         if forget_user.expiry > current_time:
-            muid = forget_user.user.mu_id
+            muid = forget_user.user.muid
             return CustomResponse(response={"muid": muid}).get_success_response()
         else:
             forget_user.delete()

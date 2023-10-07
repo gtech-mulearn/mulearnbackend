@@ -37,7 +37,6 @@ class UserDashboardSerializer(serializers.Serializer):
 
 
 class UserSerializer(serializers.ModelSerializer):
-    muid = serializers.CharField(source="mu_id")
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
 
@@ -222,7 +221,7 @@ class UserVerificationSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField(source="user.fullname")
     user_id = serializers.ReadOnlyField(source="user.id")
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
-    mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.ReadOnlyField(source="user.muid")
     email = serializers.ReadOnlyField(source="user.email")
     mobile = serializers.ReadOnlyField(source="user.mobile")
     role_title = serializers.ReadOnlyField(source="role.title")
@@ -233,7 +232,7 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "id",
             "user_id",
             "discord_id",
-            "mu_id",
+            "muid",
             "full_name",
             "verified",
             "role_id",
