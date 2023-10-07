@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import transaction
-from django.db.models import F, Prefetch, Q, Sum
+from django.db.models import F, Q, Sum
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -34,6 +34,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     level = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     is_public = serializers.SerializerMethodField()
+    org_district_id = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -47,6 +48,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "roles",
             "college_id",
             "college_code",
+            "org_district_id",
             "karma",
             "rank",
             "karma_distribution",
@@ -67,6 +69,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "roles") else OrganizationType.COLLEGE.value
         user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
         return user_org_link.org.id if user_org_link else None
+
+    def get_org_district_id(self, obj):
+        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.context.get(
+            "roles") else OrganizationType.COLLEGE.value
+        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+
+        return user_org_link.org.district.id if user_org_link else None
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
