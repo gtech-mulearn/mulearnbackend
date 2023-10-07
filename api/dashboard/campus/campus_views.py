@@ -1,4 +1,6 @@
 from django.db.models import Count, Q, F, Case, When, Value
+from django.db.models import Sum
+from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
 from db.task import Level, Wallet
@@ -105,6 +107,23 @@ class CampusStudentDetailsAPI(APIView):
 
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
 
+        # user_org_links = (
+        #     User.objects.filter(
+        #         user_organization_link_user__org=user_org_link.org,
+        #         user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        #     )
+        #     .distinct()
+        #     .annotate(
+        #         user_id=F("id"),
+        #         muid=F("mu_id"),
+        #         karma=F("wallet_user__karma"),
+        #         level=F("user_lvl_link_user__level__name"),
+        #         join_date=F("created_at"),
+        #         is_active=Case(
+        #             When(Q(karma_activity_log_user__created_at__range=(start_date, end_date)), then=Value("Active")),
+        #             default=Value("Not Active")
+        #         )
+        #     ))
         user_org_links = (
             User.objects.filter(
                 user_organization_link_user__org=user_org_link.org,
@@ -114,14 +133,18 @@ class CampusStudentDetailsAPI(APIView):
             .annotate(
                 user_id=F("id"),
                 muid=F("mu_id"),
-                karma=F("wallet_user__karma"),
+                karma=Coalesce(Sum("wallet_user__karma"), 0),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
                 is_active=Case(
-                    When(Q(karma_activity_log_user__created_at__range=(start_date, end_date)), then=Value("Active")),
+                    When(
+                        Q(karma_activity_log_user__created_at__range=(start_date, end_date)),
+                        then=Value("Active")
+                    ),
                     default=Value("Not Active")
                 )
-            ))
+            )
+        )
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
