@@ -39,6 +39,7 @@ class ImportVoucherLogAPI(APIView):
 
         valid_rows = []
         error_rows = []
+        success_rows = []
         users_to_fetch = set()
         tasks_to_fetch = set()
         for row in excel_data[1:]:
@@ -63,7 +64,7 @@ class ImportVoucherLogAPI(APIView):
             karma = row.get('karma')
             month = row.get('month')
             week = row.get('week')
-            muid = row.pop('muid')
+            muid = row.get('muid')
             user_info = user_dict.get(muid)
             if user_info is None:
                 row['error'] = f"Invalid muid: {muid}"
@@ -93,6 +94,15 @@ class ImportVoucherLogAPI(APIView):
                     row['updated_at'] = DateTimeUtils.get_current_utc_time()
                     count += 1
                     valid_rows.append(row)
+                    success_rows.append({
+                        'muid': muid,
+                        'code': row['code'], 
+                        'user': full_name, 
+                        'task': task_hashtag, 
+                        'karma': karma, 
+                        'month': month, 
+                        'week': week
+                        })
                     # Preparing email context and attachment
                     from_mail = decouple.config("FROM_MAIL")
                     subject = "Congratulations on earning Karma points!"
@@ -133,7 +143,7 @@ class ImportVoucherLogAPI(APIView):
         else:
             error_rows.append(voucher_serializer.errors)
         return CustomResponse(
-            response={"Success": voucher_serializer.data, "Failed": error_rows}).get_success_response()
+            response={"Success": success_rows, "Failed": error_rows}).get_success_response()
 
 
 class VoucherLogAPI(APIView):
