@@ -24,6 +24,7 @@ class UserDashboardSerializer(serializers.Serializer):
     level = serializers.CharField()
 
     class Meta:
+        model = User
         fields = [
             "id",
             "first_name",
