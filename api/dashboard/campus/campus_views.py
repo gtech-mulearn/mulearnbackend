@@ -1,6 +1,4 @@
 from django.db.models import Count, Q, F, Case, When, Value
-from django.db.models import Sum
-from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
 from db.task import Level, Wallet
@@ -120,7 +118,8 @@ class CampusStudentDetailsAPI(APIView):
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
                 is_active=Case(
-                    When(Q(karma_activity_log_user__created_at__range=(start_date, end_date)), then=Value("Active")),
+                    When(Q(karma_activity_log_user__created_at__range=(start_date, end_date),
+                           karma_activity_log_user__user=F("id")), then=Value("Active")),
                     default=Value("Not Active")
                 )
             ))
