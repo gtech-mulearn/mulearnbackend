@@ -1,7 +1,8 @@
 from decouple import config
 from django.core.mail import send_mail
-from rest_framework.views import APIView
 from django.db.models import Q
+from rest_framework.views import APIView
+
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink
 from db.user import User
@@ -30,9 +31,9 @@ class TotalLearningCircleListApi(APIView):
             filters &= Q(ig_id=interest_group_id)
 
         if circle_code:
-            if not LearningCircle.objects.filter(circle_code=circle_code).exists():
-                return CustomResponse(general_message='invalid circle code').get_failure_response()
-            filters &= Q(circle_code=circle_code)
+            if not LearningCircle.objects.filter(Q(circle_code=circle_code) | Q(name__icontains=circle_code)).exists():
+                return CustomResponse(general_message='invalid circle code or Circle Name').get_failure_response()
+            filters &= Q(circle_code=circle_code) | Q(name__icontains=circle_code)
 
         learning_queryset = LearningCircle.objects.filter(filters)
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
@@ -61,7 +62,8 @@ class LearningCircleJoinApi(APIView):
                                                   context={'user_id': user_id, 'circle_id': circle_id})
         if serializer.is_valid():
             serializer.save()
-            NotificationUtils.insert_notification(user_id=lc.user,
+            user = User.objects.filter(id=lc.user.id).first()
+            NotificationUtils.insert_notification(user=user,
                                                   title="Member Request",
                                                   description=f"{full_name} has requested to join your learning circle",
                                                   button="LC",
@@ -139,14 +141,16 @@ class LearningCircleHomeApi(APIView):
         if serializer.is_valid():
             serializer.save()
             is_accepted = request.data.get('is_accepted')
+            user = User.objects.filter(id=member_id).first()
             if is_accepted == '1':
-                NotificationUtils.insert_notification(member_id, title="Request approved",
+
+                NotificationUtils.insert_notification(user, title="Request approved",
                                                       description="You request to join the learning circle has been approved",
                                                       button="LC",
                                                       url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
                                                       created_by=User.objects.filter(id=user_id).first())
             else:
-                NotificationUtils.insert_notification(member_id, title="Request rejected",
+                NotificationUtils.insert_notification(user, title="Request rejected",
                                                       description="You request to join the learning circle has been rejected",
                                                       button="LC",
                                                       url=f'{domain}/api/v1/dashboard/lc/join',
@@ -248,7 +252,7 @@ class LearningCircleInviteLeadAPI(APIView):
         if not usr_circle_link:
             return CustomResponse(general_message='User not part of circle').get_failure_response()
         if usr_circle_link.lead:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if not user:
                 return CustomResponse(general_message='Muid is Invalid').get_failure_response()
             # send_template_mail(

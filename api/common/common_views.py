@@ -111,7 +111,7 @@ class LcReportAPI(APIView):
         ).values(
             first_name=F('user__first_name'),
             last_name=F('user__last_name'),
-            muid=F('user__mu_id'),
+            muid=F('user__muid'),
             circle_name=F('circle__name'),
             circle_ig=F('circle__ig__name'),
             organisation=F('user__user_organization_link_user__org__title'),
@@ -126,7 +126,8 @@ class LcReportAPI(APIView):
         ).annotate(karma_earned=Sum('user__karma_activity_log_user__task__karma',
                                     filter=Q(user__karma_activity_log_user__task__ig=F('circle__ig'))))
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request, search_fields=[],
+        paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request,
+                                                                search_fields=['first_name', 'last_name', 'muid'],
                                                                 sort_fields={'name': 'name'})
 
         student_info_data = StudentInfoSerializer(paginated_queryset.get('queryset'), many=True).data

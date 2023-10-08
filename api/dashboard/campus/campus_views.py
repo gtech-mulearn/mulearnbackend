@@ -1,4 +1,5 @@
-from django.db.models import Count, Q, F, Case, When, Value
+from django.db.models import Count, F
+from django.db.models import Q, Case, When, Value
 from rest_framework.views import APIView
 
 from db.task import Level, Wallet
@@ -7,7 +8,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
-
 from . import serializers
 from .dash_campus_helper import get_user_college_link
 
@@ -114,22 +114,11 @@ class CampusStudentDetailsAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("mu_id"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
-            )
-            .annotate(
-                is_active=Case(
-                    When(
-                        Q(
-                            karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date)),
-                        then=Value("Active")),
-                    default=Value("Not Active")
-                    )
             ))
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
@@ -137,10 +126,10 @@ class CampusStudentDetailsAPI(APIView):
             {
                 "first_name": "first_name",
                 "last_name": "last_name",
-                "muid": "mu_id",
+                "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
-                "is_active": "karma_activity_log_user__created_at",
+                # "is_active": "karma_activity_log_user__created_at",
                 "joined_at": "created_at"
             },
         )
@@ -195,7 +184,6 @@ class CampusStudentDetailsCSVAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("mu_id"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),

@@ -17,7 +17,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "mu_id",
+            "muid",
             "email",
             "jsid",
             "total_karma",
@@ -71,7 +71,7 @@ class KKEMAuthorization(serializers.Serializer):
 
     email = serializers.CharField(read_only=True)
     fullname = serializers.CharField(read_only=True)
-    mu_id = serializers.CharField(read_only=True)
+    muid = serializers.CharField(read_only=True)
     link_id = serializers.CharField(read_only=True)
 
     verified = serializers.BooleanField()
@@ -83,7 +83,7 @@ class KKEMAuthorization(serializers.Serializer):
             "verified",
             "email",
             "fullname",
-            "mu_id",
+            "muid",
             "link_id",
         )
 
@@ -91,7 +91,7 @@ class KKEMAuthorization(serializers.Serializer):
         return {
             "email": instance.user.email,
             "fullname": instance.user.fullname,
-            "mu_id": instance.user.mu_id,
+            "muid": instance.user.muid,
             "link_id": instance.id,
             "verified": instance.verified,
         }
@@ -140,9 +140,9 @@ class KKEMAuthorization(serializers.Serializer):
 
         return kkem_link
 
-    def verify_user(self, user_mu_id):
+    def verify_user(self, user_muid):
         if user := User.objects.filter(
-                Q(mu_id=user_mu_id) | Q(email=user_mu_id)
+                Q(muid=user_muid) | Q(email=user_muid)
         ).first():
             return user
         else:

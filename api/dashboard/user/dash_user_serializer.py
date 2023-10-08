@@ -11,19 +11,14 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
 
-class UserDashboardSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    muid = serializers.CharField()
-    discord_id = serializers.CharField(allow_null=True)
-    email = serializers.CharField()
-    mobile = serializers.CharField()
-    created_at = serializers.DateTimeField()
-    karma = serializers.IntegerField()
-    level = serializers.CharField()
+class UserDashboardSerializer(serializers.ModelSerializer):
+    karma = serializers.IntegerField(source="wallet_user.karma", default=None)
+    level = serializers.CharField(
+        source="user_lvl_link_user.level.name", default=None
+    )
 
     class Meta:
+        model = User
         fields = [
             "id",
             "first_name",
@@ -33,11 +28,12 @@ class UserDashboardSerializer(serializers.Serializer):
             "email",
             "mobile",
             "created_at",
+            "karma",
+            "level"
         ]
 
 
 class UserSerializer(serializers.ModelSerializer):
-    muid = serializers.CharField(source="mu_id")
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
 
@@ -101,7 +97,7 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = ["title", "org_type"]
 
 
-class UserEditSerializer(serializers.ModelSerializer):
+class UserDetailsSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(source="id")
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
@@ -120,6 +116,7 @@ class UserEditSerializer(serializers.ModelSerializer):
             "email",
             "mobile",
             "gender",
+            "discord_id",
             "dob",
             "role",
             "organizations",
@@ -135,10 +132,10 @@ class UserEditSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User id is a required field")
 
         if (
-                "email" in data
-                and User.objects.filter(email=data["email"])
-                .exclude(id=data["user_id"].id)
-                .all()
+            "email" in data
+            and User.objects.filter(email=data["email"])
+            .exclude(id=data["user_id"].id)
+            .all()
         ):
             raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
@@ -222,8 +219,9 @@ class UserVerificationSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField(source="user.fullname")
     user_id = serializers.ReadOnlyField(source="user.id")
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
-    mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.ReadOnlyField(source="user.muid")
     email = serializers.ReadOnlyField(source="user.email")
+    mobile = serializers.ReadOnlyField(source="user.mobile")
     role_title = serializers.ReadOnlyField(source="role.title")
 
     class Meta:
@@ -232,12 +230,13 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "id",
             "user_id",
             "discord_id",
-            "mu_id",
+            "muid",
             "full_name",
             "verified",
             "role_id",
             "role_title",
             "email",
+            "mobile",
         ]
 
 
@@ -247,6 +246,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
     interest_groups = serializers.ListField(write_only=True)
     department = serializers.CharField(write_only=True)
     graduation_year = serializers.CharField(write_only=True)
+    admin = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
@@ -260,20 +260,22 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "dob",
             "organizations",
             "roles",
+            "discord_id",
             "interest_groups",
             "department",
             "graduation_year",
+            "admin"
         ]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
         if (
-                college := instance.user_organization_link_user.filter(
-                    org__org_type=OrganizationType.COLLEGE.value
-                )
-                        .select_related("org__district__zone__state__country", "department")
-                        .first()
+            college := instance.user_organization_link_user.filter(
+                org__org_type=OrganizationType.COLLEGE.value
+            )
+            .select_related("org__district__zone__state__country", "department")
+            .first()
         ):
             data.update(
                 {
@@ -304,12 +306,12 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
-        admin = self.context.get("admin")
+        admin = validated_data.pop("admin")
         current_time = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
             if isinstance(
-                    organization_ids := validated_data.pop("organizations", None), list
+                organization_ids := validated_data.pop("organizations", None), list
             ):
                 instance.user_organization_link_user.all().delete()
                 organizations = Organization.objects.filter(
@@ -317,8 +319,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 ).order_by("org_type")
 
                 if (
-                        organizations.exists()
-                        and organizations.first().org_type != OrganizationType.COLLEGE.value
+                    organizations.exists()
+                    and organizations.first().org_type != OrganizationType.COLLEGE.value
                 ):
                     validated_data.pop("department", None)
                     validated_data.pop("graduation_year", None)
@@ -354,7 +356,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             if isinstance(
-                    interest_group_ids := validated_data.pop("interest_groups", None), list
+                interest_group_ids := validated_data.pop("interest_groups", None), list
             ):
                 instance.user_ig_link_user.all().delete()
                 UserIgLink.objects.bulk_create(

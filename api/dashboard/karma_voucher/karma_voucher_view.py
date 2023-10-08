@@ -25,42 +25,38 @@ class ImportVoucherLogAPI(APIView):
             file_obj = request.FILES['voucher_log']
         except KeyError:
             return CustomResponse(general_message={'File not found.'}).get_failure_response()
-
         excel_data = ImportCSV()
         excel_data = excel_data.read_excel_file(file_obj)
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['karma', 'muid', 'hashtag', 'month', 'week']
+        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
                 return CustomResponse(general_message={f'{key} does not exist in the file.'}).get_failure_response()
-
         current_user = JWTUtils.fetch_user_id(request)
 
         valid_rows = []
         error_rows = []
-
+        success_rows = []
         users_to_fetch = set()
         tasks_to_fetch = set()
-
         for row in excel_data[1:]:
             task_hashtag = row.get('hashtag')
             muid = row.get('muid')
             users_to_fetch.add(muid)
             tasks_to_fetch.add(task_hashtag)
-
-        # Fetch users and tasks in bulk
-        users = User.objects.filter(mu_id__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name','mu_id')
+        # Fetching users and tasks in bulk
+        users = User.objects.filter(muid__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name','muid')
         tasks = TaskList.objects.filter(hashtag__in=tasks_to_fetch).values('id', 'hashtag')
+        user_dict = {
+            user['muid']: (
+                user['id'], user['email'], 
+                user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}"
+                ) for user in users
+                }
 
-        for user in users:
-            user_dict = {user['mu_id']: (
-                user['id'],
-                user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}",
-                user['email']
-            )}
         task_dict = {task['hashtag']: task['id'] for task in tasks}
 
         count = 1
@@ -69,15 +65,14 @@ class ImportVoucherLogAPI(APIView):
             karma = row.get('karma')
             month = row.get('month')
             week = row.get('week')
-
+            muid = row.get('muid')
             user_info = user_dict.get(muid)
             if user_info is None:
                 row['error'] = f"Invalid muid: {muid}"
                 error_rows.append(row)
             else:
-                user_id, full_name, email = user_info
+                user_id, email, full_name = user_info
                 task_id = task_dict.get(task_hashtag)
-
                 if task_id is None:
                     row['error'] = f"Invalid task hashtag: {task_hashtag}"
                     error_rows.append(row)
@@ -88,7 +83,7 @@ class ImportVoucherLogAPI(APIView):
                     existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
                     while generate_ordered_id(count) in existing_codes:
                         count += 1
-                    # Prepare valid row data
+                    # Preparing valid row data
                     row['user_id'] = user_id
                     row['task_id'] = task_id
                     row['id'] = str(uuid.uuid4())
@@ -100,8 +95,16 @@ class ImportVoucherLogAPI(APIView):
                     row['updated_at'] = DateTimeUtils.get_current_utc_time()
                     count += 1
                     valid_rows.append(row)
-
-                    # Prepare email context and attachment
+                    success_rows.append({
+                        'muid': muid,
+                        'code': row['code'], 
+                        'user': full_name, 
+                        'task': task_hashtag, 
+                        'karma': karma, 
+                        'month': month, 
+                        'week': week
+                        })
+                    # Preparing email context and attachment
                     from_mail = decouple.config("FROM_MAIL")
                     subject = "Congratulations on earning Karma points!"
                     text = f"""Greetings from GTech µLearn!
@@ -112,7 +115,6 @@ class ImportVoucherLogAPI(APIView):
                     Email: {email}
                     
                     To claim your karma points copy this `voucher {row["code"]}` and paste it #task-dropbox channel along with your voucher image.
-                    Great news! You are just one step away from claiming your internship/contribution Karma points. Simply post the Karma card attached to this email in the #task-dropbox channel and include the specified hashtag to redeem your points.
                     """
 
                     month_week = f'{month}/{week}'
@@ -135,15 +137,14 @@ class ImportVoucherLogAPI(APIView):
                     email_obj.attach(attachment)
                     email_obj.send(fail_silently=False)
 
-        # Serialize and save valid voucher rows
+        # Serializing and saving valid voucher rows
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
         if voucher_serializer.is_valid():
             voucher_serializer.save()
         else:
             error_rows.append(voucher_serializer.errors)
-
         return CustomResponse(
-            response={"Success": voucher_serializer.data, "Failed": error_rows}).get_success_response()
+            response={"Success": success_rows, "Failed": error_rows}).get_success_response()
 
 
 class VoucherLogAPI(APIView):

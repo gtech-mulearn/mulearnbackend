@@ -31,7 +31,7 @@ class Referral(APIView):
             user_context = {
                 "full_name": user.fullname,
                 "email": receiver_email,
-                "mu_id": user.mu_id,
+                "muid": user.muid,
             }
             send_template_mail(context=user_context, subject="AN INVITE TO INSPIRE✨", address=["user_referral.html"])
         elif RefferalType.MUCOIN.value == invite_type:
@@ -45,7 +45,7 @@ class Referral(APIView):
                 user_context = {
                     "full_name": user.fullname,
                     "email": receiver_email,
-                    "mu_id": user.mu_id,
+                    "muid": user.muid,
                     'invite_code': invite_log.invite_code,
                 }
                 send_template_mail(context=user_context, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])

@@ -1,7 +1,10 @@
+from db.user import Role
 from rest_framework.views import APIView
 
+from django.db.models import Prefetch
 from db.task import InterestGroup, KarmaActivityLog, Level
 from db.user import User, UserSettings, UserRoleLink, Socials
+from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
@@ -17,9 +20,10 @@ class UserProfileEditView(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
         if not user:
-            return CustomResponse(general_message='User Not Exists').get_failure_response()
-        serializer = profile_serializer.UserProfileEditSerializer(
-            user, many=False)
+            return CustomResponse(
+                general_message="User Not Exists"
+            ).get_failure_response()
+        serializer = profile_serializer.UserProfileEditSerializer(user, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
@@ -52,10 +56,8 @@ class UserIgEditView(APIView):
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_ig = InterestGroup.objects.filter(
-            user_ig_link_ig__user_id=user_id).all()
-        serializer = profile_serializer.UserIgListSerializer(
-            user_ig, many=True)
+        user_ig = InterestGroup.objects.filter(user_ig_link_ig__user_id=user_id).all()
+        serializer = profile_serializer.UserIgListSerializer(user_ig, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
@@ -73,56 +75,55 @@ class UserIgEditView(APIView):
                 WebHookActions.UPDATE.value,
                 user_id,
             )
-            return CustomResponse(general_message="Interest Group edited successfully").get_success_response()
+            return CustomResponse(
+                general_message="Interest Group edited successfully"
+            ).get_success_response()
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
-        if muid is not None:
-            user = User.objects.filter(mu_id=muid).first()
-            if user is None:
-                return CustomResponse(
-                    general_message="Invalid muid"
-                ).get_failure_response()
+        try:
+            user = User.objects.prefetch_related(
+                Prefetch(
+                    "user_organization_link_user",
+                    queryset=UserOrganizationLink.objects.all().select_related(
+                        "org", "department"
+                    ),
+                ),
+                Prefetch(
+                    "user_role_link_user__role",
+                    queryset=Role.objects.all(),
+                ),
+            ).get(muid=muid or JWTUtils.fetch_muid(request))
 
-            user_settings = UserSettings.objects.filter(user_id=user).first()
-            if not user_settings.is_public:
-                return CustomResponse(
-                    general_message="Private Profile"
-                ).get_failure_response()
-            user_id = user.id
-            roles = [
-                role.role.title for role in UserRoleLink.objects.filter(user=user)]
-        else:
-            JWTUtils.is_jwt_authenticated(request)
-            user_id = JWTUtils.fetch_user_id(request)
-            roles = JWTUtils.fetch_role(request)
+            if muid:
+                user_settings = UserSettings.objects.filter(user_id=user).first()
+                if not user_settings.is_public:
+                    return CustomResponse(
+                        general_message="Private Profile"
+                    ).get_failure_response()
+                
+            else:
+                JWTUtils.is_jwt_authenticated(request)
 
-        user = (
-            User.objects.select_related("wallet_user")
-            .prefetch_related(
-                "user_organization_link_user__org",
-                "user_organization_link_user__department",
-                "user_role_link_user__role",
-                "user_lvl_link_user__level",
+            serializer = profile_serializer.UserProfileSerializer(
+                user, many=False
             )
-            .filter(id=user_id)
-            .first()
-        )
 
-        serializer = profile_serializer.UserProfileSerializer(
-            user, many=False, context={"roles": roles}
-        )
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(response=serializer.data).get_success_response()
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given μID seems to be invalid"
+            ).get_failure_response()
 
 
 class UserLogAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
@@ -138,13 +139,18 @@ class UserLogAPI(APIView):
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
 
-        karma_activity_log = KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True).order_by(
-            "-created_at")
+        karma_activity_log = KarmaActivityLog.objects.filter(
+            user=user_id, appraiser_approved=True
+        ).order_by("-created_at")
 
         if karma_activity_log is None:
-            return CustomResponse(general_message="No karma details available for user").get_success_response()
+            return CustomResponse(
+                general_message="No karma details available for user"
+            ).get_success_response()
 
-        serializer = profile_serializer.UserLogSerializer(karma_activity_log, many=True).data
+        serializer = profile_serializer.UserLogSerializer(
+            karma_activity_log, many=True
+        ).data
 
         return CustomResponse(response=serializer).get_success_response()
 
@@ -181,7 +187,7 @@ class ShareUserProfileAPI(APIView):
 class UserLevelsAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
-            user = User.objects.filter(mu_id=muid).first()
+            user = User.objects.filter(muid=muid).first()
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
@@ -206,11 +212,10 @@ class UserLevelsAPI(APIView):
 
 class UserRankAPI(APIView):
     def get(self, request, muid):
-        user = User.objects.filter(mu_id=muid).first()
+        user = User.objects.filter(muid=muid).first()
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
-        roles = [
-            role.role.title for role in UserRoleLink.objects.filter(user=user)]
+        roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
         serializer = profile_serializer.UserRankSerializer(
             user, many=False, context={"roles": roles}
         )
@@ -223,31 +228,19 @@ class SocialsAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        social_instance = Socials.objects.filter(
-            user_id=user_id
-        ).first()
+        social_instance = Socials.objects.filter(user_id=user_id).first()
 
-        serializer = LinkSocials(
-            instance=social_instance
-        )
+        serializer = LinkSocials(instance=social_instance)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        social_instance = Socials.objects.filter(
-            user_id=user_id
-        ).first()
+        social_instance = Socials.objects.filter(user_id=user_id).first()
 
         serializer = LinkSocials(
-            instance=social_instance,
-            data=request.data,
-            context={
-                "request": request
-            }
+            instance=social_instance, data=request.data, context={"request": request}
         )
 
         if serializer.is_valid():
@@ -257,6 +250,4 @@ class SocialsAPI(APIView):
                 general_message="Socials Updated"
             ).get_success_response()
 
-        return CustomResponse(
-            response=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()

@@ -7,13 +7,13 @@ from db.user import UserReferralLink
 class ReferralListSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="user.id")
     full_name = serializers.CharField(source="user.fullname")
-    mu_id = serializers.CharField(source="user.mu_id")
+    muid = serializers.CharField(source="user.muid")
     karma = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()
 
     class Meta:
         model = UserReferralLink
-        fields = ["id", "full_name", "mu_id", "karma", "level"]
+        fields = ["id", "full_name", "muid", "karma", "level"]
 
     def get_karma(self, obj):
         total_karma = Wallet.objects.filter(user=obj.user).first()
