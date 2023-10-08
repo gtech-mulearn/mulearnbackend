@@ -25,11 +25,8 @@ class UserLogSerializer(ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
-    is_public = serializers.CharField(
-        source="user_settings_user.is_public", default=None
-    )
+    is_public = serializers.CharField(source="user_settings_user.is_public", default=None)
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
-    profile_pic = serializers.SerializerMethodField()
 
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
@@ -61,13 +58,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "is_public",
         )
         
-    def get_profile_pic(self, obj):
-        if obj.muid == "muhammedzafar@mulearn":
-            obj.profile_pic = "https://th.bing.com/th/id/OIP.qHMOgzVFm4rnHuriMAD9LAHaFU?pid=ImgDet&rs=1"
-            obj.save()
-            return obj.profile_pic
-        return obj.profile_pic
-
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.all()})
 

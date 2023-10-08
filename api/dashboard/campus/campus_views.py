@@ -114,7 +114,6 @@ class CampusStudentDetailsAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("muid"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
@@ -185,7 +184,6 @@ class CampusStudentDetailsCSVAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("muid"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
