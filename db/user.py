@@ -115,7 +115,7 @@ class ForgotPassword(models.Model):
 
 class UserSettings(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_settings_user")
     is_public = models.BooleanField(default=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='user_settings_updated_by')
