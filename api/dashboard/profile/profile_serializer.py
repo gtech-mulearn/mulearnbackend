@@ -1,12 +1,12 @@
 import uuid
 
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink, UserLvlLink
 from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
@@ -27,7 +27,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
     is_public = serializers.CharField(source="user_settings_user.is_public", default=None)
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
-
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
@@ -57,7 +56,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
         )
-        
+
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.all()})
 
@@ -86,7 +85,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
-            org__org_type=OrganizationType.COLLEGE.value
+                org__org_type=OrganizationType.COLLEGE.value
         ).first():
             return user_org_link.org.code
         return None
@@ -135,14 +134,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 if KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
+                   .aggregate(Sum("karma"))
+                   .get("karma__sum")
+                   is None
                 else KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
+                   .aggregate(Sum("karma"))
+                   .get("karma__sum")
             )
             interest_groups.append(
                 {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
@@ -159,17 +158,18 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
+        user_lvl = UserLvlLink.objects.filter(user__id=user_id).first().level.level_order
+        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
 
         data = []
         for task in tasks:
-            completed = KarmaActivityLog.objects.filter(
-                user=user_id, task=task, appraiser_approved=True
-            ).exists()
+            completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
             if task.active or completed:
                 data.append(
                     {
                         "task_name": task.title,
+                        "discord_link": task.discord_link,
                         "hashtag": task.hashtag,
                         "completed": completed,
                         "karma": task.karma,
