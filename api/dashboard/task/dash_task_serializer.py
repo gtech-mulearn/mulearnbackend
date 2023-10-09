@@ -41,6 +41,7 @@ class TaskModifySerializer(serializers.ModelSerializer):
         model = TaskList
         fields = (
             "hashtag",
+            "discord_link",
             "title",
             "description",
             "karma",
@@ -72,6 +73,7 @@ class TaskImportSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "hashtag",
+            "discord_link",
             "title",
             "description",
             "karma",

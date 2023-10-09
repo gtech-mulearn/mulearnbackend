@@ -1,12 +1,12 @@
 import uuid
 
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
 from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink, UserLvlLink
 from db.user import User, UserSettings, Socials
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
@@ -24,16 +24,15 @@ class UserLogSerializer(ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
-    muid = serializers.CharField(source="mu_id")
+    level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
+    is_public = serializers.CharField(source="user_settings_user.is_public", default=None)
+    karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
-    karma = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma_distribution = serializers.SerializerMethodField()
-    level = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
-    is_public = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
 
     class Meta:
@@ -58,36 +57,41 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "is_public",
         )
 
-    def get_is_public(self, obj):
-        return UserSettings.objects.filter(user=obj).first().is_public
-
     def get_roles(self, obj):
-        return list(obj.user_role_link_user.values_list("role__title", flat=True).distinct())
+        return list({link.role.title for link in obj.user_role_link_user.all()})
 
     def get_college_id(self, obj):
-        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.context.get(
-            "roles") else OrganizationType.COLLEGE.value
-        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        org_type = (
+            OrganizationType.COMPANY.value
+            if MainRoles.MENTOR.value in self.get_roles(obj)
+            else OrganizationType.COLLEGE.value
+        )
+        user_org_link = obj.user_organization_link_user.filter(
+            org__org_type=org_type
+        ).first()
         return user_org_link.org.id if user_org_link else None
 
     def get_org_district_id(self, obj):
-        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.context.get(
-            "roles") else OrganizationType.COLLEGE.value
-        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        org_type = (
+            OrganizationType.COMPANY.value
+            if MainRoles.MENTOR.value in self.get_roles(obj)
+            else OrganizationType.COLLEGE.value
+        )
+        user_org_link = obj.user_organization_link_user.filter(
+            org__org_type=org_type
+        ).first()
 
         return user_org_link.org.district.id if user_org_link else None
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
-                org__org_type=OrganizationType.COLLEGE.value).first():
+                org__org_type=OrganizationType.COLLEGE.value
+        ).first():
             return user_org_link.org.code
         return None
 
-    def get_karma(self, obj):
-        return total_karma.karma if (total_karma := obj.wallet_user) else None
-
     def get_rank(self, obj):
-        roles = self.context.get("roles")
+        roles = self.get_roles(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
@@ -122,26 +126,26 @@ class UserProfileSerializer(serializers.ModelSerializer):
             .order_by()
         )
 
-    def get_level(self, obj):
-        if user_level_link := obj.user_lvl_link_user.first():
-            return user_level_link.level.name
-        return None
-
     def get_interest_groups(self, obj):
         interest_groups = []
         for ig_link in UserIgLink.objects.filter(user=obj):
             total_ig_karma = (
                 0
-                if KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
+                if KarmaActivityLog.objects.filter(
+                    task__ig=ig_link.ig, user=obj, appraiser_approved=True
+                )
                    .aggregate(Sum("karma"))
                    .get("karma__sum")
                    is None
-                else KarmaActivityLog.objects.filter(task__ig=ig_link.ig, user=obj, appraiser_approved=True)
+                else KarmaActivityLog.objects.filter(
+                    task__ig=ig_link.ig, user=obj, appraiser_approved=True
+                )
                    .aggregate(Sum("karma"))
                    .get("karma__sum")
             )
             interest_groups.append(
-                {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma})
+                {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
+            )
         return interest_groups
 
 
@@ -154,17 +158,18 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
+        user_lvl = UserLvlLink.objects.filter(user__id=user_id).first().level.level_order
+        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
 
         data = []
         for task in tasks:
-            completed = KarmaActivityLog.objects.filter(
-                user=user_id, task=task, appraiser_approved=True
-            ).exists()
+            completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
             if task.active or completed:
                 data.append(
                     {
                         "task_name": task.title,
+                        "discord_link": task.discord_link,
                         "hashtag": task.hashtag,
                         "completed": completed,
                         "karma": task.karma,
@@ -183,8 +188,7 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role",
-                  "rank", "karma", "interest_groups")
+        fields = ("first_name", "last_name", "role", "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
         roles = self.context.get("roles")
@@ -235,8 +239,7 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        instance.is_public = validated_data.get(
-            "is_public", instance.is_public)
+        instance.is_public = validated_data.get("is_public", instance.is_public)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -249,9 +252,11 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
         communities = instance.user_organization_link_user.filter(
-            org__org_type=OrganizationType.COMMUNITY.value).all()
+            org__org_type=OrganizationType.COMMUNITY.value
+        ).all()
         data["communities"] = (
-            [community.org_id for community in communities] if communities else [])
+            [community.org_id for community in communities] if communities else []
+        )
         return data
 
     def update(self, instance, validated_data):
@@ -274,8 +279,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                     for org_data in community_data
                 ]
 
-                UserOrganizationLink.objects.bulk_create(
-                    user_organization_links)
+                UserOrganizationLink.objects.bulk_create(user_organization_links)
 
             return super().update(instance, validated_data)
 
@@ -319,10 +323,8 @@ class UserIgEditSerializer(serializers.ModelSerializer):
                 for ig_data in ig_details
             ]
             if len(user_ig_links) > 3:
-                raise ValueError(
-                    "Cannot add more than 3 interest groups")
-            UserIgLink.objects.bulk_create(
-                user_ig_links)
+                raise ValueError("Cannot add more than 3 interest groups")
+            UserIgLink.objects.bulk_create(user_ig_links)
             return super().update(instance, validated_data)
 
     class Meta:
@@ -347,7 +349,7 @@ class LinkSocials(ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
-        user_id = JWTUtils.fetch_user_id(self.context.get('request'))
+        user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         accounts = [
             "github",
             "facebook",
@@ -359,22 +361,11 @@ class LinkSocials(ModelSerializer):
             "medium",
         ]
 
-        old_accounts = {
-            account: getattr(
-                instance,
-                account
-            )
-            for account in accounts
-        }
+        old_accounts = {account: getattr(instance, account) for account in accounts}
 
         for account in accounts:
             setattr(
-                instance,
-                account,
-                validated_data.get(
-                    account,
-                    old_accounts[account]
-                )
+                instance, account, validated_data.get(account, old_accounts[account])
             )
 
         def create_karma_activity_log(task_title, karma_value):

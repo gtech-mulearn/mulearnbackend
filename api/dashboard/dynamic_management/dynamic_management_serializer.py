@@ -110,7 +110,7 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         return data
     
     def validate_user(self, value):
-        user = User.objects.filter(Q(mu_id=value) | Q(email=value)).first()
+        user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
         if user is None:
             raise serializers.ValidationError("Enter a valid user")
         return user
@@ -129,7 +129,7 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
             'dynamic_user_id': dynamic_user.id,
             'user_id': dynamic_user.user.id,
             'name': f"{dynamic_user.user.first_name} {dynamic_user.user.last_name if dynamic_user.user.last_name else ''}",
-            'muid': dynamic_user.user.mu_id,
+            'muid': dynamic_user.user.muid,
             'email': dynamic_user.user.email} for dynamic_user in dynamic_users]
         return user_data
 
@@ -157,7 +157,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
         return instance 
 
     def validate_new_user(self, value):
-        new_user = User.objects.filter(Q(mu_id=value) | Q(email=value)).first()
+        new_user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
         if new_user is None:
             raise serializers.ValidationError("Enter a valid user")
         return new_user

@@ -82,7 +82,7 @@ class Level(models.Model):
 
 class UserLvlLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(
+    user = models.OneToOneField(
         User, on_delete=models.CASCADE, related_name="user_lvl_link_user"
     )
     level = models.ForeignKey(
@@ -134,6 +134,7 @@ class TaskType(models.Model):
 class TaskList(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     hashtag = models.CharField(max_length=75)
+    discord_link = models.CharField(max_length=200, blank=True, null=True)
     title = models.CharField(max_length=75)
     description = models.CharField(max_length=200, blank=True, null=True)
     karma = models.IntegerField(blank=True, null=True)

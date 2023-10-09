@@ -120,7 +120,6 @@ class ZonalStudentDetailsAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("mu_id"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
@@ -133,7 +132,7 @@ class ZonalStudentDetailsAPI(APIView):
             {
                 "first_name": "first_name",
                 "last_name": "last_name",
-                "muid": "mu_id",
+                "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
             },
@@ -183,7 +182,6 @@ class ZonalStudentDetailsCSVAPI(APIView):
             .distinct()
             .annotate(
                 user_id=F("id"),
-                muid=F("mu_id"),
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
             )
