@@ -143,7 +143,6 @@ class LearningCircleHomeApi(APIView):
             is_accepted = request.data.get('is_accepted')
             user = User.objects.filter(id=member_id).first()
             if is_accepted == '1':
-
                 NotificationUtils.insert_notification(user, title="Request approved",
                                                       description="You request to join the learning circle has been approved",
                                                       button="LC",
