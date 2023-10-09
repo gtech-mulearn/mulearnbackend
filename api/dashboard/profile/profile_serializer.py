@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import transaction
-from django.db.models import F, Sum, Q
+from django.db.models import F, Sum,Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -156,41 +156,13 @@ class UserLevelSerializer(serializers.ModelSerializer):
         model = Level
         fields = ("name", "tasks", "karma")
 
-    #
-    # def get_tasks(self, obj):
-    #     user_id = self.context.get("user_id")
-    #     user_lvl = UserLvlLink.objects.filter(user__id=user_id).first().level.level_order
-    #     user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
-    #
-    #     tasks = TaskList.objects.filter(level=obj)
-    #
-    #     data = []
-    #     for task in tasks:
-    #         completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
-    #         if task.active or completed:
-    #             data.append(
-    #                 {
-    #                     "task_name": task.title,
-    #                     "hashtag": task.hashtag,
-    #                     "completed": completed,
-    #                     "karma": task.karma,
-    #                 }
-    #             )
-    #     return data
-
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
         user_lvl = UserLvlLink.objects.filter(user__id=user_id).first().level.level_order
+        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
+        tasks = TaskList.objects.filter(level=obj)
 
         data = []
-
-        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
-
-        if user_lvl <= 3:
-            tasks = TaskList.objects.filter(level=obj)
-        else:
-            tasks = TaskList.objects.filter(Q(level=obj) & Q(ig__name__in=user_igs))
-
         for task in tasks:
             completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
             if task.active or completed:
@@ -202,8 +174,8 @@ class UserLevelSerializer(serializers.ModelSerializer):
                         "karma": task.karma,
                     }
                 )
-
         return data
+
 
 class UserRankSerializer(ModelSerializer):
     first_name = serializers.CharField()
