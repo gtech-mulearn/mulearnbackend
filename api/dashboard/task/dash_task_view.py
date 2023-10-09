@@ -8,7 +8,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import Events, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
-
 from .dash_task_serializer import (
     TaskImportSerializer,
     TaskListSerializer,
@@ -86,6 +85,26 @@ class TaskListAPI(APIView):
         except TaskList.DoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.ASSOCIATE.value,
+        ]
+    )
+    def post(self, request):  # create
+        user_id = JWTUtils.fetch_user_id(request)
+        request.data["created_by"] = request.data["updated_by"] = user_id
+        serializer = TaskModifySerializer(data=request.data)
+
+        if not serializer.is_valid():
+            return CustomResponse(message=serializer.errors).get_failure_response()
+
+        serializer.save()
+        return CustomResponse(
+            general_message="Task Created Successfully"
+        ).get_success_response()
+
 
 class TaskAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -114,26 +133,6 @@ class TaskAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
-    def post(self, request):  # create
-        user_id = JWTUtils.fetch_user_id(request)
-        request.data["created_by"] = request.data["updated_by"] = user_id
-        serializer = TaskModifySerializer(data=request.data)
-
-        if not serializer.is_valid():
-            return CustomResponse(message=serializer.errors).get_failure_response()
-
-        serializer.save()
-        return CustomResponse(
-            general_message="Task Created Successfully"
-        ).get_success_response()
-
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-            RoleType.FELLOW.value,
-            RoleType.ASSOCIATE.value,
-        ]
-    )
     def put(self, request, task_id):  # edit
         try:
             user_id = JWTUtils.fetch_user_id(request)
@@ -146,7 +145,7 @@ class TaskAPI(APIView):
                 return CustomResponse(message=serializer.errors).get_failure_response()
 
             serializer.save()
-            
+
             return CustomResponse(
                 general_message=serializer.data
             ).get_success_response()
