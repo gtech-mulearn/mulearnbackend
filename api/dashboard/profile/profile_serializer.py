@@ -27,7 +27,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
     is_public = serializers.CharField(source="user_settings_user.is_public", default=None)
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
-
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
@@ -163,10 +162,9 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
         data = []
         for task in tasks:
-            completed = KarmaActivityLog.objects.filter(
-                user=user_id, task=task, appraiser_approved=True
-            ).exists()
+            completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
             if task.active or completed:
+
                 data.append(
                     {
                         "task_name": task.title,
