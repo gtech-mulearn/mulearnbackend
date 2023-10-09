@@ -13,11 +13,12 @@ class KKEMUserSerializer(serializers.ModelSerializer):
     total_karma = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     jsid = serializers.SerializerMethodField()
+    mu_id = serializers.CharField(source="muid")
 
     class Meta:
         model = User
         fields = [
-            "muid",
+            "mu_id",
             "email",
             "jsid",
             "total_karma",
