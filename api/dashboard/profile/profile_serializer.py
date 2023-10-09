@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import transaction
-from django.db.models import F, Sum,Q
+from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
@@ -169,6 +169,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
                 data.append(
                     {
                         "task_name": task.title,
+                        "discord_link": task.discord_link,
                         "hashtag": task.hashtag,
                         "completed": completed,
                         "karma": task.karma,
