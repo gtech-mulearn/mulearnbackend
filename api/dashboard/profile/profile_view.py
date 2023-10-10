@@ -244,13 +244,11 @@ class GetSocialsAPI(APIView):
 class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
         social_instance = Socials.objects.filter(user_id=user_id).first()
-
         serializer = LinkSocials(instance=social_instance, data=request.data, context={"request": request})
-
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message="Socials Updated").get_success_response()
