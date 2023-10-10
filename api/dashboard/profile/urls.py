@@ -16,5 +16,5 @@ urlpatterns = [
     path('get-user-levels/<str:muid>/', profile_view.UserLevelsAPI.as_view()),
     path('socials/', profile_view.GetSocialsAPI.as_view()),
     path('socials/<str:muid>/', profile_view.GetSocialsAPI.as_view()),
-    path('socials/edit/',profile_view.SocialsAPI.as_view())
+    path('socials/edit/', profile_view.SocialsAPI.as_view())
 ]
