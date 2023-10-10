@@ -210,8 +210,8 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
     def get_role(self, user):
         role = UserRoleLink.objects.filter(user=user).first()
-        if role and role.role.title in [RoleType.STUDENT.value, RoleType.ENABLER.value]:
-            return role.role.title
+        if role:
+            return role
         return None
 
 
