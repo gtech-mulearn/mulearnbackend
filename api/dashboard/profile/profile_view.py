@@ -244,7 +244,6 @@ class GetSocialsAPI(APIView):
 class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         social_instance = Socials.objects.filter(user_id=user_id).first()
