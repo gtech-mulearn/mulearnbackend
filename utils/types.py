@@ -90,6 +90,7 @@ class TasksTypesHashtag(Enum):
 
 class Events(Enum):
     LEARNING_FEST = 'LearningFest'
+    TOP_100_CODERS = 'Top100'
 
     @classmethod
     def get_all_values(cls):
