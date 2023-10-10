@@ -8,27 +8,17 @@ class LearningCircle(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=255, unique=True)
     circle_code = models.CharField(unique=True, max_length=36)
-    ig = models.ForeignKey(
-        InterestGroup, on_delete=models.CASCADE, blank=True, null=True
-    )
+    ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank=True, null=True)
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     meet_place = models.CharField(max_length=255, blank=True, null=True)
     meet_time = models.CharField(max_length=10, blank=True, null=True)
     day = models.CharField(max_length=20, blank=True, null=True)
     note = models.CharField(max_length=500, blank=True, null=True)
-    updated_by = models.ForeignKey(
-        User,
-        models.DO_NOTHING,
-        db_column="updated_by",
-        related_name="learning_circle_updated_by",
-    )
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+                                   related_name="learning_circle_updated_by")
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(
-        User,
-        models.DO_NOTHING,
-        db_column="created_by",
-        related_name="learning_circle_created_by",
-    )
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+                                   related_name="learning_circle_created_by")
     created_at = models.DateTimeField()
 
     class Meta:

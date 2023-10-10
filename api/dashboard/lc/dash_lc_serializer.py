@@ -337,10 +337,14 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = LearningCircle
-        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time']
+        fields = ['name', 'ig_name', 'member_count', 'members', 'meet_place', 'meet_time', 'lead_name']
 
     def get_lead_name(self, obj):
-        return UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first().user.fullname
+        user_circle_link = UserCircleLink.objects.filter(circle=obj, accepted=1, lead=True).first()
+        if user_circle_link:
+            user = user_circle_link.user
+            return f'{user.first_name} {user.last_name}'
+        return None
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
@@ -361,21 +365,22 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
 
 class LearningCircleDataSerializer(serializers.ModelSerializer):
-    state = serializers.SerializerMethodField()
-    district = serializers.SerializerMethodField()
     interest_group = serializers.SerializerMethodField()
     college = serializers.SerializerMethodField()
     learning_circle = serializers.SerializerMethodField()
+    total_no_of_users = serializers.SerializerMethodField()
 
     class Meta:
         model = LearningCircle
         fields = [
-            "state",
-            "district",
             "interest_group",
             "college",
             "learning_circle",
+            "total_no_of_users"
         ]
+
+    def get_total_no_of_users(self, obj):
+        return UserCircleLink.objects.all().count()
 
     def get_learning_circle(self, obj):
         return LearningCircle.objects.all().count()
@@ -385,12 +390,6 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
 
     def get_interest_group(self, obj):
         return LearningCircle.objects.values('ig_id').distinct().count()
-
-    def get_district(self, obj):
-        return LearningCircle.objects.values('org__district_id').distinct().count()
-
-    def get_state(self, obj):
-        return LearningCircle.objects.values('org__district__zone__state_id').distinct().count()
 
 
 class LearningCircleMemberlistSerializer(serializers.ModelSerializer):

@@ -69,12 +69,12 @@ class KKEMBulkKarmaAPI(APIView):
 
 class KKEMIndividualKarmaAPI(APIView):
     @integrations_helper.token_required(IntegrationType.KKEM.value)
-    def get(self, request, mu_id):
+    def get(self, request, muid):
         kkem_user = (
             User.objects.filter(
                 integration_authorization_user__integration__name=IntegrationType.KKEM.value,
                 integration_authorization_user__verified=True,
-                mu_id=mu_id,
+                muid=muid,
             )
             .annotate(jsid=F("integration_authorization_user__integration_value"))
             .get()
@@ -223,11 +223,9 @@ class KKEMUserStatusAPI(APIView):
     def get(self, request, encrypted_data):
         try:
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
-            if "mu_id" in details:
-                return CustomResponse(
-                    response={"mu_id": details["mu_id"][0]}
-                ).get_success_response()
-            else:
-                return CustomResponse(response={"mu_id": None}).get_success_response()
+            return CustomResponse(
+                response={"muid": details["mu_id"][0] if "mu_id" in details else None}
+            ).get_success_response()
+
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
