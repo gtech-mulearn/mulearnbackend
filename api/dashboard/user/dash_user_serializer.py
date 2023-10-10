@@ -132,10 +132,10 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User id is a required field")
 
         if (
-            "email" in data
-            and User.objects.filter(email=data["email"])
-            .exclude(id=data["user_id"].id)
-            .all()
+                "email" in data
+                and User.objects.filter(email=data["email"])
+                .exclude(id=data["user_id"].id)
+                .all()
         ):
             raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
@@ -271,11 +271,11 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
 
         if (
-            college := instance.user_organization_link_user.filter(
-                org__org_type=OrganizationType.COLLEGE.value
-            )
-            .select_related("org__district__zone__state__country", "department")
-            .first()
+                college := instance.user_organization_link_user.filter(
+                    org__org_type=OrganizationType.COLLEGE.value
+                )
+                        .select_related("org__district__zone__state__country", "department")
+                        .first()
         ):
             data.update(
                 {
@@ -307,11 +307,12 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         admin = validated_data.pop("admin")
+        admin = User.objects.filter(id=admin).first()
         current_time = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
             if isinstance(
-                organization_ids := validated_data.pop("organizations", None), list
+                    organization_ids := validated_data.pop("organizations", None), list
             ):
                 instance.user_organization_link_user.all().delete()
                 organizations = Organization.objects.filter(
@@ -319,8 +320,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 ).order_by("org_type")
 
                 if (
-                    organizations.exists()
-                    and organizations.first().org_type != OrganizationType.COLLEGE.value
+                        organizations.exists()
+                        and organizations.first().org_type != OrganizationType.COLLEGE.value
                 ):
                     validated_data.pop("department", None)
                     validated_data.pop("graduation_year", None)
@@ -356,7 +357,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             if isinstance(
-                interest_group_ids := validated_data.pop("interest_groups", None), list
+                    interest_group_ids := validated_data.pop("interest_groups", None), list
             ):
                 instance.user_ig_link_user.all().delete()
                 UserIgLink.objects.bulk_create(
