@@ -222,9 +222,7 @@ class UserRankAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 
-class SocialsAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
+class GetSocialsAPI(APIView):
     def get(self, request, muid=None):
         if muid is not None:
             user = User.objects.filter(muid=muid).first()
@@ -243,20 +241,14 @@ class SocialsAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 
+class SocialsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
         social_instance = Socials.objects.filter(user_id=user_id).first()
-
-        serializer = LinkSocials(
-            instance=social_instance, data=request.data, context={"request": request}
-        )
-
+        serializer = LinkSocials(instance=social_instance, data=request.data, context={"request": request})
         if serializer.is_valid():
             serializer.save()
-
-            return CustomResponse(
-                general_message="Socials Updated"
-            ).get_success_response()
-
+            return CustomResponse(general_message="Socials Updated").get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
