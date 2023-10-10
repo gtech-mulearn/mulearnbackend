@@ -7,7 +7,7 @@ from db.organization import Organization, UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
 
@@ -209,9 +209,12 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         return igs
 
     def get_role(self, user):
-        role = UserRoleLink.objects.filter(user=user).first()
-        if role:
-            return role
+        roles_data = []
+        roles = UserRoleLink.objects.filter(user=user)
+        if roles:
+            for role in roles:
+                roles_data.append(role)
+            return roles_data
         return None
 
 
