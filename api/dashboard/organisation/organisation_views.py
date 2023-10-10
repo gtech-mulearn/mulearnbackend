@@ -218,7 +218,7 @@ class InstitutionDetailsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
 
-        organizations = Organization.objects.all().values(
+        organization = Organization.objects.filter(code=org_code).values(
             "id",
             "title",
             "code",
@@ -227,7 +227,7 @@ class InstitutionDetailsAPI(APIView):
             district_name=F("district__name"),
             zone_name=F("district__zone__name"),
             state_name=F("district__zone__state__name"),
-            country_name=F("district__zone__state__country__name")
+            country_name=F("district__zone__state__country__name"),
         ).annotate(
             karma=Sum(
                 'user_organization_link_org__user__wallet_user__karma'
@@ -243,9 +243,7 @@ class InstitutionDetailsAPI(APIView):
                     order_by=F('karma').desc()
                 )))
 
-        organization = organizations.filter(
-            code=org_code
-        ).first()
+
 
         if organization is None:
             return CustomResponse(

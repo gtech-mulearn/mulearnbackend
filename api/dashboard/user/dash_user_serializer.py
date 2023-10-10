@@ -7,7 +7,7 @@ from db.organization import Organization, UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
 
@@ -102,7 +102,6 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
     igs = serializers.ListField(write_only=True)
-    orgs = serializers.ListField(write_only=True)
     role = serializers.SerializerMethodField(read_only=True)
     department = serializers.CharField(write_only=True)
     graduation_year = serializers.CharField(write_only=True)
@@ -120,7 +119,6 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             "dob",
             "role",
             "organizations",
-            "orgs",
             "department",
             "graduation_year",
             "interest_groups",
@@ -209,9 +207,12 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         return igs
 
     def get_role(self, user):
-        role = UserRoleLink.objects.filter(user=user).first()
-        if role and role.role.title in [RoleType.STUDENT.value, RoleType.ENABLER.value]:
-            return role.role.title
+        roles_list = []
+        roles = UserRoleLink.objects.filter(user=user).values_list('role__title', flat=True)
+        if roles:
+            for role in roles:
+                roles_list.append(role)
+            return roles_list
         return None
 
 
