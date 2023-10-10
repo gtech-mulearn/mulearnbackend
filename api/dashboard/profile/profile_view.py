@@ -1,10 +1,10 @@
-from db.user import Role
+from django.db.models import Prefetch
 from rest_framework.views import APIView
 
-from django.db.models import Prefetch
-from db.task import InterestGroup, KarmaActivityLog, Level
-from db.user import User, UserSettings, UserRoleLink, Socials
 from db.organization import UserOrganizationLink
+from db.task import InterestGroup, KarmaActivityLog, Level
+from db.user import Role
+from db.user import User, UserSettings, UserRoleLink, Socials
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
@@ -104,7 +104,7 @@ class UserProfileAPI(APIView):
                     return CustomResponse(
                         general_message="Private Profile"
                     ).get_failure_response()
-                
+
             else:
                 JWTUtils.is_jwt_authenticated(request)
 
@@ -225,14 +225,23 @@ class UserRankAPI(APIView):
 class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+    def get(self, request, muid=None):
+        if muid is not None:
+            user = User.objects.filter(muid=muid).first()
+            if user is None:
+                return CustomResponse(general_message="Invalid muid").get_failure_response()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+            if not user_settings.is_public:
+                return CustomResponse(general_message="Private Profile").get_failure_response()
+            user_id = user.id
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+            user_id = JWTUtils.fetch_user_id(request)
 
         social_instance = Socials.objects.filter(user_id=user_id).first()
-
         serializer = LinkSocials(instance=social_instance)
-
         return CustomResponse(response=serializer.data).get_success_response()
+
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
