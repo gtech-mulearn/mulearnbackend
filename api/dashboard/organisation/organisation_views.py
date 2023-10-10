@@ -224,10 +224,15 @@ class InstitutionDetailsAPI(APIView):
             "code",
             "org_type",
             affiliation_name=F("affiliation__title"),
+            affiliation_id=F("affiliation__id"),
             district_name=F("district__name"),
+            district_id=F("district__id"),
             zone_name=F("district__zone__name"),
+            zone_id=F("district__zone__id"),
             state_name=F("district__zone__state__name"),
-            country_name=F("district__zone__state__country__name")
+            state_id=F("district__zone__state__id"),
+            country_name=F("district__zone__state__country__name"),
+            country_id=F("district__zone__state__country__id")
         ).annotate(
             karma=Sum(
                 'user_organization_link_org__user__wallet_user__karma'
@@ -243,9 +248,7 @@ class InstitutionDetailsAPI(APIView):
                     order_by=F('karma').desc()
                 )))
 
-        organization = organizations.filter(
-            code=org_code
-        ).first()
+        organization = organizations.filter(code=org_code).first()
 
         if organization is None:
             return CustomResponse(
