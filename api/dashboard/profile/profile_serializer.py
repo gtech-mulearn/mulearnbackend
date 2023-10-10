@@ -25,7 +25,7 @@ class UserLogSerializer(ModelSerializer):
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
-    is_public = serializers.CharField(source="user_settings_user.is_public", default=None)
+    is_public = serializers.BooleanField(source="user_settings_user.is_public", default=None)
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
