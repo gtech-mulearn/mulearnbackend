@@ -102,7 +102,6 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
     igs = serializers.ListField(write_only=True)
-    orgs = serializers.ListField(write_only=True)
     role = serializers.SerializerMethodField(read_only=True)
     department = serializers.CharField(write_only=True)
     graduation_year = serializers.CharField(write_only=True)
@@ -120,7 +119,6 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             "dob",
             "role",
             "organizations",
-            "orgs",
             "department",
             "graduation_year",
             "interest_groups",
@@ -209,12 +207,12 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         return igs
 
     def get_role(self, user):
-        roles_data = []
-        roles = UserRoleLink.objects.filter(user=user)
+        roles_list = []
+        roles = UserRoleLink.objects.filter(user=user).values_list('role__title', flat=True)
         if roles:
             for role in roles:
-                roles_data.append(role)
-            return roles_data
+                roles_list.append(role)
+            return roles_list
         return None
 
 
