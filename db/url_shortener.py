@@ -8,7 +8,7 @@ class UrlShortener(models.Model):
     title = models.CharField(max_length=100)
     short_url = models.CharField(unique=True, max_length=100)
     long_url = models.CharField(max_length=500)
-    count = models.IntegerField(blank=True, null=True)
+    count = models.IntegerField(blank=True, null=True, default=0)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='url_shortener_updated_by')
     updated_at = models.DateTimeField()
@@ -19,6 +19,7 @@ class UrlShortener(models.Model):
     class Meta:
         managed = False
         db_table = 'url_shortener'
+
 
 class UrlShortenerTracker(models.Model):
     id = models.CharField(primary_key=True, max_length=36)

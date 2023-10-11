@@ -12,6 +12,7 @@ urlpatterns = [
     path('hackathon/', include('api.hackathon.urls')),
     path('notification/', include('api.notification.urls')),
     path('get-log/', include('api.common.urls')),
-    
+    path('top100/', include('api.top100_coders.urls')),
+
     path("__debug__/", include(debug_toolbar.urls)),
 ]

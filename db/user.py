@@ -1,14 +1,13 @@
 import uuid
 
 from django.db import models
-from django.db.models import Max, F
 
 
 class User(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     discord_id = models.CharField(
         unique=True, max_length=36, blank=True, null=True)
-    mu_id = models.CharField(unique=True, max_length=100)
+    muid = models.CharField(unique=True, max_length=100)
     first_name = models.CharField(max_length=75)
     last_name = models.CharField(max_length=75, blank=True, null=True)
     email = models.EmailField(unique=True, max_length=200)
@@ -39,9 +38,11 @@ class UserReferralLink(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')
     referral = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_referral')
     is_coin = models.BooleanField(default=False)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by', db_column='updated_by')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_updated_by',
+                                   db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by', db_column='created_by')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_created_by',
+                                   db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -115,7 +116,7 @@ class ForgotPassword(models.Model):
 
 class UserSettings(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_settings_user")
     is_public = models.BooleanField(default=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='user_settings_updated_by')
@@ -128,26 +129,32 @@ class UserSettings(models.Model):
         managed = False
         db_table = 'user_settings'
 
+
 class DynamicRole(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     type = models.CharField(max_length=50)
-    role = models.ForeignKey(Role,on_delete=models.CASCADE, db_column='role', related_name='dynamic_role_role')
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='dynamic_role_updated_by')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, db_column='role', related_name='dynamic_role_role')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='dynamic_role_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='dynamic_role_created_by')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='dynamic_role_created_by')
     created_at = models.DateTimeField()
 
     class Meta:
         managed = False
         db_table = 'dynamic_role'
 
+
 class DynamicUser(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     type = models.CharField(max_length=50)
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='dynamic_user_user')
-    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by', related_name='dynamic_user_updated_by')
+    updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='dynamic_user_updated_by')
     updated_at = models.DateTimeField()
-    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by', related_name='dynamic_user_created_by')
+    created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='dynamic_user_created_by')
     created_at = models.DateTimeField()
 
     class Meta:

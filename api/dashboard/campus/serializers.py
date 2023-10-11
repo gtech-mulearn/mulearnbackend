@@ -83,11 +83,11 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
     level = serializers.CharField()
-    is_active = serializers.CharField()
+    # is_active = serializers.CharField()
     join_date = serializers.CharField()
 
     class Meta:
-        fields = ("user_id", "fullname", "karma", "muid", "rank", "level", "is_active", "join_date")
+        fields = ("user_id", "fullname", "karma", "muid", "rank", "level", "join_date")
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")

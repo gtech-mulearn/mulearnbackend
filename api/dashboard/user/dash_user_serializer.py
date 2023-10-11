@@ -7,23 +7,18 @@ from db.organization import Organization, UserOrganizationLink
 from db.task import UserIgLink
 from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
 
-class UserDashboardSerializer(serializers.Serializer):
-    id = serializers.CharField()
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
-    muid = serializers.CharField()
-    discord_id = serializers.CharField(allow_null=True)
-    email = serializers.CharField()
-    mobile = serializers.CharField()
-    created_at = serializers.DateTimeField()
-    karma = serializers.IntegerField()
-    level = serializers.CharField()
+class UserDashboardSerializer(serializers.ModelSerializer):
+    karma = serializers.IntegerField(source="wallet_user.karma", default=None)
+    level = serializers.CharField(
+        source="user_lvl_link_user.level.name", default=None
+    )
 
     class Meta:
+        model = User
         fields = [
             "id",
             "first_name",
@@ -33,11 +28,12 @@ class UserDashboardSerializer(serializers.Serializer):
             "email",
             "mobile",
             "created_at",
+            "karma",
+            "level"
         ]
 
 
 class UserSerializer(serializers.ModelSerializer):
-    muid = serializers.CharField(source="mu_id")
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
 
@@ -101,12 +97,11 @@ class CompanySerializer(serializers.ModelSerializer):
         fields = ["title", "org_type"]
 
 
-class UserEditSerializer(serializers.ModelSerializer):
+class UserDetailsSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(source="id")
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
     igs = serializers.ListField(write_only=True)
-    orgs = serializers.ListField(write_only=True)
     role = serializers.SerializerMethodField(read_only=True)
     department = serializers.CharField(write_only=True)
     graduation_year = serializers.CharField(write_only=True)
@@ -120,10 +115,10 @@ class UserEditSerializer(serializers.ModelSerializer):
             "email",
             "mobile",
             "gender",
+            "discord_id",
             "dob",
             "role",
             "organizations",
-            "orgs",
             "department",
             "graduation_year",
             "interest_groups",
@@ -212,9 +207,12 @@ class UserEditSerializer(serializers.ModelSerializer):
         return igs
 
     def get_role(self, user):
-        role = UserRoleLink.objects.filter(user=user).first()
-        if role and role.role.title in [RoleType.STUDENT.value, RoleType.ENABLER.value]:
-            return role.role.title
+        roles_list = []
+        roles = UserRoleLink.objects.filter(user=user).values_list('role__title', flat=True)
+        if roles:
+            for role in roles:
+                roles_list.append(role)
+            return roles_list
         return None
 
 
@@ -222,8 +220,9 @@ class UserVerificationSerializer(serializers.ModelSerializer):
     full_name = serializers.ReadOnlyField(source="user.fullname")
     user_id = serializers.ReadOnlyField(source="user.id")
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
-    mu_id = serializers.ReadOnlyField(source="user.mu_id")
+    muid = serializers.ReadOnlyField(source="user.muid")
     email = serializers.ReadOnlyField(source="user.email")
+    mobile = serializers.ReadOnlyField(source="user.mobile")
     role_title = serializers.ReadOnlyField(source="role.title")
 
     class Meta:
@@ -232,12 +231,13 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "id",
             "user_id",
             "discord_id",
-            "mu_id",
+            "muid",
             "full_name",
             "verified",
             "role_id",
             "role_title",
             "email",
+            "mobile",
         ]
 
 
@@ -247,6 +247,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
     interest_groups = serializers.ListField(write_only=True)
     department = serializers.CharField(write_only=True)
     graduation_year = serializers.CharField(write_only=True)
+    admin = serializers.CharField(write_only=True)
 
     class Meta:
         model = User
@@ -260,9 +261,11 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "dob",
             "organizations",
             "roles",
+            "discord_id",
             "interest_groups",
             "department",
             "graduation_year",
+            "admin"
         ]
 
     def to_representation(self, instance):
@@ -304,7 +307,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         return data
 
     def update(self, instance, validated_data):
-        admin = self.context.get("admin")
+        admin = validated_data.pop("admin")
+        admin = User.objects.filter(id=admin).first()
         current_time = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():

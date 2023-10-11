@@ -86,10 +86,19 @@ class IntegrationType(Enum):
 class TasksTypesHashtag(Enum):
     REFERRAL = 'referral'
     MUCOIN = 'mucoin'
+    GITHUB = 'social_github'
+    FACEBOOK = 'social_facebook'
+    INSTAGRAM = 'social_instagram'
+    LINKEDIN = 'social_linkedin'
+    DRIBBLE = 'social_dribble'
+    BEHANCE = 'social_behance'
+    STACKOVERFLOW = 'social_stackoverflow'
+    MEDIUM = 'social_medium'
 
 
 class Events(Enum):
     LEARNING_FEST = 'LearningFest'
+    TOP_100_CODERS = 'Top100'
 
     @classmethod
     def get_all_values(cls):

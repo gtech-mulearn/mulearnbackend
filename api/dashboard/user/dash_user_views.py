@@ -1,11 +1,9 @@
 import uuid
 from datetime import timedelta
 
-import decouple
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.mail import send_mail
-from django.db.models import F, Q
+from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
@@ -21,12 +19,10 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        user = User.objects.filter(mu_id=user_muid).first()
+        user = User.objects.filter(muid=user_muid).first()
 
         if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
+            return CustomResponse(general_message="No user data available").get_failure_response()
 
         response = dash_user_serializer.UserSerializer(user, many=False).data
         return CustomResponse(response=response).get_success_response()
@@ -37,51 +33,31 @@ class UserEditAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            serializer = dash_user_serializer.UserDetailsEditSerializer(user).data
-            return CustomResponse(response=serializer).get_success_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user = User.objects.filter(id=user_id).first()
+        if user is None:
+            return CustomResponse(general_message='User Not Available').get_failure_response()
+        serializer = dash_user_serializer.UserDetailsSerializer(user).data
+        return CustomResponse(response=serializer).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            user.active = False
-            user.save()
-            return CustomResponse(
-                general_message="User deleted successfully"
-            ).get_success_response()
-
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user = User.objects.filter(id=user_id).first()
+        if user is None:
+            return CustomResponse(general_message="User Not Available").get_failure_response()
+        user.active = False
+        user.save()
+        return CustomResponse(general_message="User deleted successfully").get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            admin_id = JWTUtils.fetch_user_id(request)
-            admin = User.objects.get(id=admin_id)
-            serializer = dash_user_serializer.UserDetailsEditSerializer(
-                user, data=request.data, partial=True, context={"admin": admin}
-            )
-            if serializer.is_valid():
-                serializer.save()
-                DiscordWebhooks.general_updates(
-                    WebHookCategory.USER.value,
-                    WebHookActions.UPDATE.value,
-                    user_id,
-                )
-
-                return CustomResponse(
-                    general_message=serializer.data
-                ).get_success_response()
-            return CustomResponse(
-                general_message=serializer.errors
-            ).get_failure_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user = User.objects.get(id=user_id)
+        request.data["admin"] = JWTUtils.fetch_user_id(request)
+        serializer = dash_user_serializer.UserDetailsEditSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            DiscordWebhooks.general_updates(WebHookCategory.USER.value, WebHookActions.UPDATE.value, user_id)
+            return CustomResponse(general_message="User Edited Successfully").get_success_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
 
 class UserAPI(APIView):
@@ -89,21 +65,14 @@ class UserAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = (
-            User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "discord_id", "created_at")
-            .annotate(
-                muid=F("mu_id"),
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name"),
-            )
-        )
-
+        user_queryset = User.objects.select_related(
+            "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
+        ).all()
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
             [
-                "mu_id",
+                "muid",
                 "first_name",
                 "last_name",
                 "email",
@@ -131,16 +100,9 @@ class UserManagementCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = (
-            User.objects.all()
-            .values("id", "first_name", "last_name", "email", "mobile", "created_at")
-            .annotate(
-                muid=F("mu_id"),
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name"),
-            )
-        )
-
+        user_queryset = User.objects.select_related(
+            "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
+        ).all()
         serializer = dash_user_serializer.UserDashboardSerializer(
             user_queryset, many=True
         )
@@ -157,11 +119,20 @@ class UserVerificationAPI(APIView):
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
-            ["user__first_name", "user__last_name", "role__title"],
-            {
+            search_fields=[
+                "user__first_name",
+                "user__last_name",
+                "user__mobile",
+                "user__email",
+                "user__muid",
+                "role__title",
+            ],
+            sort_fields={
                 "first_name": "user__first_name",
                 "role_title": "role__title",
-                "muid": "user__mu_id",
+                "muid": "user__muid",
+                "email": "user__email",
+                "mobile": "user__mobile",
             },
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
@@ -226,7 +197,7 @@ class ForgotPasswordAPI(APIView):
 
         if not (
                 user := User.objects.filter(
-                    Q(mu_id=email_muid) | Q(email=email_muid)
+                    Q(muid=email_muid) | Q(email=email_muid)
                 ).first()
         ):
             return CustomResponse(
@@ -266,7 +237,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
         current_time = DateTimeUtils.get_current_utc_time()
 
         if forget_user.expiry > current_time:
-            muid = forget_user.user.mu_id
+            muid = forget_user.user.muid
             return CustomResponse(response={"muid": muid}).get_success_response()
         else:
             forget_user.delete()
@@ -295,29 +266,4 @@ class ResetPasswordConfirmAPI(APIView):
         forget_user.delete()
         return CustomResponse(
             general_message="New Password Saved Successfully"
-        ).get_success_response()
-
-
-class UserInviteAPI(APIView):
-    def post(self, request):
-        email = request.data.get("email")
-        if User.objects.filter(email=email).exists():
-            return CustomResponse(
-                general_message="User already exist"
-            ).get_failure_response()
-
-        email_host_user = decouple.config("EMAIL_HOST_USER")
-        domain = decouple.config("FR_DOMAIN_NAME")
-        from_mail = decouple.config("FROM_MAIL")
-        to = [email]
-        message = f"Hi, \n\nYou have been invited to join the MuLearn community. Please click on the link below to join.\n\n{domain}\n\nThanks,\nMuLearn Team"
-        send_mail(
-            "Invitation to join MuLearn",
-            message,
-            from_mail,
-            to,
-            fail_silently=False,
-        )
-        return CustomResponse(
-            general_message="Invitation sent successfully"
         ).get_success_response()

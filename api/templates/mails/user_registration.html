@@ -45,7 +45,7 @@
           font-size: 13px;
         "
       >
-        {{ user.mu_id }}
+        {{ user.muid }}
       </p>
     </a>
 
@@ -74,7 +74,7 @@
     </p>
     {% if user.role %}
     <p>
-      Please be aware that your role as an {{ user.role }} will only be granted
+      Please be aware that your role as <b>{{ user.role }}</b> will only be granted
       following a verification process.
     </p>
     {% endif %}
