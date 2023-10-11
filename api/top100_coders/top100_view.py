@@ -1,28 +1,42 @@
 from rest_framework.views import APIView
+
+from django.db import connection
+from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+from db.user import User
 from utils.types import Events
-from django.db.models import Sum
+from django.db.models import Sum, F, Subquery, OuterRef
 from api.top100_coders.top100_serializer import Top100CodersSerializer
 from utils.response import CustomResponse
 
 
 class Leaderboard(APIView):
     def get(self, request):
-        coders = (
-            KarmaActivityLog.objects
-            .select_related('user', 'task')
-            .prefetch_related('user__user_organization_link_user__org__district__zone__state')
-            .filter(task__event=Events.TOP_100_CODERS.value, user__exist_in_guild=True, user__active=True,
-                    appraiser_approved=True)
-            .values('user__first_name', 'user__last_name', 'user__user_organization_link_user__org__title',
-                    'user__user_organization_link_user__org__district__name',
-                    'user__user_organization_link_user__org__district__zone__state__name')
-            .annotate(total_karma=Sum('karma'))
-            .order_by('-total_karma')
-            [:100]
-        )
-        coders = list(coders)
-        for rank, coder in enumerate(coders, start=1):
-            coder['rank'] = rank
-        serialized_data = Top100CodersSerializer(coders, many=True).data
-        return CustomResponse(response=serialized_data).get_success_response()
+        query = """
+            SELECT u.first_name, u.last_name, SUM(kal.karma) AS total_karma, org.title as org, org.dis, org.state, u.profile_pic
+            FROM karma_activity_log AS kal 
+            INNER JOIN user AS u ON kal.user_id = u.id
+            INNER JOIN task_list AS tl ON tl.id = kal.task_id
+            LEFT JOIN (
+                SELECT uol.user_id, org.id, org.title as title, d.name dis, s.name state 
+                FROM user_organization_link AS uol
+                INNER JOIN organization AS org ON org.id = uol.org_id
+                LEFT JOIN district AS d ON d.id = org.district_id
+                LEFT JOIN zone AS z ON z.id = d.zone_id
+                LEFT JOIN state AS s ON s.id = z.state_id
+                GROUP BY uol.user_id 
+            ) as org on org.user_id = u.id
+            WHERE tl.event = 'TOP100' AND kal.appraiser_approved = TRUE
+            GROUP BY u.id
+            ORDER BY total_karma DESC
+            LIMIT 100;
+        """
+
+        with connection.cursor() as cursor:
+            cursor.execute(query)
+            results = cursor.fetchall()
+            column_names = [desc[0] for desc in cursor.description]
+
+            list_of_dicts = [dict(zip(column_names, row)) for row in results]
+            return CustomResponse(response=list_of_dicts).get_success_response()
+
