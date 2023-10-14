@@ -94,7 +94,6 @@ class ImportVoucherLogAPI(APIView):
                     row['created_at'] = DateTimeUtils.get_current_utc_time()
                     row['updated_at'] = DateTimeUtils.get_current_utc_time()
                     count += 1
-                    muid = row.pop('muid')
                     valid_rows.append(row)
                     success_rows.append({
                         'muid': muid,
@@ -113,11 +112,23 @@ class ImportVoucherLogAPI(APIView):
         else:
             error_rows.append(voucher_serializer.errors)
 
-        # Send emails after data has been added to the database
-        for success_row in success_rows:
-            muid = success_row['muid']
-            code = success_row['code']
-            full_name = success_row['user']
+        vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
+            'code', 
+            'user__muid', 
+            'month', 
+            'week', 
+            'karma',
+            'task__hashtag'
+            ) 
+        
+        for voucher in vouchers_to_send:
+            muid = voucher['user__muid']
+            code = voucher['code']
+            month = voucher['month']
+            week = voucher['week']
+            karma = voucher['karma']
+            task_hashtag = voucher['task__hashtag']
+            full_name = user_dict.get(muid)[2]
             email = user_dict.get(muid)[1]
 
             # Preparing email context and attachment
@@ -135,7 +146,7 @@ class ImportVoucherLogAPI(APIView):
 
             month_week = f'{month}/{week}'
             karma_voucher_image = generate_karma_voucher(
-                name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
+                name=str(full_name), karma=str(int(karma)), code=code, hashtag=task_hashtag,
                 month=month_week)
             karma_voucher_image.seek(0)
             email_obj = EmailMessage(
@@ -152,6 +163,7 @@ class ImportVoucherLogAPI(APIView):
             )
             email_obj.attach(attachment)
             email_obj.send(fail_silently=False)
+            
         return CustomResponse(
             response={"Success": success_rows, "Failed": error_rows}
         ).get_success_response()
