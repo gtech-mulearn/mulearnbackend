@@ -79,6 +79,9 @@ class ImportVoucherLogAPI(APIView):
                 elif karma == 0:
                     row['error'] = "Karma cannot be 0"
                     error_rows.append(row)
+                elif month is None or week is None:
+                    row['error'] = "Month and week cannot be empty"
+                    error_rows.append(row)
                 else:
                     existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
                     while generate_ordered_id(count) in existing_codes:
