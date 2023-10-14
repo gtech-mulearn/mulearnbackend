@@ -94,6 +94,7 @@ class ImportVoucherLogAPI(APIView):
                     row['created_at'] = DateTimeUtils.get_current_utc_time()
                     row['updated_at'] = DateTimeUtils.get_current_utc_time()
                     count += 1
+                    muid = row.pop('muid')
                     valid_rows.append(row)
                     success_rows.append({
                         'muid': muid,
@@ -104,48 +105,56 @@ class ImportVoucherLogAPI(APIView):
                         'month': month, 
                         'week': week
                         })
-                    # Preparing email context and attachment
-                    from_mail = decouple.config("FROM_MAIL")
-                    subject = "Congratulations on earning Karma points!"
-                    text = f"""Greetings from GTech µLearn!
-
-                    Great news! You are just one step away from claiming your internship/contribution Karma points.
                     
-                    Name: {full_name}
-                    Email: {email}
-                    
-                    To claim your karma points copy this `voucher {row["code"]}` and paste it #task-dropbox channel along with your voucher image.
-                    """
-
-                    month_week = f'{month}/{week}'
-                    karma_voucher_image = generate_karma_voucher(
-                        name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
-                        month=month_week)
-                    karma_voucher_image.seek(0)
-                    email_obj = EmailMessage(
-                        subject=subject,
-                        body=text,
-                        from_email=from_mail,
-                        to=[email],
-                    )
-                    attachment = MIMEImage(karma_voucher_image.read())
-                    attachment.add_header(
-                        'Content-Disposition',
-                        'attachment',
-                        filename=f'{str(full_name)}.jpg',
-                    )
-                    email_obj.attach(attachment)
-                    email_obj.send(fail_silently=False)
-
-        # Serializing and saving valid voucher rows
+        # Serializing and saving valid voucher rows to the database
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
         if voucher_serializer.is_valid():
             voucher_serializer.save()
         else:
             error_rows.append(voucher_serializer.errors)
-        return CustomResponse(
-            response={"Success": success_rows, "Failed": error_rows}).get_success_response()
 
+        # Send emails after data has been added to the database
+        for success_row in success_rows:
+            muid = success_row['muid']
+            code = success_row['code']
+            full_name = success_row['user']
+            email = user_dict.get(muid)[1]
+
+            # Preparing email context and attachment
+            from_mail = decouple.config("FROM_MAIL")
+            subject = "Congratulations on earning Karma points!"
+            text = f"""Greetings from GTech µLearn!
+
+            Great news! You are just one step away from claiming your internship/contribution Karma points.
+            
+            Name: {full_name}
+            Email: {email}
+            
+            To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
+            """
+
+            month_week = f'{month}/{week}'
+            karma_voucher_image = generate_karma_voucher(
+                name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
+                month=month_week)
+            karma_voucher_image.seek(0)
+            email_obj = EmailMessage(
+                subject=subject,
+                body=text,
+                from_email=from_mail,
+                to=[email],
+            )
+            attachment = MIMEImage(karma_voucher_image.read())
+            attachment.add_header(
+                'Content-Disposition',
+                'attachment',
+                filename=f'{str(full_name)}.jpg',
+            )
+            email_obj.attach(attachment)
+            email_obj.send(fail_silently=False)
+        return CustomResponse(
+            response={"Success": success_rows, "Failed": error_rows}
+        ).get_success_response()
 
 class VoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
