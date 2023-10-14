@@ -3,6 +3,7 @@ from email.mime.image import MIMEImage
 
 import decouple
 from django.core.mail import EmailMessage
+from django.db import transaction
 from rest_framework.views import APIView
 
 from db.task import VoucherLog, TaskList
@@ -111,19 +112,22 @@ class ImportVoucherLogAPI(APIView):
         # Serializing and saving valid voucher rows to the database
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
         if voucher_serializer.is_valid():
-            voucher_serializer.save()
+            with transaction.atomic():
+                voucher_serializer.save()
+                vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
+                    'code',
+                    'user__muid', 
+                    'month', 
+                    'week', 
+                    'karma', 
+                    'task__hashtag'
+                )
+                if len(vouchers_to_send) != len(valid_rows):
+                    transaction.set_rollback(True)
+                    return CustomResponse(general_message='Something went wrong. Please try again.').get_failure_response()
         else:
             error_rows.append(voucher_serializer.errors)
 
-        vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
-            'code', 
-            'user__muid', 
-            'month', 
-            'week', 
-            'karma',
-            'task__hashtag'
-            ) 
-        
         for voucher in vouchers_to_send:
             muid = voucher['user__muid']
             code = voucher['code']
