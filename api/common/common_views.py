@@ -19,24 +19,25 @@ class LcDashboardAPI(APIView):
         date = request.GET.get('date')
         if date:
             learning_circle_count = LearningCircle.objects.filter(created_at__gt=date).count()
-            total_no_enrollment = UserCircleLink.objects.filter(lead=False, accepted=True, created_at__gt=date).count()
+            total_no_enrollment = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).count()
             circle_count_by_ig = LearningCircle.objects.filter(created_at__gt=date).values(
-                ig_name=F('ig__name')).annotate(
-                total_circles=Count('id'))
+                ig_name=F('ig__name')).annotate(total_circles=Count('id'))
+            unique_user_count = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).values('user').distinct().count()
         else:
             learning_circle_count = LearningCircle.objects.all().count()
-            total_no_enrollment = UserCircleLink.objects.filter(lead=False, accepted=True).count()
+            total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
             circle_count_by_ig = LearningCircle.objects.all().values(ig_name=F('ig__name')).annotate(
                 total_circles=Count('id'))
+            unique_user_count = UserCircleLink.objects.filter(accepted=True).values('user').distinct().count()
         return CustomResponse(response={'lc_count': learning_circle_count, 'total_enrollment': total_no_enrollment,
-                                        'circle_count_by_ig': circle_count_by_ig}).get_success_response()
+                                        'circle_count_by_ig': circle_count_by_ig,
+                                        'unique_users': unique_user_count}).get_success_response()
 
 
 class LcReportAPI(APIView):
 
     def get(self, request):
         student_info = UserCircleLink.objects.filter(
-            lead=False,
             accepted=True,
             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
         ).values(
@@ -101,16 +102,19 @@ class GlobalCountAPI(APIView):
         org_type_counts = Organization.objects.filter(
             org_type__in=[OrganizationType.COLLEGE.value, OrganizationType.COMPANY.value,
                           OrganizationType.COMMUNITY.value]
-        ).values('org_type').annotate(count=Coalesce(Count('org_type'), 0))
+        ).values('org_type').annotate(org_count=Coalesce(Count('org_type'), 0))
 
         enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values(
-            'role__title').annotate(
-            count=Coalesce(Count('role__title'), 0))
+            'role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
 
         interest_groups_count = InterestGroup.objects.all().count()
         learning_circles_count = LearningCircle.objects.all().count()
 
-        data = {'members': members_count, 'org_type_counts': org_type_counts,
-                'enablers_mentors_count': enablers_mentors_count, 'ig_count': interest_groups_count,
-                'learning_circle_count': learning_circles_count}
+        data = {
+            'members': members_count,
+            'org_type_counts': org_type_counts,
+            'enablers_mentors_count': enablers_mentors_count,
+            'ig_count': interest_groups_count,
+            'learning_circle_count': learning_circles_count
+        }
         return CustomResponse(response=data).get_success_response()
