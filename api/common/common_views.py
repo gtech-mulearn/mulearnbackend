@@ -1,10 +1,12 @@
-from django.db.models import Count
-from django.db.models import Q
-from django.db.models import Sum, F, Case, When, Value, CharField
+from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
+from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
+from db.organization import Organization
+from db.task import InterestGroup
+from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType
 from utils.utils import CommonUtils
@@ -90,3 +92,25 @@ class LcReportDownloadAPI(APIView):
         student_info_data = StudentInfoSerializer(student_info, many=True).data
 
         return CommonUtils.generate_csv(student_info_data, "Learning Circle Report")
+
+
+class GlobalCountAPI(APIView):
+
+    def get(self, request):
+        members_count = User.objects.all().count()
+        org_type_counts = Organization.objects.filter(
+            org_type__in=[OrganizationType.COLLEGE.value, OrganizationType.COMPANY.value,
+                          OrganizationType.COMMUNITY.value]
+        ).values('org_type').annotate(count=Coalesce(Count('org_type'), 0))
+
+        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values(
+            'role__title').annotate(
+            count=Coalesce(Count('role__title'), 0))
+
+        interest_groups_count = InterestGroup.objects.all().count()
+        learning_circles_count = LearningCircle.objects.all().count()
+
+        data = {'members': members_count, 'org_type_counts': org_type_counts,
+                'enablers_mentors_count': enablers_mentors_count, 'ig_count': interest_groups_count,
+                'learning_circle_count': learning_circles_count}
+        return CustomResponse(response=data).get_success_response()
