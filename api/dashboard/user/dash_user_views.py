@@ -139,7 +139,10 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.filter(verified=False)
+        user_queryset = UserRoleLink.objects.select_related(
+            "user", "role"
+        ).filter(verified=False)
+        
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -213,6 +216,21 @@ class UserVerificationAPI(APIView):
 
         except ObjectDoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
+
+
+class UserVerificationCSV(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        user_queryset = UserRoleLink.objects.select_related(
+            "user", "role"
+        ).filter(verified=False)
+        
+        serializer = dash_user_serializer.UserVerificationSerializer(
+            user_queryset, many=True
+        )
+        return CommonUtils.generate_csv(serializer.data, "User")
 
 
 class ForgotPasswordAPI(APIView):
