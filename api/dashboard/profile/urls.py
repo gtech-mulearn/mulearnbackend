@@ -4,6 +4,7 @@ from . import profile_view
 
 urlpatterns = [
     path('', profile_view.UserProfileEditView.as_view()),
+
     path('user-profile/', profile_view.UserProfileAPI.as_view()),
     path('ig-edit/', profile_view.UserIgEditView.as_view()),
     path('user-profile/<str:muid>/', profile_view.UserProfileAPI.as_view()),
@@ -14,5 +15,8 @@ urlpatterns = [
     path('rank/<str:muid>/', profile_view.UserRankAPI.as_view()),
     path('get-user-levels/', profile_view.UserLevelsAPI.as_view()),
     path('get-user-levels/<str:muid>/', profile_view.UserLevelsAPI.as_view()),
-    path('socials/', profile_view.SocialsAPI.as_view()),
+    path('socials/edit/', profile_view.SocialsAPI.as_view()),
+    path('socials/', profile_view.GetSocialsAPI.as_view()),
+    path('socials/<str:muid>/', profile_view.GetSocialsAPI.as_view()),
+
 ]
