@@ -12,8 +12,9 @@ urlpatterns = [
     
     path('', dash_task_view.TaskListAPI.as_view()),  # list task, create
     path('csv/', dash_task_view.TaskListCSV.as_view()),  # CSV
-    path('<str:task_id>/', dash_task_view.TaskAPI.as_view()),  # get task, edit, delete
-    
     path('import/', dash_task_view.ImportTaskListCSV.as_view()),
     path('events/', dash_task_view.EventDropDownApi.as_view()),
+    
+    path('<str:task_id>/', dash_task_view.TaskAPI.as_view()),  # get task, edit, delete
+    
 ]
