@@ -3,6 +3,7 @@ from email.mime.image import MIMEImage
 
 import decouple
 from django.core.mail import EmailMessage
+from django.db import transaction
 from rest_framework.views import APIView
 
 from db.task import VoucherLog, TaskList
@@ -79,6 +80,9 @@ class ImportVoucherLogAPI(APIView):
                 elif karma == 0:
                     row['error'] = "Karma cannot be 0"
                     error_rows.append(row)
+                elif month is None or week is None:
+                    row['error'] = "Month and week cannot be empty"
+                    error_rows.append(row)
                 else:
                     existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
                     while generate_ordered_id(count) in existing_codes:
@@ -104,48 +108,72 @@ class ImportVoucherLogAPI(APIView):
                         'month': month, 
                         'week': week
                         })
-                    # Preparing email context and attachment
-                    from_mail = decouple.config("FROM_MAIL")
-                    subject = "Congratulations on earning Karma points!"
-                    text = f"""Greetings from GTech µLearn!
-
-                    Great news! You are just one step away from claiming your internship/contribution Karma points.
                     
-                    Name: {full_name}
-                    Email: {email}
-                    
-                    To claim your karma points copy this `voucher {row["code"]}` and paste it #task-dropbox channel along with your voucher image.
-                    """
-
-                    month_week = f'{month}/{week}'
-                    karma_voucher_image = generate_karma_voucher(
-                        name=str(full_name), karma=str(int(karma)), code=row["code"], hashtag=task_hashtag,
-                        month=month_week)
-                    karma_voucher_image.seek(0)
-                    email_obj = EmailMessage(
-                        subject=subject,
-                        body=text,
-                        from_email=from_mail,
-                        to=[email],
-                    )
-                    attachment = MIMEImage(karma_voucher_image.read())
-                    attachment.add_header(
-                        'Content-Disposition',
-                        'attachment',
-                        filename=f'{str(full_name)}.jpg',
-                    )
-                    email_obj.attach(attachment)
-                    email_obj.send(fail_silently=False)
-
-        # Serializing and saving valid voucher rows
+        # Serializing and saving valid voucher rows to the database
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
         if voucher_serializer.is_valid():
-            voucher_serializer.save()
+            with transaction.atomic():
+                voucher_serializer.save()
+                vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
+                    'code',
+                    'user__muid', 
+                    'month', 
+                    'week', 
+                    'karma', 
+                    'task__hashtag'
+                )
+                if len(vouchers_to_send) != len(valid_rows):
+                    transaction.set_rollback(True)
+                    return CustomResponse(general_message='Something went wrong. Please try again.').get_failure_response()
         else:
             error_rows.append(voucher_serializer.errors)
-        return CustomResponse(
-            response={"Success": success_rows, "Failed": error_rows}).get_success_response()
 
+        for voucher in vouchers_to_send:
+            muid = voucher['user__muid']
+            code = voucher['code']
+            month = voucher['month']
+            week = voucher['week']
+            karma = voucher['karma']
+            task_hashtag = voucher['task__hashtag']
+            full_name = user_dict.get(muid)[2]
+            email = user_dict.get(muid)[1]
+
+            # Preparing email context and attachment
+            from_mail = decouple.config("FROM_MAIL")
+            subject = "Congratulations on earning Karma points!"
+            text = f"""Greetings from GTech µLearn!
+
+            Great news! You are just one step away from claiming your internship/contribution Karma points.
+            
+            Name: {full_name}
+            Email: {email}
+            
+            To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
+            """
+
+            month_week = f'{month}/{week}'
+            karma_voucher_image = generate_karma_voucher(
+                name=str(full_name), karma=str(int(karma)), code=code, hashtag=task_hashtag,
+                month=month_week)
+            karma_voucher_image.seek(0)
+            email_obj = EmailMessage(
+                subject=subject,
+                body=text,
+                from_email=from_mail,
+                to=[email],
+            )
+            attachment = MIMEImage(karma_voucher_image.read())
+            attachment.add_header(
+                'Content-Disposition',
+                'attachment',
+                filename=f'{str(full_name)}.jpg',
+            )
+            email_obj.attach(attachment)
+            email_obj.send(fail_silently=False)
+            
+        return CustomResponse(
+            response={"Success": success_rows, "Failed": error_rows}
+        ).get_success_response()
 
 class VoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
