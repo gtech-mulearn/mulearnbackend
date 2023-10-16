@@ -1,4 +1,7 @@
-from django.db.models import Sum, Q, F, Window, Case, When
+
+import uuid
+from django.db.models import Sum, Q, F, Window, Case, When, Value, Count
+
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
 
@@ -18,7 +21,9 @@ from .serializers import (
     AffiliationSerializer,
     InstitutionCsvSerializer,
     DepartmentSerializer,
-    InstitutionSerializer, InstitutionCreateUpdateSerializer, AffiliationCreateUpdateSerializer
+    InstitutionSerializer,
+    InstitutionCreateUpdateSerializer,
+    AffiliationCreateUpdateSerializer,
 )
 
 
@@ -48,7 +53,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             return CustomResponse(
-                general_message="Organisation Added Successfully"
+                general_message="Organisation added successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -110,7 +115,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             return CustomResponse(
-                general_message="Organization Edited Successfully"
+                general_message="Organization edited successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -138,7 +143,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             )
 
         return CustomResponse(
-            general_message="Deleted Successfully"
+            general_message="Organization deleted successfully"
         ).get_success_response()
 
 
@@ -209,6 +214,7 @@ class InstitutionCsvAPI(APIView):
 class InstitutionDetailsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
+
         organization = Organization.objects.filter(code=org_code).values(
             "id",
             "title",
@@ -221,6 +227,7 @@ class InstitutionDetailsAPI(APIView):
             zone_name=F("district__zone__name"),
             zone_uuid=F("district__zone__id"),
             state_name=F("district__zone__state__name"),
+            country_name=F("district__zone__state__country__name"),
             state_uuid=F("district__zone__state__id"),
             country_name=F("district__zone__state__country__name"),
             country_uuid=F("district__zone__state__country__id"),
@@ -230,6 +237,8 @@ class InstitutionDetailsAPI(APIView):
             )).order_by(
             '-karma'
         ).annotate(
+            user_count=Count('user_organization_link_org__user')
+        )
             rank=Case(
                 When(
                     Q(karma__isnull=True) | Q(karma=0),
@@ -241,7 +250,7 @@ class InstitutionDetailsAPI(APIView):
 
         if organization is None:
             return CustomResponse(
-                general_message="Invalid organization code"
+                general_message='invalid organization code'
             ).get_failure_response()
 
         return CustomResponse(
@@ -484,5 +493,5 @@ class DepartmentAPI(APIView):
 
         department.delete()
         return CustomResponse(
-            general_message=f'{department.id} deleted successfully'
+            general_message=f'{department.title} deleted successfully'
         ).get_success_response()
