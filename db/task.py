@@ -41,14 +41,14 @@ class InterestGroup(models.Model):
         db_column="updated_by",
         related_name="interest_group_updated_by",
     )
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User,
         on_delete=models.CASCADE,
         db_column="created_by",
         related_name="interest_group_created_by",
     )
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = False
