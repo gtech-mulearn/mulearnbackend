@@ -36,7 +36,6 @@ class CustomResponse:
             self.general_message = [self.general_message]
 
         self.message = {"general": self.general_message} | self.message
-        
 
     def get_success_response(self) -> Response:
         """Returns a success response.
