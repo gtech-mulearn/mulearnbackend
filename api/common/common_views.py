@@ -22,7 +22,8 @@ class LcDashboardAPI(APIView):
             total_no_enrollment = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).count()
             circle_count_by_ig = LearningCircle.objects.filter(created_at__gt=date).values(
                 ig_name=F('ig__name')).annotate(total_circles=Count('id'))
-            unique_user_count = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).values('user').distinct().count()
+            unique_user_count = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).values(
+                'user').distinct().count()
         else:
             learning_circle_count = LearningCircle.objects.all().count()
             total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
@@ -37,26 +38,50 @@ class LcDashboardAPI(APIView):
 class LcReportAPI(APIView):
 
     def get(self, request):
-        student_info = UserCircleLink.objects.filter(
-            accepted=True,
-            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
-        ).values(
-            first_name=F('user__first_name'),
-            last_name=F('user__last_name'),
-            muid=F('user__muid'),
-            circle_name=F('circle__name'),
-            circle_ig=F('circle__ig__name'),
-            organisation=F('user__user_organization_link_user__org__title'),
-            dwms_id=Case(
-                When(
-                    user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
-                    then=F('user__integration_authorization_user__additional_field')
-                ),
-                default=Value(None, output_field=CharField()),
-                output_field=CharField()
-            )
-        ).annotate(karma_earned=Sum('user__karma_activity_log_user__task__karma',
-                                    filter=Q(user__karma_activity_log_user__task__ig=F('circle__ig'))))
+        date = request.GET.get('date')
+        if date:
+            student_info = UserCircleLink.objects.filter(
+                accepted=True,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                circle__created_at=date,
+            ).values(
+                first_name=F('user__first_name'),
+                last_name=F('user__last_name'),
+                muid=F('user__muid'),
+                circle_name=F('circle__name'),
+                circle_ig=F('circle__ig__name'),
+                organisation=F('user__user_organization_link_user__org__title'),
+                dwms_id=Case(
+                    When(
+                        user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                        then=F('user__integration_authorization_user__additional_field')
+                    ),
+                    default=Value(None, output_field=CharField()),
+                    output_field=CharField()
+                )
+            ).annotate(karma_earned=Sum('user__karma_activity_log_user__task__karma',
+                                        filter=Q(user__karma_activity_log_user__task__ig=F('circle__ig'))))
+        else:
+            student_info = UserCircleLink.objects.filter(
+                accepted=True,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
+            ).values(
+                first_name=F('user__first_name'),
+                last_name=F('user__last_name'),
+                muid=F('user__muid'),
+                circle_name=F('circle__name'),
+                circle_ig=F('circle__ig__name'),
+                organisation=F('user__user_organization_link_user__org__title'),
+                dwms_id=Case(
+                    When(
+                        user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                        then=F('user__integration_authorization_user__additional_field')
+                    ),
+                    default=Value(None, output_field=CharField()),
+                    output_field=CharField()
+                )
+            ).annotate(karma_earned=Sum('user__karma_activity_log_user__task__karma',
+                                        filter=Q(user__karma_activity_log_user__task__ig=F('circle__ig'))))
 
         paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request,
                                                                 search_fields=['first_name', 'last_name', 'muid'],
@@ -104,8 +129,7 @@ class GlobalCountAPI(APIView):
                           OrganizationType.COMMUNITY.value]
         ).values('org_type').annotate(org_count=Coalesce(Count('org_type'), 0))
 
-        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values(
-            'role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
+        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values('role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
 
         interest_groups_count = InterestGroup.objects.all().count()
         learning_circles_count = LearningCircle.objects.all().count()

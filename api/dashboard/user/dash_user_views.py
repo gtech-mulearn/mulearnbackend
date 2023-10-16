@@ -130,10 +130,10 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
-            verified=False
-        )
-
+        user_queryset = UserRoleLink.objects.select_related(
+            "user", "role"
+        ).filter(verified=False)
+        
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -214,10 +214,10 @@ class UserVerificationCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
-            verified=False
-        )
-
+        user_queryset = UserRoleLink.objects.select_related(
+            "user", "role"
+        ).filter(verified=False)
+        
         serializer = dash_user_serializer.UserVerificationSerializer(
             user_queryset, many=True
         )

@@ -1,19 +1,13 @@
+from django.db import connection
 from rest_framework.views import APIView
 
-from django.db import connection
-from db.organization import UserOrganizationLink
-from db.task import KarmaActivityLog
-from db.user import User
-from utils.types import Events
-from django.db.models import Sum, F, Subquery, OuterRef
-from api.top100_coders.top100_serializer import Top100CodersSerializer
 from utils.response import CustomResponse
 
 
 class Leaderboard(APIView):
     def get(self, request):
         query = """
-            SELECT u.first_name, u.last_name, SUM(kal.karma) AS total_karma, org.title as org, org.dis, org.state, u.profile_pic
+            SELECT u.first_name, u.last_name, SUM(kal.karma) AS total_karma, org.title as org, org.dis, org.state, u.profile_pic, MAX(kal.created_at) as time_
             FROM karma_activity_log AS kal 
             INNER JOIN user AS u ON kal.user_id = u.id
             INNER JOIN task_list AS tl ON tl.id = kal.task_id
@@ -28,7 +22,7 @@ class Leaderboard(APIView):
             ) as org on org.user_id = u.id
             WHERE tl.event = 'TOP100' AND kal.appraiser_approved = TRUE
             GROUP BY u.id
-            ORDER BY total_karma DESC
+            ORDER BY total_karma DESC, time_
             LIMIT 100;
         """
 
@@ -39,4 +33,3 @@ class Leaderboard(APIView):
 
             list_of_dicts = [dict(zip(column_names, row)) for row in results]
             return CustomResponse(response=list_of_dicts).get_success_response()
-
