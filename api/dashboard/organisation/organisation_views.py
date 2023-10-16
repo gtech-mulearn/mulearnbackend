@@ -1,7 +1,4 @@
-
-import uuid
-from django.db.models import Sum, Q, F, Window, Case, When, Value, Count
-
+from django.db.models import Sum, Q, F, Window, Case, When, Count
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
 
@@ -211,51 +208,51 @@ class InstitutionCsvAPI(APIView):
         )
 
 
-class InstitutionDetailsAPI(APIView):
-    @role_required([RoleType.ADMIN.value, ])
-    def get(self, request, org_code):
-
-        organization = Organization.objects.filter(code=org_code).values(
-            "id",
-            "title",
-            "code",
-            "org_type",
-            affiliation_name=F("affiliation__title"),
-            affiliation_uuid=F("affiliation__id"),
-            district_name=F("district__name"),
-            district_uuid=F("affiliation__id"),
-            zone_name=F("district__zone__name"),
-            zone_uuid=F("district__zone__id"),
-            state_name=F("district__zone__state__name"),
-            country_name=F("district__zone__state__country__name"),
-            state_uuid=F("district__zone__state__id"),
-            country_name=F("district__zone__state__country__name"),
-            country_uuid=F("district__zone__state__country__id"),
-        ).annotate(
-            karma=Sum(
-                'user_organization_link_org__user__wallet_user__karma'
-            )).order_by(
-            '-karma'
-        ).annotate(
-            user_count=Count('user_organization_link_org__user')
-        )
-            rank=Case(
-                When(
-                    Q(karma__isnull=True) | Q(karma=0),
-                    then=None),
-                default=Window(
-                    expression=Rank(),
-                    order_by=F('karma').desc()
-                )))
-
-        if organization is None:
-            return CustomResponse(
-                general_message='invalid organization code'
-            ).get_failure_response()
-
-        return CustomResponse(
-            response=organization
-        ).get_success_response()
+# class InstitutionDetailsAPI(APIView):
+#     @role_required([RoleType.ADMIN.value, ])
+#     def get(self, request, org_code):
+#
+#         organization = Organization.objects.filter(code=org_code).values(
+#             "id",
+#             "title",
+#             "code",
+#             "org_type",
+#             affiliation_name=F("affiliation__title"),
+#             affiliation_uuid=F("affiliation__id"),
+#             district_name=F("district__name"),
+#             district_uuid=F("affiliation__id"),
+#             zone_name=F("district_zone_name"),
+#             zone_uuid=F("district_zone_id"),
+#             state_name=F("district_zonestate_name"),
+#             country_name=F("district_zonestatecountry_name"),
+#             state_uuid=F("district_zonestate_id"),
+#             country_name=F("district_zonestatecountry_name"),
+#             country_uuid=F("district_zonestatecountry_id"),
+#         ).annotate(
+#             karma=Sum(
+#                 'user_organization_link_org_userwallet_user_karma'
+#             )).order_by(
+#             '-karma'
+#         ).annotate(
+#             user_count=Count('user_organization_link_org__user')
+#         )
+#         rank=Case(
+#             When(
+#                 Q(karma__isnull=True) | Q(karma=0),
+#                 then=None),
+#             default=Window(
+#                 expression=Rank(),
+#                 order_by=F('karma').desc()
+#             )))
+#
+#         if organization is None:
+#             return CustomResponse(
+#                 general_message='invalid organization code'
+#             ).get_failure_response()
+#
+#         return CustomResponse(
+#             response=organization
+#         ).get_success_response()
 
 
 class GetInstitutionsAPI(APIView):
