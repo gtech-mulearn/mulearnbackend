@@ -129,8 +129,7 @@ class GlobalCountAPI(APIView):
                           OrganizationType.COMMUNITY.value]
         ).values('org_type').annotate(org_count=Coalesce(Count('org_type'), 0))
 
-        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values(
-            'role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
+        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values('role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
 
         interest_groups_count = InterestGroup.objects.all().count()
         learning_circles_count = LearningCircle.objects.all().count()
