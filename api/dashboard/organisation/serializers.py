@@ -1,4 +1,7 @@
 import uuid
+
+from django.db.models import Sum, Count
+
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
@@ -15,6 +18,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+    user_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -26,8 +30,16 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "district",
             "zone",
             "state",
-            "country"
+            "country",
+            "user_count"
         ]
+
+    def get_user_count(self, obj):
+        return obj.user_organization_link_org.annotate(
+            user_count=Count(
+                'user'
+            )
+        ).count()
 
 
 class InstitutionCsvSerializer(serializers.ModelSerializer):
@@ -42,6 +54,7 @@ class InstitutionCsvSerializer(serializers.ModelSerializer):
     zone = serializers.ReadOnlyField(source="district.zone.name")
     state = serializers.ReadOnlyField(source="district.zone.state.name")
     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+    user_count = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -55,7 +68,15 @@ class InstitutionCsvSerializer(serializers.ModelSerializer):
             "zone",
             "state",
             "country",
+            "user_count"
         ]
+
+    def get_user_count(self, obj):
+        return obj.user_organization_link_org.annotate(
+            user_count=Count(
+                'user'
+            )
+        ).count()
 
 
 class StateSerializer(serializers.ModelSerializer):
@@ -96,11 +117,8 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
-        validated_data['id'] = str(uuid.uuid4())
         validated_data['created_by_id'] = user_id
         validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
 
         return Organization.objects.create(**validated_data)
 
@@ -109,7 +127,6 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         instance.title = validated_data.get('title', instance.title)
         instance.code = validated_data.get('code', instance.code)
         instance.updated_by_id = user_id
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
 
         instance.save()
         return instance
@@ -157,11 +174,8 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
-        validated_data['id'] = str(uuid.uuid4())
         validated_data['created_by_id'] = user_id
         validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
 
         return OrgAffiliation.objects.create(**validated_data)
 
@@ -169,18 +183,17 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         instance.title = validated_data.get('title', instance.title)
         instance.updated_by_id = user_id
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
 
         instance.save()
         return instance
 
     def validate_title(self, title):
 
-        org_afiliation = OrgAffiliation.objects.filter(
+        org_affiliation = OrgAffiliation.objects.filter(
             title=title
         ).first()
 
-        if org_afiliation:
+        if org_affiliation:
             raise serializers.ValidationError(
                 "Affiliation already exist"
             )
@@ -198,12 +211,10 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data['updated_by_id'] = user_id
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
-        validated_data['created_by_id'] = user_id
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['title'] = self.data.get('title')
+        validated_data['updated_by_id'] = user_id
+        validated_data['created_by_id'] = user_id
+
         return Department.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
@@ -211,9 +222,6 @@ class DepartmentSerializer(serializers.ModelSerializer):
         instance.title = updated_title
         user_id = JWTUtils.fetch_user_id(self.context.get('request'))
         instance.updated_by_id = user_id
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
-
-
 
