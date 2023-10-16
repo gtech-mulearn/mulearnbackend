@@ -62,7 +62,7 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CollegeSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source="org.title")
+    title = serializers.CharField(source="org.title", allow_null=True)
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.title")
 
