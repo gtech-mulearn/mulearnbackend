@@ -225,4 +225,3 @@ class WeeklyKarmaAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         except Exception as e:
             return CustomResponse(response=str(e)).get_failure_response()
-            return Cu
