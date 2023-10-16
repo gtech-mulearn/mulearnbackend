@@ -1,13 +1,10 @@
 import uuid
 from datetime import timedelta
 
-import decouple
 from django.contrib.auth.hashers import make_password
 from django.core.exceptions import ObjectDoesNotExist
-from django.core.mail import send_mail
-from django.db.models import F, Q, Prefetch
+from django.db.models import Q
 from rest_framework.views import APIView
-from db.task import Level
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -25,9 +22,7 @@ class UserInfoAPI(APIView):
         user = User.objects.filter(muid=user_muid).first()
 
         if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
+            return CustomResponse(general_message="No user data available").get_failure_response()
 
         response = dash_user_serializer.UserSerializer(user, many=False).data
         return CustomResponse(response=response).get_success_response()
@@ -38,50 +33,31 @@ class UserEditAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            serializer = dash_user_serializer.UserDetailsSerializer(user).data
-            return CustomResponse(response=serializer).get_success_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user = User.objects.filter(id=user_id).first()
+        if user is None:
+            return CustomResponse(general_message='User Not Available').get_failure_response()
+        serializer = dash_user_serializer.UserDetailsSerializer(user).data
+        return CustomResponse(response=serializer).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            user.active = False
-            user.save()
-            return CustomResponse(
-                general_message="User deleted successfully"
-            ).get_success_response()
-
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user = User.objects.filter(id=user_id).first()
+        if user is None:
+            return CustomResponse(general_message="User Not Available").get_failure_response()
+        user.active = False
+        user.save()
+        return CustomResponse(general_message="User deleted successfully").get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
-        try:
-            user = User.objects.get(id=user_id)
-            request.data["admin"] = JWTUtils.fetch_user_id(request)
-            serializer = dash_user_serializer.UserDetailsEditSerializer(
-                user, data=request.data, partial=True
-            )
-            if serializer.is_valid():
-                serializer.save()
-                DiscordWebhooks.general_updates(
-                    WebHookCategory.USER.value,
-                    WebHookActions.UPDATE.value,
-                    user_id,
-                )
-
-                return CustomResponse(
-                    general_message=serializer.data
-                ).get_success_response()
-            return CustomResponse(
-                general_message=serializer.errors
-            ).get_failure_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        user = User.objects.get(id=user_id)
+        request.data["admin"] = JWTUtils.fetch_user_id(request)
+        serializer = dash_user_serializer.UserDetailsEditSerializer(user, data=request.data, partial=True)
+        if serializer.is_valid():
+            serializer.save()
+            DiscordWebhooks.general_updates(WebHookCategory.USER.value, WebHookActions.UPDATE.value, user_id)
+            return CustomResponse(general_message="User Edited Successfully").get_success_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
 
 class UserAPI(APIView):
@@ -139,7 +115,10 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.filter(verified=False)
+        user_queryset = UserRoleLink.objects.select_related(
+            "user", "role"
+        ).filter(verified=False)
+        
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -215,14 +194,29 @@ class UserVerificationAPI(APIView):
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
+class UserVerificationCSV(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        user_queryset = UserRoleLink.objects.select_related(
+            "user", "role"
+        ).filter(verified=False)
+        
+        serializer = dash_user_serializer.UserVerificationSerializer(
+            user_queryset, many=True
+        )
+        return CommonUtils.generate_csv(serializer.data, "User")
+
+
 class ForgotPasswordAPI(APIView):
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(muid=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(muid=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

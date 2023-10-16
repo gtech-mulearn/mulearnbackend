@@ -1,5 +1,7 @@
+
 import uuid
 from django.db.models import Sum, Q, F, Window, Case, When, Value, Count
+
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
 
@@ -44,7 +46,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             serializer.save()
 
             if request.data.get("org_type") == OrganizationType.COMMUNITY.value:
-
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.CREATE.value,
@@ -89,7 +90,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
             if (request.data.get("title") != old_title and
                     old_type == OrganizationType.COMMUNITY.value):
-
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.EDIT.value,
@@ -99,7 +99,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
             if (request.data.get("orgType") != OrganizationType.COMMUNITY.value and
                     old_type == OrganizationType.COMMUNITY.value):
-
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.DELETE.value,
@@ -108,7 +107,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
             if (old_type != OrganizationType.COMMUNITY.value and
                     request.data.get("orgType") == OrganizationType.COMMUNITY.value):
-
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -128,7 +126,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
     def delete(self, request, org_code):
 
         if not (
-            organisation := Organization.objects.filter(code=org_code).first()
+                organisation := Organization.objects.filter(code=org_code).first()
         ):
             return CustomResponse(
                 general_message=f"Org with code '{org_code}', does not exist"
@@ -138,7 +136,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
         org_type = organisation.org_type
 
         if org_type == OrganizationType.COMMUNITY.value:
-
             DiscordWebhooks.general_updates(
                 WebHookCategory.COMMUNITY.value,
                 WebHookActions.DELETE.value,
@@ -152,7 +149,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
 class InstitutionAPI(APIView):
     def get(self, request, org_type):
-
         organizations = Organization.objects.filter(
             org_type=org_type
         )
@@ -197,7 +193,6 @@ class InstitutionCsvAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, org_type):
-
         organization = Organization.objects.filter(
             org_type=org_type
         ).prefetch_related(
@@ -220,18 +215,22 @@ class InstitutionDetailsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
 
-        organization = Organization.objects.filter(
-            code=org_code
-        ).values(
+        organization = Organization.objects.filter(code=org_code).values(
             "id",
             "title",
             "code",
             "org_type",
             affiliation_name=F("affiliation__title"),
+            affiliation_uuid=F("affiliation__id"),
             district_name=F("district__name"),
+            district_uuid=F("affiliation__id"),
             zone_name=F("district__zone__name"),
+            zone_uuid=F("district__zone__id"),
             state_name=F("district__zone__state__name"),
             country_name=F("district__zone__state__country__name"),
+            state_uuid=F("district__zone__state__id"),
+            country_name=F("district__zone__state__country__name"),
+            country_uuid=F("district__zone__state__country__id"),
         ).annotate(
             karma=Sum(
                 'user_organization_link_org__user__wallet_user__karma'
@@ -240,6 +239,14 @@ class InstitutionDetailsAPI(APIView):
         ).annotate(
             user_count=Count('user_organization_link_org__user')
         )
+            rank=Case(
+                When(
+                    Q(karma__isnull=True) | Q(karma=0),
+                    then=None),
+                default=Window(
+                    expression=Rank(),
+                    order_by=F('karma').desc()
+                )))
 
         if organization is None:
             return CustomResponse(
@@ -376,7 +383,6 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
         ).first()
 
         if affiliation is None:
-
             return CustomResponse(
                 general_message="Invalid affiliation id"
             ).get_failure_response()

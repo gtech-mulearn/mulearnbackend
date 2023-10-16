@@ -223,11 +223,9 @@ class KKEMUserStatusAPI(APIView):
     def get(self, request, encrypted_data):
         try:
             details = kkem_helper.decrypt_kkem_data(encrypted_data)
-            if "muid" in details:
-                return CustomResponse(
-                    response={"muid": details["muid"][0]}
-                ).get_success_response()
-            else:
-                return CustomResponse(response={"muid": None}).get_success_response()
+            return CustomResponse(
+                response={"muid": details["mu_id"][0] if "mu_id" in details else None}
+            ).get_success_response()
+
         except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()

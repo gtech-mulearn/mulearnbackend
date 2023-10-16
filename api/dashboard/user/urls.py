@@ -5,6 +5,7 @@ from . import dash_user_views
 urlpatterns = [
 
     path('verification/', dash_user_views.UserVerificationAPI.as_view(), name='list-verification'),
+    path('verification/csv/', dash_user_views.UserVerificationCSV.as_view(), name='csv-verification'),
     path('verification/<str:link_id>/', dash_user_views.UserVerificationAPI.as_view(), name='edit-verification'),
     path('verification/<str:link_id>/', dash_user_views.UserVerificationAPI.as_view(), name='delete-verification'),
 
