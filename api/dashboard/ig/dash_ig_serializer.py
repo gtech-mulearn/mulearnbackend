@@ -8,6 +8,7 @@ from utils.utils import DateTimeUtils
 
 
 class InterestGroupSerializer(serializers.ModelSerializer):
+
     updated_by = serializers.CharField(source='updated_by.fullname')
     created_by = serializers.CharField(source='created_by.fullname')
     user_ig_link_ig = serializers.SerializerMethodField()
@@ -31,12 +32,19 @@ class InterestGroupSerializer(serializers.ModelSerializer):
 
 
 class InterestGroupCreateSerializer(serializers.ModelSerializer):
-    name = serializers.CharField(required=True, error_messages={
-        'required': 'code field must not be left blank.'
-    })
-    icon = serializers.CharField(required=True, error_messages={
-        'required': 'icon field must not be left blank.'
-    })
+
+    name = serializers.CharField(
+        required=True,
+        error_messages={
+            'required': 'code field must not be left blank.'
+        }
+    )
+    icon = serializers.CharField(
+        required=True,
+        error_messages={
+            'required': 'icon field must not be left blank.'
+        }
+    )
 
     class Meta:
         model = InterestGroup
@@ -49,14 +57,11 @@ class InterestGroupCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context.get('user_id')
         return InterestGroup.objects.create(
-            id=uuid.uuid4(),
             name=validated_data.get('name'),
             code=validated_data.get('code'),
             icon=validated_data.get('icon'),
             updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
             created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time(),
         )
 
 

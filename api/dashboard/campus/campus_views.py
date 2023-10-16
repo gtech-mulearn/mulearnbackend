@@ -1,15 +1,15 @@
 from django.db.models import Count, F
-from django.db.models import Q, Case, When, Value
 from rest_framework.views import APIView
+from django.db.models import Q, Case, When, Value
 
-from db.task import Level, Wallet
 from db.user import User
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from . import serializers
+from db.task import Level, Wallet
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
-from . import serializers
 from .dash_campus_helper import get_user_college_link
+from utils.permission import CustomizePermission, JWTUtils, role_required
 
 
 class CampusDetailsAPI(APIView):

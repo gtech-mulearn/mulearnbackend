@@ -1,4 +1,4 @@
-from django.db.models import Sum, Q, F, Window, Case, When
+from django.db.models import Sum, Q, F, Window, Case, When, Count
 from django.db.models.functions import Rank
 from rest_framework.views import APIView
 
@@ -18,7 +18,9 @@ from .serializers import (
     AffiliationSerializer,
     InstitutionCsvSerializer,
     DepartmentSerializer,
-    InstitutionSerializer, InstitutionCreateUpdateSerializer, AffiliationCreateUpdateSerializer
+    InstitutionSerializer,
+    InstitutionCreateUpdateSerializer,
+    AffiliationCreateUpdateSerializer,
 )
 
 
@@ -48,7 +50,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             return CustomResponse(
-                general_message="Organisation Added Successfully"
+                general_message="Organisation added successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -110,7 +112,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             return CustomResponse(
-                general_message="Organization Edited Successfully"
+                general_message="Organization edited successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -138,7 +140,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             )
 
         return CustomResponse(
-            general_message="Deleted Successfully"
+            general_message="Organization deleted successfully"
         ).get_success_response()
 
 
@@ -209,40 +211,23 @@ class InstitutionCsvAPI(APIView):
 class InstitutionDetailsAPI(APIView):
     @role_required([RoleType.ADMIN.value, ])
     def get(self, request, org_code):
-        organization = Organization.objects.filter(code=org_code).values(
+
+        organization = Organization.objects.filter(
+            code=org_code
+        ).values(
             "id",
             "title",
             "code",
-            "org_type",
-            affiliation_name=F("affiliation__title"),
-            affiliation_uuid=F("affiliation__id"),
             district_name=F("district__name"),
-            district_uuid=F("affiliation__id"),
             zone_name=F("district__zone__name"),
-            zone_uuid=F("district__zone__id"),
             state_name=F("district__zone__state__name"),
-            state_uuid=F("district__zone__state__id"),
             country_name=F("district__zone__state__country__name"),
-            country_uuid=F("district__zone__state__country__id"),
         ).annotate(
             karma=Sum(
                 'user_organization_link_org__user__wallet_user__karma'
             )).order_by(
-            '-karma'
-        ).annotate(
-            rank=Case(
-                When(
-                    Q(karma__isnull=True) | Q(karma=0),
-                    then=None),
-                default=Window(
-                    expression=Rank(),
-                    order_by=F('karma').desc()
-                )))
-
-        if organization is None:
-            return CustomResponse(
-                general_message="Invalid organization code"
-            ).get_failure_response()
+                '-karma'
+            )
 
         return CustomResponse(
             response=organization
@@ -484,5 +469,5 @@ class DepartmentAPI(APIView):
 
         department.delete()
         return CustomResponse(
-            general_message=f'{department.id} deleted successfully'
+            general_message=f'{department.title} deleted successfully'
         ).get_success_response()

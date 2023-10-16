@@ -1,7 +1,6 @@
 from rest_framework.views import APIView
-from django.db.models import F, Prefetch
 
-from db.task import InterestGroup, UserIgLink
+from db.task import InterestGroup
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
@@ -19,10 +18,14 @@ class InterestGroupAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
+
         ig_queryset = (
-            InterestGroup.objects.select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
-            .all()
+            InterestGroup.objects.select_related(
+                "created_by",
+                "updated_by"
+            ).prefetch_related(
+                "user_ig_link_ig"
+            ).all()
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -35,46 +38,73 @@ class InterestGroupAPI(APIView):
                 "updated_by__first_name",
                 "updated_by__last_name",
             ],
-            {"name": "name"},
+            {
+                "name": "name"
+            },
         )
 
         ig_serializer_data = InterestGroupSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get(
+                "queryset"
+            ),
+            many=True
         ).data
 
         return CustomResponse().paginated_response(
-            data=ig_serializer_data, pagination=paginated_queryset.get("pagination")
+            data=ig_serializer_data,
+            pagination=paginated_queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         serializer = InterestGroupCreateSerializer(
-            data=request.data, context={"user_id": user_id}
+            data=request.data,
+            context={
+                "user_id": user_id
+            }
         )
         if serializer.is_valid():
             serializer.save()
+
             DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,
                 WebHookActions.CREATE.value,
                 request.data.get("name"),
             )
+
             return CustomResponse(
-                response={"interestGroup": serializer.data}
+                response={
+                    "interestGroup": serializer.data
+                }
             ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
-        ig_old_name = InterestGroup.objects.get(id=pk).name
+
+        ig_old_name = InterestGroup.objects.get(
+            id=pk
+        ).name
+
         serializer = InterestGroupUpdateSerializer(
             data=request.data,
-            instance=InterestGroup.objects.get(id=pk),
-            context={"user_id": user_id},
+            instance=InterestGroup.objects.get(
+                id=pk
+            ),
+            context={
+                "user_id": user_id
+            },
         )
+
         if serializer.is_valid():
             serializer.save()
+
             DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,
                 WebHookActions.EDIT.value,
@@ -82,20 +112,36 @@ class InterestGroupAPI(APIView):
                 ig_old_name,
             )
             return CustomResponse(
-                response={"interestGroup": serializer.data}
+                response={
+                    "interestGroup": serializer.data
+                }
             ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, pk):
-        igData = InterestGroup.objects.get(id=pk)
-        igData.delete()
+        ig = InterestGroup.objects.filter(
+            id=pk
+        ).first()
+
+        if ig is None:
+            return CustomResponse(
+                general_message="invalid ig"
+            ).get_success_response()
+
+        ig.delete()
+
         DiscordWebhooks.general_updates(
             WebHookCategory.INTEREST_GROUP.value,
             WebHookActions.DELETE.value,
-            igData.name,
+            ig.name,
         )
-        return CustomResponse().get_success_response()
+        return CustomResponse(
+            general_message="ig deleted successfully"
+        ).get_success_response()
 
 
 class InterestGroupCSV(APIView):
@@ -104,9 +150,16 @@ class InterestGroupCSV(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         ig_serializer = InterestGroup.objects.all()
-        ig_serializer_data = InterestGroupSerializer(ig_serializer, many=True).data
 
-        return CommonUtils.generate_csv(ig_serializer_data, "Interest Group")
+        ig_serializer_data = InterestGroupSerializer(
+            ig_serializer,
+            many=True
+        ).data
+
+        return CommonUtils.generate_csv(
+            ig_serializer_data,
+            "Interest Group"
+        )
 
 
 class InterestGroupGetAPI(APIView):
@@ -114,21 +167,39 @@ class InterestGroupGetAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, pk):
-        igData = InterestGroup.objects.filter(id=pk).first()
-        if not igData:
+
+        ig_data = InterestGroup.objects.filter(
+            id=pk
+        ).first()
+
+        if not ig_data:
             return CustomResponse(
                 general_message="Interest Group Does Not Exist"
             ).get_failure_response()
-        serializer = InterestGroupSerializer(igData, many=False)
+
+        serializer = InterestGroupSerializer(
+            ig_data,
+            many=False
+        )
+
         return CustomResponse(
-            response={"interestGroup": serializer.data}
+            response={
+                "interestGroup": serializer.data
+            }
         ).get_success_response()
 
 
 class InterestGroupListApi(APIView):
     def get(self, request):
         ig = InterestGroup.objects.all()
-        serializer = InterestGroupSerializer(ig, many=True)
+
+        serializer = InterestGroupSerializer(
+            ig,
+            many=True
+        )
+
         return CustomResponse(
-            response={"interestGroup": serializer.data}
+            response={
+                "interestGroup": serializer.data
+            }
         ).get_success_response()
