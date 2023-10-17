@@ -60,17 +60,16 @@ class UserSerializer(serializers.ModelSerializer):
 
 
 class CollegeSerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source="org.title", allow_null=True)
     org_type = serializers.CharField(source="org.org_type")
-    department = serializers.CharField(source="department.title")
-    country = serializers.CharField(source="country.name")
-    state = serializers.CharField(source="state.name")
-    district = serializers.CharField(source="district.name")
+    department = serializers.CharField(source="department.pk")
+    country = serializers.CharField(source="country.pk")
+    state = serializers.CharField(source="state.pk")
+    district = serializers.CharField(source="district.pk")
 
     class Meta:
         model = UserOrganizationLink
         fields = [
-            "title",
+            "org",
             "org_type",
             "department",
             "graduation_year",
@@ -80,32 +79,24 @@ class CollegeSerializer(serializers.ModelSerializer):
         ]
 
 
-class CommunitySerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source="org.title", read_only=True)
+class OrgSerializer(serializers.ModelSerializer):
     org_type = serializers.CharField(source="org.org_type", read_only=True)
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["title", "org_type"]
-
-
-class CompanySerializer(serializers.ModelSerializer):
-    title = serializers.CharField(source="org.title", read_only=True)
-    org_type = serializers.CharField(source="org.org_type", read_only=True)
-
-    class Meta:
-        model = UserOrganizationLink
-        fields = ["title", "org_type"]
+        fields = ["org", "org_type"]
 
 
 class UserDetailsSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(source="id")
-    organizations = serializers.SerializerMethodField(read_only=True)
-    interest_groups = serializers.SerializerMethodField(read_only=True)
+
     igs = serializers.ListField(write_only=True)
-    role = serializers.SerializerMethodField(read_only=True)
     department = serializers.CharField(write_only=True)
     graduation_year = serializers.CharField(write_only=True)
+
+    organizations = serializers.SerializerMethodField(read_only=True)
+    interest_groups = serializers.SerializerMethodField(read_only=True)
+    role = serializers.SerializerMethodField(read_only=True)
 
     class Meta:
         model = User
@@ -125,7 +116,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             "interest_groups",
             "igs",
         ]
-        
+
     def validate(self, data):
         if "id" not in data:
             raise serializers.ValidationError("User id is a required field")
@@ -193,26 +184,17 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         for link in organization_links:
             if link.org.org_type == OrganizationType.COLLEGE.value:
                 serializer = CollegeSerializer(link)
-            elif link.org.org_type == OrganizationType.COMPANY.value:
-                serializer = CompanySerializer(link)
             else:
-                serializer = CommunitySerializer(link)
+                serializer = OrgSerializer(link)
 
             organizations_data.append(serializer.data)
         return organizations_data
 
     def get_interest_groups(self, user):
-        igs = user.user_ig_link_user.all()
-        if igs:
-            igs = [ig.ig.name for ig in igs]
-        return igs
+        return user.user_ig_link_user.all().values_list("ig", flat=True)
 
     def get_role(self, user):
-        if roles := UserRoleLink.objects.filter(user=user).values_list(
-            "role__title", flat=True
-        ):
-            return list(roles)
-        return None
+        return user.user_role_link_user.all().values_list("role", flat=True)
 
 
 class UserVerificationSerializer(serializers.ModelSerializer):
