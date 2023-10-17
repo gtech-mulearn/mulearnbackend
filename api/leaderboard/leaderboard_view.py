@@ -1,7 +1,8 @@
-from django.db.models import Sum, F, Value, OuterRef, Subquery, Count, Q
+from django.db.models import Sum, F, Value, OuterRef, Subquery, Count, Q, Prefetch
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.views import APIView
 import datetime
+from . import serializers
 
 from db.organization import Organization, UserOrganizationLink
 from db.user import User
@@ -12,14 +13,6 @@ from utils.utils import DateTimeUtils
 
 class StudentsLeaderboard(APIView):
     def get(self, request):
-        user_college = (
-            UserOrganizationLink.objects.filter(
-                user_id=OuterRef("id"), org__org_type=OrganizationType.COLLEGE.value
-            )
-            .order_by("id")
-            .values("org__title")[:1]
-        )
-
         students_leaderboard = (
             User.objects.filter(
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
@@ -28,14 +21,25 @@ class StudentsLeaderboard(APIView):
                 active=True,
             )
             .distinct()
-            .values(
-                total_karma=F("wallet_user__karma"),
-                full_name=Concat(F("first_name"), Value(" "), F("last_name")),
-                institution=Subquery(user_college),
+            .select_related("wallet_user")
+            .prefetch_related(
+                Prefetch(
+                    "user_organization_link_user",
+                    queryset=UserOrganizationLink.objects.filter(
+                        org__org_type=OrganizationType.COLLEGE.value
+                    ).select_related("org"),
+                    to_attr="colleges"
+                )
             )
-            .order_by("-total_karma")[:20]
+            .order_by("-wallet_user__karma")[:20]
         )
-        return CustomResponse(response=students_leaderboard).get_success_response()
+        serialized_students_leaderboard = serializers.StudentLeaderboardSerializer(
+            students_leaderboard, many=True
+        )
+
+        return CustomResponse(
+            response=serialized_students_leaderboard.data
+        ).get_success_response()
 
 
 class StudentsMonthlyLeaderboard(APIView):
