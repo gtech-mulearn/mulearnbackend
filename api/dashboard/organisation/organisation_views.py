@@ -218,9 +218,15 @@ class InstitutionDetailsAPI(APIView):
             "id",
             "title",
             "code",
+            affiliation_uuid=F("affiliation__id"),
+            affiliation_name=F("affiliation__title"),
+            district_uuid=F("district__id"),
             district_name=F("district__name"),
+            zone_uuid=F("district__zone__id"),
             zone_name=F("district__zone__name"),
+            state_uuid=F("district__zone__state__id"),
             state_name=F("district__zone__state__name"),
+            country_uuid=F("district__zone__state__country__id"),
             country_name=F("district__zone__state__country__name"),
         ).annotate(
             karma=Sum(
