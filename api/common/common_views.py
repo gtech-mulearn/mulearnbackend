@@ -29,6 +29,7 @@ class LcDashboardAPI(APIView):
             total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
             circle_count_by_ig = LearningCircle.objects.all().values(ig_name=F('ig__name')).annotate(
                 total_circles=Count('id'))
+
             unique_user_count = UserCircleLink.objects.filter(accepted=True).values('user').distinct().count()
         return CustomResponse(response={'lc_count': learning_circle_count, 'total_enrollment': total_no_enrollment,
                                         'circle_count_by_ig': circle_count_by_ig,
@@ -43,7 +44,7 @@ class LcReportAPI(APIView):
             student_info = UserCircleLink.objects.filter(
                 accepted=True,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                circle__created_at=date,
+                created_at=date,
             ).values(
                 first_name=F('user__first_name'),
                 last_name=F('user__last_name'),
@@ -85,7 +86,8 @@ class LcReportAPI(APIView):
 
         paginated_queryset = CommonUtils.get_paginated_queryset(student_info, request,
                                                                 search_fields=['first_name', 'last_name', 'muid'],
-                                                                sort_fields={'name': 'name'})
+                                                                sort_fields={'first_name': 'first_name',
+                                                                             'muid': 'muid'})
 
         student_info_data = StudentInfoSerializer(paginated_queryset.get('queryset'), many=True).data
 
@@ -129,7 +131,8 @@ class GlobalCountAPI(APIView):
                           OrganizationType.COMMUNITY.value]
         ).values('org_type').annotate(org_count=Coalesce(Count('org_type'), 0))
 
-        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values('role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
+        enablers_mentors_count = UserRoleLink.objects.filter(role__title__in=["Mentor", "Enabler"]).values(
+            'role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
 
         interest_groups_count = InterestGroup.objects.all().count()
         learning_circles_count = LearningCircle.objects.all().count()
