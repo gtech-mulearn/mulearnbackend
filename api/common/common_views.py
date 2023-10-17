@@ -28,7 +28,8 @@ class LcDashboardAPI(APIView):
             learning_circle_count = LearningCircle.objects.all().count()
             total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
             circle_count_by_ig = LearningCircle.objects.all().values(ig_name=F('ig__name')).annotate(
-                total_circles=Count('id'), total_users=Count('user', distinct=True))
+                total_circles=Count('id'))
+
             unique_user_count = UserCircleLink.objects.filter(accepted=True).values('user').distinct().count()
         return CustomResponse(response={'lc_count': learning_circle_count, 'total_enrollment': total_no_enrollment,
                                         'circle_count_by_ig': circle_count_by_ig,
