@@ -5,6 +5,7 @@ from rest_framework import serializers
 
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+from db.user import User
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
@@ -46,12 +47,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         return (
-                obj.org.user_organization_link_org.filter(
-                    org__org_type=OrganizationType.COLLEGE.value,
-                    verified=True,
-                    user__wallet_user__isnull=False,
-                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-                or 0
+            obj.org.user_organization_link_org.filter(
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
+                user__wallet_user__isnull=False,
+            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+            or 0
         )
 
     def get_rank(self, obj):
@@ -74,3 +75,16 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             keys_list = list(sorted_rank_dict.keys())
             position = keys_list.index(obj.org.id)
             return position + 1
+
+
+class StudentLeaderboardSerializer(serializers.ModelSerializer):
+    institution = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField(source="wallet_user.karma", default=0)
+    full_name = serializers.CharField(source="fullname")
+
+    def get_institution(self, user):
+        return user.colleges[0].org.title if user.colleges else None
+
+    class Meta:
+        model = User
+        fields = ["full_name", "total_karma", "institution"]
