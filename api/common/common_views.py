@@ -28,7 +28,7 @@ class LcDashboardAPI(APIView):
             learning_circle_count = LearningCircle.objects.all().count()
             total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
             circle_count_by_ig = LearningCircle.objects.all().values(ig_name=F('ig__name')).annotate(
-                total_circles=Count('id'))
+                total_circles=Count('id'), total_users=Count('ig__learningcircle__usercirclelink__user', distinct=True))
 
             unique_user_count = UserCircleLink.objects.filter(accepted=True).values('user').distinct().count()
         return CustomResponse(response={'lc_count': learning_circle_count, 'total_enrollment': total_no_enrollment,
@@ -120,6 +120,16 @@ class LcReportDownloadAPI(APIView):
         student_info_data = StudentInfoSerializer(student_info, many=True).data
 
         return CommonUtils.generate_csv(student_info_data, "Learning Circle Report")
+
+
+class CollegeWiseLcReport(APIView):
+
+    def get(self, request):
+        learning_circles_info = LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value).annotate(
+            user_count=Count('usercirclelink'),
+            org_name=F('org__title')
+        ).values('name', 'user_count', 'org_name')
+        return CustomResponse(response=learning_circles_info).get_success_response()
 
 
 class GlobalCountAPI(APIView):
