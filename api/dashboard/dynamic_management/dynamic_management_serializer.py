@@ -7,6 +7,7 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 from utils.types import ManagementType
 
+
 class DynamicRoleCreateSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=True, error_messages={
         'required': 'type field must not be left blank.'
@@ -43,7 +44,8 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         if value not in [type for type in ManagementType.get_all_values()]:
             raise serializers.ValidationError("Enter a valid type")
         return value
-    
+
+
 class DynamicRoleListSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
 
@@ -55,6 +57,7 @@ class DynamicRoleListSerializer(serializers.ModelSerializer):
     class Meta:
         model = DynamicRole
         fields = ["type", "roles"]    
+
 
 class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
     new_role = serializers.CharField(required=True, error_messages={
@@ -82,6 +85,7 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+
 
 class DynamicUserCreateSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=True, error_messages={
@@ -119,7 +123,8 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         if value not in [type for type in ManagementType.get_all_values()]:
             raise serializers.ValidationError("Enter a valid type")
         return value
-    
+
+
 class DynamicUserListSerializer(serializers.ModelSerializer):
     users = serializers.SerializerMethodField()
 
@@ -136,6 +141,7 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
     class Meta:
         model = DynamicUser
         fields = ["type", "users"]
+
 
 class DynamicUserUpdateSerializer(serializers.ModelSerializer):
     new_user = serializers.CharField(required=True, error_messages={
@@ -164,6 +170,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
 
     def destroy(self, obj):
         obj.delete()
+
 
 class RoleDropDownSerializer(serializers.ModelSerializer):
     class Meta:

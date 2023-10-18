@@ -1,5 +1,3 @@
-import uuid
-
 from rest_framework import serializers
 
 from db.task import InterestGroup
