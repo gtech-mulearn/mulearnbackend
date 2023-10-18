@@ -101,9 +101,7 @@ class TaskListAPI(APIView):
             return CustomResponse(message=serializer.errors).get_failure_response()
 
         serializer.save()
-        return CustomResponse(
-            general_message="Task Created Successfully"
-        ).get_success_response()
+        return CustomResponse(general_message="Task Created Successfully").get_success_response()
 
 
 class TaskAPI(APIView):
