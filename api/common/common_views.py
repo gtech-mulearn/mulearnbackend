@@ -1,5 +1,3 @@
-from collections import defaultdict
-
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
@@ -130,23 +128,11 @@ class CollegeWiseLcReport(APIView):
 
     def get(self, request):
         learning_circles_info = LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value) \
-            .values('org__title', 'name') \
-            .annotate(user_count=Count('usercirclelink')) \
-            .order_by('org__title')
+            .values(org_title=F('org__title')) \
+            .annotate(learning_circle_count=Count('id'), user_count=Count('usercirclelink')) \
+            .order_by('org_title')
 
-        org_learning_circles = defaultdict(list)
-
-        for info in learning_circles_info:
-            org_name = info['org__title']
-            org_learning_circles[org_name].append({
-                'name': info['name'],
-                'user_count': info['user_count']
-            })
-
-        result_list = [{"org_name": org_name, "learning_circles": circles} for org_name, circles in
-                       org_learning_circles.items()]
-
-        return CustomResponse(response=result_list).get_success_response()
+        return CustomResponse(response=learning_circles_info).get_success_response()
 
 
 class GlobalCountAPI(APIView):
