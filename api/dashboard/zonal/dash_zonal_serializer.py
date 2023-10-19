@@ -1,9 +1,9 @@
 from datetime import timedelta
 
-from django.db.models import Sum, Count, Q, Case, When, IntegerField
+from django.db.models import Sum
 from rest_framework import serializers
 
-from db.organization import UserOrganizationLink, District, Organization
+from db.organization import UserOrganizationLink, District
 from db.task import KarmaActivityLog, Level
 from db.user import User
 from utils.utils import DateTimeUtils
