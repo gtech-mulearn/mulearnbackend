@@ -38,7 +38,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 "user_id": user_id
             }
         )
-
         if serializer.is_valid():
             serializer.save()
 
@@ -81,7 +80,6 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 "user_id": user_id
             }
         )
-
         if serializer.is_valid():
             serializer.save()
 
