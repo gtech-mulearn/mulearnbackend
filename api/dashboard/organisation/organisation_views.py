@@ -38,6 +38,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 "user_id": user_id
             }
         )
+
         if serializer.is_valid():
             serializer.save()
 
@@ -80,6 +81,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 "user_id": user_id
             }
         )
+
         if serializer.is_valid():
             serializer.save()
 
@@ -430,15 +432,10 @@ class DepartmentAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, department_id):
-        try:
-            department = Department.objects.get(
-                id=department_id
-            )
 
-        except Exception as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
+        department = Department.objects.get(
+            id=department_id
+        )
 
         serializer = DepartmentSerializer(
             department,
@@ -461,15 +458,9 @@ class DepartmentAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, department_id):
 
-        try:
-            department = Department.objects.get(
-                id=department_id
-            )
-
-        except Exception as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
+        department = Department.objects.get(
+            id=department_id
+        )
 
         department.delete()
         return CustomResponse(

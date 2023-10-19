@@ -1,7 +1,6 @@
-from django.db.models import Sum, F, Value, OuterRef, Subquery, Count, Q, Prefetch
+from django.db.models import Sum, F, Value, Count, Q, Prefetch
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.views import APIView
-import datetime
 from . import serializers
 
 from db.organization import Organization, UserOrganizationLink
