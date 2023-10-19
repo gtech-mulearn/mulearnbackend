@@ -10,6 +10,7 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 from .dash_campus_helper import get_user_college_link
 from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.exception import CustomException
 
 
 class CampusDetailsAPI(APIView):
@@ -223,5 +224,9 @@ class WeeklyKarmaAPI(APIView):
 
             serializer = serializers.WeeklyKarmaSerializer(user_org_link)
             return CustomResponse(response=serializer.data).get_success_response()
+
         except Exception as e:
-            return CustomResponse(response=str(e)).get_failure_response()
+            raise CustomException(
+                detail='somthing went wrong',
+                status_code=403
+            )

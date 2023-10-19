@@ -126,6 +126,7 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         instance.title = validated_data.get('title', instance.title)
         instance.code = validated_data.get('code', instance.code)
+        instance.affiliation = validated_data.get('affiliation', instance.affiliation)
         instance.updated_by_id = user_id
 
         instance.save()
@@ -142,7 +143,6 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(
                     "Invalid organization affiliation"
                 )
-
         return organization
 
     def validate_affiliation(self, affiliation_id):
