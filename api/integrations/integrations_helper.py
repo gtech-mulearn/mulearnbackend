@@ -7,6 +7,7 @@ import requests
 
 from db.integrations import Integration
 from mulearnbackend.settings import SECRET_KEY
+from utils.exception import CustomException
 from utils.response import CustomResponse
 
 
@@ -21,16 +22,19 @@ def get_authorization_id(token: str) -> str | None:
     :return: the authorization ID if the token is valid and has not expired. If the token is invalid or
     has expired, it returns None.
     """
-    payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
-    authorization_id = payload.get("authorization_id")
-    exp_timestamp = payload.get("exp", 0)
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+        authorization_id = payload.get("authorization_id")
+        exp_timestamp = payload.get("exp", 0)
 
-    if exp_timestamp and datetime.now(pytz.utc) < datetime.fromtimestamp(
-        exp_timestamp, tz=pytz.utc
-    ):
-        return authorization_id
-    else:
-        raise ValueError("Token invalid or expired")
+        if exp_timestamp and datetime.now(pytz.utc) < datetime.fromtimestamp(
+            exp_timestamp, tz=pytz.utc
+        ):
+            return authorization_id
+        else:
+            raise CustomException("Token invalid or expired")
+    except jwt.ExpiredSignatureError:
+        raise CustomException("This token has expired, maybe again with a new one!")
 
 
 def generate_confirmation_token(authorization_id: str) -> str:
@@ -68,14 +72,14 @@ def token_required(integration_name: str):
             try:
                 auth_header = request.META.get("HTTP_AUTHORIZATION")
                 if not auth_header or not auth_header.startswith("Bearer "):
-                    raise ValueError("Invalid Authorization header")
+                    raise CustomException("Invalid Authorization header")
 
                 token = auth_header.split(" ")[1]
 
                 if not Integration.objects.filter(
                     token=token, name=integration_name
                 ).first():
-                    raise ValueError("Invalid Authorization header")
+                    raise CustomException("Invalid Authorization header")
                 else:
                     result = func(self, request, *args, **kwargs)
                 return result
@@ -111,7 +115,7 @@ def get_access_token(
         ).json()
 
         if response.get("statusCode") != 200:
-            raise ValueError(
+            raise CustomException(
                 "Oops! The username or password didn't match our records. Please double-check and try again."
             )
     else:
@@ -120,7 +124,7 @@ def get_access_token(
         ).json()
 
         if response.get("statusCode") != 200:
-            raise ValueError(
+            raise CustomException(
                 "Oops! We couldn't find that account. Please double-check your details and try again."
             )
 
@@ -137,10 +141,10 @@ def get_access_token(
 def handle_response(response: dict) -> None:
     if response.get("statusCode") != 200:
         if "emailOrMuid" in response:
-            raise ValueError(
+            raise CustomException(
                 "Oops! The username or password didn't match our records. Please double-check and try again."
             )
         else:
-            raise ValueError(
+            raise CustomException(
                 "Oops! We couldn't find that account. Please double-check your details and try again."
             )

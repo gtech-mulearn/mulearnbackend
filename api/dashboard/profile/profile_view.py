@@ -5,6 +5,7 @@ from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level
 from db.user import Role
 from db.user import User, UserSettings, UserRoleLink, Socials
+from utils.exception import CustomException
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
@@ -86,7 +87,7 @@ class UserIgEditView(APIView):
                 general_message="Interest Group edited successfully"
             ).get_success_response()
 
-        except ValueError as e:
+        except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
