@@ -127,12 +127,6 @@ class KKEMAuthorizationAPI(APIView):
                 general_message=str(e)
             ).get_failure_response()
 
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
-
     def patch(self, request, token):
         try:
             link_id = integrations_helper.get_authorization_id(token)
@@ -160,13 +154,6 @@ class KKEMAuthorizationAPI(APIView):
             return CustomResponse(
                 general_message=str(e)
             ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
-
 
 class KKEMIntegrationLogin(APIView):
     def post(self, request):
@@ -206,11 +193,7 @@ class KKEMIntegrationLogin(APIView):
                 general_message=str(e)
             ).get_failure_response()
 
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+
 
 
 class KKEMdetailsFetchAPI(APIView):
@@ -248,11 +231,7 @@ class KKEMdetailsFetchAPI(APIView):
                 general_message=str(e)
             ).get_failure_response()
 
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+
 
 
 class KKEMUserStatusAPI(APIView):
@@ -268,8 +247,4 @@ class KKEMUserStatusAPI(APIView):
                 general_message=str(e)
             ).get_failure_response()
 
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+

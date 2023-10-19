@@ -212,21 +212,14 @@ class WeeklyKarmaAPI(APIView):
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value])
     def get(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
+        user_id = JWTUtils.fetch_user_id(request)
 
-            user_org_link = get_user_college_link(user_id)
+        user_org_link = get_user_college_link(user_id)
 
-            if user_org_link.org is None:
-                return CustomResponse(
-                    general_message="Campus lead has no college"
-                ).get_failure_response()
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
 
-            serializer = serializers.WeeklyKarmaSerializer(user_org_link)
-            return CustomResponse(response=serializer.data).get_success_response()
-
-        except Exception as e:
-            raise CustomException(
-                detail='somthing went wrong',
-                status_code=403
-            )
+        serializer = serializers.WeeklyKarmaSerializer(user_org_link)
+        return CustomResponse(response=serializer.data).get_success_response()

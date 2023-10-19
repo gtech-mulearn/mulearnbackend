@@ -14,8 +14,6 @@ from .profile_serializer import LinkSocials
 import logging
 
 
-
-
 class UserProfileEditView(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -60,37 +58,23 @@ class UserIgEditView(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_ig = InterestGroup.objects.filter(
-            user_ig_link_ig__user_id=user_id
-        ).all()
+        user_ig = InterestGroup.objects.filter(user_ig_link_ig__user_id=user_id).all()
 
-        serializer = profile_serializer.UserIgListSerializer(
-            user_ig,
-            many=True
-        )
+        serializer = profile_serializer.UserIgListSerializer(user_ig, many=True)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
-
-        logger = logging.getLogger(__name__)
-
         try:
             user_id = JWTUtils.fetch_user_id(request)
             user = User.objects.get(id=user_id)
 
             serializer = profile_serializer.UserIgEditSerializer(
-                user,
-                data=request.data,
-                partial=True
+                user, data=request.data, partial=True
             )
 
             if not serializer.is_valid():
-                return CustomResponse(
-                    response=serializer.errors
-                ).get_failure_response()
+                return CustomResponse(response=serializer.errors).get_failure_response()
 
             serializer.save()
             DiscordWebhooks.general_updates(
@@ -103,15 +87,7 @@ class UserIgEditView(APIView):
             ).get_success_response()
 
         except ValueError as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserProfileAPI(APIView):
@@ -140,9 +116,7 @@ class UserProfileAPI(APIView):
             else:
                 JWTUtils.is_jwt_authenticated(request)
 
-            serializer = profile_serializer.UserProfileSerializer(
-                user, many=False
-            )
+            serializer = profile_serializer.UserProfileSerializer(user, many=False)
 
             return CustomResponse(response=serializer.data).get_success_response()
 
@@ -259,10 +233,14 @@ class GetSocialsAPI(APIView):
         if muid is not None:
             user = User.objects.filter(muid=muid).first()
             if user is None:
-                return CustomResponse(general_message="Invalid muid").get_failure_response()
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
             user_settings = UserSettings.objects.filter(user_id=user).first()
             if not user_settings.is_public:
-                return CustomResponse(general_message="Private Profile").get_failure_response()
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
             user_id = user.id
         else:
             JWTUtils.is_jwt_authenticated(request)
@@ -279,8 +257,12 @@ class SocialsAPI(APIView):
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         social_instance = Socials.objects.filter(user_id=user_id).first()
-        serializer = LinkSocials(instance=social_instance, data=request.data, context={"request": request})
+        serializer = LinkSocials(
+            instance=social_instance, data=request.data, context={"request": request}
+        )
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message="Socials Updated").get_success_response()
+            return CustomResponse(
+                general_message="Socials Updated"
+            ).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
