@@ -26,64 +26,69 @@ class TaskListAPI(APIView):
         ]
     )
     def get(self, request):
-        try:
-            task_queryset = TaskList.objects.select_related(
-                "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-            ).all()
 
-            paginated_queryset = CommonUtils.get_paginated_queryset(
-                task_queryset,
-                request,
-                search_fields=[
-                    "hashtag",
-                    "title",
-                    "description",
-                    "karma",
-                    "channel__name",
-                    "type__title",
-                    "active",
-                    "variable_karma",
-                    "usage_count",
-                    "level__name",
-                    "org__title",
-                    "ig__name",
-                    "event",
-                    "updated_at",
-                    "updated_by__first_name",
-                    "created_by__first_name",
-                    "created_at",
-                ],
-                sort_fields={
-                    "hashtag": "hashtag",
-                    "title": "title",
-                    "description": "description",
-                    "karma": "karma",
-                    "channel": "channel__name",
-                    "type": "type__title",
-                    "active": "active",
-                    "variable_karma": "variable_karma",
-                    "usage_count": "usage_count",
-                    "level": "level__name",
-                    "org": "org__title",
-                    "ig": "ig__name",
-                    "event": "event",
-                    "updated_at": "updated_at",
-                    "updated_by": "updated_by__first_name",
-                    "created_by": "created_by__first_name",
-                    "created_at": "created_at",
-                },
-            )
+        task_queryset = TaskList.objects.select_related(
+            "created_by",
+            "updated_by",
+            "channel",
+            "type",
+            "level",
+            "ig",
+            "org"
+        ).all()
 
-            task_serializer_data = TaskListSerializer(
-                paginated_queryset.get("queryset"), many=True
-            ).data
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset,
+            request,
+            search_fields=[
+                "hashtag",
+                "title",
+                "description",
+                "karma",
+                "channel__name",
+                "type__title",
+                "active",
+                "variable_karma",
+                "usage_count",
+                "level__name",
+                "org__title",
+                "ig__name",
+                "event",
+                "updated_at",
+                "updated_by__first_name",
+                "created_by__first_name",
+                "created_at",
+            ],
+            sort_fields={
+                "hashtag": "hashtag",
+                "title": "title",
+                "description": "description",
+                "karma": "karma",
+                "channel": "channel__name",
+                "type": "type__title",
+                "active": "active",
+                "variable_karma": "variable_karma",
+                "usage_count": "usage_count",
+                "level": "level__name",
+                "org": "org__title",
+                "ig": "ig__name",
+                "event": "event",
+                "updated_at": "updated_at",
+                "updated_by": "updated_by__first_name",
+                "created_by": "created_by__first_name",
+                "created_at": "created_at",
+            },
+        )
 
-            return CustomResponse().paginated_response(
-                data=task_serializer_data,
-                pagination=paginated_queryset.get("pagination"),
-            )
-        except TaskList.DoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        task_serializer_data = TaskListSerializer(
+            paginated_queryset.get("queryset"),
+            many=True
+        ).data
+
+        return CustomResponse().paginated_response(
+            data=task_serializer_data,
+            pagination=paginated_queryset.get("pagination"),
+        )
 
     @role_required(
         [
@@ -94,14 +99,19 @@ class TaskListAPI(APIView):
     )
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
+
         request.data["created_by"] = request.data["updated_by"] = user_id
         serializer = TaskModifySerializer(data=request.data)
 
         if not serializer.is_valid():
-            return CustomResponse(message=serializer.errors).get_failure_response()
+            return CustomResponse(
+                message=serializer.errors
+            ).get_failure_response()
 
         serializer.save()
-        return CustomResponse(general_message="Task Created Successfully").get_success_response()
+        return CustomResponse(
+            general_message="Task Created Successfully"
+        ).get_success_response()
 
 
 class TaskAPI(APIView):
@@ -115,14 +125,10 @@ class TaskAPI(APIView):
         ]
     )
     def get(self, request, task_id):
-        try:
-            task_queryset = TaskList.objects.get(pk=task_id)
+        task_queryset = TaskList.objects.get(pk=task_id)
 
-            task_serializer = TaskModifySerializer(task_queryset, many=False)
-            return CustomResponse(response=task_serializer.data).get_success_response()
-
-        except TaskList.DoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        task_serializer = TaskModifySerializer(task_queryset, many=False)
+        return CustomResponse(response=task_serializer.data).get_success_response()
 
     @role_required(
         [
@@ -132,24 +138,28 @@ class TaskAPI(APIView):
         ]
     )
     def put(self, request, task_id):  # edit
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            request.data["updated_by"] = user_id
 
-            task = TaskList.objects.get(pk=task_id)
+        user_id = JWTUtils.fetch_user_id(request)
+        request.data["updated_by"] = user_id
 
-            serializer = TaskModifySerializer(task, data=request.data, partial=True)
-            if not serializer.is_valid():
-                return CustomResponse(message=serializer.errors).get_failure_response()
+        task = TaskList.objects.get(pk=task_id)
 
-            serializer.save()
+        serializer = TaskModifySerializer(
+            task,
+            data=request.data,
+            partial=True
+        )
 
+        if not serializer.is_valid():
             return CustomResponse(
-                general_message=serializer.data
-            ).get_success_response()
+                message=serializer.errors
+            ).get_failure_response()
 
-        except TaskList.DoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        serializer.save()
+
+        return CustomResponse(
+            general_message=serializer.data
+        ).get_success_response()
 
     @role_required(
         [
@@ -159,15 +169,12 @@ class TaskAPI(APIView):
         ]
     )
     def delete(self, request, task_id):  # delete
-        try:
-            task = TaskList.objects.get(id=task_id)
-            task.delete()
+        task = TaskList.objects.get(id=task_id)
+        task.delete()
 
-            return CustomResponse(
-                general_message="Task deleted successfully"
+        return CustomResponse(
+            general_message="Task deleted successfully"
             ).get_success_response()
-        except TaskList.DoesNotExist as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class TaskListCSV(APIView):
@@ -182,11 +189,24 @@ class TaskListCSV(APIView):
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+            "created_by",
+            "updated_by",
+            "channel",
+            "type",
+            "level",
+            "ig",
+            "org"
         ).all()
 
-        task_serializer_data = TaskListSerializer(task_queryset, many=True).data
-        return CommonUtils.generate_csv(task_serializer_data, "Task List")
+        task_serializer_data = TaskListSerializer(
+            task_queryset,
+            many=True
+        ).data
+
+        return CommonUtils.generate_csv(
+            task_serializer_data,
+            "Task List"
+        )
 
 
 class ImportTaskListCSV(APIView):
@@ -204,14 +224,15 @@ class ImportTaskListCSV(APIView):
             file_obj = request.FILES["task_list"]
         except KeyError:
             return CustomResponse(
-                general_message={"File not found."}
+                general_message="File not found."
             ).get_failure_response()
 
         excel_data = ImportCSV()
         excel_data = excel_data.read_excel_file(file_obj)
+
         if not excel_data:
             return CustomResponse(
-                general_message={"Empty csv file."}
+                general_message="Empty csv file."
             ).get_failure_response()
 
         temp_headers = [
@@ -232,7 +253,7 @@ class ImportTaskListCSV(APIView):
         for key in temp_headers:
             if key not in first_entry:
                 return CustomResponse(
-                    general_message={f"{key} does not exist in the file."}
+                    general_message=f"{key} does not exist in the file."
                 ).get_failure_response()
 
         valid_rows = []
@@ -258,15 +279,40 @@ class ImportTaskListCSV(APIView):
             igs_to_fetch.add(ig)
             orgs_to_fetch.add(org)
 
-        channels = Channel.objects.filter(name__in=channels_to_fetch).values(
-            "id", "name"
+        channels = Channel.objects.filter(
+            name__in=channels_to_fetch
+        ).values(
+            "id",
+            "name"
         )
-        task_types = TaskType.objects.filter(title__in=task_types_to_fetch).values(
-            "id", "title"
+
+        task_types = TaskType.objects.filter(
+            title__in=task_types_to_fetch
+        ).values(
+            "id",
+            "title"
         )
-        levels = Level.objects.filter(name__in=levels_to_fetch).values("id", "name")
-        igs = InterestGroup.objects.filter(name__in=igs_to_fetch).values("id", "name")
-        orgs = Organization.objects.filter(code__in=orgs_to_fetch).values("id", "code")
+
+        levels = Level.objects.filter(
+            name__in=levels_to_fetch
+        ).values(
+            "id",
+            "name"
+        )
+
+        igs = InterestGroup.objects.filter(
+            name__in=igs_to_fetch
+        ).values(
+            "id",
+            "name"
+        )
+
+        orgs = Organization.objects.filter(
+            code__in=orgs_to_fetch
+        ).values(
+            "id",
+            "code"
+        )
 
         channels_dict = {channel["name"]: channel["id"] for channel in channels}
         task_types_dict = {
@@ -345,8 +391,14 @@ class ChannelDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        channels = Channel.objects.values("id", "name")
-        return CustomResponse(response=channels).get_success_response()
+        channels = Channel.objects.values(
+            "id",
+            "name"
+        )
+
+        return CustomResponse(
+            response=channels
+        ).get_success_response()
 
 
 class IGDropdownAPI(APIView):
@@ -360,8 +412,13 @@ class IGDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        igs = InterestGroup.objects.values("id", "name")
-        return CustomResponse(response=igs).get_success_response()
+        igs = InterestGroup.objects.values(
+            "id",
+            "name"
+        )
+        return CustomResponse(
+            response=igs
+        ).get_success_response()
 
 
 class OrganizationDropdownAPI(APIView):
@@ -375,8 +432,13 @@ class OrganizationDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        organizations = Organization.objects.values("id", "title")
-        return CustomResponse(response=organizations).get_success_response()
+        organizations = Organization.objects.values(
+            "id",
+            "title"
+        )
+        return CustomResponse(
+            response=organizations
+        ).get_success_response()
 
 
 class LevelDropdownAPI(APIView):
@@ -390,8 +452,13 @@ class LevelDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        levels = Level.objects.values("id", "name")
-        return CustomResponse(response=levels).get_success_response()
+        levels = Level.objects.values(
+            "id",
+            "name"
+        )
+        return CustomResponse(
+            response=levels
+        ).get_success_response()
 
 
 class TaskTypesDropDownAPI(APIView):
@@ -405,8 +472,13 @@ class TaskTypesDropDownAPI(APIView):
         ]
     )
     def get(self, request):
-        task_types = TaskType.objects.values("id", "title")
-        return CustomResponse(response=task_types).get_success_response()
+        task_types = TaskType.objects.values(
+            "id",
+            "title"
+        )
+        return CustomResponse(
+            response=task_types
+        ).get_success_response()
 
 
 class EventDropDownApi(APIView):
@@ -419,4 +491,6 @@ class EventDropDownApi(APIView):
     )
     def get(self, request):
         events = Events.get_all_values()
-        return CustomResponse(response=events).get_success_response()
+        return CustomResponse(
+            response=events
+        ).get_success_response()
