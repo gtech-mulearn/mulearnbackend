@@ -9,6 +9,7 @@ from Crypto.Protocol.KDF import PBKDF2
 from Crypto.Util.Padding import unpad
 
 from db.integrations import Integration
+from utils.exception import CustomException
 from utils.types import IntegrationType
 from utils.utils import send_template_mail
 
@@ -31,7 +32,7 @@ def send_data_to_kkem(kkem_link):
     response_data = response.json()
 
     if not response_data["request_status"]:
-        raise ValueError("Invalid jsid")
+        raise CustomException("Invalid jsid")
 
     send_connection_successful_email(kkem_link.user)
     return response_data
@@ -65,11 +66,13 @@ def decrypt_kkem_data(ciphertext):
         try:
             decrypted = unpad(decrypted_data, AES.block_size)
         except:
-            raise ValueError("Invalid padding or incorrect key")
+            raise CustomException("Invalid padding or incorrect key")
 
         return parse_qs(decrypted.decode("utf-8"))
     except Exception as e:
-        raise ValueError("The given token seems to be invalid do re-check and try again!")
+        raise CustomException(
+            "The given token seems to be invalid do re-check and try again!"
+        )
 
 
 def send_connection_successful_email(user):

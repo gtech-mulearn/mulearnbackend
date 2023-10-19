@@ -3,6 +3,7 @@ from rest_framework import serializers
 
 from db.integrations import Integration, IntegrationAuthorization
 from db.user import User
+from utils.exception import CustomException
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils
 
@@ -28,8 +29,7 @@ class KKEMUserSerializer(serializers.ModelSerializer):
     def get_total_karma(self, obj):
         karma = (
             obj.wallet_user.karma
-            if hasattr(obj, "wallet_user")
-            and hasattr(obj.wallet_user, "karma")
+            if hasattr(obj, "wallet_user") and hasattr(obj.wallet_user, "karma")
             else 0
         )
         return karma
@@ -117,21 +117,21 @@ class KKEMAuthorization(serializers.Serializer):
 
         if kkem_link:
             if (
-                    self.context["type"] == "login"
-                    and kkem_link.integration_value == jsid
-                    and kkem_link.verified
+                self.context["type"] == "login"
+                and kkem_link.integration_value == jsid
+                and kkem_link.verified
             ):
                 return kkem_link
 
             elif kkem_link.verified:
-                raise ValueError(
+                raise CustomException(
                     "Your μLearn account is already connected to a KKEM account"
                 )
 
             elif kkem_link.user == user:
                 self.update_integration(validated_data, kkem_link)
             else:
-                raise ValueError("Something went wrong")
+                raise CustomException("Something went wrong")
         else:
             kkem_link = self.create_kkem_link(
                 user, integration, dwms_id, jsid, validated_data["verified"]
@@ -142,24 +142,22 @@ class KKEMAuthorization(serializers.Serializer):
         return kkem_link
 
     def verify_user(self, user_muid):
-        if user := User.objects.filter(
-                Q(muid=user_muid) | Q(email=user_muid)
-        ).first():
+        if user := User.objects.filter(Q(muid=user_muid) | Q(email=user_muid)).first():
             return user
         else:
-            raise ValueError(
+            raise CustomException(
                 "Oops! We couldn't find that account. Please double-check your details and try again."
             )
 
     def get_kkem_link(self, user, integration, jsid):
         if kkem_link := IntegrationAuthorization.objects.filter(
-                user=user, integration=integration
+            user=user, integration=integration
         ).first():
             return kkem_link
         if IntegrationAuthorization.objects.filter(
-                integration_value=jsid, integration=integration
+            integration_value=jsid, integration=integration
         ).exists():
-            raise ValueError("This KKEM account is already connected to another user")
+            raise CustomException("This KKEM account is already connected to another user")
 
         return None
 

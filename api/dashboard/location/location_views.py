@@ -15,44 +15,38 @@ class CountryDataAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, country_id=None):
-        try:
-            if country_id:
-                countries = Country.objects.filter(id=country_id)
-            else:
-                countries = Country.objects.all()
+        if country_id:
+            countries = Country.objects.filter(id=country_id)
+        else:
+            countries = Country.objects.all()
 
-            paginated_queryset = CommonUtils.get_paginated_queryset(
-                countries, request, ["name"], {"name": "name"}
-            )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            countries, request, ["name"], {"name": "name"}
+        )
 
-            serializer = location_serializer.CountryRetrievalSerializer(
-                paginated_queryset.get("queryset"), many=True
-            )
-            return CustomResponse().paginated_response(
-                data=serializer.data, pagination=paginated_queryset.get("pagination")
-            )
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+        serializer = location_serializer.CountryRetrievalSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            serializer = location_serializer.CountryCreateEditSerializer(
-                data=request.data, context={"user_id": user_id}
-            )
+        user_id = JWTUtils.fetch_user_id(request)
+        serializer = location_serializer.CountryCreateEditSerializer(
+            data=request.data, context={"user_id": user_id}
+        )
 
-            if serializer.is_valid():
-                serializer.save()
-                return CustomResponse(
-                    general_message=serializer.data
-                ).get_success_response()
-
+        if serializer.is_valid():
+            serializer.save()
             return CustomResponse(
-                general_message=serializer.errors
-            ).get_failure_response()
-        except Exception as e:
-            return CustomResponse(general_message=str(e)).get_failure_response()
+                general_message=serializer.data
+            ).get_success_response()
+
+        return CustomResponse(
+            general_message=serializer.errors
+        ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, country_id):

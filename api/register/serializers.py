@@ -2,19 +2,23 @@ from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
 
-from api.integrations.kkem.kkem_helper import send_data_to_kkem, decrypt_kkem_data
+from api.integrations.kkem.kkem_helper import decrypt_kkem_data, send_data_to_kkem
 from db.integrations import Integration, IntegrationAuthorization
-from db.organization import Country, State, Zone
-from db.organization import District, Department, Organization, UserOrganizationLink
-from db.task import (
-    InterestGroup,
-    Wallet,
-    MucoinInviteLog,
+from db.organization import (
+    Country,
+    Department,
+    District,
+    Organization,
+    State,
+    UserOrganizationLink,
+    Zone,
 )
-from db.task import UserLvlLink, Level
-from db.user import Role, User, UserRoleLink, UserSettings, UserReferralLink, Socials
+from db.task import InterestGroup, Level, MucoinInviteLog, UserLvlLink, Wallet
+from db.user import Role, Socials, User, UserReferralLink, UserRoleLink, UserSettings
+from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+
 from . import register_helper
 
 
@@ -169,7 +173,9 @@ class ReferralSerializer(serializers.ModelSerializer):
             ) from e
 
     def create(self, validated_data):
-        referral = validated_data.get("invite_code", None) or validated_data.get("muid", None)
+        referral = validated_data.get("invite_code", None) or validated_data.get(
+            "muid", None
+        )
 
         validated_data.update(
             {
@@ -194,7 +200,7 @@ class IntegrationSerializer(serializers.Serializer):
             dwms_id = details["dwms_id"][0]
 
             if IntegrationAuthorization.objects.filter(integration_value=jsid).exists():
-                raise ValueError(
+                raise CustomException(
                     "This KKEM account is already connected to another user"
                 )
 
@@ -270,7 +276,7 @@ class UserSerializer(serializers.ModelSerializer):
             "password",
             "role",
             "integration",
-            "referral"
+            "referral",
         ]
 
 
