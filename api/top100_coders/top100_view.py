@@ -6,8 +6,8 @@ from utils.response import CustomResponse
 
 class Leaderboard(APIView):
     def get(self, request):
-        query = """
-            SELECT u.first_name, u.last_name, SUM(kal.karma) AS total_karma, org.title as org, org.dis, org.state, u.profile_pic, MAX(kal.created_at) as time_
+        query ="""
+            SELECT u.first_name, u.last_name, SUM(kal.karma) AS total_karma, org.title as org, org.dis, org.state, u.profile_pic,MAX(kal.created_at) as time_
             FROM karma_activity_log AS kal
             INNER JOIN user AS u ON kal.user_id = u.id
             INNER JOIN task_list AS tl ON tl.id = kal.task_id
@@ -25,7 +25,6 @@ class Leaderboard(APIView):
             ORDER BY total_karma DESC, time_
             LIMIT 100;
         """
-
         with connection.cursor() as cursor:
             cursor.execute(query)
             results = cursor.fetchall()
