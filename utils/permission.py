@@ -11,7 +11,7 @@ from rest_framework.permissions import BasePermission
 
 from mulearnbackend.settings import SECRET_KEY
 from utils.utils import DateTimeUtils
-from .exception import CustomException
+from .exception import UnauthorizedAccessException
 from .response import CustomResponse
 
 from db.user import DynamicRole, DynamicUser
@@ -49,7 +49,7 @@ class CustomizePermission(BasePermission):
             tuple: A tuple of (user, token_payload) if authentication is successful.
 
         Raises:
-            CustomException: If authentication fails.
+            UnauthorizedAccessException: If authentication fails.
         """
         return JWTUtils.is_jwt_authenticated(request)
 
@@ -113,11 +113,11 @@ class JWTUtils:
         try:
             auth_header = get_authorization_header(request).decode("utf-8")
             if not auth_header or not auth_header.startswith(token_prefix):
-                raise CustomException("Invalid token header")
+                raise UnauthorizedAccessException("Invalid token header")
 
             token = auth_header[len(token_prefix):].strip()
             if not token:
-                raise CustomException("Empty Token")
+                raise UnauthorizedAccessException("Empty Token")
 
             payload = jwt.decode(token, secret_key, algorithms=["HS256"], verify=True)
 
@@ -125,11 +125,11 @@ class JWTUtils:
             expiry = datetime.strptime(payload.get("expiry"), "%Y-%m-%d %H:%M:%S%z")
 
             if not user_id or expiry < DateTimeUtils.get_current_utc_time():
-                raise CustomException("Token Expired or Invalid")
+                raise UnauthorizedAccessException("Token Expired or Invalid")
 
             return None, payload
         except jwt.exceptions.InvalidSignatureError as e:
-            raise CustomException(
+            raise UnauthorizedAccessException(
                 {
                     "hasError": True,
                     "message": {"general": [str(e)]},
@@ -137,7 +137,7 @@ class JWTUtils:
                 }
             ) from e
         except jwt.exceptions.DecodeError as e:
-            raise CustomException(
+            raise UnauthorizedAccessException(
                 {
                     "hasError": True,
                     "message": {"general": [str(e)]},
@@ -145,9 +145,9 @@ class JWTUtils:
                 }
             ) from e
         except AuthenticationFailed as e:
-            raise CustomException(str(e)) from e
+            raise UnauthorizedAccessException(str(e)) from e
         except Exception as e:
-            raise CustomException(
+            raise UnauthorizedAccessException(
                 {
                     "hasError": True,
                     "message": {"general": [str(e)]},
