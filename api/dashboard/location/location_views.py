@@ -240,7 +240,7 @@ class ZoneDataAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=serializer.data
+                general_message="Zone created successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -264,7 +264,7 @@ class ZoneDataAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=serializer.data
+                general_message="zone edited successfully"
             ).get_success_response()
 
         return CustomResponse(

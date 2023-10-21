@@ -97,19 +97,24 @@ class ZoneCreateEditSerializer(serializers.ModelSerializer):
         model = Zone
         fields = ["label", "state"]
 
+    def create(self, validated_data):
+        validated_data['id'] = str(uuid.uuid4())
+        validated_data["updated_at"] = validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        validated_data["updated_by_id"] = validated_data["created_by_id"] = self.context.get("user_id")
+
+        return super().create(validated_data)
+
     def update(self, instance, validated_data):
-        validated_data['id'] = uuid.uuid4()
         validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
         validated_data["updated_by_id"] = self.context.get("user_id")
 
         return super().update(instance, validated_data)
 
-    def create(self, validated_data):
-        validated_data['id'] = uuid.uuid4()
-        validated_data["updated_at"] = validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = validated_data["created_by_id"] = self.context.get("user_id")
-
-        return super().create(validated_data)
+    def validate_label(self, zone):
+        zone_obj = Zone.objects.filter(name=zone).first()
+        if zone_obj:
+            raise serializers.ValidationError("Zone with this name is already exists")
+        return zone
 
 
 class DistrictRetrievalSerializer(serializers.ModelSerializer):
