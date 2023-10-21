@@ -52,11 +52,10 @@ class CountryDataAPI(APIView):
                 "user_id": user_id
             }
         )
-
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
-                general_message=serializer.data
+                general_message="Country created Successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -80,7 +79,7 @@ class CountryDataAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=serializer.data
+                general_message="Country edited successfully"
             ).get_success_response()
 
         return CustomResponse(
