@@ -147,7 +147,7 @@ class StateDataAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=serializer.data
+                general_message="State created successfully"
             ).get_success_response()
 
         return CustomResponse(
