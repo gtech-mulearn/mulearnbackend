@@ -337,7 +337,7 @@ class DistrictDataAPI(APIView):
             ).get_success_response()
 
         return CustomResponse(
-            general_message=serializer.errors
+            general_message="Zone created successfully"
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -357,7 +357,7 @@ class DistrictDataAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=serializer.data
+                general_message="Zone edited successfully"
             ).get_success_response()
 
         return CustomResponse(
