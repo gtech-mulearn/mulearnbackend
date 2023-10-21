@@ -175,7 +175,7 @@ class StateDataAPI(APIView):
             ).get_success_response()
 
         return CustomResponse(
-            general_message=serializer.errors
+            general_message="State edited successfully"
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
