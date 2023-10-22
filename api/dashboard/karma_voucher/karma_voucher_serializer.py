@@ -61,7 +61,6 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
     week = serializers.CharField(required=True, error_messages={
         'required': 'week field must not be left blank.'
         })
-    claimed = serializers.BooleanField(default=False)
 
     class Meta:
         model = VoucherLog
@@ -71,7 +70,6 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
             "karma",
             "month",
             "week",
-            "claimed",
         ]
 
     def create(self, validated_data):
@@ -86,6 +84,7 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
             count += 1
 
         validated_data['code'] = generate_ordered_id(count)
+        validated_data['claimed'] = False
         validated_data['updated_by_id'] = user_id
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['created_by_id'] = user_id

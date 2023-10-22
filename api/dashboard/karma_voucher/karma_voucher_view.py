@@ -204,6 +204,7 @@ class VoucherLogAPI(APIView):
         return CustomResponse().paginated_response(data=voucher_serializer,
                                                    pagination=paginated_queryset.get('pagination'))
     
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def post(self, request):
         serializer = VoucherLogCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
