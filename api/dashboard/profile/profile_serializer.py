@@ -73,16 +73,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return user_org_link.org.id if user_org_link else None
 
     def get_org_district_id(self, obj):
-        org_type = (
-            OrganizationType.COMPANY.value
-            if MainRoles.MENTOR.value in self.get_roles(obj)
-            else OrganizationType.COLLEGE.value
-        )
-        user_org_link = obj.user_organization_link_user.filter(
-            org__org_type=org_type
-        ).first()
-
-        return user_org_link.org.district.id if (user_org_link and user_org_link.org.district) else None
+        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.get_roles(
+            obj) else OrganizationType.COLLEGE.value
+        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        return user_org_link.org.district.id if user_org_link and hasattr(user_org_link.org, 'district') else None
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
