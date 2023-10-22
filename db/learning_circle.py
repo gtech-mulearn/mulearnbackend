@@ -31,6 +31,7 @@ class UserCircleLink(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     circle = models.ForeignKey(LearningCircle, on_delete=models.CASCADE)
     lead = models.BooleanField(default=False)
+    is_invited = models.BooleanField(default=False)
     accepted = models.BooleanField()
     accepted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField()
