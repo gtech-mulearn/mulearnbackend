@@ -1,26 +1,23 @@
-from django.db.models import Sum, Q, F, Window, Case, When, Count
-from django.db.models.functions import Rank
+from django.db.models import F, Prefetch, Sum
 from rest_framework.views import APIView
 
 from db.organization import (
-    Organization,
-    OrgAffiliation,
     Department,
+    OrgAffiliation,
+    Organization,
+    UserOrganizationLink,
 )
-from utils.permission import CustomizePermission, JWTUtils
-from utils.permission import role_required
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, OrganizationType
-from utils.types import WebHookCategory, WebHookActions
-from utils.utils import CommonUtils
-from utils.utils import DiscordWebhooks
+from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+from utils.utils import CommonUtils, DiscordWebhooks
+
 from .serializers import (
-    AffiliationSerializer,
-    InstitutionCsvSerializer,
-    DepartmentSerializer,
-    InstitutionSerializer,
-    InstitutionCreateUpdateSerializer,
     AffiliationCreateUpdateSerializer,
+    AffiliationSerializer,
+    DepartmentSerializer,
+    InstitutionCreateUpdateSerializer,
+    InstitutionSerializer,
 )
 
 
@@ -29,14 +26,10 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = InstitutionCreateUpdateSerializer(
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            data=request.data, context={"user_id": user_id}
         )
 
         if serializer.is_valid():
@@ -53,18 +46,13 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 general_message="Organisation added successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, org_code):
-
         user_id = JWTUtils.fetch_user_id(request)
 
-        organization = Organization.objects.filter(
-            code=org_code
-        ).first()
+        organization = Organization.objects.filter(code=org_code).first()
 
         if organization is None:
             return CustomResponse(
@@ -75,18 +63,16 @@ class InstitutionPostUpdateDeleteAPI(APIView):
         old_type = organization.org_type
 
         serializer = InstitutionCreateUpdateSerializer(
-            organization,
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            organization, data=request.data, context={"user_id": user_id}
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            if (request.data.get("title") != old_title and
-                    old_type == OrganizationType.COMMUNITY.value):
+            if (
+                request.data.get("title") != old_title
+                and old_type == OrganizationType.COMMUNITY.value
+            ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.EDIT.value,
@@ -94,37 +80,34 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                     old_title,
                 )
 
-            if (request.data.get("orgType") != OrganizationType.COMMUNITY.value and
-                    old_type == OrganizationType.COMMUNITY.value):
+            if (
+                request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                and old_type == OrganizationType.COMMUNITY.value
+            ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
                     WebHookActions.DELETE.value,
                     old_title,
                 )
 
-            if (old_type != OrganizationType.COMMUNITY.value and
-                    request.data.get("orgType") == OrganizationType.COMMUNITY.value):
+            if (
+                old_type != OrganizationType.COMMUNITY.value
+                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+            ):
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
-                    WebHookCategory.COMMUNITY.value,
-                    WebHookActions.CREATE.value,
-                    title
+                    WebHookCategory.COMMUNITY.value, WebHookActions.CREATE.value, title
                 )
 
             return CustomResponse(
                 general_message="Organization edited successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, org_code):
-
-        if not (
-                organisation := Organization.objects.filter(code=org_code).first()
-        ):
+        if not (organisation := Organization.objects.filter(code=org_code).first()):
             return CustomResponse(
                 general_message=f"Org with code '{org_code}', does not exist"
             ).get_failure_response()
@@ -146,8 +129,23 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
 class InstitutionAPI(APIView):
     def get(self, request, org_type):
-        organizations = Organization.objects.filter(
-            org_type=org_type
+        organizations = (
+            Organization.objects.filter(org_type=org_type)
+            .select_related(
+                "affiliation",
+                "district__zone__state__country",
+                "district__zone__state",
+                "district__zone",
+                "district",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "user_organization_link_org",
+                    queryset=UserOrganizationLink.objects.filter(
+                        verified=True
+                    ).select_related("user"),
+                )
+            )
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -160,7 +158,7 @@ class InstitutionAPI(APIView):
                 "district__name",
                 "district__zone__name",
                 "district__zone__state__name",
-                "district__zone__state__country__name"
+                "district__zone__state__country__name",
             ],
             {
                 "title": "title",
@@ -169,7 +167,7 @@ class InstitutionAPI(APIView):
                 "district": "district__name",
                 "zone": "district__zone__name",
                 "state": "district__zone__state__name",
-                "country": "district__zone__state__country__name"
+                "country": "district__zone__state__country__name",
             },
         )
 
@@ -185,94 +183,85 @@ class InstitutionAPI(APIView):
         ).get_success_response()
 
 
-class InstitutionCsvAPI(APIView):
+class InstitutionCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, org_type):
-        organization = Organization.objects.filter(
-            org_type=org_type
-        ).prefetch_related(
-            "affiliation",
-            "district__zone__state__country"
+        organizations = (
+            Organization.objects.filter(org_type=org_type)
+            .select_related(
+                "affiliation",
+                "district__zone__state__country",
+                "district__zone__state",
+                "district__zone",
+                "district",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "user_organization_link_org",
+                    queryset=UserOrganizationLink.objects.filter(
+                        verified=True
+                    ).select_related("user"),
+                )
+            )
         )
 
-        serializer = InstitutionCsvSerializer(
-            organization,
-            many=True
-        ).data
+        serializer = InstitutionSerializer(organizations, many=True).data
 
-        return CommonUtils.generate_csv(
-            serializer,
-            f"{org_type} data"
-        )
+        return CommonUtils.generate_csv(serializer, f"{org_type} data")
 
 
 class InstitutionDetailsAPI(APIView):
-    @role_required([RoleType.ADMIN.value, ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def get(self, request, org_code):
-
-        organization = Organization.objects.filter(
-            code=org_code
-        ).values(
-            "id",
-            "title",
-            "code",
-            affiliation_uuid=F("affiliation__id"),
-            affiliation_name=F("affiliation__title"),
-            district_uuid=F("district__id"),
-            district_name=F("district__name"),
-            zone_uuid=F("district__zone__id"),
-            zone_name=F("district__zone__name"),
-            state_uuid=F("district__zone__state__id"),
-            state_name=F("district__zone__state__name"),
-            country_uuid=F("district__zone__state__country__id"),
-            country_name=F("district__zone__state__country__name"),
-        ).annotate(
-            karma=Sum(
-                'user_organization_link_org__user__wallet_user__karma'
-            )).order_by(
-                '-karma'
+        organization = (
+            Organization.objects.filter(code=org_code)
+            .values(
+                "id",
+                "title",
+                "code",
+                affiliation_uuid=F("affiliation__id"),
+                affiliation_name=F("affiliation__title"),
+                district_uuid=F("district__id"),
+                district_name=F("district__name"),
+                zone_uuid=F("district__zone__id"),
+                zone_name=F("district__zone__name"),
+                state_uuid=F("district__zone__state__id"),
+                state_name=F("district__zone__state__name"),
+                country_uuid=F("district__zone__state__country__id"),
+                country_name=F("district__zone__state__country__name"),
             )
+            .annotate(karma=Sum("user_organization_link_org__user__wallet_user__karma"))
+            .order_by("-karma")
+        )
 
-        return CustomResponse(
-            response=organization
-        ).get_success_response()
+        return CustomResponse(response=organization).get_success_response()
 
 
 class GetInstitutionsAPI(APIView):
     def get(self, request, org_type, district_id=None):
-
         if district_id:
             organisations = Organization.objects.filter(
-                org_type=org_type,
-                district_id=district_id
+                org_type=org_type, district_id=district_id
             )
         else:
-            organisations = Organization.objects.filter(
-                org_type=org_type
-            )
+            organisations = Organization.objects.filter(org_type=org_type)
 
         paginated_organisations = CommonUtils.get_paginated_queryset(
-            organisations,
-            request,
-            [
-                "title",
-                "code"
-            ]
+            organisations, request, ["title", "code"]
         )
 
-        organisation_serializer = InstitutionCsvSerializer(
-            paginated_organisations.get(
-                "queryset"
-            ),
-            many=True
+        organisation_serializer = InstitutionSerializer(
+            paginated_organisations.get("queryset"), many=True
         )
         return CustomResponse().paginated_response(
             data=organisation_serializer.data,
-            pagination=paginated_organisations.get(
-                "pagination"
-            ),
+            pagination=paginated_organisations.get("pagination"),
         )
 
 
@@ -280,37 +269,28 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            affiliation,
-            request,
-            [
-                "id",
-                "title"
-            ])
+            affiliation, request, ["id", "title"]
+        )
 
         serializer = AffiliationSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
+            paginated_queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get(
-                "pagination"
-            ))
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = AffiliationCreateUpdateSerializer(
             data=request.data,
             context={
                 "user_id": user_id,
-            }
+            },
         )
 
         if serializer.is_valid():
@@ -320,18 +300,13 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
                 general_message=f"{request.data.get('title')} added successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, affiliation_id):
-
         user_id = JWTUtils.fetch_user_id(request)
 
-        affiliation = OrgAffiliation.objects.filter(
-            id=affiliation_id
-        ).first()
+        affiliation = OrgAffiliation.objects.filter(id=affiliation_id).first()
 
         if affiliation is None:
             return CustomResponse(
@@ -339,11 +314,7 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
             ).get_failure_response()
 
         serializer = AffiliationCreateUpdateSerializer(
-            affiliation,
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            affiliation, data=request.data, context={"user_id": user_id}
         )
 
         if serializer.is_valid():
@@ -353,16 +324,11 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
                 general_message=f"{affiliation.title} Edited Successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, affiliation_id):
-
-        affiliation = OrgAffiliation.objects.filter(
-            id=affiliation_id
-        ).first()
+        affiliation = OrgAffiliation.objects.filter(id=affiliation_id).first()
 
         if affiliation is None:
             return CustomResponse(
@@ -381,43 +347,26 @@ class DepartmentAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, dept_id=None):
-
         if dept_id:
-            departments = Department.objects.filter(
-                id=dept_id
-            )
+            departments = Department.objects.filter(id=dept_id)
         else:
             departments = Department.objects.all()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            departments,
-            request,
-            [
-                "title"
-            ],
-            {
-                "title": "title"
-            })
-
-        serializer = DepartmentSerializer(
-            paginated_queryset.get(
-                "queryset"
-            ), many=True
+            departments, request, ["title"], {"title": "title"}
         )
 
+        serializer = DepartmentSerializer(paginated_queryset.get("queryset"), many=True)
+
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get(
-                "pagination"
-            ))
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         serializer = DepartmentSerializer(
-            data=request.data,
-            context={
-                "request": request
-            })
+            data=request.data, context={"request": request}
+        )
 
         if serializer.is_valid():
             serializer.save()
@@ -426,43 +375,30 @@ class DepartmentAPI(APIView):
                 general_message=f"{request.data.get('title')} created successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            response=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, department_id):
-
-        department = Department.objects.get(
-            id=department_id
-        )
+        department = Department.objects.get(id=department_id)
 
         serializer = DepartmentSerializer(
-            department,
-            data=request.data,
-            context={
-                "request": request
-            })
+            department, data=request.data, context={"request": request}
+        )
 
         if serializer.is_valid():
             serializer.save()
 
             return CustomResponse(
-                general_message=f'{department.title} updated successfully'
+                general_message=f"{department.title} updated successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            response=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, department_id):
-
-        department = Department.objects.get(
-            id=department_id
-        )
+        department = Department.objects.get(id=department_id)
 
         department.delete()
         return CustomResponse(
-            general_message=f'{department.title} deleted successfully'
+            general_message=f"{department.title} deleted successfully"
         ).get_success_response()
