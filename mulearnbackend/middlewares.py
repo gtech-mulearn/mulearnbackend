@@ -2,6 +2,7 @@ import hmac
 import json
 import logging
 import traceback
+from contextlib import suppress
 
 import decouple
 from django.conf import settings
@@ -111,10 +112,15 @@ class UniversalErrorHandlerMiddleware:
         if settings.DEBUG:
             print(error_message)
 
+        data = request.body.decode('utf-8')) if hasattr(request, 'body') else 'No Data'
+
+        with suppress(json.JSONDecodeError):
+            data = json.loads(data)
+
         request_info = (
             f"Request Info: METHOD: {request.method}; \n"
             f"\tPATH: {request.path}; \n"
-            f"\tDATA: {json.loads(request.body.decode('utf-8')) if hasattr(request, 'body') else 'No Data'}\n"
+            f"\tDATA: {data}\n"
         )
         logger.error(request_info)
 
