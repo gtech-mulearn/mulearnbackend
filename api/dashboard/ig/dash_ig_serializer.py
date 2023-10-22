@@ -26,7 +26,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         ]
 
     def get_user_ig_link_ig(self, obj):
-        return len(obj.user_ig_link_ig.all())
+        return obj.user_ig_link_ig.all().count()
 
 
 class InterestGroupCreateSerializer(serializers.ModelSerializer):

@@ -27,7 +27,6 @@ class InterestGroupAPI(APIView):
                 "user_ig_link_ig"
             ).all()
         )
-
         paginated_queryset = CommonUtils.get_paginated_queryset(
             ig_queryset,
             request,
@@ -39,7 +38,11 @@ class InterestGroupAPI(APIView):
                 "updated_by__last_name",
             ],
             {
-                "name": "name"
+                "name": "name",
+                "updated_on": "updated_at",
+                "updated_by": "updated_by",
+                "created_on": "created_at",
+                "created_by": "created_by"
             },
         )
 
