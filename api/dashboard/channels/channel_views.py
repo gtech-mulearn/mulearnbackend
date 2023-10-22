@@ -6,18 +6,15 @@ from db.task import Channel
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 
-class ChannelGetView(APIView):
+class ChannelView(APIView):
   authentication_classes = [CustomizePermission]
 
   def get(self,request):
     all_channels = Channel.objects.all()
     pager_ = CommonUtils.get_paginated_queryset(all_channels,request,['name','discord_id','id'])
-    serial_ = ChannelReadSerializer(data=pager_.get("queryset"),many=True)
-    serial_.is_valid()
+    serial_ = ChannelReadSerializer(pager_.get("queryset"),many=True)
+    # serial_.is_valid()
     return CustomResponse(response=serial_.data).get_success_response()
-
-class ChannelAddView(APIView):
-  authentication_classes = [CustomizePermission]
 
   @role_required([RoleType.ADMIN.value])
   def post(self,request):
@@ -35,10 +32,6 @@ class ChannelAddView(APIView):
     return CustomResponse(
         general_message=serial_.errors
     ).get_failure_response()
-
-
-class ChannelEditView(APIView):
-  authentication_classes = [CustomizePermission]
 
   @role_required([RoleType.ADMIN.value])
   def put(self,request,channel_id):
@@ -67,9 +60,6 @@ class ChannelEditView(APIView):
     return CustomResponse(
         message=serializer.errors
     ).get_failure_response()
-
-class ChannelDeleteView(APIView):
-  authentication_classes = [CustomizePermission]
 
   @role_required([RoleType.ADMIN.value])
   def delete(self,request,channel_id):

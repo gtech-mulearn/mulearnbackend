@@ -6,20 +6,17 @@ from db.organization import OrgAffiliation
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 
-class AffiliationGetView(APIView):
+class AffiliationView(APIView):
   authentication_classes = [CustomizePermission]
 
 
   def get(self,request):
     all_affiliations = OrgAffiliation.objects.all()
     pager_ = CommonUtils.get_paginated_queryset(all_affiliations,request,['title'])
-    serial_ = AffiliationReadSerializer(data=pager_.get('queryset'),many=True)
-    serial_.is_valid()
+    serial_ = AffiliationReadSerializer(pager_.get('queryset'),many=True)
+    # serial_.is_valid()
     return CustomResponse(response=serial_.data).get_success_response()
-
-class AffiliationAddView(APIView):
-  authentication_classes = [CustomizePermission]
-
+  
   @role_required([RoleType.ADMIN.value])
   def post(self,request):
     user_id = JWTUtils.fetch_user_id(request)
@@ -36,10 +33,6 @@ class AffiliationAddView(APIView):
     return CustomResponse(
         general_message=serial_.errors
     ).get_failure_response()
-
-
-class AffiliationEditView(APIView):
-  authentication_classes = [CustomizePermission]
 
   @role_required([RoleType.ADMIN.value])
   def put(self,request,affiliation_id):
@@ -68,9 +61,6 @@ class AffiliationEditView(APIView):
     return CustomResponse(
         message=serializer.errors
     ).get_failure_response()
-
-class AffiliationDeleteView(APIView):
-  authentication_classes = [CustomizePermission]
 
   @role_required([RoleType.ADMIN.value])
   def delete(self,request,affiliation_id):
