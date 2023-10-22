@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework import serializers
 
 from db.organization import OrgAffiliation
@@ -5,7 +7,7 @@ from db.organization import OrgAffiliation
 class AffiliationCRUDSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrgAffiliation
-        exclude = ['updated_by', 'updated_at', 'created_by', 'created_at']
+        fields = ['name', 'discord_id', 'id']
         read_only_fields = ['id']
 
     def create(self, validated_data):
@@ -13,6 +15,7 @@ class AffiliationCRUDSerializer(serializers.ModelSerializer):
 
         validated_data["created_by_id"] = user_id
         validated_data["updated_by_id"] = user_id
+        validated_data["id"] = uuid.uuid4()
         return OrgAffiliation.objects.create(**validated_data)
 
     def update(self, instance, validated_data):

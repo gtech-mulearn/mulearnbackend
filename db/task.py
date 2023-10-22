@@ -8,7 +8,7 @@ from .user import User
 
 class Channel(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    name = models.CharField(max_length=75)
+    name = models.CharField(max_length=75, unique=True)
     discord_id = models.CharField(max_length=36)
     updated_by = models.ForeignKey(
         User,

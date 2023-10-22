@@ -16,8 +16,8 @@ class ChannelCRUDAPI(APIView):
         channel = Channel.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             channel,
-            ['id', 'name', 'discord_id'],
-            request
+            request,
+            ['id', 'name', 'discord_id']
         )
 
         serializer = ChannelCRUDSerializer(
@@ -49,12 +49,12 @@ class ChannelCRUDAPI(APIView):
 
             return CustomResponse(
                 general_message=f"{request.data.get('name')} Channel created successfully",
-                data=serializer.data
-            ).get_success_response
+                response=serializer.data
+            ).get_success_response()
 
         return CustomResponse(
             general_message=serializer.errors,
-        ).get_error_response
+        ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, channel_id):

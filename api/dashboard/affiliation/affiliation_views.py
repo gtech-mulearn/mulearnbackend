@@ -16,8 +16,9 @@ class AffiliationCRUDAPI(APIView):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             affiliation,
-            ['id', 'title'],
-            request
+            request,
+            ['id', 'title']
+            
         )
 
         serializer = AffiliationCRUDSerializer(
@@ -49,12 +50,12 @@ class AffiliationCRUDAPI(APIView):
 
             return CustomResponse(
                 general_message=f"{request.data.get('title')} Affiliation created successfully",
-                data=serializer.data
-            ).get_success_response
+                response=serializer.data
+            ).get_success_response()
 
         return CustomResponse(
             general_message=serializer.errors,
-        ).get_error_response
+        ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, affiliation_id):

@@ -1,3 +1,5 @@
+import uuid
+
 from rest_framework import serializers
 
 from db.task import Channel
@@ -5,7 +7,7 @@ from db.task import Channel
 class ChannelCRUDSerializer(serializers.ModelSerializer):
     class Meta:
         model = Channel
-        exclude = ['updated_by', 'updated_at', 'created_by', 'created_at']
+        fields = ['name', 'discord_id', 'id']
         read_only_fields = ['id']
 
     def create(self, validated_data):
@@ -13,6 +15,8 @@ class ChannelCRUDSerializer(serializers.ModelSerializer):
 
         validated_data["created_by_id"] = user_id
         validated_data["updated_by_id"] = user_id
+        validated_data["id"] = uuid.uuid4()
+        
         return Channel.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
