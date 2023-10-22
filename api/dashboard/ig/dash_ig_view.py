@@ -152,7 +152,15 @@ class InterestGroupCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        ig_serializer = InterestGroup.objects.all()
+
+        ig_serializer = (
+            InterestGroup.objects.select_related(
+                "created_by",
+                "updated_by"
+            ).prefetch_related(
+                "user_ig_link_ig"
+            ).all()
+        )
 
         ig_serializer_data = InterestGroupSerializer(
             ig_serializer,
