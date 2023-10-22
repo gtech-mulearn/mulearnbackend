@@ -1,6 +1,7 @@
 from rest_framework import serializers
 from db.task import Channel
 from django.utils import timezone
+from utils.utils import DateTimeUtils
 import uuid
 class ChannelReadSerializer(serializers.ModelSerializer):
 
@@ -33,8 +34,8 @@ class ChannelCreateUpdateSerializer(serializers.ModelSerializer):
         validated_data['id'] = uuid.uuid4()
         validated_data['created_by_id'] = user_id
         validated_data['updated_by_id'] = user_id
-        validated_data['created_at'] = timezone.now()
-        validated_data['updated_at'] = timezone.now()
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         return Channel.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
@@ -42,6 +43,6 @@ class ChannelCreateUpdateSerializer(serializers.ModelSerializer):
         instance.name = validated_data.get('name', instance.name)
         instance.discord_id = validated_data.get('discord_id', instance.name)
         instance.updated_by_id = user_id
-        instance.updated_at = timezone.now()
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance

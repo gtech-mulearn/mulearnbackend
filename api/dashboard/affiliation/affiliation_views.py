@@ -12,10 +12,10 @@ class AffiliationView(APIView):
 
   def get(self,request):
     all_affiliations = OrgAffiliation.objects.all()
-    pager_ = CommonUtils.get_paginated_queryset(all_affiliations,request,['title'])
+    pager_ = CommonUtils.get_paginated_queryset(all_affiliations,request,['title'],sort_fields={'created':'created_at','updated':'updated_at','title':'title'})
     serial_ = AffiliationReadSerializer(pager_.get('queryset'),many=True)
     # serial_.is_valid()
-    return CustomResponse(response=serial_.data).get_success_response()
+    return CustomResponse().paginated_response(data=serial_.data,pagination=pager_.get("pagination"))
   
   @role_required([RoleType.ADMIN.value])
   def post(self,request):

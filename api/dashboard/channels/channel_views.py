@@ -11,10 +11,10 @@ class ChannelView(APIView):
 
   def get(self,request):
     all_channels = Channel.objects.all()
-    pager_ = CommonUtils.get_paginated_queryset(all_channels,request,['name','discord_id','id'])
+    pager_ = CommonUtils.get_paginated_queryset(all_channels,request,['name','discord_id','id'],sort_fields={'created':'created_at','updated':'updated_at','name':'name'})
     serial_ = ChannelReadSerializer(pager_.get("queryset"),many=True)
     # serial_.is_valid()
-    return CustomResponse(response=serial_.data).get_success_response()
+    return CustomResponse().paginated_response(data=serial_.data,pagination=pager_.get("pagination"))
 
   @role_required([RoleType.ADMIN.value])
   def post(self,request):
