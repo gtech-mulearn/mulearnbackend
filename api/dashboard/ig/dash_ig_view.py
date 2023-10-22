@@ -8,8 +8,7 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import (
     InterestGroupSerializer,
-    InterestGroupCreateSerializer,
-    InterestGroupUpdateSerializer,
+    InterestGroupCreateUpdateSerializer
 )
 
 
@@ -27,7 +26,6 @@ class InterestGroupAPI(APIView):
                 "user_ig_link_ig"
             ).all()
         )
-
         paginated_queryset = CommonUtils.get_paginated_queryset(
             ig_queryset,
             request,
@@ -39,7 +37,11 @@ class InterestGroupAPI(APIView):
                 "updated_by__last_name",
             ],
             {
-                "name": "name"
+                "name": "name",
+                "updated_on": "updated_at",
+                "updated_by": "updated_by",
+                "created_on": "created_at",
+                "created_by": "created_by"
             },
         )
 
@@ -59,12 +61,13 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = InterestGroupCreateSerializer(
+        serializer = InterestGroupCreateUpdateSerializer(
             data=request.data,
             context={
-                "user_id": user_id
+                "user_id": user_id,
             }
         )
+
         if serializer.is_valid():
             serializer.save()
 
@@ -81,7 +84,7 @@ class InterestGroupAPI(APIView):
             ).get_success_response()
 
         return CustomResponse(
-            message=serializer.errors
+            general_message=serializer.errors
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -92,7 +95,7 @@ class InterestGroupAPI(APIView):
             id=pk
         ).name
 
-        serializer = InterestGroupUpdateSerializer(
+        serializer = InterestGroupCreateUpdateSerializer(
             data=request.data,
             instance=InterestGroup.objects.get(
                 id=pk
@@ -149,7 +152,15 @@ class InterestGroupCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        ig_serializer = InterestGroup.objects.all()
+
+        ig_serializer = (
+            InterestGroup.objects.select_related(
+                "created_by",
+                "updated_by"
+            ).prefetch_related(
+                "user_ig_link_ig"
+            ).all()
+        )
 
         ig_serializer_data = InterestGroupSerializer(
             ig_serializer,
