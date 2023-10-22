@@ -6,7 +6,7 @@ from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from .serializers import AffiliationCRUDSerializer
+from .serializers import AffiliationCUDSerializer, AffiliationListSerializer
 
 class AffiliationCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -21,7 +21,7 @@ class AffiliationCRUDAPI(APIView):
             
         )
 
-        serializer = AffiliationCRUDSerializer(
+        serializer = AffiliationListSerializer(
             paginated_queryset.get("queryset"),
             many=True
         )
@@ -38,7 +38,7 @@ class AffiliationCRUDAPI(APIView):
         
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = AffiliationCRUDSerializer(
+        serializer = AffiliationCUDSerializer(
             data=request.data,
             context={
                 "user_id": user_id,
@@ -71,7 +71,7 @@ class AffiliationCRUDAPI(APIView):
                 general_message="Invalid affiliation id"
             ).get_failure_response()
 
-        serializer = AffiliationCRUDSerializer(
+        serializer = AffiliationCUDSerializer(
             affiliation,
             data=request.data,
             context={"user_id": user_id}

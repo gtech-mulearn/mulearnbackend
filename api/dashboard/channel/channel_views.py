@@ -6,7 +6,7 @@ from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from .serializers import ChannelCRUDSerializer
+from .serializers import ChannelCUDSerializer, ChannelListSerializer
 
 class ChannelCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -20,7 +20,7 @@ class ChannelCRUDAPI(APIView):
             ['id', 'name', 'discord_id']
         )
 
-        serializer = ChannelCRUDSerializer(
+        serializer = ChannelListSerializer(
             paginated_queryset.get("queryset"),
             many=True
         )
@@ -37,7 +37,7 @@ class ChannelCRUDAPI(APIView):
         
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = ChannelCRUDSerializer(
+        serializer = ChannelCUDSerializer(
             data=request.data,
             context={
                 "user_id": user_id,
@@ -70,7 +70,7 @@ class ChannelCRUDAPI(APIView):
                 general_message="Invalid channel id"
             ).get_failure_response()
 
-        serializer = ChannelCRUDSerializer(
+        serializer = ChannelCUDSerializer(
             channel,
             data=request.data,
             context={"user_id": user_id}
