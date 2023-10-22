@@ -1,3 +1,4 @@
+from contextlib import suppress
 import hmac
 import json
 import json
@@ -95,7 +96,7 @@ class UniversalErrorHandlerMiddleware:
 
     def log_exception(self, request, exception):
         """
-        Log the exception and prints the information in CLI if DEBUG is True.
+        Log the exception and prints the information in CLI.
 
         Args:
             request: The request object.
@@ -109,19 +110,27 @@ class UniversalErrorHandlerMiddleware:
         )
         logger.error(error_message)
 
-        if settings.DEBUG:
-            print(error_message)
+        print(error_message)
+
+        body = request.body.decode("utf-8") if hasattr(request, "body") else "No body"
+        auth = request.auth if hasattr(request, "auth") else "No Auth data"
+
+        with suppress(json.JSONDecodeError):
+            body = json.loads(body)
+            body = json.dumps(body, indent=4)
+
+        with suppress(json.JSONDecodeError):
+            auth = json.dumps(auth, indent=4)
 
         request_info = (
             f"Request Info: METHOD: {request.method}; \n"
-            f"\tPATH: {request.path}; \n"
-            f"\tDATA: {json.loads(request.body.decode('utf-8')) if hasattr(request, 'body') else 'No Data'}\n"
+            f"PATH: {request.path}; \n"
+            f"AUTH: \n{auth} \n"
+            f"BODY: \n{body}\n"
         )
         logger.error(request_info)
 
-        # Print to terminal if DEBUG is True
-        if settings.DEBUG:
-            print(request_info)
+        print(request_info)
 
     def process_exception(self, request, exception):
         """
