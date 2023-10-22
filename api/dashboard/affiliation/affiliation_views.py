@@ -4,6 +4,7 @@ from utils.types import RoleType
 from .serializers import AffiliationReadSerializer, AffiliationCreateUpdateSerializer
 from db.organization import OrgAffiliation
 from utils.response import CustomResponse
+from utils.utils import CommonUtils
 
 class AffiliationGetView(APIView):
   authentication_classes = [CustomizePermission]
@@ -11,8 +12,8 @@ class AffiliationGetView(APIView):
 
   def get(self,request):
     all_affiliations = OrgAffiliation.objects.all()
-
-    serial_ = AffiliationReadSerializer(data=all_affiliations,many=True)
+    pager_ = CommonUtils.get_paginated_queryset(all_affiliations,request,['title'])
+    serial_ = AffiliationReadSerializer(data=pager_.get('queryset'),many=True)
     serial_.is_valid()
     return CustomResponse(response=serial_.data).get_success_response()
 

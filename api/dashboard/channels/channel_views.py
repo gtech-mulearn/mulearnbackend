@@ -4,15 +4,15 @@ from utils.types import RoleType
 from .serializers import ChannelReadSerializer,ChannelCreateUpdateSerializer
 from db.task import Channel
 from utils.response import CustomResponse
+from utils.utils import CommonUtils
 
 class ChannelGetView(APIView):
   authentication_classes = [CustomizePermission]
 
-
   def get(self,request):
     all_channels = Channel.objects.all()
-
-    serial_ = ChannelReadSerializer(data=all_channels,many=True)
+    pager_ = CommonUtils.get_paginated_queryset(all_channels,request,['name','discord_id','id'])
+    serial_ = ChannelReadSerializer(data=pager_.get("queryset"),many=True)
     serial_.is_valid()
     return CustomResponse(response=serial_.data).get_success_response()
 
