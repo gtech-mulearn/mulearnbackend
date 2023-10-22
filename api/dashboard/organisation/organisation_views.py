@@ -256,7 +256,7 @@ class GetInstitutionsAPI(APIView):
             organisations, request, ["title", "code"]
         )
 
-        organisation_serializer = InstitutionCSVSerializer(
+        organisation_serializer = InstitutionSerializer(
             paginated_organisations.get("queryset"), many=True
         )
         return CustomResponse().paginated_response(

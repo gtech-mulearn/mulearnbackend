@@ -17,6 +17,7 @@ from db.organization import (
     Department,
 )
 
+
 class InstitutionSerializer(serializers.ModelSerializer):
     affiliation = serializers.SlugRelatedField(
         many=False, read_only=True, slug_field="title"
@@ -140,9 +141,7 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def validate_title(self, title):
-        org_affiliation = OrgAffiliation.objects.filter(title=title).first()
-
-        if org_affiliation:
+        if OrgAffiliation.objects.filter(title=title).first():
             raise serializers.ValidationError("Affiliation already exist")
         return title
 
