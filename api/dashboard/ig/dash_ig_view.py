@@ -8,8 +8,7 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import (
     InterestGroupSerializer,
-    InterestGroupCreateSerializer,
-    InterestGroupUpdateSerializer,
+    InterestGroupCreateUpdateSerializer
 )
 
 
@@ -62,12 +61,13 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = InterestGroupCreateSerializer(
+        serializer = InterestGroupCreateUpdateSerializer(
             data=request.data,
             context={
-                "user_id": user_id
+                "user_id": user_id,
             }
         )
+
         if serializer.is_valid():
             serializer.save()
 
@@ -84,7 +84,7 @@ class InterestGroupAPI(APIView):
             ).get_success_response()
 
         return CustomResponse(
-            message=serializer.errors
+            general_message=serializer.errors
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -95,7 +95,7 @@ class InterestGroupAPI(APIView):
             id=pk
         ).name
 
-        serializer = InterestGroupUpdateSerializer(
+        serializer = InterestGroupCreateUpdateSerializer(
             data=request.data,
             instance=InterestGroup.objects.get(
                 id=pk
