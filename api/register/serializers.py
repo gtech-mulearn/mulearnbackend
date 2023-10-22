@@ -269,6 +269,8 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "mobile",
             "password",
+            "dob",
+            "gender",
             "role",
         ]
 
