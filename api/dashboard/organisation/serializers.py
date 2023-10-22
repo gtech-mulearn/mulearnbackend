@@ -117,6 +117,7 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
+        validated_data['id'] = str(uuid.uuid4())
         validated_data['created_by_id'] = user_id
         validated_data['updated_by_id'] = user_id
 
@@ -128,7 +129,6 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         instance.code = validated_data.get('code', instance.code)
         instance.affiliation = validated_data.get('affiliation', instance.affiliation)
         instance.updated_by_id = user_id
-
         instance.save()
         return instance
 

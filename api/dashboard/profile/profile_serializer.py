@@ -8,6 +8,7 @@ from rest_framework.serializers import ModelSerializer
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink, UserLvlLink
 from db.user import User, UserSettings, Socials
+from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
@@ -72,16 +73,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return user_org_link.org.id if user_org_link else None
 
     def get_org_district_id(self, obj):
-        org_type = (
-            OrganizationType.COMPANY.value
-            if MainRoles.MENTOR.value in self.get_roles(obj)
-            else OrganizationType.COLLEGE.value
-        )
-        user_org_link = obj.user_organization_link_user.filter(
-            org__org_type=org_type
-        ).first()
-
-        return user_org_link.org.district.id if (user_org_link and user_org_link.org.district) else None
+        org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.get_roles(
+            obj) else OrganizationType.COLLEGE.value
+        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        return user_org_link.org.district.id if user_org_link and hasattr(user_org_link.org, 'district') else None
 
     def get_college_code(self, obj):
         if user_org_link := obj.user_organization_link_user.filter(
@@ -323,7 +318,7 @@ class UserIgEditSerializer(serializers.ModelSerializer):
                 for ig_data in ig_details
             ]
             if len(user_ig_links) > 3:
-                raise ValueError("Cannot add more than 3 interest groups")
+                raise CustomException("Cannot add more than 3 interest groups")
             UserIgLink.objects.bulk_create(user_ig_links)
             return super().update(instance, validated_data)
 
@@ -383,9 +378,9 @@ class LinkSocials(ModelSerializer):
             old_account_url = old_accounts[account]
             if account_url != old_account_url:
                 if old_account_url is None:
-                    create_karma_activity_log("social_" + account, 50)
+                    create_karma_activity_log(f"social_{account}", 50)
                 elif account_url is None:
-                    create_karma_activity_log("social_" + account, -50)
+                    create_karma_activity_log(f"social_{account}", -50)
 
         instance.save()
         return instance

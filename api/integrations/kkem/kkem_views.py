@@ -1,6 +1,6 @@
+import logging
 from datetime import datetime
 
-import logging
 import requests
 from django.db.models import F, Prefetch
 from rest_framework.views import APIView
@@ -8,6 +8,7 @@ from rest_framework.views import APIView
 from db.integrations import Integration, IntegrationAuthorization
 from db.task import InterestGroup, KarmaActivityLog, TaskList, UserIgLink
 from db.user import User
+from utils.exception import CustomException
 from utils.response import CustomResponse
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils, send_template_mail
@@ -60,7 +61,7 @@ class KKEMBulkKarmaAPI(APIView):
                 base_queryset = base_queryset.filter(
                     karma_activity_log_user__updated_at__gte=from_datetime
                 )
-            except ValueError:
+            except CustomException:
                 return CustomResponse(
                     general_message="Invalid datetime format",
                 ).get_failure_response()
@@ -122,16 +123,8 @@ class KKEMAuthorizationAPI(APIView):
                 general_message="We've set up your authorization! Please check your email for further instructions."
             ).get_success_response()
 
-        except ValueError as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     def patch(self, request, token):
         try:
@@ -156,16 +149,8 @@ class KKEMAuthorizationAPI(APIView):
                 general_message="Invalid or missing Token"
             ).get_failure_response()
 
-        except ValueError as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class KKEMIntegrationLogin(APIView):
@@ -197,20 +182,11 @@ class KKEMIntegrationLogin(APIView):
                 response["data"] = serialized_set.data
 
             return CustomResponse(
-                general_message=general_message,
-                response=response
+                general_message=general_message, response=response
             ).get_success_response()
 
-        except ValueError as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class KKEMdetailsFetchAPI(APIView):
@@ -243,16 +219,8 @@ class KKEMdetailsFetchAPI(APIView):
 
             return CustomResponse(response=result_data).get_success_response()
 
-        except ValueError as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class KKEMUserStatusAPI(APIView):
@@ -263,13 +231,5 @@ class KKEMUserStatusAPI(APIView):
                 response={"muid": details["mu_id"][0] if "mu_id" in details else None}
             ).get_success_response()
 
-        except ValueError as e:
-            return CustomResponse(
-                general_message=str(e)
-            ).get_failure_response()
-
-        except Exception as e:
-            logger.exception("An error occurred: %s", str(e))
-            return CustomResponse(
-                general_message="Somthing went wrong"
-            ).get_failure_response()
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
