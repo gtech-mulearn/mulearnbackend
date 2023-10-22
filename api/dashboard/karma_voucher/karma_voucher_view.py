@@ -14,7 +14,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from utils.utils import ImportCSV, CommonUtils
-from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer
+from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer, VoucherLogUpdateSerializer
 
 
 class ImportVoucherLogAPI(APIView):
@@ -212,7 +212,28 @@ class VoucherLogAPI(APIView):
             return CustomResponse(general_message='Voucher created successfully',
                                   response=serializer.data).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
-
+    
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    def patch(self, request, voucher_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        context = {'user_id': user_id}
+        voucher = VoucherLog.objects.filter(id=voucher_id).first()
+        serializer = VoucherLogUpdateSerializer(voucher, data=request.data, context=context)
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Voucher updated successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+    
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]) 
+    def delete(self, request, voucher_id):
+        if voucher_log := VoucherLog.objects.filter(id=voucher_id).first():
+            VoucherLogUpdateSerializer().destroy(voucher_log)
+            return CustomResponse(
+                general_message=f'Voucher successfully deleted'
+            ).get_success_response()
+        return CustomResponse(
+            general_message=f'Invalid Voucher'
+        ).get_failure_response()
 
 class ExportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]

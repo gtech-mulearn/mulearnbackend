@@ -1,9 +1,7 @@
 import uuid
 from rest_framework import serializers
-
 from db.task import VoucherLog, TaskList
 from db.user import User
-
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 from utils.karma_voucher import generate_ordered_id
@@ -110,3 +108,35 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         if len(value) != 2:
             raise serializers.ValidationError("Week must have exactly two characters.")
         return value
+    
+class VoucherLogUpdateSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(required=False)
+    task = serializers.CharField(required=False)
+    karma = serializers.IntegerField(required=False)
+    month = serializers.CharField(required=False)
+    week = serializers.CharField(required=False)
+
+    class Meta:
+        model = VoucherLog
+        fields = [
+            "user",
+            "task",
+            "karma",
+            "month",
+            "week",
+        ]
+
+    def update(self, instance, validated_data):
+        instance.user_id = validated_data.get('user', instance.user)
+        instance.task_id = validated_data.get('task', instance.task)
+        instance.karma = validated_data.get('karma', instance.karma)
+        instance.month = validated_data.get('month', instance.month)
+        instance.week = validated_data.get('week', instance.week)
+        
+        instance.updated_by_id = self.context.get('user_id')
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        return instance 
+    
+    def destroy(self, obj):
+        obj.delete()
