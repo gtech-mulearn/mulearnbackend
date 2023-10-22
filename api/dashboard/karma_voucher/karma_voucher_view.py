@@ -14,7 +14,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from utils.utils import ImportCSV, CommonUtils
-from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer
+from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer
 
 
 class ImportVoucherLogAPI(APIView):
@@ -203,6 +203,14 @@ class VoucherLogAPI(APIView):
         voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=voucher_serializer,
                                                    pagination=paginated_queryset.get('pagination'))
+    
+    def post(self, request):
+        serializer = VoucherLogCreateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Voucher created successfully',
+                                  response=serializer.data).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
 
 class ExportVoucherLogAPI(APIView):
