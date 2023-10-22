@@ -8,7 +8,7 @@ urlpatterns = [
     path('institutes/edit/<str:org_code>/', organisation_views.InstitutionPostUpdateDeleteAPI.as_view()),
     path('institutes/delete/<str:org_code>/', organisation_views.InstitutionPostUpdateDeleteAPI.as_view()),
     path('institutes/<str:org_type>/', organisation_views.InstitutionAPI.as_view()),
-    path('institutes/<str:org_type>/csv/', organisation_views.InstitutionCsvAPI.as_view()),
+    path('institutes/<str:org_type>/csv/', organisation_views.InstitutionCSVAPI.as_view()),
     path('institutes/info/<str:org_code>/', organisation_views.InstitutionDetailsAPI.as_view()),
     path('institutes/show/<str:org_type>/', organisation_views.GetInstitutionsAPI.as_view()),
     path('institutes/show/<str:org_type>/<str:district_id>/', organisation_views.GetInstitutionsAPI.as_view()),
