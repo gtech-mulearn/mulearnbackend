@@ -11,9 +11,9 @@ class UrlShortener(models.Model):
     long_url         = models.CharField(max_length=500)
     count            = models.IntegerField(blank=True, null=True, default=0)
     updated_by       = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='url_shortener_updated_by')
-    updated_at       = models.DateTimeField()
+    updated_at       = models.DateTimeField(auto_now=True)
     created_by       = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='url_shortener_created_by')
-    created_at       = models.DateTimeField()
+    created_at       = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False

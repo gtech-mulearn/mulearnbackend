@@ -21,8 +21,8 @@ class Integration(models.Model):
 #
 class IntegrationAuthorization(models.Model):
     id                = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
-    integration       = models.ForeignKey(Integration,on_delete=models.CASCADE,null=False,related_name="integration_authorization_integration",)
-    user              = models.ForeignKey(User,on_delete=models.CASCADE,related_name="integration_authorization_user",null=False,)
+    integration       = models.ForeignKey(Integration, on_delete=models.CASCADE, null=False, related_name="integration_authorization_integration",)
+    user              = models.ForeignKey(User, on_delete=models.CASCADE, related_name="integration_authorization_user", null=False,)
     integration_value = models.CharField(max_length=255, unique=True, null=False)
     additional_field  = models.CharField(max_length=255)
     verified          = models.BooleanField(default=False, null=False)
