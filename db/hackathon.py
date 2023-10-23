@@ -25,9 +25,9 @@ class Hackathon(models.Model):
     event_end         = models.DateTimeField(blank=True, null=True)
     status            = models.CharField(max_length=20, blank=True, null=True)
     updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_updated_by')
-    updated_at        = models.DateTimeField()
+    updated_at        = models.DateTimeField(auto_now=True)
     created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_created_by')
-    created_at        = models.DateTimeField()
+    created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -41,9 +41,9 @@ class HackathonForm(models.Model):
     field_type        = models.CharField(max_length=50)
     is_required       = models.BooleanField(default=False)
     updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_form_updated_by')
-    updated_at        = models.DateTimeField()
+    updated_at        = models.DateTimeField(auto_now=True)
     created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_form_created_by')
-    created_at        = models.DateTimeField()
+    created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -55,9 +55,9 @@ class HackathonOrganiserLink(models.Model):
     organiser         = models.ForeignKey(User, on_delete=models.CASCADE)
     hackathon         = models.ForeignKey(Hackathon, on_delete=models.CASCADE)
     updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_organiser_link_updated_by')
-    updated_at        = models.DateTimeField()
+    updated_at        = models.DateTimeField(auto_now=True)
     created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_organiser_link_created_by')
-    created_at        = models.DateTimeField()
+    created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -69,9 +69,9 @@ class HackathonUserSubmission(models.Model):
     user              = models.ForeignKey(User, on_delete=models.CASCADE)
     hackathon         = models.ForeignKey(Hackathon, on_delete=models.CASCADE)
     updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_submission_updated_by')
-    updated_at        = models.DateTimeField()
+    updated_at        = models.DateTimeField(auto_now=True)
     created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_submission_created_by')
-    created_at        = models.DateTimeField()
+    created_at        = models.DateTimeField(auto_now_add=True)
     data              = models.JSONField(max_length=2000, blank=True, null=True)
 
     class Meta:
