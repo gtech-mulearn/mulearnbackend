@@ -57,7 +57,7 @@ MIDDLEWARE = [
     "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.common.CommonMiddleware",
     "corsheaders.middleware.CorsMiddleware",
-    # "mulearnbackend.middlewares.UniversalErrorHandlerMiddleware",
+    "mulearnbackend.middlewares.UniversalErrorHandlerMiddleware",
 ]
 
 ROOT_URLCONF = "mulearnbackend.urls"
