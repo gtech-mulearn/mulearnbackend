@@ -1,3 +1,4 @@
+import logging
 from datetime import datetime
 
 import requests
@@ -7,6 +8,7 @@ from rest_framework.views import APIView
 from db.integrations import Integration, IntegrationAuthorization
 from db.task import InterestGroup, KarmaActivityLog, TaskList, UserIgLink
 from db.user import User
+from utils.exception import CustomException
 from utils.response import CustomResponse
 from utils.types import IntegrationType
 from utils.utils import DateTimeUtils, send_template_mail
@@ -14,6 +16,8 @@ from utils.utils import DateTimeUtils, send_template_mail
 from .. import integrations_helper
 from . import kkem_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
+
+logger = logging.getLogger(__name__)
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -57,7 +61,7 @@ class KKEMBulkKarmaAPI(APIView):
                 base_queryset = base_queryset.filter(
                     karma_activity_log_user__updated_at__gte=from_datetime
                 )
-            except ValueError:
+            except CustomException:
                 return CustomResponse(
                     general_message="Invalid datetime format",
                 ).get_failure_response()
@@ -119,7 +123,7 @@ class KKEMAuthorizationAPI(APIView):
                 general_message="We've set up your authorization! Please check your email for further instructions."
             ).get_success_response()
 
-        except Exception as e:
+        except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     def patch(self, request, token):
@@ -145,7 +149,7 @@ class KKEMAuthorizationAPI(APIView):
                 general_message="Invalid or missing Token"
             ).get_failure_response()
 
-        except Exception as e:
+        except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
@@ -181,7 +185,7 @@ class KKEMIntegrationLogin(APIView):
                 general_message=general_message, response=response
             ).get_success_response()
 
-        except Exception as e:
+        except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
@@ -215,7 +219,7 @@ class KKEMdetailsFetchAPI(APIView):
 
             return CustomResponse(response=result_data).get_success_response()
 
-        except Exception as e:
+        except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
 
@@ -227,5 +231,5 @@ class KKEMUserStatusAPI(APIView):
                 response={"muid": details["mu_id"][0] if "mu_id" in details else None}
             ).get_success_response()
 
-        except Exception as e:
+        except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()

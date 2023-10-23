@@ -1,5 +1,6 @@
 from rest_framework import serializers
 
+
 class Top100CodersSerializer(serializers.Serializer):
     rank = serializers.IntegerField()
     first_name = serializers.CharField(source='user__first_name')

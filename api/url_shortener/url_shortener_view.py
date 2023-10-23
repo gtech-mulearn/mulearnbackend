@@ -19,26 +19,43 @@ class UrlShortenerAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def post(self, request):
+
         serializer = ShortenUrlsCreateUpdateSerializer(
-            data=request.data, context={"request": request}
+            data=request.data,
+            context={
+                "request": request
+            }
         )
+
         if serializer.is_valid():
             serializer.save()
+
             return CustomResponse(
                 general_message="Url created successfully."
             ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all()
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             url_shortener_objects,
             request,
-            ["title", "short_url", "long_url"],
-            {"title": "title", "created_at": "created_at"},
+            [
+                "title",
+                "short_url",
+                "long_url"
+            ],
+            {
+                "title": "title",
+                "created_at": "created_at"
+            },
         )
 
         if len(url_shortener_objects) == 0:
@@ -47,37 +64,56 @@ class UrlShortenerAPI(APIView):
             ).get_failure_response()
 
         url_shortener_list = ShowShortenUrlsSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get(
+                "queryset"
+            ),
+            many=True
         ).data
 
         return CustomResponse().paginated_response(
-            data=url_shortener_list, pagination=paginated_queryset.get("pagination")
+            data=url_shortener_list,
+            pagination=paginated_queryset.get("pagination")
         )
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def put(self, request, url_id):
-        url_shortener = UrlShortener.objects.filter(id=url_id).first()
+        url_shortener = UrlShortener.objects.filter(
+            id=url_id
+        ).first()
+
         if url_shortener is None:
             return CustomResponse(
                 general_message="Invalid Url ID"
             ).get_failure_response()
+
         serializer = ShortenUrlsCreateUpdateSerializer(
-            url_shortener, data=request.data, context={"request": request}
+            url_shortener,
+            data=request.data,
+            context={
+                "request": request
+            }
         )
         if serializer.is_valid():
             serializer.save()
+
             return CustomResponse(
                 general_message="Url Edited Successfully"
             ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def delete(self, request, url_id):
-        url_shortener_object = UrlShortener.objects.filter(id=url_id).first()
+        url_shortener_object = UrlShortener.objects.filter(
+            id=url_id
+        ).first()
+
         if url_shortener_object is None:
             return CustomResponse(
                 general_message="invalid URL id"
@@ -91,7 +127,9 @@ class UrlShortenerAPI(APIView):
 
 class UrlAnalyticsAPI(APIView):
     def get(self, request, url_id):
-        url_shortener_object = UrlShortener.objects.get(id=url_id)
+        url_shortener_object = UrlShortener.objects.get(
+            id=url_id
+        )
 
         url_data = UrlShortenerTracker.objects.filter(
             url_shortener_id=url_shortener_object.id
