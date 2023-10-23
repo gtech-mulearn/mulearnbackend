@@ -1,4 +1,5 @@
 import uuid
+from django.db.models import Q
 from rest_framework import serializers
 from db.task import VoucherLog, TaskList
 from db.user import User
@@ -90,9 +91,10 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         return VoucherLog.objects.create(**validated_data)
 
     def validate_user(self, value):
-        if not User.objects.filter(id=value).exists():
+        user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
+        if not user:
             raise serializers.ValidationError("Enter a valid user")
-        return value
+        return user.id
     
     def validate_task(self, value):
         if not TaskList.objects.filter(id=value).exists():
@@ -110,33 +112,39 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         return value
     
 class VoucherLogUpdateSerializer(serializers.ModelSerializer):
-    user = serializers.CharField(required=False)
-    task = serializers.CharField(required=False)
-    karma = serializers.IntegerField(required=False)
-    month = serializers.CharField(required=False)
-    week = serializers.CharField(required=False)
+    new_user = serializers.CharField(required=False)
+    new_task = serializers.CharField(required=False)
+    new_karma = serializers.IntegerField(required=False)
+    new_month = serializers.CharField(required=False)
+    new_week = serializers.CharField(required=False)
 
     class Meta:
         model = VoucherLog
         fields = [
-            "user",
-            "task",
-            "karma",
-            "month",
-            "week",
+            "new_user",
+            "new_task",
+            "new_karma",
+            "new_month",
+            "new_week",
         ]
 
     def update(self, instance, validated_data):
-        instance.user_id = validated_data.get('user', instance.user)
-        instance.task_id = validated_data.get('task', instance.task)
-        instance.karma = validated_data.get('karma', instance.karma)
-        instance.month = validated_data.get('month', instance.month)
-        instance.week = validated_data.get('week', instance.week)
+        instance.user_id = validated_data.get('new_user', instance.user)
+        instance.task_id = validated_data.get('new_task', instance.task)
+        instance.karma = validated_data.get('new_karma', instance.karma)
+        instance.month = validated_data.get('new_month', instance.month)
+        instance.week = validated_data.get('new_week', instance.week)
         
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance 
+
+    def validate_new_user(self, value):
+        user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
+        if not user:
+            raise serializers.ValidationError("Enter a valid user")
+        return user.id
     
     def destroy(self, obj):
         obj.delete()
