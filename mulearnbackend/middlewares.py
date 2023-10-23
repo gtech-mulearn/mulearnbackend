@@ -92,7 +92,10 @@ class UniversalErrorHandlerMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Cache the body
+        _ = request.body
         return self.get_response(request)
+
 
     def log_exception(self, request, exception):
         """
@@ -112,7 +115,7 @@ class UniversalErrorHandlerMiddleware:
 
         print(error_message)
 
-        body = request.body.decode("utf-8") if hasattr(request, "body") else "No body"
+        body = request._body.decode("utf-8") if hasattr(request, "_body") else "No body"
         auth = request.auth if hasattr(request, "auth") else "No Auth data"
 
         with suppress(json.JSONDecodeError):
