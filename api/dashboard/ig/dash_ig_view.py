@@ -35,9 +35,9 @@ class InterestGroupAPI(APIView):
             {
                 "name": "name",
                 "updated_on": "updated_at",
-                "updated_by": "updated_by",
+                "updated_by": "updated_by__first_name",
                 "created_on": "created_at",
-                "created_by": "created_by",
+                "created_by": "created_by__first_name",
             },
         )
 
