@@ -53,7 +53,7 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        request_data = request.data.dict()
+        request_data = request.data
 
         request_data["created_by"] = request_data["updated_by"] = user_id
 
@@ -83,7 +83,7 @@ class InterestGroupAPI(APIView):
 
         ig_old_name = ig.name
 
-        request_data = request.data.dict()
+        request_data = request.data
         request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(
