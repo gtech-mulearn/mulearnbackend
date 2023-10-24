@@ -2,29 +2,29 @@ import csv
 import datetime
 import gzip
 import io
+from datetime import timedelta
 
 import decouple
 import openpyxl
 import pytz
 import requests
 from decouple import config
+from django.core.mail import EmailMessage
 from django.core.mail import send_mail
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
-from django.core.mail import EmailMessage
-from datetime import timedelta
 
 
 class CommonUtils:
     @staticmethod
     def get_paginated_queryset(
             queryset: QuerySet, request, search_fields, sort_fields: dict = None
-            ) -> QuerySet:
+    ) -> QuerySet:
         if sort_fields is None:
-            sort_fields = { }
+            sort_fields = {}
 
         page = int(request.query_params.get("pageIndex", 1))
         per_page = int(request.query_params.get("perPage", 10))
@@ -34,7 +34,7 @@ class CommonUtils:
         if search_query:
             query = Q()
             for field in search_fields:
-                query |= Q(**{ f"{field}__icontains": search_query })
+                query |= Q(**{f"{field}__icontains": search_query})
 
             queryset = queryset.filter(query)
 
@@ -64,8 +64,8 @@ class CommonUtils:
                 "nextPage": queryset.next_page_number()
                 if queryset.has_next()
                 else None,
-                },
-            }
+            },
+        }
 
     @staticmethod
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
@@ -79,7 +79,7 @@ class CommonUtils:
         compressed_response = HttpResponse(
             gzip.compress(response.content),
             content_type="text/csv",
-            )
+        )
         compressed_response[
             "Content-Disposition"
         ] = f'attachment; filename="{csv_name}.csv"'
@@ -124,7 +124,7 @@ class DateTimeUtils:
         start_date = today.replace(day=1)
         end_date = start_date.replace(
             day=1, month=start_date.month % 12 + 1
-            ) - timedelta(days=1)
+        ) - timedelta(days=1)
         return start_date, end_date
 
 
@@ -153,7 +153,7 @@ class DiscordWebhooks:
         for value in values:
             content = f"{content}<|=|>{value}"
         url = config("DISCORD_WEBHOOK_LINK")
-        data = { "content": content }
+        data = {"content": content}
         requests.post(url, json=data)
 
 
@@ -166,7 +166,7 @@ class ImportCSV:
         for row in sheet.iter_rows(values_only=True):
             row_dict = {
                 header.value: cell_value for header, cell_value in zip(sheet[1], row)
-                }
+            }
             rows.append(row_dict)
         workbook.close()
 
@@ -194,8 +194,8 @@ def send_template_mail(
     status = None
 
     email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}", { "user": context, "base_url": base_url }
-        )
+        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
+    )
     if not (mail := getattr(context, "email", None)):
         mail = context["email"]
 
@@ -207,7 +207,7 @@ def send_template_mail(
             recipient_list=[mail],
             html_message=email_content,
             fail_silently=False,
-            )
+        )
 
     else:
         email = EmailMessage(
@@ -215,7 +215,7 @@ def send_template_mail(
             body=email_content,
             from_email=from_mail,
             to=[context["email"]],
-            )
+        )
         email.attach(attachment)
         email.content_subtype = "html"
         status = email.send()
