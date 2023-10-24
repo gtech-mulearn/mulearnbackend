@@ -38,34 +38,34 @@ class InstitutionSerializer(serializers.ModelSerializer):
         ).count()
 
 
-class InstitutionSerializer(serializers.ModelSerializer):
-    affiliation = serializers.SlugRelatedField(
-        many=False, read_only=True, slug_field="title"
-    )
-
-    district = serializers.ReadOnlyField(source="district.name")
-    zone = serializers.ReadOnlyField(source="district.zone.name")
-    state = serializers.ReadOnlyField(source="district.zone.state.name")
-    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
-    user_count = serializers.SerializerMethodField()
-
-    class Meta:
-        model = Organization
-        fields = [
-            "id",
-            "title",
-            "code",
-            "affiliation",
-            "org_type",
-            "district",
-            "zone",
-            "state",
-            "country",
-            "user_count",
-        ]
-
-    def get_user_count(self, obj):
-        return len({link.user for link in obj.user_organization_link_org.all()})
+# class InstitutionSerializer(serializers.ModelSerializer):
+#     affiliation = serializers.SlugRelatedField(
+#         many=False, read_only=True, slug_field="title"
+#     )
+#
+#     district = serializers.ReadOnlyField(source="district.name")
+#     zone = serializers.ReadOnlyField(source="district.zone.name")
+#     state = serializers.ReadOnlyField(source="district.zone.state.name")
+#     country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+#     user_count = serializers.SerializerMethodField()
+#
+#     class Meta:
+#         model = Organization
+#         fields = [
+#             "id",
+#             "title",
+#             "code",
+#             "affiliation",
+#             "org_type",
+#             "district",
+#             "zone",
+#             "state",
+#             "country",
+#             "user_count",
+#         ]
+#
+#     def get_user_count(self, obj):
+#         return len({link.user for link in obj.user_organization_link_org.all()})
 
 
 class StateSerializer(serializers.ModelSerializer):
