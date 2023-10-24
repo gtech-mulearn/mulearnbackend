@@ -140,23 +140,24 @@ class InstitutionAPI(APIView):
                 org_type=org_type
             )
 
-        # org_queryset = organisations.select_related(
-        #     "affiliation",
-        #     "district__zone__state__country",
-        #     "district__zone__state",
-        #     "district__zone",
-        #     "district",
-        # ).prefetch_related(
-        #     Prefetch(
-        #         "user_organization_link_org",
-        #         queryset=UserOrganizationLink.objects.filter(
-        #             verified=True
-        #         ).select_related("user"),
-        #     )
-        # )
+        org_queryset = organisations.select_related(
+            'affiliation',
+            # 'district',
+            # "district__zone__state__country",
+            # "district__zone__state",
+            # "district__zone",
+            # "district",
+        ).prefetch_related(
+            Prefetch(
+                "user_organization_link_org",
+                queryset=UserOrganizationLink.objects.filter(
+                    verified=True
+                ).select_related("user"),
+            )
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            organisations,
+            org_queryset,
             request,
             [
                 "title",
