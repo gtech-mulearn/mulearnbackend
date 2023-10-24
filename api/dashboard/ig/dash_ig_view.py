@@ -35,9 +35,9 @@ class InterestGroupAPI(APIView):
             {
                 "name": "name",
                 "updated_on": "updated_at",
-                "updated_by": "updated_by",
+                "updated_by": "updated_by__first_name",
                 "created_on": "created_at",
-                "created_by": "created_by",
+                "created_by": "created_by__first_name",
             },
         )
 
@@ -52,7 +52,9 @@ class InterestGroupAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        request_data = request.data
+
+        request_data = request.data.dict()
+
         request_data["created_by"] = request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(
@@ -78,9 +80,10 @@ class InterestGroupAPI(APIView):
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         ig = InterestGroup.objects.get(id=pk)
+
         ig_old_name = ig.name
 
-        request_data = request.data
+        request_data = request.data.dict()
         request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(
