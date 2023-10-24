@@ -19,8 +19,6 @@ class User(models.Model):
     active = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic = models.CharField(max_length=200, blank=True, null=True)
-    login_attempts = models.IntegerField(blank=True, null=True)
-    last_login_failure = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

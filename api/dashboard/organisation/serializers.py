@@ -1,18 +1,14 @@
 import uuid
 
-from django.db.models import Sum, Count
-
-from utils.permission import JWTUtils
-from utils.types import OrganizationType
-from utils.utils import DateTimeUtils
-
+from django.db.models import Count
 from rest_framework import serializers
 
 from db.organization import Organization, District, Zone, State, OrgAffiliation, Department
+from utils.permission import JWTUtils
+from utils.types import OrganizationType
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
-
     affiliation = serializers.ReadOnlyField(source="affiliation.title")
     district = serializers.ReadOnlyField(source="district.name")
     zone = serializers.ReadOnlyField(source="district.zone.name")
@@ -43,7 +39,6 @@ class InstitutionSerializer(serializers.ModelSerializer):
 
 
 class InstitutionCsvSerializer(serializers.ModelSerializer):
-
     affiliation = serializers.SlugRelatedField(
         many=False,
         read_only=True,
@@ -104,6 +99,7 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 
 class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
+    district = serializers.CharField(required=False)
 
     class Meta:
         model = Organization
@@ -152,7 +148,6 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class AffiliationSerializer(serializers.ModelSerializer):
-
     label = serializers.ReadOnlyField(source='title')
     value = serializers.ReadOnlyField(source='id')
 
@@ -165,7 +160,6 @@ class AffiliationSerializer(serializers.ModelSerializer):
 
 
 class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = OrgAffiliation
         fields = [
@@ -188,7 +182,6 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def validate_title(self, title):
-
         org_affiliation = OrgAffiliation.objects.filter(
             title=title
         ).first()
@@ -224,4 +217,3 @@ class DepartmentSerializer(serializers.ModelSerializer):
         instance.updated_by_id = user_id
         instance.save()
         return instance
-
