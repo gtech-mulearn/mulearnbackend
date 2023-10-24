@@ -1,21 +1,41 @@
 import uuid
 
-from django.db.models import Sum, Count
-
-from utils.permission import JWTUtils
-from utils.types import OrganizationType
-from utils.utils import DateTimeUtils
-
+from django.db.models import Count
 from rest_framework import serializers
 
-from db.organization import (
-    Organization,
-    District,
-    Zone,
-    State,
-    OrgAffiliation,
-    Department,
-)
+from db.organization import Organization, District, Zone, State, OrgAffiliation, Department
+from utils.permission import JWTUtils
+from utils.types import OrganizationType
+
+
+class InstitutionSerializer(serializers.ModelSerializer):
+    affiliation = serializers.ReadOnlyField(source="affiliation.title")
+    district = serializers.ReadOnlyField(source="district.name")
+    zone = serializers.ReadOnlyField(source="district.zone.name")
+    state = serializers.ReadOnlyField(source="district.zone.state.name")
+    country = serializers.ReadOnlyField(source="district.zone.state.country.name")
+    user_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "affiliation",
+            "district",
+            "zone",
+            "state",
+            "country",
+            "user_count"
+        ]
+
+    def get_user_count(self, obj):
+        return obj.user_organization_link_org.annotate(
+            user_count=Count(
+                'user'
+            )
+        ).count()
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -75,6 +95,8 @@ class DistrictSerializer(serializers.ModelSerializer):
 
 
 class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
+    district = serializers.CharField(required=False)
+
     class Meta:
         model = Organization
         fields = ["title", "code", "org_type", "affiliation", "district"]
@@ -105,6 +127,14 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invalid organization affiliation")
         return organization
 
+    def validate_district(self, value):
+        district = District.objects.filter(id=value).first()
+
+        if district is None:
+            raise serializers.ValidationError("Invalid district")
+
+        return district
+
     def validate_affiliation(self, affiliation_id):
         if self.initial_data.get("org_type") != OrganizationType.COLLEGE.value:
             return None
@@ -112,8 +142,8 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class AffiliationSerializer(serializers.ModelSerializer):
-    label = serializers.ReadOnlyField(source="title")
-    value = serializers.ReadOnlyField(source="id")
+    label = serializers.ReadOnlyField(source='title')
+    value = serializers.ReadOnlyField(source='id')
 
     class Meta:
         model = OrgAffiliation
@@ -141,8 +171,15 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def validate_title(self, title):
-        if OrgAffiliation.objects.filter(title=title).first():
-            raise serializers.ValidationError("Affiliation already exist")
+        org_affiliation = OrgAffiliation.objects.filter(
+            title=title
+        ).first()
+
+        if org_affiliation:
+            raise serializers.ValidationError(
+                "Affiliation already exist"
+            )
+
         return title
 
 
