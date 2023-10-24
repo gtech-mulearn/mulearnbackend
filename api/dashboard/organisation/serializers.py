@@ -7,6 +7,7 @@ from db.organization import Organization, District, Zone, State, OrgAffiliation,
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
 
+
 class InstitutionSerializer(serializers.ModelSerializer):
     affiliation = serializers.ReadOnlyField(source="affiliation.title")
     district = serializers.ReadOnlyField(source="district.name")
@@ -35,10 +36,6 @@ class InstitutionSerializer(serializers.ModelSerializer):
                 'user'
             )
         ).count()
-
-
-
-
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -129,6 +126,14 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
             if org_affiliation is None:
                 raise serializers.ValidationError("Invalid organization affiliation")
         return organization
+
+    def validate_district(self, value):
+        district = District.objects.filter(id=value).first()
+
+        if district is None:
+            raise serializers.ValidationError("Invalid district")
+
+        return district
 
     def validate_affiliation(self, affiliation_id):
         if self.initial_data.get("org_type") != OrganizationType.COLLEGE.value:
