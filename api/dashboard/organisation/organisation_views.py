@@ -141,11 +141,12 @@ class InstitutionAPI(APIView):
             )
 
         org_queryset = organisations.select_related(
-            "affiliation",
-            "district__zone__state__country",
-            "district__zone__state",
-            "district__zone",
-            "district",
+            'affiliation',
+            # 'district',
+            # "district__zone__state__country",
+            # "district__zone__state",
+            # "district__zone",
+            # "district",
         ).prefetch_related(
             Prefetch(
                 "user_organization_link_org",
