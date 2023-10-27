@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from db.task import TaskList
+from db.task import TaskList, KarmaActivityLog
 
 
 class TaskListSerializer(serializers.ModelSerializer):
@@ -9,6 +9,8 @@ class TaskListSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
+    total_karma_gainers = serializers.SerializerMethodField()
+
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
 
@@ -20,6 +22,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "karma",
+            "total_karma_gainers",
             "channel",
             "type",
             "active",
@@ -34,6 +37,12 @@ class TaskListSerializer(serializers.ModelSerializer):
             "created_by",
             "created_at",
         ]
+
+    def get_total_karma_gainers(self, obj):
+
+        return obj.karma_activity_log_task.filter(
+            appraiser_approved=True
+        ).count()
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
