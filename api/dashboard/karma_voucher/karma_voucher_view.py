@@ -208,7 +208,61 @@ class VoucherLogAPI(APIView):
     def post(self, request):
         serializer = VoucherLogCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                id = serializer.save().id
+                voucher = VoucherLog.objects.filter(id=id).values(
+                    'code',
+                    'user__first_name',
+                    'user__last_name',
+                    'user__email',
+                    'task__hashtag',
+                    'month',
+                    'week',
+                    'karma'
+                ).first()
+                if not voucher :
+                    transaction.set_rollback(True)
+                    return CustomResponse(general_message='Something went wrong. Please try again.').get_failure_response()
+            code = voucher['code']
+            month = voucher['month']
+            week = voucher['week']
+            karma = voucher['karma']
+            task_hashtag = voucher['task__hashtag']
+            full_name = voucher['user__first_name'] if voucher['user__last_name'] is None else f"{voucher['user__first_name']} {voucher['user__last_name']}"
+            email = voucher['user__email']
+
+            # Preparing email context and attachment
+            from_mail = decouple.config("FROM_MAIL")
+            subject = "Congratulations on earning Karma points!"
+            text = f"""Greetings from GTech µLearn!
+
+            Great news! You are just one step away from claiming your internship/contribution Karma points.
+            
+            Name: {full_name}
+            Email: {email}
+            
+            To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
+            """
+
+            month_week = f'{month}/{week}'
+            karma_voucher_image = generate_karma_voucher(
+                name=str(full_name), karma=str(int(karma)), code=code, hashtag=task_hashtag,
+                month=month_week)
+            karma_voucher_image.seek(0)
+            email_obj = EmailMessage(
+                subject=subject,
+                body=text,
+                from_email=from_mail,
+                to=[email],
+            )
+            attachment = MIMEImage(karma_voucher_image.read())
+            attachment.add_header(
+                'Content-Disposition',
+                'attachment',
+                filename=f'{str(full_name)}.jpg',
+            )
+            email_obj.attach(attachment)
+            email_obj.send(fail_silently=False)
             return CustomResponse(general_message='Voucher created successfully',
                                   response=serializer.data).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
