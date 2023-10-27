@@ -31,7 +31,7 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week']
+        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week', 'event', 'description']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -106,7 +106,9 @@ class ImportVoucherLogAPI(APIView):
                         'task': task_hashtag, 
                         'karma': karma, 
                         'month': month, 
-                        'week': week
+                        'week': week,
+                        'description': row.get('description'),
+                        'event': row.get('event')
                         })
                     
         # Serializing and saving valid voucher rows to the database
@@ -120,7 +122,9 @@ class ImportVoucherLogAPI(APIView):
                     'month', 
                     'week', 
                     'karma', 
-                    'task__hashtag'
+                    'task__hashtag',
+                    'event',
+                    'description'
                 )
                 if len(vouchers_to_send) != len(valid_rows):
                     transaction.set_rollback(True)
@@ -137,6 +141,12 @@ class ImportVoucherLogAPI(APIView):
             task_hashtag = voucher['task__hashtag']
             full_name = user_dict.get(muid)[2]
             email = user_dict.get(muid)[1]
+            description = voucher['description']
+            time_or_event = f'{month}/{week}'
+
+            event = voucher['event']
+            if event:
+                time_or_event = f'{event}/{description}'
 
             # Preparing email context and attachment
             from_mail = decouple.config("FROM_MAIL")
@@ -151,10 +161,9 @@ class ImportVoucherLogAPI(APIView):
             To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
             """
 
-            month_week = f'{month}/{week}'
             karma_voucher_image = generate_karma_voucher(
                 name=str(full_name), karma=str(int(karma)), code=code, hashtag=task_hashtag,
-                month=month_week)
+                month=time_or_event)
             karma_voucher_image.seek(0)
             email_obj = EmailMessage(
                 subject=subject,
@@ -186,7 +195,8 @@ class VoucherLogAPI(APIView):
             search_fields=["user__first_name", "user__last_name",
                            "task__title", "karma", "month", "week", "claimed",
                            "updated_by__first_name", "updated_by__last_name",
-                           "created_by__first_name", "created_by__last_name"],
+                           "created_by__first_name", "created_by__last_name",
+                           "description", "event", "code"],
 
             sort_fields={'user': 'user__first_name',
                          'code': 'code',
@@ -197,7 +207,9 @@ class VoucherLogAPI(APIView):
                          'month': 'month',
                          'updated_by': 'updated_by__first_name',
                          'updated_at': 'updated_at',
-                         'created_at': 'created_at'
+                         'created_at': 'created_at',
+                         'event': 'event',
+                         'description': 'description'
                          }
         )
         voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
