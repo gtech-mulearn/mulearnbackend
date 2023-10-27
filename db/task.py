@@ -200,7 +200,7 @@ class VoucherLog(models.Model):
     user                 = models.ForeignKey(User, on_delete=models.CASCADE, related_name="voucher_log_user")
     task                 = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name="voucher_log_task")
     karma                = models.IntegerField()
-    week                 = models.CharField(max_length=2)
+    week = models.CharField(max_length=2, blank=True, null=True)
     month                = models.CharField(max_length=10)
     claimed              = models.BooleanField()
     event                = models.CharField(max_length=50, blank=True, null=True)
