@@ -373,3 +373,38 @@ class DistrictDataAPI(APIView):
             general_message="District deleted successfully"
         ).get_success_response()
 
+
+class CountryListApi(APIView):
+    def get(self, request):
+        country = Country.objects.all().values(
+            'id',
+            'name'
+        ).order_by('name')
+
+        return CustomResponse(
+            response=country
+        ).get_success_response()
+
+
+class StateListApi(APIView):
+    def get(self, request):
+        state = State.objects.all().values(
+            'id',
+            'name'
+        ).order_by('name')
+
+        return CustomResponse(
+            response=state
+        ).get_success_response()
+
+
+class ZoneListApi(APIView):
+    def get(self, request):
+        zone = Zone.objects.all().values(
+            'id',
+            'name'
+        ).order_by('name')
+
+        return CustomResponse(
+            response=zone
+        ).get_success_response()
