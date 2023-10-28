@@ -5,6 +5,8 @@ import decouple
 from django.core.mail import EmailMessage
 from django.db import transaction
 from rest_framework.views import APIView
+from django.db.models.functions import Coalesce
+from django.db.models import Value
 
 from db.task import VoucherLog, TaskList
 from db.user import User
@@ -31,7 +33,7 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week', 'event', 'description']
+        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -67,6 +69,8 @@ class ImportVoucherLogAPI(APIView):
             month = row.get('month')
             week = row.get('week')
             muid = row.get('muid')
+            description = row.get('description')
+            event = row.get('event')
             user_info = user_dict.get(muid)
             if user_info is None:
                 row['error'] = f"Invalid muid: {muid}"
@@ -80,8 +84,8 @@ class ImportVoucherLogAPI(APIView):
                 elif karma == 0:
                     row['error'] = "Karma cannot be 0"
                     error_rows.append(row)
-                elif month is None or week is None:
-                    row['error'] = "Month and week cannot be empty"
+                elif month is None:
+                    row['error'] = "Month cannot be empty"
                     error_rows.append(row)
                 else:
                     existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
@@ -107,8 +111,8 @@ class ImportVoucherLogAPI(APIView):
                         'karma': karma, 
                         'month': month, 
                         'week': week,
-                        'description': row.get('description'),
-                        'event': row.get('event')
+                        'description': description,
+                        'event': event
                         })
                     
         # Serializing and saving valid voucher rows to the database
@@ -120,11 +124,11 @@ class ImportVoucherLogAPI(APIView):
                     'code',
                     'user__muid', 
                     'month', 
-                    'week', 
                     'karma', 
                     'task__hashtag',
-                    'event',
-                    'description'
+                    'description',
+                    week_value=Coalesce('week', Value('')),
+                    event_value=Coalesce('event', Value(''))
                 )
                 if len(vouchers_to_send) != len(valid_rows):
                     transaction.set_rollback(True)
@@ -136,7 +140,7 @@ class ImportVoucherLogAPI(APIView):
             muid = voucher['user__muid']
             code = voucher['code']
             month = voucher['month']
-            week = voucher['week']
+            week = voucher['week_value']
             karma = voucher['karma']
             task_hashtag = voucher['task__hashtag']
             full_name = user_dict.get(muid)[2]
@@ -144,8 +148,8 @@ class ImportVoucherLogAPI(APIView):
             description = voucher['description']
             time_or_event = f'{month}/{week}'
 
-            event = voucher['event']
-            if event:
+            event = voucher['event_value']
+            if event != '':
                 time_or_event = f'{event}/{description}'
 
             # Preparing email context and attachment
