@@ -40,6 +40,7 @@ class ImportVoucherLogAPI(APIView):
                 return CustomResponse(general_message={f'{key} does not exist in the file.'}).get_failure_response()
         current_user = JWTUtils.fetch_user_id(request)
 
+        excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
         success_rows = []
@@ -126,7 +127,7 @@ class ImportVoucherLogAPI(APIView):
                     'month', 
                     'karma', 
                     'task__hashtag',
-                    'description',
+                    description_value=Coalesce('description', Value('')),
                     week_value=Coalesce('week', Value('')),
                     event_value=Coalesce('event', Value(''))
                 )
@@ -145,7 +146,7 @@ class ImportVoucherLogAPI(APIView):
             task_hashtag = voucher['task__hashtag']
             full_name = user_dict.get(muid)[2]
             email = user_dict.get(muid)[1]
-            description = voucher['description']
+            description = voucher['description_value']
             time_or_event = f'{month}/{week}'
 
             event = voucher['event_value']

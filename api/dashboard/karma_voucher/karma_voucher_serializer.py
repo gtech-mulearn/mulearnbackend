@@ -30,7 +30,7 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
             'updated_at', 
             'event', 
             'description'
-            ]
+            ]   
 
 
 class VoucherLogSerializer(serializers.ModelSerializer):
