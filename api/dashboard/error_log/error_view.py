@@ -54,7 +54,12 @@ class ViewErrorLogAPI(APIView):
 
 
 class ClearErrorLogAPI(APIView):
-    def get(self, request, log_name):
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    def post(self, request, log_name):
         error_log = f"{log_path}/{log_name}.log"
         if os.path.exists(error_log):
             try:
