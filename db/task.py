@@ -29,7 +29,7 @@ class Channel(models.Model):
 
     class Meta:
         managed = False
-        db_table = "channel"
+        db_table = "channels"
 
 
 

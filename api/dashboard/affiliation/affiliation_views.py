@@ -8,6 +8,7 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 from .serializers import AffiliationCUDSerializer, AffiliationListSerializer
 
+
 class AffiliationCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -18,7 +19,7 @@ class AffiliationCRUDAPI(APIView):
             affiliation,
             request,
             ['id', 'title']
-            
+
         )
 
         serializer = AffiliationListSerializer(
@@ -35,7 +36,7 @@ class AffiliationCRUDAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        
+
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = AffiliationCUDSerializer(
