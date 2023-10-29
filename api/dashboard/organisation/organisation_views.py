@@ -410,3 +410,17 @@ class DepartmentAPI(APIView):
         return CustomResponse(
             general_message=f"{department.title} deleted successfully"
         ).get_success_response()
+
+
+class AffiliationListAPI(APIView):
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+
+        affiliation = OrgAffiliation.objects.all().values(
+            'id',
+            'title'
+        )
+
+        return CustomResponse(
+            response=affiliation
+        ).get_success_response()

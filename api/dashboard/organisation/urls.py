@@ -20,4 +20,5 @@ urlpatterns = [
     path('departments/create/', organisation_views.DepartmentAPI.as_view()),
     path('departments/edit/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
     path('departments/delete/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
+    path('affiliation/list/', organisation_views.AffiliationListAPI.as_view()),
 ]
