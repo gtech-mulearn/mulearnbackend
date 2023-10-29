@@ -10,3 +10,9 @@ class StudentInfoSerializer(serializers.Serializer):
     organisation = serializers.CharField()
     dwms_id = serializers.CharField(allow_null=True)
     karma_earned = serializers.IntegerField()
+
+
+class CollegeInfoSerializer(serializers.Serializer):
+    org_title = serializers.CharField()
+    learning_circle_count = serializers.CharField()
+    user_count = serializers.CharField()
