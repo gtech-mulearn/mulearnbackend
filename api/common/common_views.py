@@ -19,7 +19,6 @@ from .serializer import StudentInfoSerializer, CollegeInfoSerializer
 class LcDashboardAPI(APIView):
     def get(self, request):
         date = request.query_params.get("date")
-        print(date)
         if date:
             learning_circle_count = LearningCircle.objects.filter(
                 created_at__gt=date
@@ -201,14 +200,25 @@ class CollegeWiseLcReportCSV(APIView):
 
 class CollegeWiseLcReport(APIView):
     def get(self, request):
-        learning_circles_info = (
-            LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
-            .values(org_title=F("org__title"))
-            .annotate(
-                learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+        date = request.query_params.get('date')
+        if date:
+            learning_circles_info = (
+                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
+                .values(org_title=F("org__title"))
+                .annotate(
+                    learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                )
+                .order_by("org_title")
             )
-            .order_by("org_title")
-        )
+        else:
+            learning_circles_info = (
+                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+                .values(org_title=F("org__title"))
+                .annotate(
+                    learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                )
+                .order_by("org_title")
+            )
 
         return CustomResponse(response=learning_circles_info).get_success_response()
 
