@@ -206,3 +206,30 @@ class DepartmentSerializer(serializers.ModelSerializer):
         instance.updated_by_id = user_id
         instance.save()
         return instance
+
+
+class InstitutionPrefillSerializer(serializers.ModelSerializer):
+    district_id = serializers.CharField(source='district.id')
+    district_name = serializers.CharField(source='district.name')
+    affiliation_id = serializers.CharField(source='affiliation.id', allow_null=True)
+    affiliation_name = serializers.CharField(source='affiliation.name', allow_null=True)
+    state_id = serializers.CharField(source='district.state.id', allow_null=True)
+    state_name = serializers.CharField(source='district.state.name', allow_null=True)
+    country_id = serializers.CharField(source='district.state.country.id', allow_null=True)
+    country_name = serializers.CharField(source='district.state.country.name', allow_null=True)
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "affiliation_id",
+            "affiliation_name",
+            "district_id",
+            "district_name",
+            "state_id",
+            "state_name",
+            "country_id",
+            "country_name",
+        ]
