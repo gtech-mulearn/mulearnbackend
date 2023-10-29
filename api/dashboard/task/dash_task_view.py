@@ -64,7 +64,7 @@ class TaskListAPI(APIView):
                 "title": "title",
                 "description": "description",
                 "karma": "karma",
-                "channel": "channel__name",
+                "channels": "channel__name",
                 "type": "type__title",
                 "active": "active",
                 "variable_karma": "variable_karma",
@@ -191,7 +191,7 @@ class TaskListCSV(APIView):
         task_queryset = TaskList.objects.select_related(
             "created_by",
             "updated_by",
-            "channel",
+            "channels",
             "type",
             "level",
             "ig",
@@ -243,7 +243,7 @@ class ImportTaskListCSV(APIView):
             "usage_count",
             "variable_karma",
             "level",
-            "channel",
+            "channels",
             "type",
             "ig",
             "org",
@@ -268,7 +268,7 @@ class ImportTaskListCSV(APIView):
         for row in excel_data[1:]:
             hashtag = row.get("hashtag")
             level = row.get("level")
-            channel = row.get("channel")
+            channel = row.get("channels")
             task_type = row.get("type")
             ig = row.get("ig")
             org = row.get("org")
@@ -325,7 +325,7 @@ class ImportTaskListCSV(APIView):
         for row in excel_data[1:]:
             hashtag = row.get("hashtag")
             level = row.pop("level")
-            channel = row.pop("channel")
+            channel = row.pop("channels")
             task_type = row.pop("type")
             ig = row.pop("ig")
             org = row.pop("org")
@@ -340,7 +340,7 @@ class ImportTaskListCSV(APIView):
                 row["error"] = f"Hashtag already exists: {hashtag}"
                 error_rows.append(row)
             elif not channel_id:
-                row["error"] = f"Invalid channel ID: {channel}"
+                row["error"] = f"Invalid channels ID: {channel}"
                 error_rows.append(row)
             elif not task_type_id:
                 row["error"] = f"Invalid task type ID: {task_type}"

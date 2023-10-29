@@ -6,20 +6,30 @@ from db.organization import Organization
 from .user import User
 
 # fmt: off
-
+# noinspection PyPep8
 
 class Channel(models.Model):
-    id                   = models.CharField(primary_key=True, max_length=36)
-    name                 = models.CharField(max_length=75)
-    discord_id           = models.CharField(max_length=36)
-    updated_by           = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by", related_name="channel_updated_by")
-    updated_at           = models.DateTimeField(auto_now=True)
-    created_by           = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by", related_name="channel_created_by")
-    created_at           = models.DateTimeField(auto_now_add=True)
+    id = models.CharField(primary_key=True, max_length=36)
+    name = models.CharField(max_length=75, unique=True)
+    discord_id = models.CharField(max_length=36)
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column="updated_by",
+        related_name="channel_updated_by",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column="created_by",
+        related_name="channel_created_by",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
-        db_table = "channel"
+        db_table = "channels"
 
 
 

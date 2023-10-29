@@ -139,7 +139,7 @@ class ReferralSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserReferralLink
         fields = ["muid", "user", "invite_code", "is_coin"]
-    
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         if "muid" in data:
@@ -272,6 +272,7 @@ class UserSerializer(serializers.ModelSerializer):
             "dob",
             "gender",
             "role",
+            "district"
         ]
 
 
@@ -331,3 +332,14 @@ class UserZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zone
         fields = ["zone_name"]
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    location = serializers.SerializerMethodField()
+
+    class Meta:
+        model = District
+        fields = ("id", "location")
+
+    def get_location(self, obj):
+        return f"{obj.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"

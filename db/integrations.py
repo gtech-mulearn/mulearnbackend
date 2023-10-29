@@ -3,7 +3,9 @@ import uuid
 from django.db import models
 
 from db.user import User
+
 # fmt: off
+# noinspection PyPep8
 
 class Integration(models.Model):
     id                = models.CharField(primary_key=True, default=uuid.uuid4, max_length=36)
