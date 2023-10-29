@@ -14,6 +14,7 @@ class User(models.Model):
     email = models.EmailField(unique=True, max_length=200)
     password = models.CharField(max_length=200, blank=True, null=True)
     mobile = models.CharField(unique=True, max_length=15)
+    district = models.ForeignKey("district", models.DO_NOTHING, blank=True, null=True)
     gender = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"), ("Female", "Female")])
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
