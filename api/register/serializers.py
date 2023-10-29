@@ -272,6 +272,7 @@ class UserSerializer(serializers.ModelSerializer):
             "dob",
             "gender",
             "role",
+            "district"
         ]
 
 
