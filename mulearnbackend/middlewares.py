@@ -147,23 +147,5 @@ class UniversalErrorHandlerMiddleware:
             A response object.
 
         """
-        if isinstance(exception, CustomException):
-            response = CustomResponse(
-                general_message=exception.detail,
-            ).get_failure_response(status_code=exception.status_code)
-        else:
-            self.log_exception(request, exception)
-            response = CustomResponse(
-                general_message="Something went wrong"
-            ).get_failure_response()
-
-        # Set the renderer and renderer context
-        renderer = JSONRenderer()
-        response.accepted_renderer = renderer
-        response.accepted_media_type = renderer.media_type
-        response.renderer_context = {
-            "request": request,
-            "view": None,
-        }
-
-        return response.render()
+        self.log_exception(request, exception)
+        raise exception
