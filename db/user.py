@@ -4,6 +4,7 @@ from django.db import models
 
 
 # fmt: off
+# noinspection PyPep8
 
 class User(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)

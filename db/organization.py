@@ -3,7 +3,9 @@ import uuid
 from django.db import models
 
 from .user import User
+
 # fmt: off
+# noinspection PyPep8
 
 class Country(models.Model):
     id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)

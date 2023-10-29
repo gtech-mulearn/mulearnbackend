@@ -2,7 +2,9 @@ from django.db import models
 
 from db.task import InterestGroup, Organization
 from db.user import User
+
 # fmt: off
+# noinspection PyPep8
 
 class LearningCircle(models.Model):
     id         = models.CharField(primary_key=True, max_length=36)
