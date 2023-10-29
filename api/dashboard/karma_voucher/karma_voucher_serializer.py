@@ -15,8 +15,22 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = VoucherLog
-        fields = ['id', 'code', 'user_id', 'task_id', 'karma', 'month', 'week', 'claimed', 'created_by_id',
-                  'updated_by_id', 'created_at', 'updated_at']
+        fields = [
+            'id', 
+            'code', 
+            'user_id', 
+            'task_id', 
+            'karma', 
+            'month', 
+            'week', 
+            'claimed', 
+            'created_by_id',
+            'updated_by_id', 
+            'created_at', 
+            'updated_at', 
+            'event', 
+            'description'
+            ]   
 
 
 class VoucherLogSerializer(serializers.ModelSerializer):
@@ -37,6 +51,8 @@ class VoucherLogSerializer(serializers.ModelSerializer):
             "month",
             "week",
             "claimed",
+            "description",
+            "event",
             "created_by",
             "updated_by",
             "created_at",

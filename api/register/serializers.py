@@ -128,7 +128,7 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["user", "organizations", "verified", "department", "graduation_year"]
+        fields = ["user", "organizations", "department", "graduation_year"]
 
 
 class ReferralSerializer(serializers.ModelSerializer):
