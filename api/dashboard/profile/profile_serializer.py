@@ -341,6 +341,7 @@ class LinkSocials(ModelSerializer):
             "behance",
             "stackoverflow",
             "medium",
+            "hackerrank"
         ]
 
     def update(self, instance, validated_data):
@@ -354,6 +355,7 @@ class LinkSocials(ModelSerializer):
             "behance",
             "stackoverflow",
             "medium",
+            "hackerrank"
         ]
 
         old_accounts = {account: getattr(instance, account) for account in accounts}
