@@ -291,7 +291,7 @@ class UserZoneAPI(APIView):
 class LocationSearchView(APIView):
     def get(self, request):
         query = request.GET.get("q")
-        MAX_RESULTS = 5
+        MAX_RESULTS = 7
 
         if not query:
             return CustomResponse(
@@ -304,11 +304,12 @@ class LocationSearchView(APIView):
         query_filter = Q()
         for q in queries:
             query_filter |= Q(name__icontains=q)
-            query_filter |= Q(zone__name__icontains=q)
             query_filter |= Q(zone__state__name__icontains=q)
             query_filter |= Q(zone__state__country__name__icontains=q)
 
-        districts = District.objects.filter(query_filter)[:MAX_RESULTS]
+        districts = District.objects.filter(query_filter).select_related(
+            "zone__state", "zone__state__country"
+        )[:MAX_RESULTS]
         all_districts = serializers.LocationSerializer(districts, many=True).data
 
         return CustomResponse(response=all_districts).get_success_response()
