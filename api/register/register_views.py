@@ -11,72 +11,42 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import send_template_mail
 from . import serializers
+from .register_helper import get_auth_token
 
 
 class UserRegisterValidateAPI(APIView):
     def put(self, request):
-
-        serialized_user = serializers.UserSerializer(
-            data=request.data
-        )
+        serialized_user = serializers.RegisterSerializer(data=request.data)
 
         if not serialized_user.is_valid():
             return CustomResponse(
                 general_message=serialized_user.errors
             ).get_failure_response()
 
-        return CustomResponse(
-            response=serialized_user.data
-        ).get_success_response()
+        return CustomResponse(response=serialized_user.data).get_success_response()
 
 
 class RoleAPI(APIView):
     def get(self, request):
-        role = Role.objects.all().values(
-            "id",
-            "title"
-        )
-
-        role_serializer_data = serializers.BaseSerializer(
-            role,
-            many=True
-        ).data
-
-        return CustomResponse(
-            response={"roles": role_serializer_data}
-        ).get_success_response()
+        roles = Role.objects.all().values("id", "title")
+        return CustomResponse(response={"roles": roles}).get_success_response()
 
 
 class CollegesAPI(APIView):
     def get(self, request):
-
-        college = Organization.objects.filter(
+        colleges = Organization.objects.filter(
             org_type=OrganizationType.COLLEGE.value
-        ).values(
-            "id",
-            "title"
-        )
+        ).values("id", "title")
 
-        college_serializer_data = serializers.BaseSerializer(
-            college,
-            many=True
-        ).data
-
-        return CustomResponse(
-            response={"colleges": college_serializer_data}
-        ).get_success_response()
+        return CustomResponse(response={"colleges": colleges}).get_success_response()
 
 
 class DepartmentAPI(APIView):
     def get(self, request):
-        department_serializer = Department.objects.all().values(
-            "id",
-            "title"
-        )
+        department_serializer = Department.objects.all().values("id", "title")
 
         department_serializer_data = serializers.BaseSerializer(
-            department_serializer,
-            many=True
+            department_serializer, many=True
         ).data
 
         return CustomResponse(
@@ -86,17 +56,12 @@ class DepartmentAPI(APIView):
 
 class CompanyAPI(APIView):
     def get(self, request):
-
         company_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMPANY.value
-        ).values(
-            "id",
-            "title"
-        )
+        ).values("id", "title")
 
         company_serializer_data = serializers.BaseSerializer(
-            company_queryset,
-            many=True
+            company_queryset, many=True
         ).data
 
         return CustomResponse(
@@ -111,13 +76,9 @@ class LearningCircleUserViewAPI(APIView):
         user = User.objects.filter(muid=muid).first()
 
         if user is None:
-            return CustomResponse(
-                general_message="Invalid muid"
-            ).get_failure_response()
+            return CustomResponse(general_message="Invalid muid").get_failure_response()
 
-        serializer = serializers.LearningCircleUserSerializer(
-            user
-        )
+        serializer = serializers.LearningCircleUserSerializer(user)
         id, muid, first_name, last_name, email, phone = serializer.data.values()
 
         name = f"{first_name}{last_name or ''}"
@@ -148,33 +109,9 @@ class RegisterDataAPI(APIView):
         user = create_user.save()
         password = request.data["user"]["password"]
 
-        AUTH_DOMAIN = decouple.config("AUTH_DOMAIN")
-        response = requests.post(
-            f"{AUTH_DOMAIN}/api/v1/auth/user-authentication/",
-            data={
-                "emailOrMuid": user.muid,
-                "password": password
-            },
-        )
-        response = response.json()
-        if response.get("statusCode") != 200:
-            return CustomResponse(
-                message=response.get("message")
-            ).get_failure_response()
+        res_data = get_auth_token(user.muid, password)
 
-        res_data = response.get("response")
-        access_token = res_data.get("accessToken")
-        refresh_token = res_data.get("refreshToken")
-
-        response = {
-            "accessToken": access_token,
-            "refreshToken": refresh_token,
-        }
-
-        response_data = serializers.UserDetailSerializer(
-            user,
-            many=False
-        ).data
+        response_data = serializers.UserDetailSerializer(user, many=False).data
 
         send_template_mail(
             context=response_data,
@@ -182,21 +119,16 @@ class RegisterDataAPI(APIView):
             address=["user_registration.html"],
         )
 
-        response["data"] = response_data
+        res_data["data"] = response_data
 
-        return CustomResponse(
-            response=response
-        ).get_success_response()
+        return CustomResponse(response=res_data).get_success_response()
 
 
 class CountryAPI(APIView):
     def get(self, request):
         countries = Country.objects.all()
 
-        serializer = serializers.CountrySerializer(
-            countries,
-            many=True
-        )
+        serializer = serializers.CountrySerializer(countries, many=True)
 
         return CustomResponse(
             response={
@@ -207,13 +139,8 @@ class CountryAPI(APIView):
 
 class StateAPI(APIView):
     def post(self, request):
-        state = State.objects.filter(
-            country_id=request.data.get("country")
-        )
-        serializer = serializers.StateSerializer(
-            state,
-            many=True
-        )
+        state = State.objects.filter(country_id=request.data.get("country"))
+        serializer = serializers.StateSerializer(state, many=True)
 
         return CustomResponse(
             response={
@@ -224,14 +151,9 @@ class StateAPI(APIView):
 
 class DistrictAPI(APIView):
     def post(self, request):
-        district = District.objects.filter(
-            zone__state_id=request.data.get("state")
-        )
+        district = District.objects.filter(zone__state_id=request.data.get("state"))
 
-        serializer = serializers.DistrictSerializer(
-            district,
-            many=True
-        )
+        serializer = serializers.DistrictSerializer(district, many=True)
 
         return CustomResponse(
             response={
@@ -249,13 +171,11 @@ class CollegeAPI(APIView):
         department_queryset = Department.objects.all()
 
         college_serializer_data = serializers.OrgSerializer(
-            org_queryset,
-            many=True
+            org_queryset, many=True
         ).data
 
         department_serializer_data = serializers.OrgSerializer(
-            department_queryset,
-            many=True
+            department_queryset, many=True
         ).data
 
         return CustomResponse(
@@ -273,8 +193,7 @@ class CommunityAPI(APIView):
         )
 
         community_serializer_data = serializers.OrgSerializer(
-            community_queryset,
-            many=True
+            community_queryset, many=True
         ).data
 
         return CustomResponse(
@@ -287,8 +206,7 @@ class AreaOfInterestAPI(APIView):
         aoi_queryset = InterestGroup.objects.all()
 
         aoi_serializer_data = serializers.AreaOfInterestAPISerializer(
-            aoi_queryset,
-            many=True
+            aoi_queryset, many=True
         ).data
 
         return CustomResponse(
@@ -300,18 +218,13 @@ class UserEmailVerificationAPI(APIView):
     def post(self, request):
         user_email = request.data.get("email")
 
-        if user := User.objects.filter(
-                email=user_email
-        ).first():
-
+        if user := User.objects.filter(email=user_email).first():
             return CustomResponse(
-                general_message="This email already exists",
-                response={"value": True}
+                general_message="This email already exists", response={"value": True}
             ).get_success_response()
         else:
             return CustomResponse(
-                general_message="User email not exist",
-                response={"value": False}
+                general_message="User email not exist", response={"value": False}
             ).get_success_response()
 
 
@@ -324,75 +237,79 @@ class UserCountryAPI(APIView):
                 general_message="No data available"
             ).get_success_response()
 
-        country_serializer = serializers.UserCountrySerializer(
-            country,
-            many=True
-        ).data
+        country_serializer = serializers.UserCountrySerializer(country, many=True).data
 
-        return CustomResponse(
-            response=country_serializer
-        ).get_success_response()
+        return CustomResponse(response=country_serializer).get_success_response()
 
 
 class UserStateAPI(APIView):
     def get(self, request):
         country_name = request.data.get("country")
 
-        country_object = Country.objects.filter(
-            name=country_name
-        ).first()
+        country_object = Country.objects.filter(name=country_name).first()
 
         if country_object is None:
             return CustomResponse(
                 general_message="No country data available"
             ).get_success_response()
 
-        state_object = State.objects.filter(
-            country_id=country_object
-        ).all()
+        state_object = State.objects.filter(country_id=country_object).all()
 
         if len(state_object) == 0:
             return CustomResponse(
                 general_message="No state data available for given country"
             ).get_success_response()
 
-        state_serializer = serializers.UserStateSerializer(
-            state_object,
-            many=True
-        ).data
+        state_serializer = serializers.UserStateSerializer(state_object, many=True).data
 
-        return CustomResponse(
-            response=state_serializer
-        ).get_success_response()
+        return CustomResponse(response=state_serializer).get_success_response()
 
 
 class UserZoneAPI(APIView):
     def get(self, request):
         state_name = request.data.get("state")
 
-        state_object = State.objects.filter(
-            name=state_name
-        ).first()
+        state_object = State.objects.filter(name=state_name).first()
 
         if state_object is None:
             return CustomResponse(
                 general_message="No state data available"
             ).get_success_response()
 
-        zone_object = Zone.objects.filter(
-            state_id=state_object
-        ).all()
+        zone_object = Zone.objects.filter(state_id=state_object).all()
 
         if len(zone_object) == 0:
             return CustomResponse(
                 general_message="No zone data available for given country"
             ).get_success_response()
 
-        zone_serializer = serializers.UserZoneSerializer(
-            zone_object,
-            many=True
-        ).data
+        zone_serializer = serializers.UserZoneSerializer(zone_object, many=True).data
 
-        return CustomResponse(
-            response=zone_serializer
-        ).get_success_response()
+        return CustomResponse(response=zone_serializer).get_success_response()
+
+
+class LocationSearchView(APIView):
+    def get(self, request):
+        query = request.GET.get("q")
+        MAX_RESULTS = 7
+
+        if not query:
+            return CustomResponse(
+                general_message="Query parameter 'q' is required"
+            ).get_failure_response()
+
+        queries = [q.strip() for q in query.split(",")]
+
+        # Building the Q object for the OR-based lookup
+        query_filter = Q()
+        for q in queries:
+            query_filter |= Q(name__icontains=q)
+            query_filter |= Q(zone__state__name__icontains=q)
+            query_filter |= Q(zone__state__country__name__icontains=q)
+
+        districts = District.objects.filter(query_filter).select_related(
+            "zone__state", "zone__state__country"
+        )[:MAX_RESULTS]
+        all_districts = serializers.LocationSerializer(districts, many=True).data
+
+        return CustomResponse(response=all_districts).get_success_response()

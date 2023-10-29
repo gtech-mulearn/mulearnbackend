@@ -1,8 +1,9 @@
+from contextlib import suppress
 import hmac
+import json
 import json
 import logging
 import traceback
-from contextlib import suppress
 
 import decouple
 from django.conf import settings
@@ -91,11 +92,14 @@ class UniversalErrorHandlerMiddleware:
         self.get_response = get_response
 
     def __call__(self, request):
+        # Cache the body
+        _ = request.body
         return self.get_response(request)
+
 
     def log_exception(self, request, exception):
         """
-        Log the exception and prints the information in CLI if DEBUG is True.
+        Log the exception and prints the information in CLI.
 
         Args:
             request: The request object.
@@ -109,24 +113,27 @@ class UniversalErrorHandlerMiddleware:
         )
         logger.error(error_message)
 
-        if settings.DEBUG:
-            print(error_message)
+        print(error_message)
 
-        data = request.body.decode('utf-8')) if hasattr(request, 'body') else 'No Data'
+        body = request._body.decode("utf-8") if hasattr(request, "_body") else "No body"
+        auth = request.auth if hasattr(request, "auth") else "No Auth data"
 
         with suppress(json.JSONDecodeError):
-            data = json.loads(data)
+            body = json.loads(body)
+            body = json.dumps(body, indent=4)
+
+        with suppress(json.JSONDecodeError):
+            auth = json.dumps(auth, indent=4)
 
         request_info = (
             f"Request Info: METHOD: {request.method}; \n"
-            f"\tPATH: {request.path}; \n"
-            f"\tDATA: {data}\n"
+            f"PATH: {request.path}; \n"
+            f"AUTH: \n{auth} \n"
+            f"BODY: \n{body}\n"
         )
         logger.error(request_info)
 
-        # Print to terminal if DEBUG is True
-        if settings.DEBUG:
-            print(request_info)
+        print(request_info)
 
     def process_exception(self, request, exception):
         """
@@ -140,23 +147,5 @@ class UniversalErrorHandlerMiddleware:
             A response object.
 
         """
-        if isinstance(exception, CustomException):
-            response = CustomResponse(
-                general_message=exception.detail,
-            ).get_failure_response(status_code=exception.status_code)
-        else:
-            self.log_exception(request, exception)
-            response = CustomResponse(
-                general_message="Something went wrong"
-            ).get_failure_response()
-
-        # Set the renderer and renderer context
-        renderer = JSONRenderer()
-        response.accepted_renderer = renderer
-        response.accepted_media_type = renderer.media_type
-        response.renderer_context = {
-            "request": request,
-            "view": None,
-        }
-
-        return response.render()
+        self.log_exception(request, exception)
+        raise exception

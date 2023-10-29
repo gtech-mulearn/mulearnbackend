@@ -3,17 +3,19 @@ import uuid
 from django.db import models
 
 
+# fmt: off
+
 class User(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    discord_id = models.CharField(
-        unique=True, max_length=36, blank=True, null=True)
+    discord_id = models.CharField(unique=True, max_length=36, blank=True, null=True)
     muid = models.CharField(unique=True, max_length=100)
     first_name = models.CharField(max_length=75)
     last_name = models.CharField(max_length=75, blank=True, null=True)
     email = models.EmailField(unique=True, max_length=200)
     password = models.CharField(max_length=200, blank=True, null=True)
     mobile = models.CharField(unique=True, max_length=15)
-    gender = models.CharField(max_length=10, blank=True, null=True)
+    district = models.ForeignKey("district", models.DO_NOTHING, blank=True, null=True)
+    gender = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"), ("Female", "Female")])
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
     active = models.BooleanField(default=True)
@@ -54,12 +56,12 @@ class Role(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=75)
     description = models.CharField(max_length=300, blank=True, null=True)
-    updated_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, db_column='updated_by', related_name='role_updated_by')
-    updated_at = models.DateTimeField()
-    created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, db_column='created_by', related_name='role_created_by')
-    created_at = models.DateTimeField()
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='role_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='role_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -91,6 +93,7 @@ class Socials(models.Model):
     behance = models.CharField(max_length=60, blank=True, null=True)
     stackoverflow = models.CharField(max_length=60, blank=True, null=True)
     medium = models.CharField(max_length=60, blank=True, null=True)
+    hackerrank = models.CharField(max_length=60, blank=True, null=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='socials_created_by')
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
@@ -107,7 +110,7 @@ class ForgotPassword(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey(User, on_delete=models.CASCADE)
     expiry = models.DateTimeField()
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -136,10 +139,10 @@ class DynamicRole(models.Model):
     role = models.ForeignKey(Role, on_delete=models.CASCADE, db_column='role', related_name='dynamic_role_role')
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='dynamic_role_updated_by')
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='dynamic_role_created_by')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -152,10 +155,10 @@ class DynamicUser(models.Model):
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='dynamic_user_user')
     updated_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='dynamic_user_updated_by')
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey('User', on_delete=models.CASCADE, db_column='created_by',
                                    related_name='dynamic_user_created_by')
-    created_at = models.DateTimeField()
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False

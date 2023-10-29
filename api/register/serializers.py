@@ -77,13 +77,6 @@ class AreaOfInterestAPISerializer(serializers.ModelSerializer):
 
 class UserDetailSerializer(serializers.ModelSerializer):
     role = serializers.SerializerMethodField()
-    fullname = serializers.SerializerMethodField()
-
-    def get_fullname(self, obj):
-        if obj.last_name is None:
-            return obj.first_name
-
-        return f"{obj.first_name} {obj.last_name}"
 
     def get_role(self, obj):
         role_link = obj.user_role_link_user.filter(
@@ -96,8 +89,6 @@ class UserDetailSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "muid",
-            "first_name",
-            "last_name",
             "email",
             "role",
             "fullname",
@@ -137,7 +128,7 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserOrganizationLink
-        fields = ["user", "organizations", "verified", "department", "graduation_year"]
+        fields = ["user", "organizations", "department", "graduation_year"]
 
 
 class ReferralSerializer(serializers.ModelSerializer):
@@ -148,6 +139,12 @@ class ReferralSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserReferralLink
         fields = ["muid", "user", "invite_code", "is_coin"]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        if "muid" in data:
+            data["muid"] = instance.get("muid").muid
+        return data
 
     def validate(self, attrs):
         if not attrs.get("muid", None) and not attrs.get("invite_code", None):
@@ -231,8 +228,6 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), required=False, write_only=True
     )
-    referral = ReferralSerializer(required=False)
-    integration = IntegrationSerializer(required=False)
 
     def create(self, validated_data):
         role = validated_data.pop("role", None)
@@ -274,9 +269,10 @@ class UserSerializer(serializers.ModelSerializer):
             "email",
             "mobile",
             "password",
+            "dob",
+            "gender",
             "role",
-            "integration",
-            "referral",
+            "district"
         ]
 
 
@@ -336,3 +332,14 @@ class UserZoneSerializer(serializers.ModelSerializer):
     class Meta:
         model = Zone
         fields = ["zone_name"]
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    location = serializers.SerializerMethodField()
+
+    class Meta:
+        model = District
+        fields = ("id", "location")
+
+    def get_location(self, obj):
+        return f"{obj.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"

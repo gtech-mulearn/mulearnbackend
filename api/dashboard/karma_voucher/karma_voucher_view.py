@@ -5,6 +5,8 @@ import decouple
 from django.core.mail import EmailMessage
 from django.db import transaction
 from rest_framework.views import APIView
+from django.db.models.functions import Coalesce
+from django.db.models import Value
 
 from db.task import VoucherLog, TaskList
 from db.user import User
@@ -14,7 +16,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from utils.utils import ImportCSV, CommonUtils
-from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer
+from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer, VoucherLogUpdateSerializer
 
 
 class ImportVoucherLogAPI(APIView):
@@ -38,6 +40,7 @@ class ImportVoucherLogAPI(APIView):
                 return CustomResponse(general_message={f'{key} does not exist in the file.'}).get_failure_response()
         current_user = JWTUtils.fetch_user_id(request)
 
+        excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
         success_rows = []
@@ -67,6 +70,8 @@ class ImportVoucherLogAPI(APIView):
             month = row.get('month')
             week = row.get('week')
             muid = row.get('muid')
+            description = row.get('description')
+            event = row.get('event')
             user_info = user_dict.get(muid)
             if user_info is None:
                 row['error'] = f"Invalid muid: {muid}"
@@ -80,8 +85,8 @@ class ImportVoucherLogAPI(APIView):
                 elif karma == 0:
                     row['error'] = "Karma cannot be 0"
                     error_rows.append(row)
-                elif month is None or week is None:
-                    row['error'] = "Month and week cannot be empty"
+                elif month is None:
+                    row['error'] = "Month cannot be empty"
                     error_rows.append(row)
                 else:
                     existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
@@ -106,7 +111,9 @@ class ImportVoucherLogAPI(APIView):
                         'task': task_hashtag, 
                         'karma': karma, 
                         'month': month, 
-                        'week': week
+                        'week': week,
+                        'description': description,
+                        'event': event
                         })
                     
         # Serializing and saving valid voucher rows to the database
@@ -118,9 +125,11 @@ class ImportVoucherLogAPI(APIView):
                     'code',
                     'user__muid', 
                     'month', 
-                    'week', 
                     'karma', 
-                    'task__hashtag'
+                    'task__hashtag',
+                    description_value=Coalesce('description', Value('')),
+                    week_value=Coalesce('week', Value('')),
+                    event_value=Coalesce('event', Value(''))
                 )
                 if len(vouchers_to_send) != len(valid_rows):
                     transaction.set_rollback(True)
@@ -132,11 +141,112 @@ class ImportVoucherLogAPI(APIView):
             muid = voucher['user__muid']
             code = voucher['code']
             month = voucher['month']
-            week = voucher['week']
+            week = voucher['week_value']
             karma = voucher['karma']
             task_hashtag = voucher['task__hashtag']
             full_name = user_dict.get(muid)[2]
             email = user_dict.get(muid)[1]
+            description = voucher['description_value']
+            time_or_event = f'{month}/{week}'
+
+            event = voucher['event_value']
+            if event != '':
+                time_or_event = f'{event}/{description}'
+
+            # Preparing email context and attachment
+            from_mail = decouple.config("FROM_MAIL")
+            subject = "Congratulations on earning Karma points!"
+            text = f"""Greetings from GTech µLearn!
+
+            Great news! You are just one step away from claiming your internship/contribution Karma points.
+            
+            Name: {full_name}
+            Email: {email}
+            
+            To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
+            """
+
+            karma_voucher_image = generate_karma_voucher(
+                name=str(full_name), karma=str(int(karma)), code=code, hashtag=task_hashtag,
+                month=time_or_event)
+            karma_voucher_image.seek(0)
+            email_obj = EmailMessage(
+                subject=subject,
+                body=text,
+                from_email=from_mail,
+                to=[email],
+            )
+            attachment = MIMEImage(karma_voucher_image.read())
+            attachment.add_header(
+                'Content-Disposition',
+                'attachment',
+                filename=f'{str(full_name)}.jpg',
+            )
+            email_obj.attach(attachment)
+            email_obj.send(fail_silently=False)
+            
+        return CustomResponse(
+            response={"Success": success_rows, "Failed": error_rows}
+        ).get_success_response()
+
+class VoucherLogAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    def get(self, request):
+        voucher_queryset = VoucherLog.objects.all()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            voucher_queryset, request,
+            search_fields=["user__first_name", "user__last_name",
+                           "task__title", "karma", "month", "week", "claimed",
+                           "updated_by__first_name", "updated_by__last_name",
+                           "created_by__first_name", "created_by__last_name",
+                           "description", "event", "code"],
+
+            sort_fields={'user': 'user__first_name',
+                         'code': 'code',
+                         'karma': 'karma',
+                         'claimed': 'claimed',
+                         'task': 'task__title',
+                         'week': 'week',
+                         'month': 'month',
+                         'updated_by': 'updated_by__first_name',
+                         'updated_at': 'updated_at',
+                         'created_at': 'created_at',
+                         'event': 'event',
+                         'description': 'description'
+                         }
+        )
+        voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
+        return CustomResponse().paginated_response(data=voucher_serializer,
+                                                   pagination=paginated_queryset.get('pagination'))
+    
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    def post(self, request):
+        serializer = VoucherLogCreateSerializer(data=request.data, context={'request': request})
+        if serializer.is_valid():
+            with transaction.atomic():
+                id = serializer.save().id
+                voucher = VoucherLog.objects.filter(id=id).values(
+                    'code',
+                    'user__first_name',
+                    'user__last_name',
+                    'user__email',
+                    'task__hashtag',
+                    'month',
+                    'week',
+                    'karma'
+                ).first()
+                if not voucher :
+                    transaction.set_rollback(True)
+                    return CustomResponse(general_message='Something went wrong. Please try again.').get_failure_response()
+            code = voucher['code']
+            month = voucher['month']
+            week = voucher['week']
+            karma = voucher['karma']
+            task_hashtag = voucher['task__hashtag']
+            full_name = voucher['user__first_name'] if voucher['user__last_name'] is None else f"{voucher['user__first_name']} {voucher['user__last_name']}"
+            email = voucher['user__email']
 
             # Preparing email context and attachment
             from_mail = decouple.config("FROM_MAIL")
@@ -170,40 +280,31 @@ class ImportVoucherLogAPI(APIView):
             )
             email_obj.attach(attachment)
             email_obj.send(fail_silently=False)
-            
-        return CustomResponse(
-            response={"Success": success_rows, "Failed": error_rows}
-        ).get_success_response()
-
-class VoucherLogAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
+            return CustomResponse(general_message='Voucher created successfully',
+                                  response=serializer.data).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+    
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
-    def get(self, request):
-        voucher_queryset = VoucherLog.objects.all()
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            voucher_queryset, request,
-            search_fields=["user__first_name", "user__last_name",
-                           "task__title", "karma", "month", "week", "claimed",
-                           "updated_by__first_name", "updated_by__last_name",
-                           "created_by__first_name", "created_by__last_name"],
-
-            sort_fields={'user': 'user__first_name',
-                         'code': 'code',
-                         'karma': 'karma',
-                         'claimed': 'claimed',
-                         'task': 'task__title',
-                         'week': 'week',
-                         'month': 'month',
-                         'updated_by': 'updated_by__first_name',
-                         'updated_at': 'updated_at',
-                         'created_at': 'created_at'
-                         }
-        )
-        voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
-        return CustomResponse().paginated_response(data=voucher_serializer,
-                                                   pagination=paginated_queryset.get('pagination'))
-
+    def patch(self, request, voucher_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        context = {'user_id': user_id}
+        voucher = VoucherLog.objects.filter(id=voucher_id).first()
+        serializer = VoucherLogUpdateSerializer(voucher, data=request.data, context=context)
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Voucher updated successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+    
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]) 
+    def delete(self, request, voucher_id):
+        if voucher_log := VoucherLog.objects.filter(id=voucher_id).first():
+            VoucherLogUpdateSerializer().destroy(voucher_log)
+            return CustomResponse(
+                general_message=f'Voucher successfully deleted'
+            ).get_success_response()
+        return CustomResponse(
+            general_message=f'Invalid Voucher'
+        ).get_failure_response()
 
 class ExportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
