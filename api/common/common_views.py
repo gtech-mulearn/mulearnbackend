@@ -1,3 +1,6 @@
+import json
+
+import requests
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
@@ -229,3 +232,35 @@ class GlobalCountAPI(APIView):
             "learning_circle_count": learning_circles_count,
         }
         return CustomResponse(response=data).get_success_response()
+
+
+class GTASANDSHOREAPI(APIView):
+    def get(self, request):
+
+        response = requests.get('https://devfolio.vez.social/rank')
+        if response.status_code == 200:
+            # Save JSON response to a local file
+            with open('response.json', 'w') as json_file:
+                json.dump(response.json(), json_file)
+
+            with open('response.json', 'r') as file:
+                data = json.load(file)
+        else:
+            with open('response.json', 'r') as file:
+                data = json.load(file)
+
+        # Create a dictionary to store the grouped data
+        grouped_colleges = {}
+
+        for college, count in data.items():
+            # Clean the college name by removing spaces and converting to lowercase
+            cleaned_college = college.replace(" ", "").lower()
+
+            # Check if the cleaned name already exists in the grouped_colleges dictionary
+            if cleaned_college in grouped_colleges:
+                # If it exists, add the count to the existing entry
+                grouped_colleges[cleaned_college] += int(count)
+            else:
+                # If it doesn't exist, create a new entry
+                grouped_colleges[cleaned_college] = int(count)
+        return CustomResponse(response=grouped_colleges).get_success_response()
