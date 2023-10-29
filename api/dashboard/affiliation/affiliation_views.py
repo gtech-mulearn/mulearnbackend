@@ -13,7 +13,6 @@ class AffiliationCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             affiliation,
