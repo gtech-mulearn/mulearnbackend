@@ -10,6 +10,7 @@ urlpatterns = [
     # path('institutes/<str:org_type>/', organisation_views.InstitutionAPI.as_view()),
     path('institutes/<str:org_type>/csv/', organisation_views.InstitutionCSVAPI.as_view()),
     path('institutes/info/<str:org_code>/', organisation_views.InstitutionDetailsAPI.as_view()),
+    path('institutes/<str:org_code>/', organisation_views.InstitutionPrefillAPI.as_view()),
     path('institutes/<str:org_type>/', organisation_views.InstitutionAPI.as_view()),
     path('institutes/<str:org_type>/<str:district_id>/', organisation_views.InstitutionAPI.as_view()),
     path('institutes/org/affiliation/', organisation_views.AffiliationGetPostUpdateDeleteAPI.as_view()),

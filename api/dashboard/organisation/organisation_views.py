@@ -17,7 +17,7 @@ from .serializers import (
     AffiliationSerializer,
     DepartmentSerializer,
     InstitutionCreateUpdateSerializer,
-    InstitutionSerializer,
+    InstitutionSerializer, InstitutionPrefillSerializer,
 )
 
 
@@ -423,4 +423,24 @@ class AffiliationListAPI(APIView):
 
         return CustomResponse(
             response=affiliation
+        ).get_success_response()
+
+
+class InstitutionPrefillAPI(APIView):
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
+    def get(self, request, org_code):
+
+        organization = Organization.objects.filter(code=org_code).first()
+
+        serializer = InstitutionPrefillSerializer(
+            organization,
+            many=False
+        ).data
+
+        return CustomResponse(
+            response=serializer
         ).get_success_response()
