@@ -341,4 +341,4 @@ class LocationSerializer(serializers.ModelSerializer):
         fields = ("id", "location")
 
     def get_location(self, obj):
-        return f"{obj.name}, {obj.zone.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"
+        return f"{obj.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"
