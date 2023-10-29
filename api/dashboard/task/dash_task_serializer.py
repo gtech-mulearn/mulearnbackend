@@ -4,7 +4,7 @@ from db.task import TaskList, KarmaActivityLog
 
 
 class TaskListSerializer(serializers.ModelSerializer):
-    channel = serializers.CharField(source="channel.name", required=False, default=None)
+    channel = serializers.CharField(source="channels.name", required=False, default=None)
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
@@ -23,7 +23,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "description",
             "karma",
             "total_karma_gainers",
-            "channel",
+            "channels",
             "type",
             "active",
             "variable_karma",
@@ -54,7 +54,7 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "title",
             "description",
             "karma",
-            "channel",
+            "channels",
             "type",
             "active",
             "variable_karma",

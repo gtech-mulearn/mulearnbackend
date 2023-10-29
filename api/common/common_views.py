@@ -60,7 +60,8 @@ class LcDashboardAPI(APIView):
 
 class LcReportAPI(APIView):
     def get(self, request):
-        date = request.GET.get("date")
+        date = request.data.get("date")
+        print(date)
         if date:
             student_info = (
                 UserCircleLink.objects.filter(
