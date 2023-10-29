@@ -1,27 +1,26 @@
 from rest_framework.views import APIView
 
-from db.organization import OrgAffiliation
+from db.task import Channel
 from utils.permission import CustomizePermission, JWTUtils
 from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from .serializers import AffiliationCUDSerializer, AffiliationListSerializer
+from .serializers import ChannelCUDSerializer, ChannelListSerializer
 
-class AffiliationCRUDAPI(APIView):
+class ChannelCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
 
-        affiliation = OrgAffiliation.objects.all()
+        channel = Channel.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            affiliation,
+            channel,
             request,
-            ['id', 'title']
-            
+            ['id', 'name', 'discord_id']
         )
 
-        serializer = AffiliationListSerializer(
+        serializer = ChannelListSerializer(
             paginated_queryset.get("queryset"),
             many=True
         )
@@ -38,7 +37,7 @@ class AffiliationCRUDAPI(APIView):
         
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = AffiliationCUDSerializer(
+        serializer = ChannelCUDSerializer(
             data=request.data,
             context={
                 "user_id": user_id,
@@ -49,7 +48,7 @@ class AffiliationCRUDAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=f"{request.data.get('title')} Affiliation created successfully",
+                general_message=f"{request.data.get('name')} Channel created successfully",
                 response=serializer.data
             ).get_success_response()
 
@@ -58,21 +57,21 @@ class AffiliationCRUDAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def put(self, request, affiliation_id):
+    def put(self, request, channel_id):
 
         user_id = JWTUtils.fetch_user_id(request)
 
-        affiliation = OrgAffiliation.objects.filter(
-            id=affiliation_id
+        channel = Channel.objects.filter(
+            id=channel_id
         ).first()
 
-        if affiliation is None:
+        if channel is None:
             return CustomResponse(
-                general_message="Invalid affiliation id"
+                general_message="Invalid channel id"
             ).get_failure_response()
 
-        serializer = AffiliationCUDSerializer(
-            affiliation,
+        serializer = ChannelCUDSerializer(
+            channel,
             data=request.data,
             context={"user_id": user_id}
         )
@@ -81,7 +80,7 @@ class AffiliationCRUDAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=f"{affiliation.title} Edited Successfully"
+                general_message=f"{channel.name} Edited Successfully"
             ).get_success_response()
 
         return CustomResponse(
@@ -89,19 +88,19 @@ class AffiliationCRUDAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request, affiliation_id):
+    def delete(self, request, channel_id):
 
-        affiliation = OrgAffiliation.objects.filter(
-            id=affiliation_id
+        channel = Channel.objects.filter(
+            id=channel_id
         ).first()
 
-        if affiliation is None:
+        if channel is None:
             return CustomResponse(
-                general_message="Invalid affiliation id"
+                general_message="Invalid channel id"
             ).get_failure_response()
 
-        affiliation.delete()
+        channel.delete()
 
         return CustomResponse(
-            general_message=f"{affiliation.title} Deleted Successfully"
+            general_message=f"{channel.name} Deleted Successfully"
         ).get_success_response()
