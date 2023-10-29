@@ -1,10 +1,7 @@
-import uuid
 
 from rest_framework import serializers
 
 from db.task import InterestGroup
-from db.user import User
-from utils.utils import DateTimeUtils
 
 
 class InterestGroupSerializer(serializers.ModelSerializer):

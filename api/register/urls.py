@@ -9,6 +9,7 @@ urlpatterns = [
     path("colleges/", register_views.CollegesAPI.as_view()),
     path("department/list/", register_views.DepartmentAPI.as_view()),
     
+    path("location/", register_views.LocationSearchView.as_view()),
     
     path("country/list/", register_views.CountryAPI.as_view()),
     path("state/list/", register_views.StateAPI.as_view()),
