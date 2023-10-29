@@ -65,12 +65,14 @@ class District(models.Model):
 
 
 class OrgAffiliation(models.Model):
-    id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
-    title          = models.CharField(max_length=75)
-    updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='org_affiliation_updated_by')
-    updated_at     = models.DateTimeField(auto_now=True)
-    created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='org_affiliation_created_by')
-    created_at     = models.DateTimeField(auto_now=True)
+    id = models.CharField(primary_key=True, max_length=36,default=uuid.uuid4())
+    title = models.CharField(max_length=75)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, db_column='updated_by', related_name='org_affiliation_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE, db_column='created_by', related_name='org_affiliation_created_by')
+    created_at     = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
