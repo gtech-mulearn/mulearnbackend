@@ -20,6 +20,7 @@ class User(models.Model):
     active         = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic    = models.CharField(max_length=200, blank=True, null=True)
+    district = models.ForeignKey("District",on_delete=models.CASCADE, blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -87,6 +88,7 @@ class Socials(models.Model):
     behance        = models.CharField(max_length=60, blank=True, null=True)
     stackoverflow  = models.CharField(max_length=60, blank=True, null=True)
     medium         = models.CharField(max_length=60, blank=True, null=True)
+    hackerrank     = models.CharField(max_length=60, blank=True, null=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='socials_created_by')
     updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='socials_updated_by')
     created_at     = models.DateTimeField(auto_now_add=True)

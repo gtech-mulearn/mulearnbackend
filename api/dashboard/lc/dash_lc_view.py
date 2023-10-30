@@ -85,7 +85,6 @@ class UserLearningCircleListApi(APIView):
         learning_serializer = LearningCircleSerializer(learning_queryset, many=True)
         return CustomResponse(response=learning_serializer.data).get_success_response()
 
-
 class LearningCircleMeetAPI(APIView):
     def patch(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
@@ -117,6 +116,8 @@ class LearningCircleLeadTransfer(APIView):
 class LearningCircleHomeApi(APIView):
     def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+        if not LearningCircle.objects.filter(id=circle_id).exists():
+            return CustomResponse(general_message='Learning Circle not found').get_failure_response()
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
         serializer = LearningCircleHomeSerializer(learning_circle, many=False, context={ "user_id": user_id })
         return CustomResponse(response=serializer.data).get_success_response()

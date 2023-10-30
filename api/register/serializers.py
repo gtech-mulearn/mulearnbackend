@@ -18,7 +18,6 @@ from db.user import Role, Socials, User, UserReferralLink, UserRoleLink, UserSet
 from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
-
 from . import register_helper
 
 
