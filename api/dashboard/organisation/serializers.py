@@ -147,7 +147,10 @@ class AffiliationSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrgAffiliation
-        fields = ["value", "label"]
+        fields = [
+            "value",
+            "label"
+        ]
 
 
 class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):

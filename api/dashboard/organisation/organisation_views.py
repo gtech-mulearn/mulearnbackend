@@ -197,13 +197,14 @@ class InstitutionCSVAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, org_type):
         organizations = (
-            Organization.objects.filter(org_type=org_type)
-            .select_related(
+            Organization.objects.filter(
+                org_type=org_type
+            ).select_related(
                 "affiliation",
-                "district__zone__state__country",
-                "district__zone__state",
-                "district__zone",
-                "district",
+                # "district__zone__state__country",
+                # "district__zone__state",
+                # "district__zone",
+                # "district",
             )
             .prefetch_related(
                 Prefetch(
@@ -215,9 +216,15 @@ class InstitutionCSVAPI(APIView):
             )
         )
 
-        serializer = InstitutionSerializer(organizations, many=True).data
+        serializer = InstitutionSerializer(
+            organizations,
+            many=True
+        ).data
 
-        return CommonUtils.generate_csv(serializer, f"{org_type} data")
+        return CommonUtils.generate_csv(
+            serializer,
+            f"{org_type} data"
+        )
 
 
 class InstitutionDetailsAPI(APIView):
@@ -276,18 +283,26 @@ class GetInstitutionsAPI(APIView):
 class AffiliationGetPostUpdateDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            affiliation, request, ["id", "title"]
+            affiliation,
+            request,
+            [
+                "id",
+                "title"
+            ]
         )
-
         serializer = AffiliationSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"),
+            many=True
         )
-
         return CustomResponse().paginated_response(
-            data=serializer.data, pagination=paginated_queryset.get("pagination")
+            data=serializer.data,
+            pagination=paginated_queryset.get(
+                "pagination"
+            )
         )
 
     @role_required([RoleType.ADMIN.value])
@@ -308,7 +323,9 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
                 general_message=f"{request.data.get('title')} added successfully"
             ).get_success_response()
 
-        return CustomResponse(general_message=serializer.errors).get_failure_response()
+        return CustomResponse(
+            general_message=serializer.errors
+        ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, affiliation_id):
