@@ -16,7 +16,7 @@ from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberlistSerializer
+    LearningCircleMemberlistSerializer, MeetingCreateUpdateDeleteSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -443,3 +443,27 @@ class PreviousMeetingsDetailsAPI(APIView):
         return CustomResponse(
             response=circle_meeting_log
         ).get_success_response()
+
+
+class MeetingCreateUpdateDeleteAPI(APIView):
+    def post(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        serializer = MeetingCreateUpdateDeleteSerializer(
+            data=request.data,
+            context={
+                'user_id': user_id,
+                'circle_id': circle_id,
+            }
+        )
+        if serializer.is_valid():
+            circle_meet_log = serializer.save()
+
+            return CustomResponse(
+                general_message=f'Meet scheduled at {circle_meet_log.meet_time}'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
+

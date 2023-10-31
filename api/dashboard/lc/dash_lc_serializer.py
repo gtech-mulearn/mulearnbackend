@@ -1,9 +1,9 @@
 import uuid
 
-from django.db.models import Sum, F
+from django.db.models import Sum
 from rest_framework import serializers
 
-from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup
+from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 from utils.types import OrganizationType
@@ -456,3 +456,25 @@ class LearningCircleMemberlistSerializer(serializers.ModelSerializer):
             }
             for member in members
         ]
+
+
+class MeetingCreateUpdateDeleteSerializer(serializers.ModelSerializer):
+    meet_place = serializers.CharField(required=False, allow_null=True)
+
+    class Meta:
+        model = CircleMeetingLog
+        fields = [
+            "meet_time",
+            "meet_place",
+            "day",
+            "attendees",
+            "agenda",
+        ]
+
+    def create(self, validated_data):
+        validated_data['circle_id'] = self.context.get('circle_id')
+        validated_data['created_by_id'] = self.context.get('user_id')
+        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['updated_by_id'] = self.context.get('user_id')
+        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
+        return CircleMeetingLog.objects.create(**validated_data)
