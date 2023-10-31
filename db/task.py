@@ -99,14 +99,14 @@ class TaskList(models.Model):
     hashtag              = models.CharField(max_length=75)
     discord_link         = models.CharField(max_length=200, blank=True, null=True)
     title                = models.CharField(max_length=75)
-    description          = models.CharField(max_length=200, blank=True, null=True)
-    karma                = models.IntegerField(blank=True, null=True)
-    channel              = models.ForeignKey(Channel, on_delete=models.CASCADE, blank =True, null  =True)
+    description          = models.CharField(max_length=200, null=True)
+    karma                = models.IntegerField(null=True)
+    channel              = models.ForeignKey(Channel, on_delete=models.CASCADE, null  =True)
     type                 = models.ForeignKey(TaskType, on_delete=models.CASCADE)
-    org                  = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
-    level                = models.ForeignKey(Level, on_delete=models.CASCADE, blank=True, null=True)
-    ig                   = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank =True, null  =True, related_name="task_list_ig")
-    event                = models.CharField(max_length=50, blank =True, null  =True)
+    org                  = models.ForeignKey(Organization, on_delete=models.CASCADE, null=True)
+    level                = models.ForeignKey(Level, on_delete=models.CASCADE, null=True)
+    ig                   = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, null  =True, related_name="task_list_ig")
+    event                = models.CharField(max_length=50, null  =True)
     active               = models.BooleanField(default=True)
     variable_karma       = models.BooleanField(default=False)
     usage_count          = models.IntegerField(default=1)
@@ -204,7 +204,7 @@ class UserIgLink(models.Model):
 
 
 
-class VoucherLog(models.Model):
+class VoucherLog(models.Model): 
     id                   = models.CharField(primary_key=True, max_length=36)
     code                 = models.CharField(unique=True, max_length=255)
     user                 = models.ForeignKey(User, on_delete=models.CASCADE, related_name="voucher_log_user")
