@@ -2,13 +2,13 @@ import uuid
 
 from decouple import config
 from django.core.mail import send_mail
-from django.db.models import Q
+from django.db.models import Q, F
 from django.shortcuts import redirect
 from rest_framework.views import APIView
 
 
 from api.notification.notifications_utils import NotificationUtils
-from db.learning_circle import LearningCircle, UserCircleLink
+from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
@@ -412,3 +412,25 @@ class LearningCircleInvitationStatus(APIView):
         elif status == "rejected":
             usr_circle_link.delete()
             return CustomResponse(general_message='User rejected invitation').get_failure_response()
+
+
+class PreviousMeetingsDetailsAPI(APIView):
+    def get(self, request, meet_id):
+
+        circle_meeting_log = CircleMeetingLog.objects.filter(
+            id=meet_id
+        ).values(
+            "id",
+            "meet_time",
+            "day",
+            "attendees",
+            "agenda",
+            meet_created_by=F("created_by__first_name"),
+            meet_created_at=F("created_at"),
+            meet_updated_by=F("updated_by__first_name"),
+            meet_updated_at=F("updated_at"),
+        )
+
+        return CustomResponse(
+            response=circle_meeting_log
+        ).get_success_response()
