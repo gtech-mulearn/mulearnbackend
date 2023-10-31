@@ -100,8 +100,11 @@ class TaskListAPI(APIView):
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
 
-        request.data["created_by"] = request.data["updated_by"] = user_id
-        serializer = TaskModifySerializer(data=request.data)
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["created_by"] = user_id
+        mutable_data["updated_by"] = user_id
+
+        serializer = TaskModifySerializer(data=mutable_data)
 
         if not serializer.is_valid():
             return CustomResponse(
