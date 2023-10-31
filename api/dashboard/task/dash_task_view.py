@@ -256,6 +256,7 @@ class ImportTaskListCSV(APIView):
                     general_message=f"{key} does not exist in the file."
                 ).get_failure_response()
 
+        excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
 
