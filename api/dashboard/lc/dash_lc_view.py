@@ -415,6 +415,14 @@ class LearningCircleInvitationStatus(APIView):
 
 
 class PreviousMeetingsDetailsAPI(APIView):
+    """
+       API for retrieving details of a previous meeting by ID.
+
+       This API allows you to retrieve information about a previous meeting
+       based on its unique ID.
+       Methode:
+           - get: Retrieve details of a previous meeting.
+        """
     def get(self, request, meet_id):
 
         circle_meeting_log = CircleMeetingLog.objects.filter(
