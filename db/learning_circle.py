@@ -39,3 +39,20 @@ class UserCircleLink(models.Model):
     class Meta:
         managed = False
         db_table = "user_circle_link"
+
+
+class CircleMeetingLog(models.Model):
+    uuid =       models.CharField(primary_key=True, max_length=36)
+    circle =     models.ForeignKey('LearningCircle', models.DO_NOTHING)
+    meet_time =  models.DateTimeField()
+    day =        models.CharField(max_length=20)
+    attendees =  models.CharField(max_length=216)
+    agenda =     models.CharField(max_length=500)
+    created_by = models.ForeignKey('User', models.DO_NOTHING, db_column='created_by')
+    created_at = models.DateTimeField()
+    updated_by = models.ForeignKey('User', models.DO_NOTHING, db_column='updated_by')
+    updated_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'circle_meeting_log'
