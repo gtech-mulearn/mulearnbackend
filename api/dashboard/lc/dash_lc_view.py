@@ -430,6 +430,7 @@ class PreviousMeetingsDetailsAPI(APIView):
         ).values(
             "id",
             "meet_time",
+            "meet_place",
             "day",
             "attendees",
             "agenda",
