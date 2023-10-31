@@ -261,7 +261,6 @@ class GlobalCountAPI(APIView):
 
 class GTASANDSHOREAPI(APIView):
     def get(self, request):
-
         response = requests.get('https://devfolio.vez.social/rank')
         if response.status_code == 200:
             # Save JSON response to a local file
@@ -276,7 +275,6 @@ class GTASANDSHOREAPI(APIView):
 
         # Create a dictionary to store the grouped data
         grouped_colleges = {}
-
         for college, count in data.items():
             # Clean the college name by removing spaces and converting to lowercase
             cleaned_college = college.replace(" ", "").lower()
