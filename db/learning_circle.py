@@ -42,7 +42,7 @@ class UserCircleLink(models.Model):
 
 
 class CircleMeetingLog(models.Model):
-    uuid =       models.CharField(primary_key=True, max_length=36)
+    id = models.CharField(primary_key=True, max_length=36)
     circle =     models.ForeignKey(LearningCircle, on_delete=models.CASCADE, related_name='circle_meeting_log_learning_circle')
     meet_time =  models.DateTimeField()
     day =        models.CharField(max_length=20)
