@@ -2,13 +2,13 @@ import uuid
 
 from decouple import config
 from django.core.mail import send_mail
-from django.db.models import Q
+from django.db.models import Q, F
 from django.shortcuts import redirect
 from rest_framework.views import APIView
 
 
 from api.notification.notifications_utils import NotificationUtils
-from db.learning_circle import LearningCircle, UserCircleLink
+from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
@@ -16,7 +16,7 @@ from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberlistSerializer
+    LearningCircleMemberlistSerializer, MeetingCreateUpdateDeleteSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -116,52 +116,108 @@ class LearningCircleLeadTransfer(APIView):
 class LearningCircleHomeApi(APIView):
     def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
-        if not LearningCircle.objects.filter(id=circle_id).exists():
-            return CustomResponse(general_message='Learning Circle not found').get_failure_response()
-        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
-        serializer = LearningCircleHomeSerializer(learning_circle, many=False, context={ "user_id": user_id })
-        return CustomResponse(response=serializer.data).get_success_response()
+
+        if not LearningCircle.objects.filter(
+                id=circle_id
+        ).exists():
+            return CustomResponse(
+                general_message='Learning Circle not found'
+            ).get_failure_response()
+
+        learning_circle = LearningCircle.objects.filter(
+            id=circle_id
+        ).first()
+
+        serializer = LearningCircleHomeSerializer(
+            learning_circle,
+            many=False,
+            context={
+                "user_id": user_id
+            }
+        )
+
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
 
     def post(self, request, member_id, circle_id):
-        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+
+        learning_circle_link = UserCircleLink.objects.filter(
+            user_id=member_id,
+            circle_id=circle_id
+        ).first()
+
         if learning_circle_link is None:
-            return CustomResponse(general_message='User not part of circle').get_failure_response()
+            return CustomResponse(
+                general_message='User not part of circle'
+            ).get_failure_response()
+
         serializer = LearningCircleUpdateSerializer()
         serializer.destroy(learning_circle_link)
-        return CustomResponse(general_message='Removed successfully').get_success_response()
+
+        return CustomResponse(
+            general_message='Removed successfully'
+        ).get_success_response()
 
     def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
 
-        if not UserCircleLink.objects.filter(user_id=member_id,
-                                             circle_id=circle_id).exists() or not LearningCircle.objects.filter(
-            id=circle_id).exists():
-            return CustomResponse(general_message='Learning Circle Not Available').get_failure_response()
+        if not UserCircleLink.objects.filter(
+                user_id=member_id,
+                circle_id=circle_id
+        ).exists() or not LearningCircle.objects.filter(
+            id=circle_id
+        ).exists():
 
-        learning_circle_link = UserCircleLink.objects.filter(user_id=member_id, circle_id=circle_id).first()
+            return CustomResponse(
+                general_message='Learning Circle Not Available'
+            ).get_failure_response()
+
+        learning_circle_link = UserCircleLink.objects.filter(
+            user_id=member_id,
+            circle_id=circle_id
+        ).first()
+
         if learning_circle_link.accepted is not None:
-            return CustomResponse(general_message='Already evaluated').get_failure_response()
+            return CustomResponse(
+                general_message='Already evaluated'
+            ).get_failure_response()
 
-        serializer = LearningCircleUpdateSerializer(learning_circle_link, data=request.data,
-                                                    context={ 'user_id': user_id })
+        serializer = LearningCircleUpdateSerializer(
+            learning_circle_link,
+            data=request.data,
+            context={
+                'user_id': user_id
+            }
+        )
+
         if serializer.is_valid():
             serializer.save()
             is_accepted = request.data.get('is_accepted')
             user = User.objects.filter(id=member_id).first()
+
             if is_accepted == '1':
-                NotificationUtils.insert_notification(user, title="Request approved",
-                                                      description="You request to join the learning circle has been approved",
-                                                      button="LC",
-                                                      url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
-                                                      created_by=User.objects.filter(id=user_id).first())
+                NotificationUtils.insert_notification(
+                    user, title="Request approved",
+                    description="You request to join the learning circle has been approved",
+                    button="LC",
+                    url=f'{domain}/api/v1/dashboard/lc/{circle_id}/',
+                    created_by=User.objects.filter(id=user_id).first())
             else:
-                NotificationUtils.insert_notification(user, title="Request rejected",
-                                                      description="You request to join the learning circle has been rejected",
-                                                      button="LC",
-                                                      url=f'{domain}/api/v1/dashboard/lc/join',
-                                                      created_by=User.objects.filter(id=user_id).first())
-            return CustomResponse(general_message='Approved successfully').get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+                NotificationUtils.insert_notification(
+                    user, title="Request rejected",
+                    description="You request to join the learning circle has been rejected",
+                    button="LC",
+                    url=f'{domain}/api/v1/dashboard/lc/join',
+                    created_by=User.objects.filter(id=user_id).first())
+
+            return CustomResponse(
+                general_message='Approved successfully'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
     def put(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
@@ -356,3 +412,58 @@ class LearningCircleInvitationStatus(APIView):
         elif status == "rejected":
             usr_circle_link.delete()
             return CustomResponse(general_message='User rejected invitation').get_failure_response()
+
+
+class PreviousMeetingsDetailsAPI(APIView):
+    """
+       API for retrieving details of a previous meeting by ID.
+
+       This API allows you to retrieve information about a previous meeting
+       based on its unique ID.
+       Methode:
+           - get: Retrieve details of a previous meeting.
+        """
+    def get(self, request, meet_id):
+
+        circle_meeting_log = CircleMeetingLog.objects.filter(
+            id=meet_id
+        ).values(
+            "id",
+            "meet_time",
+            "meet_place",
+            "day",
+            "attendees",
+            "agenda",
+            meet_created_by=F("created_by__first_name"),
+            meet_created_at=F("created_at"),
+            meet_updated_by=F("updated_by__first_name"),
+            meet_updated_at=F("updated_at"),
+        )
+
+        return CustomResponse(
+            response=circle_meeting_log
+        ).get_success_response()
+
+
+class MeetingCreateUpdateDeleteAPI(APIView):
+    def post(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        serializer = MeetingCreateUpdateDeleteSerializer(
+            data=request.data,
+            context={
+                'user_id': user_id,
+                'circle_id': circle_id,
+            }
+        )
+        if serializer.is_valid():
+            circle_meet_log = serializer.save()
+
+            return CustomResponse(
+                general_message=f'Meet scheduled at {circle_meet_log.meet_time}'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
+
