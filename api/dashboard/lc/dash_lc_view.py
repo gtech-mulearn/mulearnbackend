@@ -209,7 +209,7 @@ class LearningCircleLeadTransfer(APIView):
 
 
 class LearningCircleHomeApi(APIView):
-    def get(self, request, circle_id):
+    def get(self, request, circle_id, member_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
         if not LearningCircle.objects.filter(
