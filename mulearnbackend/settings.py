@@ -35,6 +35,7 @@ ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.spl
 # Application definition
 
 INSTALLED_APPS = [
+    'daphne',
     # 'django.contrib.admin',
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -82,7 +83,18 @@ TEMPLATES = [
     },
 ]
 
+ASGI_APPLICATION = "mulearnbackend.asgi.application"
+
 WSGI_APPLICATION = "mulearnbackend.wsgi.application"
+
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels_redis.core.RedisChannelLayer",
+        "CONFIG": {
+            "hosts": [('localhost', 6379)],
+        },
+    },
+}
 
 # Database
 # https://docs.djangoproject.com/en/4.1/ref/settings/#databases
@@ -118,64 +130,64 @@ AUTH_PASSWORD_VALIDATORS = [
 
 # logging
 
-LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'request_log': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/request.log',
-            'formatter': 'verbose',
-        },
-        'error_log': {
-            'level': 'ERROR',
-            'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/error.log',
-            'formatter': 'verbose',
-        },
-        'sql_log': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/sql.log',
-            'formatter': 'verbose',
-        },
-        'root_log': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/root.log',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'django.request': {
-            'handlers': ['request_log'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'django': {
-            'handlers': ['error_log'],
-            'level': 'ERROR',
-            'propagate': True,
-        },
-        'django.db.backends': {
-            'handlers': ['sql_log'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        '': {
-            'handlers': ['root_log'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-    },
-    'formatters': {
-        'verbose': {
-            'format': '{asctime} {levelname} {message}',
-            'style': '{',
-        },
-    },
-}
+# LOGGING = {
+#     'version': 1,
+#     'disable_existing_loggers': False,
+#     'handlers': {
+#         'request_log': {
+#             'level': 'INFO',
+#             'class': 'logging.FileHandler',
+#             'filename': decouple.config("LOGGER_DIR_PATH") + '/request.log',
+#             'formatter': 'verbose',
+#         },
+#         'error_log': {
+#             'level': 'ERROR',
+#             'class': 'logging.FileHandler',
+#             'filename': decouple.config("LOGGER_DIR_PATH") + '/error.log',
+#             'formatter': 'verbose',
+#         },
+#         'sql_log': {
+#             'level': 'DEBUG',
+#             'class': 'logging.FileHandler',
+#             'filename': decouple.config("LOGGER_DIR_PATH") + '/sql.log',
+#             'formatter': 'verbose',
+#         },
+#         'root_log': {
+#             'level': 'DEBUG',
+#             'class': 'logging.FileHandler',
+#             'filename': decouple.config("LOGGER_DIR_PATH") + '/root.log',
+#             'formatter': 'verbose',
+#         },
+#     },
+#     'loggers': {
+#         'django.request': {
+#             'handlers': ['request_log'],
+#             'level': 'INFO',
+#             'propagate': True,
+#         },
+#         'django': {
+#             'handlers': ['error_log'],
+#             'level': 'ERROR',
+#             'propagate': True,
+#         },
+#         'django.db.backends': {
+#             'handlers': ['sql_log'],
+#             'level': 'DEBUG',
+#             'propagate': True,
+#         },
+#         '': {
+#             'handlers': ['root_log'],
+#             'level': 'DEBUG',
+#             'propagate': True,
+#         },
+#     },
+#     'formatters': {
+#         'verbose': {
+#             'format': '{asctime} {levelname} {message}',
+#             'style': '{',
+#         },
+#     },
+# }
 
 # Internationalization
 # https://docs.djangoproject.com/en/4.1/topics/i18n/
