@@ -1,6 +1,10 @@
 from django.db.models import Prefetch
 from rest_framework.views import APIView
-
+import qrcode
+import requests
+import decouple
+from PIL import Image
+from io import BytesIO
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level
 from db.user import Role
@@ -201,8 +205,6 @@ class UserLogAPI(APIView):
         return CustomResponse(
             response=serializer.data
         ).get_success_response()
-
-
 class ShareUserProfileAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -377,3 +379,55 @@ class SocialsAPI(APIView):
         return CustomResponse(
             response=serializer.errors
         ).get_failure_response()
+
+
+# Qrcode Logic API for getting the qrcode if the user is account public 
+class QrcodeManagmentAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        base_url = decouple.config("FR_DOMAIN_NAME")
+        user_muid = JWTUtils.fetch_muid(request)
+        data = f"{base_url}/profile/{user_muid}"
+
+        qr = qrcode.QRCode(
+            version=1,
+            error_correction=qrcode.constants.ERROR_CORRECT_H,
+            box_size=10,
+            border=4,
+        )
+        qr.add_data(data)
+        qr.make(fit=True)
+
+        img = qr.make_image(fill_color="black", back_color="white")
+
+        logo_url = "https://mulearn.org/assets/navbar/%C2%B5Learn.webp"  # Replace with your logo URL
+        logo_response = requests.get(logo_url)
+
+        if logo_response.status_code == 200:
+            logo_image = Image.open(BytesIO(logo_response.content))
+        else:
+            return HttpResponse("Failed to download the logo from the URL", status=500)
+
+        logo_width, logo_height = logo_image.size
+        basewidth = 200
+        wpercent = (basewidth / float(logo_width))
+        hsize = int((float(logo_height) * float(wpercent)))
+        resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
+
+        QRcode = qrcode.QRCode(
+            error_correction=qrcode.constants.ERROR_CORRECT_H
+        )
+        QRcode.add_data(data)
+        QRcolor = 'black'
+
+        QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
+
+        pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
+        QRimg.paste(resized_logo, pos)
+
+        file_path = '/home/mishal/Downloads/qr_code_image.png'  # Replace with your desired directory
+        QRimg.save(file_path)
+        return CustomResponse(
+                general_message="QR code image with logo saved locally"
+            ).get_success_response()
