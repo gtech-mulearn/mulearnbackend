@@ -425,8 +425,8 @@ class QrcodeCreateAPI(APIView):
             if logo_response.status_code == 200:
                 logo_image = Image.open(BytesIO(logo_response.content))
             else:
-                return HttpResponse("Failed to download the logo from the URL", status=500)
-
+                return CustomResponse(general_message="Failed to download the logo from the URL"
+                ).get_failure_response()
             logo_width, logo_height = logo_image.size
             basewidth = 200
             wpercent = (basewidth / float(logo_width))
