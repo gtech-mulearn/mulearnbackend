@@ -18,5 +18,6 @@ urlpatterns = [
     path('socials/edit/', profile_view.SocialsAPI.as_view()),
     path('socials/', profile_view.GetSocialsAPI.as_view()),
     path('socials/<str:muid>/', profile_view.GetSocialsAPI.as_view()),
-    path('qrcode/', profile_view.QrcodeManagmentAPI.as_view())
+    path('qrcode/<str:muid>/', profile_view.QrcodeCreateAPI.as_view()),
+    path('qrcode-get/<str:muid>/', profile_view.QrcodeRetrieveAPI.as_view())
 ]

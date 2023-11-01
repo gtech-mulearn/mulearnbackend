@@ -223,7 +223,8 @@ class UserRankSerializer(ModelSerializer):
     def get_interest_groups(self, obj):
         return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]
 
-
+# is public true then pass the qrcode vice versa delete the image
+# another api when passing muid is give its corresponding image is returned
 class ShareUserProfileUpdateSerializer(ModelSerializer):
     updated_by = serializers.CharField(required=False)
     updated_at = serializers.CharField(required=False)

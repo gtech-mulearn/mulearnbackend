@@ -382,52 +382,80 @@ class SocialsAPI(APIView):
 
 
 # Qrcode Logic API for getting the qrcode if the user is account public 
-class QrcodeManagmentAPI(APIView):
+class QrcodeCreateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
+    def get(self, request,muid=None):
         base_url = decouple.config("FR_DOMAIN_NAME")
-        user_muid = JWTUtils.fetch_muid(request)
-        data = f"{base_url}/profile/{user_muid}"
+        print(muid,"before")
+        if muid is not None:
+            user = User.objects.filter(muid=muid).first() 
+            print(muid,"after")
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
 
-        qr = qrcode.QRCode(
-            version=1,
-            error_correction=qrcode.constants.ERROR_CORRECT_H,
-            box_size=10,
-            border=4,
-        )
-        qr.add_data(data)
-        qr.make(fit=True)
+            user_settings = UserSettings.objects.filter(
+                user_id=user
+            ).first()
 
-        img = qr.make_image(fill_color="black", back_color="white")
+            if not user_settings.is_public:
+                    return CustomResponse(
+                        general_message="Private Profile"
+                    ).get_failure_response()
+            else:
+                user_muid = JWTUtils.fetch_muid(request)
+                data = f"{base_url}/profile/{user_muid}"
 
-        logo_url = "https://mulearn.org/assets/navbar/%C2%B5Learn.webp"  # Replace with your logo URL
-        logo_response = requests.get(logo_url)
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(data)
+            qr.make(fit=True)
 
-        if logo_response.status_code == 200:
-            logo_image = Image.open(BytesIO(logo_response.content))
-        else:
-            return HttpResponse("Failed to download the logo from the URL", status=500)
+            img = qr.make_image(fill_color="black", back_color="white")
 
-        logo_width, logo_height = logo_image.size
-        basewidth = 200
-        wpercent = (basewidth / float(logo_width))
-        hsize = int((float(logo_height) * float(wpercent)))
-        resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
+            logo_url = "https://mulearn.org/assets/navbar/%C2%B5Learn.webp"  # Replace with your logo URL
+            logo_response = requests.get(logo_url)
 
-        QRcode = qrcode.QRCode(
-            error_correction=qrcode.constants.ERROR_CORRECT_H
-        )
-        QRcode.add_data(data)
-        QRcolor = 'black'
+            if logo_response.status_code == 200:
+                logo_image = Image.open(BytesIO(logo_response.content))
+            else:
+                return HttpResponse("Failed to download the logo from the URL", status=500)
 
-        QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
+            logo_width, logo_height = logo_image.size
+            basewidth = 200
+            wpercent = (basewidth / float(logo_width))
+            hsize = int((float(logo_height) * float(wpercent)))
+            resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
 
-        pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
-        QRimg.paste(resized_logo, pos)
+            QRcode = qrcode.QRCode(
+                error_correction=qrcode.constants.ERROR_CORRECT_H
+            )
+            QRcode.add_data(data)
+            QRcolor = 'black'
 
-        file_path = '/home/mishal/Downloads/qr_code_image.png'  # Replace with your desired directory
-        QRimg.save(file_path)
+            QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
+
+            pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
+            QRimg.paste(resized_logo, pos)
+
+            file_path = '/home/mishal/Downloads/'+user_muid+'.png'  # Replace with your desired directory
+            QRimg.save(file_path)
+            return CustomResponse(
+                    general_message="QR code image with logo saved locally"
+                ).get_success_response()
+        
+
+        
+class QrcodeRetrieveAPI(APIView):
+    def get(self,request,muid):
+        qrcode = requests.get(f"http://0.0.0.0:8500/{muid}.png")
         return CustomResponse(
-                general_message="QR code image with logo saved locally"
-            ).get_success_response()
+            general_message="QR code image with logo reterived",
+        ).get_success_response()
+        
