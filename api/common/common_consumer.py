@@ -47,6 +47,8 @@ class GlobalCount(BaseConsumer):
         @receiver(post_save, sender=User)
         @receiver(post_save, sender=LearningCircle)
         @receiver(post_save, sender=InterestGroup)
+        @receiver(post_save, sender=UserRoleLink)
+        @receiver(post_save, sender=Organization)
         def user_post_save(sender, instance, created, **kwargs):
             data = {}
 
@@ -54,12 +56,27 @@ class GlobalCount(BaseConsumer):
                 if sender == User:
                     count = User.objects.all().count()
                     data['members'] = count
+
                 elif sender == LearningCircle:
                     count = LearningCircle.objects.all().count()
                     data['learning_circle_count'] = count
+
                 elif sender == InterestGroup:
                     count = InterestGroup.objects.all().count()
                     data['ig_count'] = count
+
+                elif sender == UserRoleLink:
+                    count = UserRoleLink.objects.filter(
+                        role__title__in=["Mentor", "Enabler"]).values(
+                        'role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
+                    data['enablers_mentors_count'] = list(count)
+
+                elif sender == Organization:
+                    count = Organization.objects.filter(
+                        org_type__in=[OrganizationType.COLLEGE.value, OrganizationType.COMPANY.value,
+                                      OrganizationType.COMMUNITY.value]
+                    ).values('org_type').annotate(org_count=Coalesce(Count('org_type'), 0)) 
+                    data['org_type_counts'] = list(count)
 
                 self.send(text_data=json.dumps(data))
 
@@ -72,11 +89,26 @@ class GlobalCount(BaseConsumer):
             if sender == User:
                 count = User.objects.all().count()
                 data['members'] = count
+
             elif sender == LearningCircle:
                 count = LearningCircle.objects.all().count()
                 data['learning_circle_count'] = count
+
             elif sender == InterestGroup:
                 count = InterestGroup.objects.all().count()
                 data['ig_count'] = count
+
+            elif sender == UserRoleLink:
+                count = UserRoleLink.objects.filter(
+                    role__title__in=["Mentor", "Enabler"]).values(
+                    'role__title').annotate(role_count=Coalesce(Count('role__title'), 0))
+                data['enablers_mentors_count'] = list(count)
+                    
+            elif sender == Organization:
+                count = Organization.objects.filter(
+                    org_type__in=[OrganizationType.COLLEGE.value, OrganizationType.COMPANY.value,
+                                    OrganizationType.COMMUNITY.value]
+                ).values('org_type').annotate(org_count=Coalesce(Count('org_type'), 0))
+                data['org_type_counts'] = list(count)
 
             self.send(text_data=json.dumps(data))
