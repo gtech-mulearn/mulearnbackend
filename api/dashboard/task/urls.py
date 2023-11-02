@@ -4,7 +4,7 @@ from . import dash_task_view
 
 urlpatterns = [
 
-    path('channel/', dash_task_view.ChannelDropdownAPI.as_view()),
+    path('channels/', dash_task_view.ChannelDropdownAPI.as_view()),
     path('ig/', dash_task_view.IGDropdownAPI.as_view()),
     path('organization/', dash_task_view.OrganizationDropdownAPI.as_view()),
     path('level/', dash_task_view.LevelDropdownAPI.as_view()),

@@ -64,7 +64,7 @@ class TaskListAPI(APIView):
                 "title": "title",
                 "description": "description",
                 "karma": "karma",
-                "channel": "channel__name",
+                "channels": "channel__name",
                 "type": "type__title",
                 "active": "active",
                 "variable_karma": "variable_karma",
@@ -191,7 +191,7 @@ class TaskListCSV(APIView):
         task_queryset = TaskList.objects.select_related(
             "created_by",
             "updated_by",
-            "channel",
+            "channels",
             "type",
             "level",
             "ig",
@@ -256,6 +256,7 @@ class ImportTaskListCSV(APIView):
                     general_message=f"{key} does not exist in the file."
                 ).get_failure_response()
 
+        excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
 
@@ -330,8 +331,8 @@ class ImportTaskListCSV(APIView):
             ig = row.pop("ig")
             org = row.pop("org")
 
-            channel_id = channels_dict.get(channel)
             task_type_id = task_types_dict.get(task_type)
+            channel_id = channels_dict.get(channel) if channel is not None else None
             level_id = levels_dict.get(level) if level is not None else None
             ig_id = igs_dict.get(ig) if ig is not None else None
             org_id = orgs_dict.get(org) if org is not None else None
@@ -339,7 +340,7 @@ class ImportTaskListCSV(APIView):
             if TaskList.objects.filter(hashtag=hashtag).exists():
                 row["error"] = f"Hashtag already exists: {hashtag}"
                 error_rows.append(row)
-            elif not channel_id:
+            elif channel and not channel_id:
                 row["error"] = f"Invalid channel ID: {channel}"
                 error_rows.append(row)
             elif not task_type_id:
@@ -362,7 +363,7 @@ class ImportTaskListCSV(APIView):
                 row["created_by_id"] = user_id
                 row["created_at"] = DateTimeUtils.get_current_utc_time()
                 row["active"] = True
-                row["channel_id"] = channel_id
+                row["channel_id"] = channel_id or None 
                 row["type_id"] = task_type_id
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None

@@ -3,7 +3,9 @@ import uuid
 from django.db import models
 
 from .user import User
+
 # fmt: off
+# noinspection PyPep8
 
 class Country(models.Model):
     id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
@@ -90,7 +92,7 @@ class Organization(models.Model):
     updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='organization_updated_by')
     updated_at     = models.DateTimeField(auto_now=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='organization_created_by')
-    created_at     = models.DateTimeField(auto_now=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -104,7 +106,7 @@ class Department(models.Model):
     updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='department_updated_by')
     updated_at     = models.DateTimeField(auto_now=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='department_created_by')
-    created_at     = models.DateTimeField(auto_now=True)
+    created_at     = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
@@ -115,7 +117,7 @@ class Department(models.Model):
 class College(models.Model):
     id             = models.CharField(primary_key=True, max_length=36)
     level          = models.IntegerField()
-    org            = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='college_org')
+    org            = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='college_org', unique=True)
     updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='college_updated_by')
     updated_at     = models.DateTimeField(auto_now=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='college_created_by')
@@ -130,7 +132,7 @@ class College(models.Model):
 class OrgDiscordLink(models.Model):
     id             = models.CharField(primary_key=True, max_length=36)
     discord_id     = models.CharField(unique=True, max_length=36)
-    org            = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='org_discord_link_org_id')
+    org            = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='org_discord_link_org_id')
     updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='org_discord_link_updated_by')
     updated_at     = models.DateTimeField(auto_now=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='org_discord_link_created_by')

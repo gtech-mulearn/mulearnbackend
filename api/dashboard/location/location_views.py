@@ -28,11 +28,11 @@ class CountryDataAPI(APIView):
                 "name"
             ],
             {
-                "name": "name"
+                "label": "name"
             }
         )
 
-        serializer = location_serializer.CountryRetrievalSerializer(
+        serializer = location_serializer.LocationSerializer(
             paginated_queryset.get("queryset"),
             many=True
         )

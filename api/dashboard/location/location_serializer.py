@@ -6,7 +6,7 @@ from db.organization import Country, District, State, Zone
 from utils.utils import DateTimeUtils
 
 
-class CountryRetrievalSerializer(serializers.ModelSerializer):
+class LocationSerializer(serializers.ModelSerializer):
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
 

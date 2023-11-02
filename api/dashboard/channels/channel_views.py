@@ -67,7 +67,7 @@ class ChannelCRUDAPI(APIView):
 
         if channel is None:
             return CustomResponse(
-                general_message="Invalid channel id"
+                general_message="Invalid channels id"
             ).get_failure_response()
 
         serializer = ChannelCUDSerializer(
@@ -96,7 +96,7 @@ class ChannelCRUDAPI(APIView):
 
         if channel is None:
             return CustomResponse(
-                general_message="Invalid channel id"
+                general_message="Invalid channels id"
             ).get_failure_response()
 
         channel.delete()
