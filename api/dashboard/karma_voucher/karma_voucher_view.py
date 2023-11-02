@@ -19,6 +19,10 @@ from utils.utils import ImportCSV, CommonUtils
 from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer, \
     VoucherLogUpdateSerializer
 
+from openpyxl import load_workbook
+from tempfile import NamedTemporaryFile
+from io import BytesIO
+from django.http import FileResponse
 
 class ImportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -324,21 +328,12 @@ class ExportVoucherLogAPI(APIView):
 
         return CommonUtils.generate_csv(voucher_serializer_data, 'Voucher Log')
     
-from openpyxl import Workbook, load_workbook
-
 class BaseTemplateAPI(APIView):
     # authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Sheet1"
-
-        ws.append(['muid', 'karma', 'hashtag', 'month', 'week', 'description', 'event'])
-
-        ws = wb.create_sheet('Data Defenitions')
-        ws.append(['hashtag', 'month', 'week'])
-
+        wb = load_workbook('./api/dashboard/karma_voucher/assets/base_template.xlsx')
+        ws = wb['Data Defenitions']
         hashtags = TaskList.objects.all().values_list('hashtag', flat=True)
         data = {
             'hashtag': hashtags,
@@ -350,11 +345,11 @@ class BaseTemplateAPI(APIView):
         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
             for row, value in enumerate(col_values, start=2):
                 ws.cell(row=row, column=col_num, value=value)
-
-        wb.save('base_template.xlsx')
-
-        return CustomResponse(
-            response={
-                "message": "Base template created successfully"
-                }
-        ).get_success_response()
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='base_template.xlsx')
