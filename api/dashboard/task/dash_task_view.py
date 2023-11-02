@@ -499,3 +499,59 @@ class EventDropDownApi(APIView):
         return CustomResponse(
             response=events
         ).get_success_response()
+
+from openpyxl import Workbook, load_workbook
+
+class TaskBaseTemplateAPI(APIView):
+    # authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+
+        ws.append([
+            "hashtag",
+            "title",
+            "description",
+            "karma",
+            "usage_count",
+            "variable_karma",
+            "level",
+            "channel",
+            "type",
+            "ig",
+            "org",
+            "event",
+        ])
+
+        ws = wb.create_sheet('Data Defenitions')
+        ws.append(['level', 'chanel', 'type', 'ig', 'org', 'event'])
+
+        levels = Level.objects.all().values_list('name', flat=True)
+        channels = Channel.objects.all().values_list('name', flat=True)
+        task_types = TaskType.objects.all().values_list('title', flat=True)
+        igs = InterestGroup.objects.all().values_list('name', flat=True)
+        orgs = Organization.objects.all().values_list('code', flat=True)
+        events = Events.get_all_values()
+
+        data = {
+            'level': levels,
+            'channel': channels,
+            'type': task_types,
+            'ig': igs,
+            'org': orgs,
+            'event': events
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+
+        wb.save('base_template.xlsx')
+
+        return CustomResponse(
+            response={
+                "message": "Base template created successfully"
+                }
+        ).get_success_response()
