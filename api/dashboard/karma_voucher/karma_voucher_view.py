@@ -328,12 +328,12 @@ class ExportVoucherLogAPI(APIView):
 
         return CommonUtils.generate_csv(voucher_serializer_data, 'Voucher Log')
     
-class BaseTemplateAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+class VoucherBaseTemplateAPI(APIView):
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
         wb = load_workbook('./api/dashboard/karma_voucher/assets/base_template.xlsx')
-        ws = wb['Data Defenitions']
+        ws = wb['Data Definitions']
         hashtags = TaskList.objects.all().values_list('hashtag', flat=True)
         data = {
             'hashtag': hashtags,

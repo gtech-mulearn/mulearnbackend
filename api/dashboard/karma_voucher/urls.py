@@ -11,5 +11,5 @@ urlpatterns = [
     path('update/<str:voucher_id>/', karma_voucher_view.VoucherLogAPI.as_view()),
     path('delete/<str:voucher_id>/', karma_voucher_view.VoucherLogAPI.as_view()),
 
-    path('base-template/', karma_voucher_view.BaseTemplateAPI.as_view()),
+    path('base-template/', karma_voucher_view.VoucherBaseTemplateAPI.as_view()),
 ]   
