@@ -207,7 +207,7 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
                 )
                 .order_by("org_title")
             )
@@ -216,12 +216,24 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
                 )
                 .order_by("org_title")
             )
 
-        return CustomResponse(response=learning_circles_info).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            learning_circles_info,
+            request,
+            search_fields=["org_title", "learning_circle_count", "user_count"],
+            sort_fields={"org_title": "org_title", "learning_circle_count": "learning_circle_count",
+                         "user_count": "user_count"},
+        )
+
+        collegewise_info_data = CollegeInfoSerializer(paginated_queryset.get("queryset"), many=True).data
+
+        return CustomResponse().paginated_response(
+            data=collegewise_info_data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class GlobalCountAPI(APIView):
