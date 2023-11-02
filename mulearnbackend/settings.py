@@ -12,8 +12,7 @@ https://docs.djangoproject.com/en/4.1/ref/settings/
 import os
 from pathlib import Path
 
-import decouple
-from decouple import config
+from decouple import config as decouple_config
 
 import logging
 
@@ -25,12 +24,12 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/4.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = config("SECRET_KEY")
+SECRET_KEY = decouple_config("SECRET_KEY")
 
 # SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = config("DEBUG", default=False, cast=bool)
+DEBUG = decouple_config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")])
+ALLOWED_HOSTS = decouple_config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")])
 
 # Application definition
 
@@ -91,7 +90,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [('localhost', 6379)],
+            "hosts": [(decouple_config('REDIS_HOST'), decouple_config('REDIS_PORT'))],
         },
     },
 }
@@ -101,12 +100,12 @@ CHANNEL_LAYERS = {
 
 DATABASES = {
     "default": {
-        "ENGINE": config("DATABASE_ENGINE"),
-        "NAME": config("DATABASE_NAME"),
-        "USER": config("DATABASE_USER"),
-        "PASSWORD": config("DATABASE_PASSWORD"),
-        "HOST": config("DATABASE_HOST"),
-        "PORT": config("DATABASE_PORT"),
+        "ENGINE": decouple_config("DATABASE_ENGINE"),
+        "NAME": decouple_config("DATABASE_NAME"),
+        "USER": decouple_config("DATABASE_USER"),
+        "PASSWORD": decouple_config("DATABASE_PASSWORD"),
+        "HOST": decouple_config("DATABASE_HOST"),
+        "PORT": decouple_config("DATABASE_PORT"),
     }
 }
 
@@ -128,7 +127,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-logging
 
 LOGGING = {
     'version': 1,
@@ -137,25 +135,25 @@ LOGGING = {
         'request_log': {
             'level': 'INFO',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/request.log',
+            'filename': decouple_config("LOGGER_DIR_PATH") + '/request.log',
             'formatter': 'verbose',
         },
         'error_log': {
             'level': 'ERROR',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/error.log',
+            'filename': decouple_config("LOGGER_DIR_PATH") + '/error.log',
             'formatter': 'verbose',
         },
         'sql_log': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/sql.log',
+            'filename': decouple_config("LOGGER_DIR_PATH") + '/sql.log',
             'formatter': 'verbose',
         },
         'root_log': {
             'level': 'DEBUG',
             'class': 'logging.FileHandler',
-            'filename': decouple.config("LOGGER_DIR_PATH") + '/root.log',
+            'filename': decouple_config("LOGGER_DIR_PATH") + '/root.log',
             'formatter': 'verbose',
         },
     },
@@ -218,13 +216,13 @@ MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 # Email Sending
-EMAIL_BACKEND = config("EMAIL_BACKEND")
-EMAIL_HOST = config("EMAIL_HOST")
-EMAIL_HOST_USER = config("EMAIL_HOST_USER")
-EMAIL_HOST_PASSWORD = config("EMAIL_HOST_PASSWORD")
-EMAIL_PORT = config("EMAIL_PORT")
-EMAIL_USE_TLS = config("EMAIL_USE_TLS")
-from_mail = decouple.config('FROM_MAIL')
+EMAIL_BACKEND = decouple_config("EMAIL_BACKEND")
+EMAIL_HOST = decouple_config("EMAIL_HOST")
+EMAIL_HOST_USER = decouple_config("EMAIL_HOST_USER")
+EMAIL_HOST_PASSWORD = decouple_config("EMAIL_HOST_PASSWORD")
+EMAIL_PORT = decouple_config("EMAIL_PORT")
+EMAIL_USE_TLS = decouple_config("EMAIL_USE_TLS")
+from_mail = decouple_config('FROM_MAIL')
 
 DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 
