@@ -129,7 +129,8 @@ class LcReportAPI(APIView):
             request,
             search_fields=["first_name", "last_name", "muid", "circle_name", 'circle_ig', "organisation", "dwms_id",
                            "karma_earned"],
-            sort_fields={"first_name": "first_name", "muid": "muid", "circle_name": "circle_name",
+            sort_fields={"first_name": "first_name", "last_name": "last_name", "muid": "muid",
+                         "circle_name": "circle_name",
                          "circle_ig": "circle_ig", "organisation": "organisation", "dwms_id": "dwms_id",
                          "karma_earned": "karma_earned"},
         )
