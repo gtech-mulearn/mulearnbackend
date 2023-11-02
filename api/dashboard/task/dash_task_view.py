@@ -100,8 +100,11 @@ class TaskListAPI(APIView):
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
 
-        request.data["created_by"] = request.data["updated_by"] = user_id
-        serializer = TaskModifySerializer(data=request.data)
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["created_by"] = user_id
+        mutable_data["updated_by"] = user_id
+
+        serializer = TaskModifySerializer(data=mutable_data)
 
         if not serializer.is_valid():
             return CustomResponse(
@@ -140,13 +143,14 @@ class TaskAPI(APIView):
     def put(self, request, task_id):  # edit
 
         user_id = JWTUtils.fetch_user_id(request)
-        request.data["updated_by"] = user_id
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["updated_by"] = user_id
 
         task = TaskList.objects.get(pk=task_id)
 
         serializer = TaskModifySerializer(
             task,
-            data=request.data,
+            data=mutable_data,
             partial=True
         )
 
