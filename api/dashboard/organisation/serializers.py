@@ -2,10 +2,20 @@ import uuid
 
 from django.db.models import Count
 from rest_framework import serializers
+from django.db import models
 
-from db.organization import Organization, District, Zone, State, OrgAffiliation, Department
+from db.organization import (
+    Organization,
+    District,
+    Zone,
+    State,
+    OrgAffiliation,
+    Department,
+)
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
+from django.db import transaction
+from django.forms.models import model_to_dict
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -27,15 +37,11 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "zone",
             "state",
             "country",
-            "user_count"
+            "user_count",
         ]
 
     def get_user_count(self, obj):
-        return obj.user_organization_link_org.annotate(
-            user_count=Count(
-                'user'
-            )
-        ).count()
+        return obj.user_organization_link_org.annotate(user_count=Count("user")).count()
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):
@@ -142,15 +148,12 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class AffiliationSerializer(serializers.ModelSerializer):
-    label = serializers.ReadOnlyField(source='title')
-    value = serializers.ReadOnlyField(source='id')
+    label = serializers.ReadOnlyField(source="title")
+    value = serializers.ReadOnlyField(source="id")
 
     class Meta:
         model = OrgAffiliation
-        fields = [
-            "value",
-            "label"
-        ]
+        fields = ["value", "label"]
 
 
 class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
@@ -174,14 +177,10 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def validate_title(self, title):
-        org_affiliation = OrgAffiliation.objects.filter(
-            title=title
-        ).first()
+        org_affiliation = OrgAffiliation.objects.filter(title=title).first()
 
         if org_affiliation:
-            raise serializers.ValidationError(
-                "Affiliation already exist"
-            )
+            raise serializers.ValidationError("Affiliation already exist")
 
         return title
 
@@ -212,16 +211,20 @@ class DepartmentSerializer(serializers.ModelSerializer):
 
 
 class InstitutionPrefillSerializer(serializers.ModelSerializer):
-    affiliation_id = serializers.CharField(source='affiliation.id', allow_null=True)
-    affiliation_name = serializers.CharField(source='affiliation.name', allow_null=True)
-    district_id = serializers.CharField(source='district.id', allow_null=True)
-    district_name = serializers.CharField(source='district.name', allow_null=True)
-    zone_id = serializers.CharField(source='district.zone.id', allow_null=True)
-    zone_name = serializers.CharField(source='district.zone.name', allow_null=True)
-    state_id = serializers.CharField(source='district.state.id', allow_null=True)
-    state_name = serializers.CharField(source='district.state.name', allow_null=True)
-    country_id = serializers.CharField(source='district.state.country.id', allow_null=True)
-    country_name = serializers.CharField(source='district.state.country.name', allow_null=True)
+    affiliation_id = serializers.CharField(source="affiliation.id", allow_null=True)
+    affiliation_name = serializers.CharField(source="affiliation.name", allow_null=True)
+    district_id = serializers.CharField(source="district.id", allow_null=True)
+    district_name = serializers.CharField(source="district.name", allow_null=True)
+    zone_id = serializers.CharField(source="district.zone.id", allow_null=True)
+    zone_name = serializers.CharField(source="district.zone.name", allow_null=True)
+    state_id = serializers.CharField(source="district.state.id", allow_null=True)
+    state_name = serializers.CharField(source="district.state.name", allow_null=True)
+    country_id = serializers.CharField(
+        source="district.state.country.id", allow_null=True
+    )
+    country_name = serializers.CharField(
+        source="district.state.country.name", allow_null=True
+    )
 
     class Meta:
         model = Organization
@@ -240,3 +243,65 @@ class InstitutionPrefillSerializer(serializers.ModelSerializer):
             "country_id",
             "country_name",
         ]
+
+
+class OrganizationMergerSerializer(serializers.Serializer):
+    remove_code = serializers.SlugRelatedField(
+        slug_field="code", queryset=Organization.objects.all()
+    )
+
+    def validate(self, attrs):
+        if self.instance.code == attrs.get("remove_code"):
+            raise serializers.ValidationError(
+                "Keep code and remove code should not be the same."
+            )
+        return super().validate(attrs)
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            remove_org = validated_data["remove_code"]
+
+            # Fetch and iterate over all relations to the Organization model
+            for relation in Organization._meta.related_objects:
+                # We're interested in ForeignKey relations only
+                if isinstance(
+                    relation,
+                    (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+                ):
+                    related_model = relation.related_model
+                    related_field_name = relation.field.name
+                elif isinstance(
+                    relation,
+                    (models.ManyToOneRel, models.ManyToManyRel, models.OneToOneRel),
+                ):
+                    related_model = relation.related_model
+                    related_field_name = None
+                    for field in related_model._meta.fields:
+                        if (
+                            isinstance(field, models.ForeignKey)
+                            and field.related_model == Organization
+                        ):
+                            related_field_name = field.name
+                            break
+
+                    if (
+                        not related_field_name
+                    ):  # If the related field is not found, skip
+                        continue
+                else:
+                    continue  # Skip other types of relations
+
+                # Update the ForeignKey in the related model
+                filter_kwargs = {related_field_name: remove_org}
+                update_kwargs = {related_field_name: instance}
+                relation_instance = related_model.objects.filter(**filter_kwargs)
+                if isinstance(relation, (models.OneToOneField, models.OneToOneRel)):
+                    if existing_college := related_model.objects.filter(
+                        **{related_field_name: instance}
+                    ):
+                        existing_college.delete()
+
+                relation_instance.update(**update_kwargs)
+            remove_org.delete()
+
+        return instance

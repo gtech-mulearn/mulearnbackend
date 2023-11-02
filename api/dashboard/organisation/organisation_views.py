@@ -17,7 +17,9 @@ from .serializers import (
     AffiliationSerializer,
     DepartmentSerializer,
     InstitutionCreateUpdateSerializer,
-    InstitutionSerializer, InstitutionPrefillSerializer,
+    InstitutionSerializer,
+    InstitutionPrefillSerializer,
+    OrganizationMergerSerializer,
 )
 
 
@@ -129,19 +131,15 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
 class InstitutionAPI(APIView):
     def get(self, request, org_type, district_id=None):
-
         if district_id:
             organisations = Organization.objects.filter(
-                org_type=org_type,
-                district_id=district_id
+                org_type=org_type, district_id=district_id
             )
         else:
-            organisations = Organization.objects.filter(
-                org_type=org_type
-            )
+            organisations = Organization.objects.filter(org_type=org_type)
 
         org_queryset = organisations.select_related(
-            'affiliation',
+            "affiliation",
             # 'district',
             # "district__zone__state__country",
             # "district__zone__state",
@@ -197,9 +195,8 @@ class InstitutionCSVAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, org_type):
         organizations = (
-            Organization.objects.filter(
-                org_type=org_type
-            ).select_related(
+            Organization.objects.filter(org_type=org_type)
+            .select_related(
                 "affiliation",
                 # "district__zone__state__country",
                 # "district__zone__state",
@@ -216,15 +213,9 @@ class InstitutionCSVAPI(APIView):
             )
         )
 
-        serializer = InstitutionSerializer(
-            organizations,
-            many=True
-        ).data
+        serializer = InstitutionSerializer(organizations, many=True).data
 
-        return CommonUtils.generate_csv(
-            serializer,
-            f"{org_type} data"
-        )
+        return CommonUtils.generate_csv(serializer, f"{org_type} data")
 
 
 class InstitutionDetailsAPI(APIView):
@@ -287,22 +278,13 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            affiliation,
-            request,
-            [
-                "id",
-                "title"
-            ]
+            affiliation, request, ["id", "title"]
         )
         serializer = AffiliationSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
+            paginated_queryset.get("queryset"), many=True
         )
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get(
-                "pagination"
-            )
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
@@ -323,9 +305,7 @@ class AffiliationGetPostUpdateDeleteAPI(APIView):
                 general_message=f"{request.data.get('title')} added successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def put(self, request, affiliation_id):
@@ -432,15 +412,9 @@ class DepartmentAPI(APIView):
 class AffiliationListAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
+        affiliation = OrgAffiliation.objects.all().values("id", "title")
 
-        affiliation = OrgAffiliation.objects.all().values(
-            'id',
-            'title'
-        )
-
-        return CustomResponse(
-            response=affiliation
-        ).get_success_response()
+        return CustomResponse(response=affiliation).get_success_response()
 
 
 class InstitutionPrefillAPI(APIView):
@@ -450,14 +424,29 @@ class InstitutionPrefillAPI(APIView):
         ]
     )
     def get(self, request, org_code):
-
         organization = Organization.objects.filter(code=org_code).first()
 
-        serializer = InstitutionPrefillSerializer(
-            organization,
-            many=False
-        ).data
+        serializer = InstitutionPrefillSerializer(organization, many=False).data
 
-        return CustomResponse(
-            response=serializer
-        ).get_success_response()
+        return CustomResponse(response=serializer).get_success_response()
+
+
+class OrganizationMergerView(APIView):
+    def patch(self, request, organisation_id):
+        try:
+            destination = Organization.objects.get(pk=organisation_id)
+            serializer = OrganizationMergerSerializer(destination, data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
+            serializer.save()
+
+            return CustomResponse(
+                general_message=f"Organizations merged successfully into {destination.title}."
+            ).get_success_response()
+
+        except Organization.DoesNotExist as e:
+            return CustomResponse(
+                general_message="Organisation id that was given to merge into does not exist"
+            ).get_failure_response()
