@@ -323,3 +323,38 @@ class ExportVoucherLogAPI(APIView):
         voucher_serializer_data = VoucherLogSerializer(voucher_serializer, many=True).data
 
         return CommonUtils.generate_csv(voucher_serializer_data, 'Voucher Log')
+    
+from openpyxl import Workbook, load_workbook
+
+class BaseTemplateAPI(APIView):
+    # authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+
+        ws.append(['muid', 'karma', 'hashtag', 'month', 'week', 'description', 'event'])
+
+        ws = wb.create_sheet('Data Defenitions')
+        ws.append(['hashtag', 'month', 'week'])
+
+        hashtags = TaskList.objects.all().values_list('hashtag', flat=True)
+        data = {
+            'hashtag': hashtags,
+            'month': ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September',
+                      'October', 'November', 'December'],
+            'week': ['W1', 'W2', 'W3', 'W4', 'W5']
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+
+        wb.save('base_template.xlsx')
+
+        return CustomResponse(
+            response={
+                "message": "Base template created successfully"
+                }
+        ).get_success_response()
