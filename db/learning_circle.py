@@ -44,7 +44,7 @@ class UserCircleLink(models.Model):
 
 
 class CircleMeetingLog(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4(), unique=True)
     circle =     models.ForeignKey(LearningCircle, on_delete=models.CASCADE, related_name='circle_meeting_log_learning_circle')
     meet_time =  models.DateTimeField()
     meet_place = models.CharField(max_length=255, blank=True, null=True)
