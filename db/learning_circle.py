@@ -36,7 +36,7 @@ class UserCircleLink(models.Model):
     is_invited  = models.BooleanField(default=False)
     accepted    = models.BooleanField()
     accepted_at = models.DateTimeField(blank=True, null=True)
-    created_at  = models.DateTimeField(auto_now_add=True)
+    created_at  = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = False
@@ -54,7 +54,7 @@ class CircleMeetingLog(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='circle_meeting_log_created_by')
     created_at = models.DateTimeField(auto_now=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='circle_meeting_log_updated_by')
-    updated_at = models.DateTimeField()
+    updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
         managed = False
