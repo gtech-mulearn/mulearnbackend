@@ -435,6 +435,23 @@ class OrganizationMergerView(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    def get(self, request, organisation_id):
+        try:
+            destination = Organization.objects.get(pk=organisation_id)
+            serializer = OrganizationMergerSerializer(destination, data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
+
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        except Organization.DoesNotExist:
+            return CustomResponse(
+                general_message="An organization with the given id doesn't exist"
+            ).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, organisation_id):
         try:
             destination = Organization.objects.get(pk=organisation_id)
@@ -449,7 +466,7 @@ class OrganizationMergerView(APIView):
                 general_message=f"Organizations merged successfully into {destination.title}."
             ).get_success_response()
 
-        except Organization.DoesNotExist as e:
+        except Organization.DoesNotExist:
             return CustomResponse(
-                general_message="Organisation id that was given to merge into does not exist"
+                general_message="An organization with the given id doesn't exist"
             ).get_failure_response()
