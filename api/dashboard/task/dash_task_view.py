@@ -14,6 +14,10 @@ from .dash_task_serializer import (
     TaskModifySerializer,
 )
 
+from openpyxl import load_workbook
+from tempfile import NamedTemporaryFile
+from io import BytesIO
+from django.http import FileResponse
 
 class TaskListAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -499,3 +503,37 @@ class EventDropDownApi(APIView):
         return CustomResponse(
             response=events
         ).get_success_response()
+
+class TaskBaseTemplateAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    
+    def get(self, request):
+        wb = load_workbook('./api/dashboard/task/assets/base_template.xlsx')
+        ws = wb['Data Definitions']
+        levels = Level.objects.all().values_list('name', flat=True)
+        channels = Channel.objects.all().values_list('name', flat=True)
+        task_types = TaskType.objects.all().values_list('title', flat=True)
+        igs = InterestGroup.objects.all().values_list('name', flat=True)
+        orgs = Organization.objects.all().values_list('code', flat=True)
+        events = Events.get_all_values()
+
+        data = {
+            'level': levels,
+            'channel': channels,
+            'type': task_types,
+            'ig': igs,
+            'org': orgs,
+            'event': events
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='base_template.xlsx')
