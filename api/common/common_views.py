@@ -129,7 +129,8 @@ class LcReportAPI(APIView):
             request,
             search_fields=["first_name", "last_name", "muid", "circle_name", 'circle_ig', "organisation", "dwms_id",
                            "karma_earned"],
-            sort_fields={"first_name": "first_name", "muid": "muid", "circle_name": "circle_name",
+            sort_fields={"first_name": "first_name", "last_name": "last_name", "muid": "muid",
+                         "circle_name": "circle_name",
                          "circle_ig": "circle_ig", "organisation": "organisation", "dwms_id": "dwms_id",
                          "karma_earned": "karma_earned"},
         )
@@ -206,7 +207,7 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
                 )
                 .order_by("org_title")
             )
@@ -215,12 +216,24 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
                 )
                 .order_by("org_title")
             )
 
-        return CustomResponse(response=learning_circles_info).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            learning_circles_info,
+            request,
+            search_fields=["org_title", "learning_circle_count", "user_count"],
+            sort_fields={"org_title": "org_title", "learning_circle_count": "learning_circle_count",
+                         "user_count": "user_count"},
+        )
+
+        collegewise_info_data = CollegeInfoSerializer(paginated_queryset.get("queryset"), many=True).data
+
+        return CustomResponse().paginated_response(
+            data=collegewise_info_data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class GlobalCountAPI(APIView):
@@ -261,7 +274,6 @@ class GlobalCountAPI(APIView):
 
 class GTASANDSHOREAPI(APIView):
     def get(self, request):
-
         response = requests.get('https://devfolio.vez.social/rank')
         if response.status_code == 200:
             # Save JSON response to a local file
@@ -276,7 +288,6 @@ class GTASANDSHOREAPI(APIView):
 
         # Create a dictionary to store the grouped data
         grouped_colleges = {}
-
         for college, count in data.items():
             # Clean the college name by removing spaces and converting to lowercase
             cleaned_college = college.replace(" ", "").lower()
