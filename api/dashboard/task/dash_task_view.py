@@ -14,6 +14,10 @@ from .dash_task_serializer import (
     TaskModifySerializer,
 )
 
+from openpyxl import load_workbook
+from tempfile import NamedTemporaryFile
+from io import BytesIO
+from django.http import FileResponse
 
 class TaskListAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -100,8 +104,11 @@ class TaskListAPI(APIView):
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
 
-        request.data["created_by"] = request.data["updated_by"] = user_id
-        serializer = TaskModifySerializer(data=request.data)
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["created_by"] = user_id
+        mutable_data["updated_by"] = user_id
+
+        serializer = TaskModifySerializer(data=mutable_data)
 
         if not serializer.is_valid():
             return CustomResponse(
@@ -140,13 +147,14 @@ class TaskAPI(APIView):
     def put(self, request, task_id):  # edit
 
         user_id = JWTUtils.fetch_user_id(request)
-        request.data["updated_by"] = user_id
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["updated_by"] = user_id
 
         task = TaskList.objects.get(pk=task_id)
 
         serializer = TaskModifySerializer(
             task,
-            data=request.data,
+            data=mutable_data,
             partial=True
         )
 
@@ -495,3 +503,37 @@ class EventDropDownApi(APIView):
         return CustomResponse(
             response=events
         ).get_success_response()
+
+class TaskBaseTemplateAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    
+    def get(self, request):
+        wb = load_workbook('./api/dashboard/task/assets/base_template.xlsx')
+        ws = wb['Data Definitions']
+        levels = Level.objects.all().values_list('name', flat=True)
+        channels = Channel.objects.all().values_list('name', flat=True)
+        task_types = TaskType.objects.all().values_list('title', flat=True)
+        igs = InterestGroup.objects.all().values_list('name', flat=True)
+        orgs = Organization.objects.all().values_list('code', flat=True)
+        events = Events.get_all_values()
+
+        data = {
+            'level': levels,
+            'channel': channels,
+            'type': task_types,
+            'ig': igs,
+            'org': orgs,
+            'event': events
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='base_template.xlsx')

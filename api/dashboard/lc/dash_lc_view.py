@@ -14,9 +14,9 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
-    LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleMeetSerializer, \
+    LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleCreateEditDeleteSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberlistSerializer, MeetingCreateUpdateDeleteSerializer
+    LearningCircleMemberlistSerializer, MeetCreateEditDeleteSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -144,16 +144,42 @@ class UserLearningCircleListApi(APIView):
         ).get_success_response()
 
 
-class LearningCircleMeetAPI(APIView):
+class MeetCreateEditDeleteAPI(APIView):
+
+    def post(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        serializer = MeetCreateEditDeleteSerializer(
+            data=request.data,
+            context={
+                'user_id': user_id,
+                'circle_id': circle_id
+            }
+        )
+        if serializer.is_valid():
+            circle_meet_log = serializer.save()
+
+            return CustomResponse(
+                general_message=f'Meet scheduled at {circle_meet_log.meet_time}'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
+
     def patch(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
 
         learning_circle = LearningCircle.objects.filter(
             id=circle_id
         ).first()
 
-        serializer = LearningCircleMeetSerializer(
+        serializer = MeetCreateEditDeleteSerializer(
             learning_circle,
-            data=request.data
+            data=request.data,
+            context={
+                'user_id': user_id
+            }
         )
         if serializer.is_valid():
             serializer.save()
@@ -611,27 +637,4 @@ class PreviousMeetingsDetailsAPI(APIView):
         return CustomResponse(
             response=circle_meeting_log
         ).get_success_response()
-
-
-class MeetingCreateUpdateDeleteAPI(APIView):
-    def post(self, request, circle_id):
-        user_id = JWTUtils.fetch_user_id(request)
-
-        serializer = MeetingCreateUpdateDeleteSerializer(
-            data=request.data,
-            context={
-                'user_id': user_id,
-                'circle_id': circle_id,
-            }
-        )
-        if serializer.is_valid():
-            circle_meet_log = serializer.save()
-
-            return CustomResponse(
-                general_message=f'Meet scheduled at {circle_meet_log.meet_time}'
-            ).get_success_response()
-
-        return CustomResponse(
-            message=serializer.errors
-        ).get_failure_response()
 
