@@ -256,7 +256,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
         },
     )
 
-    def validate_source_code(self, attrs):
+    def validate_source_org(self, attrs):
         if self.instance.code == attrs.code:
             raise serializers.ValidationError(
                 "You can't merge an organization into itself."
