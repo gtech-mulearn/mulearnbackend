@@ -383,7 +383,7 @@ class LearningCircleNoteSerializer(serializers.ModelSerializer):
         return instance
 
 
-class LearningCircleMeetSerializer(serializers.ModelSerializer):
+class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
         fields = [
@@ -503,8 +503,7 @@ class LearningCircleMemberlistSerializer(serializers.ModelSerializer):
         ]
 
 
-class MeetingCreateUpdateDeleteSerializer(serializers.ModelSerializer):
-    meet_place = serializers.CharField(required=False, allow_null=True)
+class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CircleMeetingLog
@@ -517,9 +516,13 @@ class MeetingCreateUpdateDeleteSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
+        print()
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
-        validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['updated_by_id'] = self.context.get('user_id')
-        validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         return CircleMeetingLog.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        instance.updated_by_id = self.context.get('user_id')
+        instance.save()
+        return instance
