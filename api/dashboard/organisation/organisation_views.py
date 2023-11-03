@@ -432,6 +432,9 @@ class InstitutionPrefillAPI(APIView):
 
 
 class OrganizationMergerView(APIView):
+    permission_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, organisation_id):
         try:
             destination = Organization.objects.get(pk=organisation_id)
