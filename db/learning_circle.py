@@ -9,7 +9,7 @@ from db.user import User
 # noinspection PyPep8
 
 class LearningCircle(models.Model):
-    id         = models.CharField(primary_key=True, max_length=36)
+    id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
     name       = models.CharField(max_length=255, unique=True)
     circle_code= models.CharField(unique=True, max_length=36)
     ig         = models.ForeignKey(InterestGroup, on_delete=models.CASCADE)
