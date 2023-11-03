@@ -4,11 +4,12 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
+from db.task import TaskList
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-
+from utils.types import Lc
 
 class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
@@ -504,7 +505,7 @@ class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        print()
+        validated_data['id'] = uuid.uuid4()
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
@@ -514,3 +515,24 @@ class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
         instance.updated_by_id = self.context.get('user_id')
         instance.save()
         return instance
+
+    def validate_attendees(self, attendees):
+        task = TaskList.objects.filter(hashtag=Lc.TASK_HASHTAG.value).first()
+
+        attendees = attendees.split(',')
+
+        user_id = self.context.get('user_id')
+
+        KarmaActivityLog.objects.bulk_create([
+            KarmaActivityLog(
+                id=uuid.uuid4(),
+                user_id=user,
+                karma=Lc.KARMA.value,
+                task_id=task.id,
+                updated_by_id=user_id,
+                created_by_id=user_id,
+            )
+            for user in attendees
+        ])
+
+        return attendees
