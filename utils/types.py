@@ -105,6 +105,11 @@ class Events(Enum):
         return [member.value for member in cls]
 
 
+class Lc(Enum):
+    KARMA = 5
+    TASK_HASHTAG = 'Basics'
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
     'name': 'system',
     'gender': 'system',
