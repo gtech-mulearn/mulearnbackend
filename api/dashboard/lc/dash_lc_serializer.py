@@ -42,18 +42,6 @@ class LearningCircleSerializer(serializers.ModelSerializer):
 
 
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
-    ig = serializers.CharField(
-        required=True,
-        error_messages={
-            'required': 'ig field must not be left blank.'
-        }
-    )
-    name = serializers.CharField(
-        required=True,
-        error_messages={
-            'required': 'name field must not be left blank.'
-        }
-    )
 
     class Meta:
         model = LearningCircle
@@ -64,8 +52,8 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user_id = self.context.get('user_id')
-
         ig_id = data.get('ig')
+
         if not InterestGroup.objects.filter(
                 id=ig_id
         ).exists():
@@ -87,11 +75,11 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Already a member of a learning circle with the same interest group"
             )
-
         return data
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
+
         org_link = UserOrganizationLink.objects.filter(
             user_id=user_id,
             org__org_type=OrganizationType.COLLEGE.value

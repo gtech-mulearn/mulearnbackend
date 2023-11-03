@@ -99,21 +99,41 @@ class LearningCircleJoinApi(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
+
         full_name = f'{user.first_name} {user.last_name}' if user.last_name else user.first_name
-        lc = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first()
-        serializer = LearningCircleJoinSerializer(data=request.data,
-                                                  context={ 'user_id': user_id, 'circle_id': circle_id })
+
+        lc = UserCircleLink.objects.filter(
+            circle_id=circle_id,
+            lead=True
+        ).first()
+
+        serializer = LearningCircleJoinSerializer(
+            data=request.data,
+            context={
+                'user_id': user_id,
+                'circle_id': circle_id
+            }
+        )
         if serializer.is_valid():
             serializer.save()
             lead_obj = User.objects.filter(id=lc.user.id).first()
-            NotificationUtils.insert_notification(user=lead_obj,
-                                                  title="Member Request",
-                                                  description=f"{full_name} has requested to join your learning circle",
-                                                  button="LC",
-                                                  url=f'{domain}/api/v1/dashboard/lc/{circle_id}/{user_id}/',
-                                                  created_by=user)
-            return CustomResponse(general_message='Request sent').get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+
+            NotificationUtils.insert_notification(
+                user=lead_obj,
+                title="Member Request",
+                description=f"{full_name} has requested to join your learning circle",
+                button="LC",
+                url=f'{domain}/api/v1/dashboard/lc/{circle_id}/{user_id}/',
+                created_by=user
+            )
+
+            return CustomResponse(
+                general_message='Request sent'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
 
 class UserLearningCircleListApi(APIView):
@@ -241,6 +261,7 @@ class LearningCircleHomeApi(APIView):
         if not LearningCircle.objects.filter(
                 id=circle_id
         ).exists():
+
             return CustomResponse(
                 general_message='Learning Circle not found'
             ).get_failure_response()
@@ -345,8 +366,12 @@ class LearningCircleHomeApi(APIView):
         serializer = LearningCircleNoteSerializer(learning_circle, data=request.data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message='Note updated successfully').get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+            return CustomResponse(
+                general_message='Note updated successfully').get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
     def delete(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)

@@ -12,7 +12,7 @@ class LearningCircle(models.Model):
     id         = models.CharField(primary_key=True, max_length=36)
     name       = models.CharField(max_length=255, unique=True)
     circle_code= models.CharField(unique=True, max_length=36)
-    ig         = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, blank=True, null=True)
+    ig         = models.ForeignKey(InterestGroup, on_delete=models.CASCADE)
     org        = models.ForeignKey(Organization, on_delete=models.CASCADE, blank=True, null=True)
     meet_place = models.CharField(max_length=255, blank=True, null=True)
     meet_time  = models.CharField(max_length=10, blank=True, null=True)
