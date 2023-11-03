@@ -432,6 +432,24 @@ class InstitutionPrefillAPI(APIView):
 
 
 class OrganizationMergerView(APIView):
+    def get(self, request, organisation_id):
+        try:
+            destination = Organization.objects.get(pk=organisation_id)
+            serializer = OrganizationMergerSerializer(destination, data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
+                
+            return CustomResponse(
+                response=serializer.data
+            ).get_success_response()
+            
+        except Organization.DoesNotExist:
+            return CustomResponse(
+                general_message="Organisation id that was given to merge into does not exist"
+            ).get_failure_response()
+            
     def patch(self, request, organisation_id):
         try:
             destination = Organization.objects.get(pk=organisation_id)
@@ -446,7 +464,7 @@ class OrganizationMergerView(APIView):
                 general_message=f"Organizations merged successfully into {destination.title}."
             ).get_success_response()
 
-        except Organization.DoesNotExist as e:
+        except Organization.DoesNotExist:
             return CustomResponse(
                 general_message="Organisation id that was given to merge into does not exist"
             ).get_failure_response()
