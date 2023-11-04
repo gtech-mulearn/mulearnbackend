@@ -73,7 +73,8 @@ class ChannelCRUDAPI(APIView):
         serializer = ChannelCUDSerializer(
             channel,
             data=request.data,
-            context={"user_id": user_id}
+            context={"user_id": user_id},
+            partial=True
         )
 
         if serializer.is_valid():
