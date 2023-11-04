@@ -17,7 +17,7 @@ urlpatterns = [
     path('meeting-log/<str:meet_id>/', dash_lc_view.MeetGetPostPatchDeleteAPI.as_view()),
     path('meet/edit/<str:circle_id>/', dash_lc_view.MeetGetPostPatchDeleteAPI.as_view()),     # optim
     path('meet/create/<str:circle_id>/', dash_lc_view.MeetGetPostPatchDeleteAPI.as_view()),   # optim
-    path('member/invite/<str:circle_id>/<str:muid>/', dash_lc_view.LearningCircleInviteMember.as_view()),
+    path('member/invite/<str:circle_id>/<str:muid>/', dash_lc_view.LearningCircleInviteMemberAPI.as_view()),
     path('member/invite/status/<str:circle_id>/<str:muid>/<str:status>/', dash_lc_view.LearningCircleInvitationStatus.as_view()),
     path('lead/<str:circle_id>/<str:lead_id>/', dash_lc_view.LearningCircleLeadTransfer.as_view()),
     ]

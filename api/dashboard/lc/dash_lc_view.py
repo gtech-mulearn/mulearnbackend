@@ -538,7 +538,7 @@ class LearningCircleInviteLeadAPI(APIView):
             return CustomResponse(general_message='User Invited').get_success_response()
 
 
-class LearningCircleInviteMember(APIView):
+class LearningCircleInviteMemberAPI(APIView):
     """
     Invite a member to a learning circle.
     """
@@ -556,19 +556,19 @@ class LearningCircleInviteMember(APIView):
                 general_message='Muid is Invalid'
             ).get_failure_response()
 
-        usr_circle_link = UserCircleLink.objects.filter(
+        user_circle_link = UserCircleLink.objects.filter(
             circle__id=circle_id,
             user__id=user.id
         ).first()
 
-        if usr_circle_link:
-            if usr_circle_link.accepted:
+        if user_circle_link:
+            if user_circle_link.accepted:
 
                 return CustomResponse(
                     general_message='User already part of circle'
                 ).get_failure_response()
 
-            elif usr_circle_link.is_invited:
+            elif user_circle_link.is_invited:
                 return CustomResponse(
                     general_message='User already invited'
                 ).get_failure_response()
@@ -576,7 +576,7 @@ class LearningCircleInviteMember(APIView):
         receiver_email = user.email
         html_address = ["lc_invitation.html"]
         inviter = User.objects.filter(id=JWTUtils.fetch_user_id(request)).first()
-        inviter_name = inviter.first_name + " " + inviter.last_name
+        inviter_name = inviter.full_name
         context = {
             "circle_name": LearningCircle.objects.filter(
                 id=circle_id
@@ -593,7 +593,7 @@ class LearningCircleInviteMember(APIView):
             )
 
         if status == 1:
-            usr_circle_link_new = UserCircleLink(
+            UserCircleLink.objects.create(
                 id=uuid.uuid4(),
                 circle_id=circle_id,
                 user=user,
@@ -601,7 +601,6 @@ class LearningCircleInviteMember(APIView):
                 accepted=False,
                 created_at=DateTimeUtils.get_current_utc_time(),
                 )
-            usr_circle_link_new.save()
 
             return CustomResponse(
                 general_message='User Invited'
