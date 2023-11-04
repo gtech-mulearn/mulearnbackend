@@ -50,6 +50,63 @@ class LearningCircleListApi(APIView):
         ).get_success_response()
 
 
+class LearningCircleMainApi(APIView):
+    def post(self, request):
+        all_circles = LearningCircle.objects.all()
+        ig_id = request.data.get('ig_id')
+        org_id = request.data.get('org_id')
+        district_id = request.data.get('district_id')
+
+        if district_id:
+            all_circles = all_circles.filter(org__district_id=district_id)
+
+        if org_id:
+            all_circles = all_circles.filter(org_id=org_id)
+
+        if ig_id:
+            all_circles = all_circles.filter(ig_id=ig_id)
+
+        if ig_id or org_id or district_id:
+            serializer = LearningCircleMainSerializer(
+                all_circles,
+                many=True
+            )
+        else:
+            random_circles = all_circles.order_by('?')[:9]
+
+            serializer = LearningCircleMainSerializer(
+                random_circles,
+                many=True
+            )
+
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
+
+
+class LearningCircleDataAPI(APIView):
+    """
+        API endpoint for retrieving basic data about all learning circles.
+
+        Endpoint: /api/v1/dashboard/lc/data/ (GET)
+
+        Returns:
+            CustomResponse: A custom response containing data about all learning circles.
+        """
+
+    def get(self, request):
+        learning_circle = LearningCircle.objects.all()
+
+        serializer = LearningCircleDataSerializer(
+            learning_circle,
+            many=False
+        )
+
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
+
+
 class TotalLearningCircleListApi(APIView):
     def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
@@ -407,63 +464,6 @@ class LearningCircleHomeApi(APIView):
                 return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
 
         return CustomResponse(general_message='Left').get_success_response()
-
-
-class LearningCircleMainApi(APIView):
-    def post(self, request):
-        all_circles = LearningCircle.objects.all()
-        ig_id = request.data.get('ig_id')
-        org_id = request.data.get('org_id')
-        district_id = request.data.get('district_id')
-
-        if district_id:
-            all_circles = all_circles.filter(org__district_id=district_id)
-
-        if org_id:
-            all_circles = all_circles.filter(org_id=org_id)
-
-        if ig_id:
-            all_circles = all_circles.filter(ig_id=ig_id)
-
-        if ig_id or org_id or district_id:
-            serializer = LearningCircleMainSerializer(
-                all_circles,
-                many=True
-            )
-        else:
-            random_circles = all_circles.order_by('?')[:9]
-
-            serializer = LearningCircleMainSerializer(
-                random_circles,
-                many=True
-            )
-
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
-
-
-class LearningCircleDataAPI(APIView):
-    """
-        API endpoint for retrieving basic data about all learning circles.
-
-        Endpoint: /api/v1/dashboard/lc/data/ (GET)
-
-        Returns:
-            CustomResponse: A custom response containing data about all learning circles.
-        """
-
-    def get(self, request):
-        all_circles = LearningCircle.objects.all()
-
-        serializer = LearningCircleDataSerializer(
-            all_circles,
-            many=False
-        )
-
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
 
 
 class LearningCircleListMembersApi(APIView):
