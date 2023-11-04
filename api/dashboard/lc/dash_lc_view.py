@@ -22,6 +22,34 @@ domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
 
 
+class LearningCircleListApi(APIView):
+    """
+    API endpoint for listing a user's learning circles.
+
+    Endpoint: /api/v1/dashboard/lc/ (GET)
+
+    Returns:
+        CustomResponse: A custom response containing a list of learning circles
+        associated with the user.
+    """
+    def get(self, request):  # Lists user's learning circle
+        user_id = JWTUtils.fetch_user_id(request)
+
+        learning_queryset = LearningCircle.objects.filter(
+            user_circle_link_circle__user_id=user_id,
+            user_circle_link_circle__accepted=1
+        )
+
+        learning_serializer = LearningCircleSerializer(
+            learning_queryset,
+            many=True
+        )
+
+        return CustomResponse(
+            response=learning_serializer.data
+        ).get_success_response()
+
+
 class TotalLearningCircleListApi(APIView):
     def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
@@ -134,34 +162,6 @@ class LearningCircleJoinApi(APIView):
         return CustomResponse(
             message=serializer.errors
         ).get_failure_response()
-
-
-class UserLearningCircleListApi(APIView):
-    """
-    API endpoint for listing a user's learning circles.
-
-    Endpoint: /api/v1/dashboard/lc/ (GET)
-
-    Returns:
-        CustomResponse: A custom response containing a list of learning circles
-        associated with the user.
-    """
-    def get(self, request):  # Lists user's learning circle
-        user_id = JWTUtils.fetch_user_id(request)
-
-        learning_queryset = LearningCircle.objects.filter(
-            user_circle_link_circle__user_id=user_id,
-            user_circle_link_circle__accepted=1
-        )
-
-        learning_serializer = LearningCircleSerializer(
-            learning_queryset,
-            many=True
-        )
-
-        return CustomResponse(
-            response=learning_serializer.data
-        ).get_success_response()
 
 
 class MeetCreateEditDeleteAPI(APIView):

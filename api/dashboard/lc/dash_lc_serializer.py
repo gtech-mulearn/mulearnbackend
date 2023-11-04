@@ -11,18 +11,13 @@ from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from utils.types import Lc
 
+
 class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
     updated_by = serializers.CharField(source='updated_by.fullname')
     ig = serializers.CharField(source='ig.name')
     org = serializers.CharField(source='org.title', allow_null=True)
     member_count = serializers.SerializerMethodField()
-
-    def get_member_count(self, obj):
-        return UserCircleLink.objects.filter(
-            circle_id=obj.id,
-            accepted=1
-        ).count()
 
     class Meta:
         model = LearningCircle
@@ -40,6 +35,12 @@ class LearningCircleSerializer(serializers.ModelSerializer):
             "created_at",
             "member_count",
         ]
+
+    def get_member_count(self, obj):
+        return obj.user_circle_link_circle.filter(
+            circle_id=obj.id,
+            accepted=1
+        ).count()
 
 
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
