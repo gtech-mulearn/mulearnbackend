@@ -3,7 +3,7 @@ from django.urls import path
 from . import dash_lc_view
 
 urlpatterns = [
-    path('', dash_lc_view.UserLearningCircleListApi.as_view()),
+    path('', dash_lc_view.LearningCircleListApi.as_view()),
     path('list/', dash_lc_view.LearningCircleMainApi.as_view()),
     path('data/', dash_lc_view.LearningCircleDataAPI.as_view()),
     path('list-all/', dash_lc_view.TotalLearningCircleListApi.as_view()),
