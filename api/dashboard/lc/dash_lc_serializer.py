@@ -4,10 +4,12 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
+from db.task import TaskList
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
+from utils.types import Lc
 
 
 class LearningCircleSerializer(serializers.ModelSerializer):
@@ -16,12 +18,6 @@ class LearningCircleSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(source='ig.name')
     org = serializers.CharField(source='org.title', allow_null=True)
     member_count = serializers.SerializerMethodField()
-
-    def get_member_count(self, obj):
-        return UserCircleLink.objects.filter(
-            circle_id=obj.id,
-            accepted=1
-        ).count()
 
     class Meta:
         model = LearningCircle
@@ -40,20 +36,14 @@ class LearningCircleSerializer(serializers.ModelSerializer):
             "member_count",
         ]
 
+    def get_member_count(self, obj):
+        return obj.user_circle_link_circle.filter(
+            circle_id=obj.id,
+            accepted=1
+        ).count()
+
 
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
-    ig = serializers.CharField(
-        required=True,
-        error_messages={
-            'required': 'ig field must not be left blank.'
-        }
-    )
-    name = serializers.CharField(
-        required=True,
-        error_messages={
-            'required': 'name field must not be left blank.'
-        }
-    )
 
     class Meta:
         model = LearningCircle
@@ -64,8 +54,8 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user_id = self.context.get('user_id')
-
         ig_id = data.get('ig')
+
         if not InterestGroup.objects.filter(
                 id=ig_id
         ).exists():
@@ -87,11 +77,11 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 "Already a member of a learning circle with the same interest group"
             )
-
         return data
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
+
         org_link = UserOrganizationLink.objects.filter(
             user_id=user_id,
             org__org_type=OrganizationType.COLLEGE.value
@@ -516,7 +506,7 @@ class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
-        print()
+        validated_data['id'] = uuid.uuid4()
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
@@ -526,3 +516,24 @@ class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
         instance.updated_by_id = self.context.get('user_id')
         instance.save()
         return instance
+
+    def validate_attendees(self, attendees):
+        task = TaskList.objects.filter(hashtag=Lc.TASK_HASHTAG.value).first()
+
+        attendees = attendees.split(',')
+
+        user_id = self.context.get('user_id')
+
+        KarmaActivityLog.objects.bulk_create([
+            KarmaActivityLog(
+                id=uuid.uuid4(),
+                user_id=user,
+                karma=Lc.KARMA.value,
+                task_id=task.id,
+                updated_by_id=user_id,
+                created_by_id=user_id,
+            )
+            for user in attendees
+        ])
+
+        return attendees
