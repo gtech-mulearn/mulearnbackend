@@ -4,7 +4,7 @@ import requests
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
-
+from django.db import models
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
@@ -14,7 +14,7 @@ from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer
-
+from django.db.models import Count, Subquery, OuterRef
 
 class LcDashboardAPI(APIView):
     def get(self, request):
@@ -27,20 +27,23 @@ class LcDashboardAPI(APIView):
             learning_circle_count = LearningCircle.objects.all().count()
 
         total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
+        user_circle_link_count = UserCircleLink.objects.filter(circle=OuterRef('pk')).values('circle_id').annotate(
+            total_users=Count('id')).values('total_users')
+
         query = InterestGroup.objects.annotate(
-            total_circles=Count("learningcircle"),
-            total_users=Count("learningcircle__usercirclelink__user", distinct=True),
+            total_circles=Count("learning_circle_ig", distinct=True),
+            total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
         ).values("name", "total_circles", "total_users")
+
         circle_count_by_ig = (
             query.values("name")
             .order_by("name")
             .annotate(
-                total_circles=Count("learningcircle", distinct=True),
-                total_users=Count(
-                    "learningcircle__usercirclelink__user", distinct=True
-                ),
+                total_circles=Count("learning_circle_ig", distinct=True),
+                total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
             )
         )
+
         unique_user_count = (
             UserCircleLink.objects.filter(accepted=True)
             .values("user")
