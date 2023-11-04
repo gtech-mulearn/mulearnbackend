@@ -35,7 +35,7 @@ class UserInfoAPI(APIView):
         ).get_success_response()
 
 
-class UserEditAPI(APIView):
+class UserGetPatchDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
