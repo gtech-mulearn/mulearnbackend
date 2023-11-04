@@ -473,7 +473,7 @@ class LearningCircleLeadTransfer(APIView):
     def patch(self, request, circle_id, lead_id):
         user_id = JWTUtils.fetch_user_id(request)
 
-        usr_circle_link = UserCircleLink.objects.filter(
+        user_circle_link = UserCircleLink.objects.filter(
             circle__id=circle_id,
             user__id=user_id
         ).first()
@@ -491,7 +491,7 @@ class LearningCircleLeadTransfer(APIView):
                 general_message='Learning Circle not found'
             ).get_failure_response()
 
-        if usr_circle_link is None or usr_circle_link.lead != 1:
+        if user_circle_link is None or user_circle_link.lead != 1:
             return CustomResponse(
                 general_message='User is not lead'
             ).get_failure_response()
@@ -501,10 +501,11 @@ class LearningCircleLeadTransfer(APIView):
                 general_message='New lead not found in the circle'
             ).get_failure_response()
 
-        usr_circle_link.lead = None
+        user_circle_link.lead = None
         lead_circle_link.lead = 1
-        usr_circle_link.save()
+        user_circle_link.save()
         lead_circle_link.save()
+
         return CustomResponse(
             general_message='Lead transferred successfully'
         ).get_success_response()
@@ -630,25 +631,25 @@ class LearningCircleInvitationStatus(APIView):
                 general_message='Muid is Invalid'
             ).get_failure_response()
 
-        usr_circle_link = UserCircleLink.objects.filter(
+        user_circle_link = UserCircleLink.objects.filter(
             circle__id=circle_id,
             user__id=user.id
         ).first()
 
-        if not usr_circle_link:
+        if not user_circle_link:
             return CustomResponse(
                 general_message='User not invited'
             ).get_failure_response()
 
         if status == "accepted":
-            usr_circle_link.accepted = True
-            usr_circle_link.accepted_at = DateTimeUtils.get_current_utc_time()
-            usr_circle_link.save()
+            user_circle_link.accepted = True
+            user_circle_link.accepted_at = DateTimeUtils.get_current_utc_time()
+            user_circle_link.save()
             # return CustomResponse(general_message='User added to circle').get_success_response()
             return redirect(f'{domain}/dashboard/learning-circle/')
 
         elif status == "rejected":
-            usr_circle_link.delete()
+            user_circle_link.delete()
 
             return CustomResponse(
                 general_message='User rejected invitation'
