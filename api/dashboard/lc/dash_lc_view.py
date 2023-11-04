@@ -84,6 +84,29 @@ class LearningCircleMainApi(APIView):
         ).get_success_response()
 
 
+class LearningCircleDataAPI(APIView):
+    """
+        API endpoint for retrieving basic data about all learning circles.
+
+        Endpoint: /api/v1/dashboard/lc/data/ (GET)
+
+        Returns:
+            CustomResponse: A custom response containing data about all learning circles.
+        """
+
+    def get(self, request):
+        learning_circle = LearningCircle.objects.all()
+
+        serializer = LearningCircleDataSerializer(
+            learning_circle,
+            many=False
+        )
+
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
+
+
 class TotalLearningCircleListApi(APIView):
     def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
@@ -441,30 +464,6 @@ class LearningCircleHomeApi(APIView):
                 return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
 
         return CustomResponse(general_message='Left').get_success_response()
-
-
-
-class LearningCircleDataAPI(APIView):
-    """
-        API endpoint for retrieving basic data about all learning circles.
-
-        Endpoint: /api/v1/dashboard/lc/data/ (GET)
-
-        Returns:
-            CustomResponse: A custom response containing data about all learning circles.
-        """
-
-    def get(self, request):
-        all_circles = LearningCircle.objects.all()
-
-        serializer = LearningCircleDataSerializer(
-            all_circles,
-            many=False
-        )
-
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
 
 
 class LearningCircleListMembersApi(APIView):

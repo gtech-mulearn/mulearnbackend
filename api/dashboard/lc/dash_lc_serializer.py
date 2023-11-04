@@ -89,6 +89,34 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
         ]
 
 
+class LearningCircleDataSerializer(serializers.ModelSerializer):
+    interest_group = serializers.SerializerMethodField()
+    college = serializers.SerializerMethodField()
+    learning_circle = serializers.SerializerMethodField()
+    total_no_of_users = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "interest_group",
+            "college",
+            "learning_circle",
+            "total_no_of_users"
+        ]
+
+    def get_interest_group(self, obj):
+        return obj.values('ig_id').distinct().count()
+
+    def get_total_no_of_users(self, obj):
+        return UserCircleLink.objects.all().count()
+
+    def get_learning_circle(self, obj):
+        return obj.count()
+
+    def get_college(self, obj):
+        return obj.values('org_id').distinct().count()
+
+
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -435,34 +463,6 @@ class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
-
-
-class LearningCircleDataSerializer(serializers.ModelSerializer):
-    interest_group = serializers.SerializerMethodField()
-    college = serializers.SerializerMethodField()
-    learning_circle = serializers.SerializerMethodField()
-    total_no_of_users = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LearningCircle
-        fields = [
-            "interest_group",
-            "college",
-            "learning_circle",
-            "total_no_of_users"
-        ]
-
-    def get_total_no_of_users(self, obj):
-        return UserCircleLink.objects.all().count()
-
-    def get_learning_circle(self, obj):
-        return LearningCircle.objects.all().count()
-
-    def get_college(self, obj):
-        return LearningCircle.objects.values('org_id').distinct().count()
-
-    def get_interest_group(self, obj):
-        return LearningCircle.objects.values('ig_id').distinct().count()
 
 
 class LearningCircleMemberlistSerializer(serializers.ModelSerializer):
