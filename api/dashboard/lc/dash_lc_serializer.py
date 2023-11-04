@@ -256,34 +256,6 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.create(**validated_data)
 
 
-class LearningCircleDataSerializer(serializers.ModelSerializer):
-    interest_group = serializers.SerializerMethodField()
-    college = serializers.SerializerMethodField()
-    learning_circle = serializers.SerializerMethodField()
-    total_no_of_users = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LearningCircle
-        fields = [
-            "interest_group",
-            "college",
-            "learning_circle",
-            "total_no_of_users"
-        ]
-
-    def get_interest_group(self, obj):
-        return obj.values('ig_id').distinct().count()
-
-    def get_total_no_of_users(self, obj):
-        return UserCircleLink.objects.all().count()
-
-    def get_learning_circle(self, obj):
-        return obj.count()
-
-    def get_college(self, obj):
-        return obj.values('org_id').distinct().count()
-
-
 class LearningCircleHomeSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
@@ -317,27 +289,19 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
 
     def get_is_member(self, obj):
         user = self.context.get('user_id')
-        try:
-            if link := UserCircleLink.objects.get(
-                    user=user,
-                    circle=obj,
-                    accepted=True
-            ):
-                return True
-        except UserCircleLink.DoesNotExist:
-            return False
+        return obj.user_circle_link_circle.filter(
+            user=user,
+            circle=obj,
+            accepted=True
+        ).exists()
 
     def get_is_lead(self, obj):
         user = self.context.get('user_id')
-        try:
-            if link := UserCircleLink.objects.get(
-                    user=user,
-                    circle=obj,
-                    lead=True
-            ):
-                return True
-        except UserCircleLink.DoesNotExist:
-            return False
+        return obj.user_circle_link_circle.filter(
+            user=user,
+            circle=obj,
+            lead=True
+        ).exists()
 
     def get_total_karma(self, obj):
         return (
@@ -359,10 +323,12 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         return self._get_member_info(obj, accepted=None)
 
     def _get_member_info(self, obj, accepted):
-        members = UserCircleLink.objects.filter(
+
+        members = obj.user_circle_link_circle.filter(
             circle=obj,
             accepted=accepted
         )
+
         member_info = []
 
         for member in members:
@@ -377,9 +343,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
 
             member_info.append({
                 'id': member.user.id,
-                'username': f'{member.user.first_name} {member.user.last_name}'
-                if member.user.last_name
-                else member.user.first_name,
+                'username': f'{member.user.fullname}',
                 'profile_pic': member.user.profile_pic or None,
                 'karma': total_ig_karma,
                 'is_lead': member.lead,
@@ -443,6 +407,34 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "day",
         )
         return previous_meetings
+
+
+class LearningCircleDataSerializer(serializers.ModelSerializer):
+    interest_group = serializers.SerializerMethodField()
+    college = serializers.SerializerMethodField()
+    learning_circle = serializers.SerializerMethodField()
+    total_no_of_users = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "interest_group",
+            "college",
+            "learning_circle",
+            "total_no_of_users"
+        ]
+
+    def get_interest_group(self, obj):
+        return obj.values('ig_id').distinct().count()
+
+    def get_total_no_of_users(self, obj):
+        return UserCircleLink.objects.all().count()
+
+    def get_learning_circle(self, obj):
+        return obj.count()
+
+    def get_college(self, obj):
+        return obj.values('org_id').distinct().count()
 
 
 class LearningCircleUpdateSerializer(serializers.ModelSerializer):
