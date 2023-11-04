@@ -399,7 +399,28 @@ class LearningCircleHomeApi(APIView):
         return CustomResponse(general_message='Left').get_success_response()
 
 
-class MeetCreateEditDeleteAPI(APIView):
+class MeetGetPostPatchDeleteAPI(APIView):
+
+    def get(self, request, meet_id):
+
+        circle_meeting_log = CircleMeetingLog.objects.filter(
+            id=meet_id
+        ).values(
+            "id",
+            "meet_time",
+            "meet_place",
+            "day",
+            "attendees",
+            "agenda",
+            meet_created_by=F("created_by__first_name"),
+            meet_created_at=F("created_at"),
+            meet_updated_by=F("updated_by__first_name"),
+            meet_updated_at=F("updated_at"),
+        )
+
+        return CustomResponse(
+            response=circle_meeting_log
+        ).get_success_response()
 
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -634,34 +655,4 @@ class LearningCircleInvitationStatus(APIView):
                 general_message='User rejected invitation'
             ).get_failure_response()
 
-
-class PreviousMeetingsDetailsAPI(APIView):
-    """
-       API for retrieving details of a previous meeting by ID.
-
-       This API allows you to retrieve information about a previous meeting
-       based on its unique ID.
-       Methode:
-           - get: Retrieve details of a previous meeting.
-        """
-    def get(self, request, meet_id):
-
-        circle_meeting_log = CircleMeetingLog.objects.filter(
-            id=meet_id
-        ).values(
-            "id",
-            "meet_time",
-            "meet_place",
-            "day",
-            "attendees",
-            "agenda",
-            meet_created_by=F("created_by__first_name"),
-            meet_created_at=F("created_at"),
-            meet_updated_by=F("updated_by__first_name"),
-            meet_updated_at=F("updated_at"),
-        )
-
-        return CustomResponse(
-            response=circle_meeting_log
-        ).get_success_response()
 
