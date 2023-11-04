@@ -16,7 +16,7 @@ from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleCreateEditDeleteSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberlistSerializer, MeetCreateEditDeleteSerializer
+    LearningCircleMemberListSerializer, MeetCreateEditDeleteSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -178,6 +178,27 @@ class LearningCircleCreateApi(APIView):
         return CustomResponse(
             message=serializer.errors
         ).get_failure_response()
+
+
+class LearningCircleListMembersApi(APIView):
+    def get(self, request, circle_id):
+        learning_circle = LearningCircle.objects.filter(
+            id=circle_id
+        )
+
+        if learning_circle is None:
+            return CustomResponse(
+                general_message='Learning Circle Not Exists'
+            ).get_failure_response()
+
+        serializer = LearningCircleMemberListSerializer(
+            learning_circle,
+            many=True
+        )
+
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
 
 
 class LearningCircleJoinApi(APIView):
@@ -464,27 +485,6 @@ class LearningCircleHomeApi(APIView):
                 return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
 
         return CustomResponse(general_message='Left').get_success_response()
-
-
-class LearningCircleListMembersApi(APIView):
-    def get(self, request, circle_id):
-        learning_circle = LearningCircle.objects.filter(
-            id=circle_id
-        )
-
-        if learning_circle is None:
-            return CustomResponse(
-                general_message='Learning Circle Not Exists'
-            ).get_failure_response()
-
-        serializer = LearningCircleMemberlistSerializer(
-            learning_circle,
-            many=True
-        )
-
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
 
 
 class LearningCircleInviteLeadAPI(APIView):

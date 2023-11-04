@@ -89,34 +89,6 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
         ]
 
 
-class LearningCircleDataSerializer(serializers.ModelSerializer):
-    interest_group = serializers.SerializerMethodField()
-    college = serializers.SerializerMethodField()
-    learning_circle = serializers.SerializerMethodField()
-    total_no_of_users = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LearningCircle
-        fields = [
-            "interest_group",
-            "college",
-            "learning_circle",
-            "total_no_of_users"
-        ]
-
-    def get_interest_group(self, obj):
-        return obj.values('ig_id').distinct().count()
-
-    def get_total_no_of_users(self, obj):
-        return UserCircleLink.objects.all().count()
-
-    def get_learning_circle(self, obj):
-        return obj.count()
-
-    def get_college(self, obj):
-        return obj.values('org_id').distinct().count()
-
-
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -213,6 +185,54 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
             created_at=DateTimeUtils.get_current_utc_time()
         )
         return lc
+
+
+class LearningCircleMemberListSerializer(serializers.ModelSerializer):
+    members = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            'members',
+        ]
+
+    def get_members(self, obj):
+        user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
+        return [
+            {
+                'full_name': f'{member.user.fullname}',
+                'discord_id': member.user.discord_id,
+            }
+            for member in user_circle_link
+        ]
+
+
+class LearningCircleDataSerializer(serializers.ModelSerializer):
+    interest_group = serializers.SerializerMethodField()
+    college = serializers.SerializerMethodField()
+    learning_circle = serializers.SerializerMethodField()
+    total_no_of_users = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            "interest_group",
+            "college",
+            "learning_circle",
+            "total_no_of_users"
+        ]
+
+    def get_interest_group(self, obj):
+        return obj.values('ig_id').distinct().count()
+
+    def get_total_no_of_users(self, obj):
+        return UserCircleLink.objects.all().count()
+
+    def get_learning_circle(self, obj):
+        return obj.count()
+
+    def get_college(self, obj):
+        return obj.values('org_id').distinct().count()
 
 
 class LearningCircleHomeSerializer(serializers.ModelSerializer):
@@ -463,26 +483,6 @@ class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
-
-
-class LearningCircleMemberlistSerializer(serializers.ModelSerializer):
-    members = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LearningCircle
-        fields = [
-            'members',
-        ]
-
-    def get_members(self, obj):
-        members = UserCircleLink.objects.filter(circle=obj, accepted=True)
-        return [
-            {
-                'full_name': f'{member.user.first_name} {member.user.last_name}' if member.user.last_name else member.user.first_name,
-                'discord_id': member.user.discord_id,
-            }
-            for member in members
-        ]
 
 
 class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
