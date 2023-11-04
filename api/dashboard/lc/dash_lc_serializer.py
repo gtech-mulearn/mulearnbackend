@@ -43,6 +43,52 @@ class LearningCircleSerializer(serializers.ModelSerializer):
         ).count()
 
 
+class LearningCircleMainSerializer(serializers.ModelSerializer):
+    ig_name = serializers.CharField(source='ig.name')
+    member_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+    lead_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LearningCircle
+        fields = [
+            'name',
+            'ig_name',
+            'member_count',
+            'members',
+            'meet_place',
+            'meet_time',
+            'lead_name'
+        ]
+
+    def get_lead_name(self, obj):
+        user_circle_link = obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=1,
+            lead=True
+        ).first()
+
+        return user_circle_link.user.fullname if user_circle_link else None
+
+    def get_member_count(self, obj):
+        return obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=1
+        ).count()
+
+    def get_members(self, obj):
+        user_circle_link = obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=1
+        )
+        return [
+            {
+                'username': f'{member.user.fullname}'
+            }
+            for member in user_circle_link
+        ]
+
+
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
     class Meta:
@@ -389,60 +435,6 @@ class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
-
-
-class LearningCircleMainSerializer(serializers.ModelSerializer):
-    ig_name = serializers.SerializerMethodField()
-    member_count = serializers.SerializerMethodField()
-    members = serializers.SerializerMethodField()
-    lead_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = LearningCircle
-        fields = [
-            'name',
-            'ig_name',
-            'member_count',
-            'members',
-            'meet_place',
-            'meet_time',
-            'lead_name'
-        ]
-
-    def get_lead_name(self, obj):
-        user_circle_link = UserCircleLink.objects.filter(
-            circle=obj,
-            accepted=1,
-            lead=True
-        ).first()
-
-        if user_circle_link:
-            user = user_circle_link.user
-            return f'{user.first_name} {user.last_name}'
-        return None
-
-    def get_ig_name(self, obj):
-        return obj.ig.name if obj.ig else None
-
-    def get_member_count(self, obj):
-        return UserCircleLink.objects.filter(
-            circle=obj,
-            accepted=1
-        ).count()
-
-    def get_members(self, obj):
-        members = UserCircleLink.objects.filter(
-            circle=obj,
-            accepted=1
-        )
-        return [
-            {
-                'username': f'{member.user.first_name} {member.user.last_name}'
-                if member.user.last_name
-                else member.user.first_name,
-            }
-            for member in members
-        ]
 
 
 class LearningCircleDataSerializer(serializers.ModelSerializer):
