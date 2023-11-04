@@ -90,6 +90,12 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
 
 
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
+    ig = serializers.CharField(required=True, error_messages={
+        'required': 'ig field must not be left blank.'
+    })
+    name = serializers.CharField(required=True, error_messages={
+        'required': 'name field must not be left blank.'}
+                                 )
 
     class Meta:
         model = LearningCircle
@@ -99,6 +105,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
+
         user_id = self.context.get('user_id')
         ig_id = data.get('ig')
 
