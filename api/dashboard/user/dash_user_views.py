@@ -12,7 +12,7 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.files.storage import FileSystemStorage
-
+from decouple import config as decouple_config
 
 class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -408,7 +408,8 @@ class UserProfilePictureView(APIView):
         if fs.exists(filename):
             fs.delete(filename)
         filename = fs.save(filename, pic)
-        uploaded_file_url = f'/api/v1/dashboard/user/profile/{user_id}'
+        file_url = fs.url(filename)
+        uploaded_file_url = f"{decouple_config('FR_DOMAIN_NAME')}{file_url}" # /api/v1/dashboard/user/profile/{user_id}"
         
         serializer = dash_user_serializer.UserProfileUpdateSerializer(
             user,data={'profile_pic':uploaded_file_url}
