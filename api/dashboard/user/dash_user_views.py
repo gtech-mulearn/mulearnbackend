@@ -7,12 +7,12 @@ from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
-from utils.response import CustomResponse
+from utils.response import CustomResponse, ImageResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.files.storage import FileSystemStorage
-
+from decouple import config as decouple_config
 
 class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -364,8 +364,34 @@ class ResetPasswordConfirmAPI(APIView):
             general_message="New Password Saved Successfully"
         ).get_success_response()
 
-class UserProfilePictureUpdateView(APIView):
+class UserProfilePictureView(APIView):
 
+    # def get(self, request, user_id):
+    #     user = User.objects.filter(id=user_id).first()
+        
+    #     if user is None:
+    #         return CustomResponse(
+    #             general_message="No user data available"
+    #         ).get_failure_response()
+    #     image_path = f'user/profile/{user_id}.png'
+    #     response = ImageResponse(path=image_path)
+    #     if response.exists():
+    #         return response.get_success_response()
+    #     else:
+    #         return CustomResponse(
+    #             general_message="No Profile picture available"
+    #         ).get_failure_response()
+
+    def patch(self,request):
+        DiscordWebhooks.general_updates(
+                WebHookCategory.USER_PROFILE.value,
+                WebHookActions.UPDATE.value,
+                JWTUtils.fetch_user_id(request)
+            )
+        return CustomResponse(
+                general_message="Successfully updated"
+            ).get_success_response()
+    
     def post(self, request):
         user_id = request.data.get('user_id')
         user = User.objects.filter(id=user_id).first()
@@ -393,18 +419,13 @@ class UserProfilePictureUpdateView(APIView):
         if fs.exists(filename):
             fs.delete(filename)
         filename = fs.save(filename, pic)
-        uploaded_file_url = fs.url(filename)
+        file_url = fs.url(filename)
+        uploaded_file_url = f"{decouple_config('FR_DOMAIN_NAME')}{file_url}"
         
-        serializer = dash_user_serializer.UserProfileUpdateSerializer(
-            user,data={'profile_pic':uploaded_file_url}
-        )
-
-        if serializer.is_valid():
-          serializer.save()
-          return CustomResponse(
-              response=serializer.data
-          ).get_success_response()
-        else:
-            return CustomResponse(
-                response=serializer.errors
-            ).get_failure_response()
+        return CustomResponse(
+            response={
+                'user_id':user.id,
+                'profile_pic':uploaded_file_url
+            }
+        ).get_success_response()
+        
