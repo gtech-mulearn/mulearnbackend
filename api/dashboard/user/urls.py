@@ -17,9 +17,9 @@ urlpatterns = [
     path('csv/', dash_user_views.UserManagementCSV.as_view(), name="csv-user"),
     path('', dash_user_views.UserAPI.as_view(), name='list-user'),
     
-    path('<str:user_id>/', dash_user_views.UserEditAPI.as_view(), name="detail-user"),
-    path('<str:user_id>/', dash_user_views.UserEditAPI.as_view(), name="edit-user"),
-    path('<str:user_id>/', dash_user_views.UserEditAPI.as_view(), name="delete-user"),
+    path('<str:user_id>/', dash_user_views.UserGetPatchDeleteAPI.as_view(), name="detail-user"),
+    path('<str:user_id>/', dash_user_views.UserGetPatchDeleteAPI.as_view(), name="edit-user"),
+    path('<str:user_id>/', dash_user_views.UserGetPatchDeleteAPI.as_view(), name="delete-user"),
 
 
 ]

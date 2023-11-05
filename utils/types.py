@@ -43,6 +43,7 @@ class RoleType(Enum):
     ENABLER = "Enabler"
     IG_FACILITATOR = "IG Facilitator"
     TECH_TEAM = 'Tech Team'
+    CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
 
 
 class OrganizationType(Enum):
@@ -103,6 +104,11 @@ class Events(Enum):
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
+
+class Lc(Enum):
+    KARMA = 5
+    TASK_HASHTAG = 'Basics'
 
 
 DEFAULT_HACKATHON_FORM_FIELDS = {

@@ -246,62 +246,118 @@ class InstitutionPrefillSerializer(serializers.ModelSerializer):
 
 
 class OrganizationMergerSerializer(serializers.Serializer):
-    remove_code = serializers.SlugRelatedField(
-        slug_field="code", queryset=Organization.objects.all()
+    update_summary = serializers.SerializerMethodField()
+    source_org = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=Organization.objects.all(),
+        write_only=True,
+        error_messages={
+            "does_not_exist": "An organization with the given code doesn't exist",
+        },
     )
 
-    def validate(self, attrs):
-        if self.instance.code == attrs.get("remove_code"):
+    def validate_source_code(self, attrs):
+        if self.instance.code == attrs.code:
             raise serializers.ValidationError(
-                "Keep code and remove code should not be the same."
+                "You can't merge an organization into itself."
             )
         return super().validate(attrs)
 
+    def get_update_summary(self, instance):
+        update_summary = []
+
+        # Simulate the transaction
+        for relation in Organization._meta.related_objects:
+            if isinstance(
+                relation,
+                (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+            ):
+                related_model = relation.related_model
+                related_field_name = relation.field.name
+            elif isinstance(relation, (models.ManyToOneRel, models.ManyToManyRel)):
+                related_model = relation.related_model
+                related_field_name = next(
+                    (
+                        field.name
+                        for field in related_model._meta.fields
+                        if isinstance(field, models.ForeignKey)
+                        and field.related_model == Organization
+                    ),
+                    None,
+                )
+            else:
+                continue
+
+            if not related_field_name:
+                continue
+
+            if existing_relations := related_model.objects.filter(
+                **{related_field_name: instance}
+            ):
+                update_summary.append(
+                    {
+                        "model": related_model._meta.model_name,
+                        "field_name": related_field_name,
+                        "count": existing_relations.count(),
+                        "action": (
+                            "delete"
+                            if isinstance(
+                                relation, (models.OneToOneField, models.OneToOneRel)
+                            )
+                            else "update"
+                        ),
+                        "instance_ids": list(
+                            existing_relations.values_list("pk", flat=True)
+                        ),
+                    }
+                )
+
+        return update_summary
+
     def update(self, instance, validated_data):
         with transaction.atomic():
-            remove_org = validated_data["remove_code"]
+            source_org = validated_data["source_org"]
 
-            # Fetch and iterate over all relations to the Organization model
             for relation in Organization._meta.related_objects:
-                # We're interested in ForeignKey relations only
+                # Determine related model and related field name
                 if isinstance(
                     relation,
                     (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
                 ):
                     related_model = relation.related_model
                     related_field_name = relation.field.name
-                elif isinstance(
-                    relation,
-                    (models.ManyToOneRel, models.ManyToManyRel, models.OneToOneRel),
-                ):
+                elif isinstance(relation, (models.ManyToOneRel, models.ManyToManyRel)):
                     related_model = relation.related_model
-                    related_field_name = None
-                    for field in related_model._meta.fields:
-                        if (
-                            isinstance(field, models.ForeignKey)
+                    # Find the related field in the related model that links back to Organization
+                    related_field_name = next(
+                        (
+                            field.name
+                            for field in related_model._meta.fields
+                            if isinstance(field, models.ForeignKey)
                             and field.related_model == Organization
-                        ):
-                            related_field_name = field.name
-                            break
+                        ),
+                        None,
+                    )
 
-                    if (
-                        not related_field_name
-                    ):  # If the related field is not found, skip
-                        continue
-                else:
-                    continue  # Skip other types of relations
+                # Skip if we couldn't determine the related field
+                if not related_field_name:
+                    continue
 
-                # Update the ForeignKey in the related model
-                filter_kwargs = {related_field_name: remove_org}
+                # Prepare filter and update arguments
+                filter_kwargs = {related_field_name: source_org}
                 update_kwargs = {related_field_name: instance}
-                relation_instance = related_model.objects.filter(**filter_kwargs)
-                if isinstance(relation, (models.OneToOneField, models.OneToOneRel)):
-                    if existing_college := related_model.objects.filter(
-                        **{related_field_name: instance}
-                    ):
-                        existing_college.delete()
 
-                relation_instance.update(**update_kwargs)
-            remove_org.delete()
+                # Handle OneToOne relationships: delete existing relation if it points to the instance
+                if isinstance(relation, (models.OneToOneField, models.OneToOneRel)):
+                    if existing_relation := related_model.objects.filter(
+                        **{related_field_name: instance}
+                    ).first():
+                        existing_relation.delete()
+
+                # Update the relations in the related model
+                related_model.objects.filter(**filter_kwargs).update(**update_kwargs)
+
+            # Delete the organization that needs to be removed
+            source_org.delete()
 
         return instance
