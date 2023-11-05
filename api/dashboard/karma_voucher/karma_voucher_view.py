@@ -332,7 +332,7 @@ class VoucherBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook('./api/dashboard/karma_voucher/assets/base_template.xlsx')
+        wb = load_workbook('./api/dashboard/karma_voucher/assets/voucher_base_template.xlsx')
         ws = wb['Data Definitions']
         hashtags = TaskList.objects.all().values_list('hashtag', flat=True)
         data = {
@@ -352,4 +352,4 @@ class VoucherBaseTemplateAPI(APIView):
             with open(tmp.name, 'rb') as f:
                 f.seek(0)
                 new_file_object = f.read()
-        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='base_template.xlsx')
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='voucher_base_template.xlsx')
