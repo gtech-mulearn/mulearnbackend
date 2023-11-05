@@ -365,21 +365,32 @@ class ResetPasswordConfirmAPI(APIView):
         ).get_success_response()
 
 class UserProfilePictureView(APIView):
-    def get(self, request, user_id):
-        user = User.objects.filter(id=user_id).first()
+
+    # def get(self, request, user_id):
+    #     user = User.objects.filter(id=user_id).first()
         
-        if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
-        image_path = f'user/profile/{user_id}.png'
-        response = ImageResponse(path=image_path)
-        if response.exists():
-            return response.get_success_response()
-        else:
-            return CustomResponse(
-                general_message="No Profile picture available"
-            ).get_failure_response()
+    #     if user is None:
+    #         return CustomResponse(
+    #             general_message="No user data available"
+    #         ).get_failure_response()
+    #     image_path = f'user/profile/{user_id}.png'
+    #     response = ImageResponse(path=image_path)
+    #     if response.exists():
+    #         return response.get_success_response()
+    #     else:
+    #         return CustomResponse(
+    #             general_message="No Profile picture available"
+    #         ).get_failure_response()
+
+    def patch(self,request):
+        DiscordWebhooks.general_updates(
+                WebHookCategory.USER_PROFILE.value,
+                WebHookActions.UPDATE.value,
+                JWTUtils.fetch_user_id(request)
+            )
+        return CustomResponse(
+                general_message="Successfully updated"
+            ).get_success_response()
     
     def post(self, request):
         user_id = request.data.get('user_id')
@@ -409,18 +420,12 @@ class UserProfilePictureView(APIView):
             fs.delete(filename)
         filename = fs.save(filename, pic)
         file_url = fs.url(filename)
-        uploaded_file_url = f"{decouple_config('FR_DOMAIN_NAME')}{file_url}" # /api/v1/dashboard/user/profile/{user_id}"
+        uploaded_file_url = f"{decouple_config('FR_DOMAIN_NAME')}{file_url}"
         
-        serializer = dash_user_serializer.UserProfileUpdateSerializer(
-            user,data={'profile_pic':uploaded_file_url}
-        )
-
-        if serializer.is_valid():
-          serializer.save()
-          return CustomResponse(
-              response=serializer.data
-          ).get_success_response()
-        else:
-            return CustomResponse(
-                response=serializer.errors
-            ).get_failure_response()
+        return CustomResponse(
+            response={
+                'user_id':user.id,
+                'profile_pic':uploaded_file_url
+            }
+        ).get_success_response()
+        

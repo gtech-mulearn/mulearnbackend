@@ -14,7 +14,6 @@ urlpatterns = [
     path('reset-password/verify-token/<str:token>/', dash_user_views.ResetPasswordVerifyTokenAPI.as_view()),
     path('reset-password/<str:token>/', dash_user_views.ResetPasswordConfirmAPI.as_view()),
     path('profile/update/',dash_user_views.UserProfilePictureView.as_view()),
-    path('profile/<str:user_id>/',dash_user_views.UserProfilePictureView.as_view()),
 
     path('csv/', dash_user_views.UserManagementCSV.as_view(), name="csv-user"),
     path('', dash_user_views.UserAPI.as_view(), name='list-user'),

@@ -73,6 +73,7 @@ class WebHookCategory(Enum):
     USER_ROLE = 'user-role'
     USER = 'user'
     USER_NAME = 'user-name'
+    USER_PROFILE = 'user-profile'
 
 
 class RefferalType(Enum):
