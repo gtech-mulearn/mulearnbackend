@@ -355,3 +355,19 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             return super().update(instance, validated_data)
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    profile_pic = serializers.CharField(required=True)
+    user_id = serializers.CharField(source='id',read_only=True)
+
+    class Meta:
+        model = User
+        fields = [
+            "user_id",
+            "profile_pic"
+        ]
+    
+    def update(self, instance, validated_data):
+        instance.profile_pic = validated_data.get('profile_pic')
+        instance.save()
+        return instance 
