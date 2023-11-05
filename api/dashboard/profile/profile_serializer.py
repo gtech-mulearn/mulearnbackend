@@ -4,6 +4,7 @@ from django.db import transaction
 from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
+from decouple import config as decouple_config
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink, UserLvlLink
@@ -12,6 +13,7 @@ from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
+from django.core.files.storage import FileSystemStorage
 
 
 class UserLogSerializer(ModelSerializer):
@@ -35,6 +37,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
+    profile_pic = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -57,7 +60,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
         )
-
+    def get_profile_pic(self,obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{decouple_config('FR_DOMAIN_NAME')}{fs.url(path)}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.all()})
 
