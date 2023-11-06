@@ -20,8 +20,12 @@ class User(models.Model):
     active         = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic    = models.CharField(max_length=200, blank=True, null=True)
-    district       = models.ForeignKey("District",on_delete=models.CASCADE, blank=True, null=True)
+    district       = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
+    suspended_at   = models.DateTimeField(blank=True, null=True)
+    suspended_by   = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="suspended_by_user", db_column="suspended_by")
+    deleted_at     = models.DateTimeField(blank=True, null=True)
+    deleted_by     = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="deleted_by_user", db_column="deleted_by")
 
     class Meta:
         managed = False
