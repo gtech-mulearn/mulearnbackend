@@ -9,7 +9,8 @@ from utils.utils import DateTimeUtils
 class LocationSerializer(serializers.ModelSerializer):
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
-
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
     class Meta:
         model = Country
         fields = [
@@ -17,6 +18,8 @@ class LocationSerializer(serializers.ModelSerializer):
             "value" ,
             "created_at",
             "updated_at",
+            "created_by",
+            "updated_by",
         ]
 
 
@@ -33,7 +36,8 @@ class StateRetrievalSerializer(serializers.ModelSerializer):
     country = serializers.CharField(source="country.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
-
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
     class Meta:
         model = State
         fields = [
@@ -42,6 +46,8 @@ class StateRetrievalSerializer(serializers.ModelSerializer):
             "country",
             "created_at",
             "updated_at",
+            "created_by",
+            "updated_by",
         ]
 
 
@@ -58,7 +64,8 @@ class ZoneRetrievalSerializer(serializers.ModelSerializer):
     state = serializers.CharField(source="state.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
-
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
     class Meta:
         model = Zone
         fields = [
@@ -67,6 +74,8 @@ class ZoneRetrievalSerializer(serializers.ModelSerializer):
             "state",
             "created_at",
             "updated_at",
+            "created_by",
+            "updated_by",
         ]
 
 
@@ -83,7 +92,8 @@ class DistrictRetrievalSerializer(serializers.ModelSerializer):
     zone = serializers.CharField(source="zone.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
-
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
     class Meta:
         model = District
         fields = [
@@ -92,6 +102,8 @@ class DistrictRetrievalSerializer(serializers.ModelSerializer):
             "zone",
             "created_at",
             "updated_at",
+            "created_by",
+            "updated_by",
         ]
 
 
