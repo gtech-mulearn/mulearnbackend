@@ -1,6 +1,7 @@
 import uuid
 
 from django.db import models
+from .managers import user_manager
 
 # fmt: off
 # noinspection PyPep8
@@ -25,6 +26,8 @@ class User(models.Model):
     suspended_by   = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="suspended_by_user", db_column="suspended_by")
     deleted_at     = models.DateTimeField(blank=True, null=True)
     deleted_by     = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="deleted_by_user", db_column="deleted_by")
+    objects        = user_manager.ActiveUserManager()
+    every          = models.Manager()
 
     class Meta:
         managed = False
