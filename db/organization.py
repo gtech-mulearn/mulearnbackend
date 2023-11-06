@@ -143,7 +143,6 @@ class OrgDiscordLink(models.Model):
         db_table = 'org_discord_link'
 
 
-
 class UserOrganizationLink(models.Model):
     id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user           = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_organization_link_user')
@@ -157,6 +156,38 @@ class UserOrganizationLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_organization_link'
+
+
+class OrgKarmaType(models.Model):
+    id =          models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    title =       models.CharField(max_length=75)
+    karma =       models.IntegerField()
+    description = models.CharField(max_length=200, blank=True, null=True)
+    updated_by =  models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='org_karma_type_updated_by')
+    updated_at =  models.DateTimeField(auto_now=True)
+    created_by =  models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
+                                   related_name='org_karma_type_created_by')
+    created_at =  models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'org_karma_type'
+
+
+class OrgKarmaLog(models.Model):
+    id =         models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    org =        models.ForeignKey(Organization, models.DO_NOTHING, related_name='org_karma_log_org')
+    karma =      models.IntegerField()
+    type =       models.ForeignKey(OrgKarmaType, models.DO_NOTHING, db_column='type', related_name='org_karma_log_type')
+    updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='org_karma_log_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by',
+                                   related_name='org_karma_log_created_by')
+    created_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'org_karma_log'
 
 
     @property
