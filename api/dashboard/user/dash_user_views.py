@@ -7,11 +7,12 @@ from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
-from utils.response import CustomResponse
+from utils.response import CustomResponse, ImageResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
-
+from django.core.files.storage import FileSystemStorage
+from decouple import config as decouple_config
 
 class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -35,7 +36,7 @@ class UserInfoAPI(APIView):
         ).get_success_response()
 
 
-class UserEditAPI(APIView):
+class UserGetPatchDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
@@ -362,3 +363,69 @@ class ResetPasswordConfirmAPI(APIView):
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()
+
+class UserProfilePictureView(APIView):
+
+    # def get(self, request, user_id):
+    #     user = User.objects.filter(id=user_id).first()
+        
+    #     if user is None:
+    #         return CustomResponse(
+    #             general_message="No user data available"
+    #         ).get_failure_response()
+    #     image_path = f'user/profile/{user_id}.png'
+    #     response = ImageResponse(path=image_path)
+    #     if response.exists():
+    #         return response.get_success_response()
+    #     else:
+    #         return CustomResponse(
+    #             general_message="No Profile picture available"
+    #         ).get_failure_response()
+
+    def patch(self,request):
+        DiscordWebhooks.general_updates(
+                WebHookCategory.USER_PROFILE.value,
+                WebHookActions.UPDATE.value,
+                JWTUtils.fetch_user_id(request)
+            )
+        return CustomResponse(
+                general_message="Successfully updated"
+            ).get_success_response()
+    
+    def post(self, request):
+        user_id = request.data.get('user_id')
+        user = User.objects.filter(id=user_id).first()
+
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+        
+        pic = request.FILES.get('profile')
+        
+        if pic is None:
+            return CustomResponse(
+                general_message="No profile picture"
+            ).get_failure_response()
+        
+        if not pic.content_type.startswith("image/"):
+            return CustomResponse(
+                general_message="Expected an image"
+            ).get_failure_response()
+        
+        extention = '.png' # os.path.splitext(pic.name)[1]
+        fs = FileSystemStorage()
+        filename = f"user/profile/{user_id}{extention}"
+        if fs.exists(filename):
+            fs.delete(filename)
+        filename = fs.save(filename, pic)
+        file_url = fs.url(filename)
+        uploaded_file_url = f"{decouple_config('FR_DOMAIN_NAME')}{file_url}"
+        
+        return CustomResponse(
+            response={
+                'user_id':user.id,
+                'profile_pic':uploaded_file_url
+            }
+        ).get_success_response()
+        
