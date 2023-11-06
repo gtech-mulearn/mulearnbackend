@@ -40,7 +40,6 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
         return obj.org.user_organization_link_org.filter(
             verified=True,
-            user__active=True,
             user__wallet_user__isnull=False,
             user__wallet_user__created_at__gte=last_month,
         ).count()
