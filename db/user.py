@@ -17,7 +17,6 @@ class User(models.Model):
     gender         = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"),("Female", "Female")])
     dob            = models.DateField(blank=True, null=True)
     admin          = models.BooleanField(default=False)
-    active         = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic    = models.CharField(max_length=200, blank=True, null=True)
     district       = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
