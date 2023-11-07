@@ -4,7 +4,6 @@ from django.db import transaction
 from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-from decouple import config as decouple_config
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink, UserLvlLink
@@ -60,14 +59,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
         )
+    
     def get_profile_pic(self,obj):
         fs = FileSystemStorage()
         path = f'user/profile/{obj.id}.png'
         if fs.exists(path):
-            profile_pic = f"{decouple_config('FR_DOMAIN_NAME')}{fs.url(path)}"
+            profile_pic = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
         else:
             profile_pic = obj.profile_pic
         return profile_pic
+    
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.all()})
 
