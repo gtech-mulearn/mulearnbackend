@@ -16,7 +16,9 @@ from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DiscordWebhooks
 from . import profile_serializer
+from django.core.files.base import ContentFile
 from .profile_serializer import LinkSocials
+from django.core.files.storage import FileSystemStorage
 
 
 class UserProfileEditView(APIView):
@@ -244,10 +246,11 @@ class ShareUserProfileAPI(APIView):
 
     # function for generating profile qr code
 
-    def get(self, request, muid=None):
+    def get(self, request, uuid=None):
         base_url = decouple.config("FR_DOMAIN_NAME")
-        if muid is not None:
-            user = User.objects.filter(muid=muid).first()
+        fs = FileSystemStorage()
+        if uuid is not None:
+            user = User.objects.filter(id=uuid).first()
 
             if user is None:
                 return CustomResponse(
@@ -261,8 +264,8 @@ class ShareUserProfileAPI(APIView):
                     general_message="Private Profile"
                 ).get_failure_response()
             else:
-                user_muid = JWTUtils.fetch_muid(request)
-                data = f"{base_url}/profile/{user_muid}"
+                user_uuid = JWTUtils.fetch_user_id(request)
+                data = f"{base_url}/profile/{user_uuid}"
 
                 qr = qrcode.QRCode(
                     version=1,
@@ -275,7 +278,7 @@ class ShareUserProfileAPI(APIView):
 
                 img = qr.make_image(fill_color="black", back_color="white")
 
-                logo_url = "https://app.mulearn.org/favicon.ico"  # Replace with your logo URL
+                logo_url = "http://localhost:5173/favicon.ico/"  # Replace with your logo URL
                 logo_response = requests.get(logo_url)
 
                 if logo_response.status_code == 200:
@@ -294,20 +297,22 @@ class ShareUserProfileAPI(APIView):
                 QRcode = qrcode.QRCode(
                     error_correction=qrcode.constants.ERROR_CORRECT_H
                 )
+                
                 QRcode.add_data(data)
                 QRcolor = 'black'
-
                 QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
 
                 pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
+                # image = Image.open(BytesIO("image_response.content"))
                 QRimg.paste(resized_logo, pos)
-                
-                # storing currently in my system, for production need to integrate with a server and 
-                # store the image on the server
-
-                file_path = '/home/mishal/Downloads/' + user_muid + '.png'  # Replace with your desired directory
-                QRimg.save(file_path)
-
+                image_io = BytesIO()
+                QRimg.save(image_io, format='PNG')
+                image_io.seek(0)
+                image_data: bytes =image_io.getvalue()
+                file_path = f'user/qr/{user_uuid}.png'
+                fs.exists(file_path) and fs.delete(file_path)
+                file = fs.save(file_path, ContentFile(image_io.read()))
+               
                 return CustomResponse(
                     general_message="QR code image with logo saved locally"
                 ).get_success_response()
