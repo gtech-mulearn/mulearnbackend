@@ -446,32 +446,34 @@ class SocialsAPI(APIView):
             response=serializer.errors
         ).get_failure_response()
 
-        
 class QrcodeRetrieveAPI(APIView):
-    def get(self, request, muid):
-        sever_address = decouple.config("SERVER_ADDRESS")
-        remote_image_url = f"{sever_address}{muid}.png"
-
+ def get(self, request, muid=None):
         try:
-            # Download the image from the remote server
-            image_response = requests.get(remote_image_url)
+            user = User.objects.prefetch_related().get(muid=muid or JWTUtils.fetch_muid(request))
+            if muid:
+                user_settings = UserSettings.objects.filter(
+                    user_id=user
+                ).first()
 
-            if image_response.status_code == 200:
-                image = Image.open(BytesIO(image_response.content))
-                image_io = BytesIO()
-                image.save(image_io, format='PNG')  # Adjust format if the image format is different
-                image_io.seek(0)
-                image_data: bytes =image_io.getvalue()
-                # success_response = CustomResponse(response=image_data).get_success_response()
-                # return success_response
-                # response = success_response.get_success_response()
-                # print(image_io.getvalue(),"image data")
-                return HttpResponse(image_io, content_type='image/png')
-                # return CustomResponse(response={
-                #     "image":image_io,
-                #     }).get_success_response()
+                if not user_settings.is_public:
+                    return CustomResponse(
+                        general_message="Private Profile"
+                    ).get_failure_response()
 
             else:
-                return CustomResponse(response="Image not found on the remote server").get_success_response()
-        except Exception as e:
-            return CustomResponse(response=f"Error retrieving image: {e}").get_success_response()
+                JWTUtils.is_jwt_authenticated(request)
+
+            serializer = profile_serializer.UserShareQrcode(
+                user,
+                many=False,
+                context={'request':request}
+            )
+           
+            return CustomResponse(
+                response=serializer.data
+            ).get_success_response()
+
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given μID seems to be invalid"
+            ).get_failure_response()

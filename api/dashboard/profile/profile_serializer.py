@@ -12,7 +12,7 @@ from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
-
+from django.core.files.storage import FileSystemStorage
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source="task.title")
@@ -22,6 +22,25 @@ class UserLogSerializer(ModelSerializer):
         model = KarmaActivityLog
         fields = ["task_name", "karma", "created_date"]
 
+
+class UserShareQrcode(serializers.ModelSerializer):  
+    profile_pic = serializers.SerializerMethodField()
+    class Meta:
+        model = User  
+        fields = ['profile_pic'] 
+
+
+    def get_profile_pic(self,obj):
+        # Here the media url in settings.py is /home/mishal/../../uid.png
+        fs = FileSystemStorage()
+        path = f'{obj.id}.png'
+        if fs.exists(path):
+            qrcode_image = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+            print("qrcode_image",qrcode_image)
+        else:
+            return "No Image"
+        print(qrcode_image,"qrcodeImage")
+        return qrcode_image
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
