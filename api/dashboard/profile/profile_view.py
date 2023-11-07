@@ -453,21 +453,20 @@ class SocialsAPI(APIView):
         ).get_failure_response()
 
 class QrcodeRetrieveAPI(APIView):
- def get(self, request, muid=None):
+ def get(self, request, uuid):
         try:
-            user = User.objects.prefetch_related().get(muid=muid or JWTUtils.fetch_muid(request))
-            if muid:
-                user_settings = UserSettings.objects.filter(
-                    user_id=user
-                ).first()
+            user = User.objects.prefetch_related().get(id=uuid or JWTUtils.fetch_user_id(request))
+          
+            user_settings = UserSettings.objects.filter(
+                user_id=user
+            ).first()
 
-                if not user_settings.is_public:
-                    return CustomResponse(
-                        general_message="Private Profile"
-                    ).get_failure_response()
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
 
-            else:
-                JWTUtils.is_jwt_authenticated(request)
+            
 
             serializer = profile_serializer.UserShareQrcode(
                 user,
@@ -481,5 +480,5 @@ class QrcodeRetrieveAPI(APIView):
 
         except User.DoesNotExist:
             return CustomResponse(
-                response="The given μID seems to be invalid"
+                response="The given UUID seems to be invalid"
             ).get_failure_response()
