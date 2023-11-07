@@ -144,7 +144,8 @@ class UserProfileAPI(APIView):
 
             serializer = profile_serializer.UserProfileSerializer(
                 user,
-                many=False
+                many=False,
+                context={'request':request}
             )
 
             return CustomResponse(

@@ -3,6 +3,7 @@ from django.db import models
 from db.user import User
 
 # fmt: off
+# noinspection PyPep8
 
 class UrlShortener(models.Model):
     id               = models.CharField(primary_key=True, max_length=36)

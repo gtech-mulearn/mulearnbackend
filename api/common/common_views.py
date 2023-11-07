@@ -4,7 +4,7 @@ import requests
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
-
+from django.db import models
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
@@ -13,12 +13,12 @@ from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
-from .serializer import StudentInfoSerializer
-
+from .serializer import StudentInfoSerializer, CollegeInfoSerializer
+from django.db.models import Count, Subquery, OuterRef
 
 class LcDashboardAPI(APIView):
     def get(self, request):
-        date = request.GET.get("date")
+        date = request.query_params.get("date")
         if date:
             learning_circle_count = LearningCircle.objects.filter(
                 created_at__gt=date
@@ -27,20 +27,23 @@ class LcDashboardAPI(APIView):
             learning_circle_count = LearningCircle.objects.all().count()
 
         total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
+        user_circle_link_count = UserCircleLink.objects.filter(circle=OuterRef('pk')).values('circle_id').annotate(
+            total_users=Count('id')).values('total_users')
+
         query = InterestGroup.objects.annotate(
-            total_circles=Count("learningcircle"),
-            total_users=Count("learningcircle__usercirclelink__user", distinct=True),
+            total_circles=Count("learning_circle_ig", distinct=True),
+            total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
         ).values("name", "total_circles", "total_users")
+
         circle_count_by_ig = (
             query.values("name")
             .order_by("name")
             .annotate(
-                total_circles=Count("learningcircle", distinct=True),
-                total_users=Count(
-                    "learningcircle__usercirclelink__user", distinct=True
-                ),
+                total_circles=Count("learning_circle_ig", distinct=True),
+                total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
             )
         )
+
         unique_user_count = (
             UserCircleLink.objects.filter(accepted=True)
             .values("user")
@@ -60,41 +63,36 @@ class LcDashboardAPI(APIView):
 
 class LcReportAPI(APIView):
     def get(self, request):
-        date = request.GET.get("date")
+        date = request.query_params.get('date')
         if date:
-            student_info = (
-                UserCircleLink.objects.filter(
-                    accepted=True,
-                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    created_at=date,
-                )
-                .values(
-                    first_name=F("user__first_name"),
-                    last_name=F("user__last_name"),
-                    muid=F("user__muid"),
-                    circle_name=F("circle__name"),
-                    circle_ig=F("circle__ig__name"),
-                    organisation=F("user__user_organization_link_user__org__title"),
-                    dwms_id=Case(
-                        When(
-                            user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
-                            then=F(
-                                "user__integration_authorization_user__additional_field"
-                            ),
+            student_info = (UserCircleLink.objects.filter(accepted=True,
+                                                          user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                                                          created_at__date=date).values(
+                first_name=F("user__first_name"),
+                last_name=F("user__last_name"),
+                muid=F("user__muid"),
+                circle_name=F("circle__name"),
+                circle_ig=F("circle__ig__name"),
+                organisation=F("user__user_organization_link_user__org__title"),
+                dwms_id=Case(
+                    When(
+                        user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                        then=F(
+                            "user__integration_authorization_user__additional_field"
                         ),
-                        default=Value(None, output_field=CharField()),
-                        output_field=CharField(),
+                    ),
+                    default=Value(None, output_field=CharField()),
+                    output_field=CharField(),
+                ),
+            )
+            .annotate(
+                karma_earned=Sum(
+                    "user__karma_activity_log_user__task__karma",
+                    filter=Q(
+                        user__karma_activity_log_user__task__ig=F("circle__ig")
                     ),
                 )
-                .annotate(
-                    karma_earned=Sum(
-                        "user__karma_activity_log_user__task__karma",
-                        filter=Q(
-                            user__karma_activity_log_user__task__ig=F("circle__ig")
-                        ),
-                    )
-                )
-            )
+            ))
         else:
             student_info = (
                 UserCircleLink.objects.filter(
@@ -132,8 +130,12 @@ class LcReportAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             student_info,
             request,
-            search_fields=["first_name", "last_name", "muid"],
-            sort_fields={"first_name": "first_name", "muid": "muid"},
+            search_fields=["first_name", "last_name", "muid", "circle_name", 'circle_ig', "organisation", "dwms_id",
+                           "karma_earned"],
+            sort_fields={"first_name": "first_name", "last_name": "last_name", "muid": "muid",
+                         "circle_name": "circle_name",
+                         "circle_ig": "circle_ig", "organisation": "organisation", "dwms_id": "dwms_id",
+                         "karma_earned": "karma_earned"},
         )
 
         student_info_data = StudentInfoSerializer(
@@ -184,7 +186,7 @@ class LcReportDownloadAPI(APIView):
         return CommonUtils.generate_csv(student_info_data, "Learning Circle Report")
 
 
-class CollegeWiseLcReport(APIView):
+class CollegeWiseLcReportCSV(APIView):
     def get(self, request):
         learning_circles_info = (
             LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
@@ -195,7 +197,46 @@ class CollegeWiseLcReport(APIView):
             .order_by("org_title")
         )
 
-        return CustomResponse(response=learning_circles_info).get_success_response()
+        learning_circles_info = CollegeInfoSerializer(learning_circles_info, many=True).data
+
+        return CommonUtils.generate_csv(learning_circles_info, "Learning Circle Report")
+
+
+class CollegeWiseLcReport(APIView):
+    def get(self, request):
+        date = request.query_params.get('date')
+        if date:
+            learning_circles_info = (
+                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
+                .values(org_title=F("org__title"))
+                .annotate(
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                )
+                .order_by("org_title")
+            )
+        else:
+            learning_circles_info = (
+                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+                .values(org_title=F("org__title"))
+                .annotate(
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                )
+                .order_by("org_title")
+            )
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            learning_circles_info,
+            request,
+            search_fields=["org_title", "learning_circle_count", "user_count"],
+            sort_fields={"org_title": "org_title", "learning_circle_count": "learning_circle_count",
+                         "user_count": "user_count"},
+        )
+
+        collegewise_info_data = CollegeInfoSerializer(paginated_queryset.get("queryset"), many=True).data
+
+        return CustomResponse().paginated_response(
+            data=collegewise_info_data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class GlobalCountAPI(APIView):
@@ -236,7 +277,6 @@ class GlobalCountAPI(APIView):
 
 class GTASANDSHOREAPI(APIView):
     def get(self, request):
-
         response = requests.get('https://devfolio.vez.social/rank')
         if response.status_code == 200:
             # Save JSON response to a local file
@@ -251,7 +291,6 @@ class GTASANDSHOREAPI(APIView):
 
         # Create a dictionary to store the grouped data
         grouped_colleges = {}
-
         for college, count in data.items():
             # Clean the college name by removing spaces and converting to lowercase
             cleaned_college = college.replace(" ", "").lower()

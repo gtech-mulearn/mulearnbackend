@@ -54,6 +54,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
+    profile_pic = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -76,7 +77,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
         )
-
+    
+    def get_profile_pic(self,obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
+    
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.all()})
 

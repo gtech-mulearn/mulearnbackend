@@ -14,6 +14,10 @@ from .dash_task_serializer import (
     TaskModifySerializer,
 )
 
+from openpyxl import load_workbook
+from tempfile import NamedTemporaryFile
+from io import BytesIO
+from django.http import FileResponse
 
 class TaskListAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -64,7 +68,7 @@ class TaskListAPI(APIView):
                 "title": "title",
                 "description": "description",
                 "karma": "karma",
-                "channel": "channel__name",
+                "channels": "channel__name",
                 "type": "type__title",
                 "active": "active",
                 "variable_karma": "variable_karma",
@@ -100,8 +104,11 @@ class TaskListAPI(APIView):
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
 
-        request.data["created_by"] = request.data["updated_by"] = user_id
-        serializer = TaskModifySerializer(data=request.data)
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["created_by"] = user_id
+        mutable_data["updated_by"] = user_id
+
+        serializer = TaskModifySerializer(data=mutable_data)
 
         if not serializer.is_valid():
             return CustomResponse(
@@ -140,13 +147,14 @@ class TaskAPI(APIView):
     def put(self, request, task_id):  # edit
 
         user_id = JWTUtils.fetch_user_id(request)
-        request.data["updated_by"] = user_id
+        mutable_data = request.data.copy()  # Create a mutable copy of request.data
+        mutable_data["updated_by"] = user_id
 
         task = TaskList.objects.get(pk=task_id)
 
         serializer = TaskModifySerializer(
             task,
-            data=request.data,
+            data=mutable_data,
             partial=True
         )
 
@@ -191,7 +199,7 @@ class TaskListCSV(APIView):
         task_queryset = TaskList.objects.select_related(
             "created_by",
             "updated_by",
-            "channel",
+            "channels",
             "type",
             "level",
             "ig",
@@ -256,6 +264,7 @@ class ImportTaskListCSV(APIView):
                     general_message=f"{key} does not exist in the file."
                 ).get_failure_response()
 
+        excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
 
@@ -330,8 +339,8 @@ class ImportTaskListCSV(APIView):
             ig = row.pop("ig")
             org = row.pop("org")
 
-            channel_id = channels_dict.get(channel)
             task_type_id = task_types_dict.get(task_type)
+            channel_id = channels_dict.get(channel) if channel is not None else None
             level_id = levels_dict.get(level) if level is not None else None
             ig_id = igs_dict.get(ig) if ig is not None else None
             org_id = orgs_dict.get(org) if org is not None else None
@@ -339,7 +348,7 @@ class ImportTaskListCSV(APIView):
             if TaskList.objects.filter(hashtag=hashtag).exists():
                 row["error"] = f"Hashtag already exists: {hashtag}"
                 error_rows.append(row)
-            elif not channel_id:
+            elif channel and not channel_id:
                 row["error"] = f"Invalid channel ID: {channel}"
                 error_rows.append(row)
             elif not task_type_id:
@@ -362,7 +371,7 @@ class ImportTaskListCSV(APIView):
                 row["created_by_id"] = user_id
                 row["created_at"] = DateTimeUtils.get_current_utc_time()
                 row["active"] = True
-                row["channel_id"] = channel_id
+                row["channel_id"] = channel_id or None 
                 row["type_id"] = task_type_id
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
@@ -494,3 +503,37 @@ class EventDropDownApi(APIView):
         return CustomResponse(
             response=events
         ).get_success_response()
+
+class TaskBaseTemplateAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    
+    def get(self, request):
+        wb = load_workbook('./api/dashboard/task/assets/task_base_template.xlsx')
+        ws = wb['Data Definitions']
+        levels = Level.objects.all().values_list('name', flat=True)
+        channels = Channel.objects.all().values_list('name', flat=True)
+        task_types = TaskType.objects.all().values_list('title', flat=True)
+        igs = InterestGroup.objects.all().values_list('name', flat=True)
+        orgs = Organization.objects.all().values_list('code', flat=True)
+        events = Events.get_all_values()
+
+        data = {
+            'level': levels,
+            'channel': channels,
+            'type': task_types,
+            'ig': igs,
+            'org': orgs,
+            'event': events
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')

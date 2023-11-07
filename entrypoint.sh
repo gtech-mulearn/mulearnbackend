@@ -1,3 +1,3 @@
 #!/bin/bash
 python manage.py collectstatic --noinput
-gunicorn --bind 0.0.0.0:8000 mulearnbackend.wsgi
+daphne -b 0.0.0.0 -p 8000 mulearnbackend.asgi:application

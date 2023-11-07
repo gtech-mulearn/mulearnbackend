@@ -4,6 +4,7 @@ from db.organization import Organization, District
 from db.user import User
 
 # fmt: off
+# noinspection PyPep8
 
 class Hackathon(models.Model):
     id                = models.CharField(primary_key=True, max_length=36)

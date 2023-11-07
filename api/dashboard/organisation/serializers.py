@@ -2,10 +2,20 @@ import uuid
 
 from django.db.models import Count
 from rest_framework import serializers
+from django.db import models
 
-from db.organization import Organization, District, Zone, State, OrgAffiliation, Department
+from db.organization import (
+    Organization,
+    District,
+    Zone,
+    State,
+    OrgAffiliation,
+    Department,
+)
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
+from django.db import transaction
+from django.forms.models import model_to_dict
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -27,15 +37,11 @@ class InstitutionSerializer(serializers.ModelSerializer):
             "zone",
             "state",
             "country",
-            "user_count"
+            "user_count",
         ]
 
     def get_user_count(self, obj):
-        return obj.user_organization_link_org.annotate(
-            user_count=Count(
-                'user'
-            )
-        ).count()
+        return obj.user_organization_link_org.annotate(user_count=Count("user")).count()
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):
@@ -142,8 +148,8 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
 
 
 class AffiliationSerializer(serializers.ModelSerializer):
-    label = serializers.ReadOnlyField(source='title')
-    value = serializers.ReadOnlyField(source='id')
+    label = serializers.ReadOnlyField(source="title")
+    value = serializers.ReadOnlyField(source="id")
 
     class Meta:
         model = OrgAffiliation
@@ -171,14 +177,10 @@ class AffiliationCreateUpdateSerializer(serializers.ModelSerializer):
         return instance
 
     def validate_title(self, title):
-        org_affiliation = OrgAffiliation.objects.filter(
-            title=title
-        ).first()
+        org_affiliation = OrgAffiliation.objects.filter(title=title).first()
 
         if org_affiliation:
-            raise serializers.ValidationError(
-                "Affiliation already exist"
-            )
+            raise serializers.ValidationError("Affiliation already exist")
 
         return title
 
@@ -205,4 +207,157 @@ class DepartmentSerializer(serializers.ModelSerializer):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.updated_by_id = user_id
         instance.save()
+        return instance
+
+
+class InstitutionPrefillSerializer(serializers.ModelSerializer):
+    affiliation_id = serializers.CharField(source="affiliation.id", allow_null=True)
+    affiliation_name = serializers.CharField(source="affiliation.name", allow_null=True)
+    district_id = serializers.CharField(source="district.id", allow_null=True)
+    district_name = serializers.CharField(source="district.name", allow_null=True)
+    zone_id = serializers.CharField(source="district.zone.id", allow_null=True)
+    zone_name = serializers.CharField(source="district.zone.name", allow_null=True)
+    state_id = serializers.CharField(source="district.state.id", allow_null=True)
+    state_name = serializers.CharField(source="district.state.name", allow_null=True)
+    country_id = serializers.CharField(
+        source="district.state.country.id", allow_null=True
+    )
+    country_name = serializers.CharField(
+        source="district.state.country.name", allow_null=True
+    )
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "affiliation_id",
+            "affiliation_name",
+            "district_id",
+            "district_name",
+            "zone_id",
+            "zone_name",
+            "state_id",
+            "state_name",
+            "country_id",
+            "country_name",
+        ]
+
+
+class OrganizationMergerSerializer(serializers.Serializer):
+    update_summary = serializers.SerializerMethodField()
+    source_org = serializers.SlugRelatedField(
+        slug_field="code",
+        queryset=Organization.objects.all(),
+        write_only=True,
+        error_messages={
+            "does_not_exist": "An organization with the given code doesn't exist",
+        },
+    )
+
+    def validate_source_org(self, attrs):
+        if self.instance.code == attrs.code:
+            raise serializers.ValidationError(
+                "You can't merge an organization into itself."
+            )
+        return super().validate(attrs)
+
+    def get_update_summary(self, instance):
+        update_summary = []
+
+        # Simulate the transaction
+        for relation in Organization._meta.related_objects:
+            if isinstance(
+                relation,
+                (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+            ):
+                related_model = relation.related_model
+                related_field_name = relation.field.name
+            elif isinstance(relation, (models.ManyToOneRel, models.ManyToManyRel)):
+                related_model = relation.related_model
+                related_field_name = next(
+                    (
+                        field.name
+                        for field in related_model._meta.fields
+                        if isinstance(field, models.ForeignKey)
+                        and field.related_model == Organization
+                    ),
+                    None,
+                )
+            else:
+                continue
+
+            if not related_field_name:
+                continue
+
+            if existing_relations := related_model.objects.filter(
+                **{related_field_name: instance}
+            ):
+                update_summary.append(
+                    {
+                        "model": related_model._meta.model_name,
+                        "field_name": related_field_name,
+                        "count": existing_relations.count(),
+                        "action": (
+                            "delete"
+                            if isinstance(
+                                relation, (models.OneToOneField, models.OneToOneRel)
+                            )
+                            else "update"
+                        ),
+                        "instance_ids": list(
+                            existing_relations.values_list("pk", flat=True)
+                        ),
+                    }
+                )
+
+        return update_summary
+
+    def update(self, instance, validated_data):
+        with transaction.atomic():
+            source_org = validated_data["source_org"]
+
+            for relation in Organization._meta.related_objects:
+                # Determine related model and related field name
+                if isinstance(
+                    relation,
+                    (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+                ):
+                    related_model = relation.related_model
+                    related_field_name = relation.field.name
+                elif isinstance(relation, (models.ManyToOneRel, models.ManyToManyRel)):
+                    related_model = relation.related_model
+                    # Find the related field in the related model that links back to Organization
+                    related_field_name = next(
+                        (
+                            field.name
+                            for field in related_model._meta.fields
+                            if isinstance(field, models.ForeignKey)
+                            and field.related_model == Organization
+                        ),
+                        None,
+                    )
+
+                # Skip if we couldn't determine the related field
+                if not related_field_name:
+                    continue
+
+                # Prepare filter and update arguments
+                filter_kwargs = {related_field_name: source_org}
+                update_kwargs = {related_field_name: instance}
+
+                # Handle OneToOne relationships: delete existing relation if it points to the instance
+                if isinstance(relation, (models.OneToOneField, models.OneToOneRel)):
+                    if existing_relation := related_model.objects.filter(
+                        **{related_field_name: instance}
+                    ).first():
+                        existing_relation.delete()
+
+                # Update the relations in the related model
+                related_model.objects.filter(**filter_kwargs).update(**update_kwargs)
+
+            # Delete the organization that needs to be removed
+            source_org.delete()
+
         return instance

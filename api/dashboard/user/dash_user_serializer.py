@@ -45,7 +45,6 @@ class UserSerializer(serializers.ModelSerializer):
             "mobile",
             "gender",
             "dob",
-            "active",
             "exist_in_guild",
             "joined",
             "roles",

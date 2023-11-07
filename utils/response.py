@@ -3,6 +3,8 @@ from typing import Any, Dict, List
 from rest_framework import status
 from rest_framework.response import Response
 
+from django.core.files.storage import FileSystemStorage
+from django.http import HttpResponse
 
 class CustomResponse:
     """A custom response class for API views.
@@ -102,3 +104,19 @@ class CustomResponse:
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ImageResponse:
+    def __init__(self,path:str):
+        fs = FileSystemStorage()
+        if fs.exists(path):self.file = fs.open(path)
+        else: self.file = None
+    
+    def exists(self) -> bool:
+        return False if self.file is None else True
+    
+    def get_success_response(self) -> Response:
+        return HttpResponse(self.file,status=status.HTTP_200_OK,content_type='image/png')
+    
+    def get_failure_response(self,http_status_code : int = status.HTTP_400_BAD_REQUEST) -> Response:
+        return HttpResponse(self.file,status=http_status_code,content_type='image/png')
