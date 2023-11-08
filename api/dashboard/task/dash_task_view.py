@@ -199,7 +199,7 @@ class TaskListCSV(APIView):
         task_queryset = TaskList.objects.select_related(
             "created_by",
             "updated_by",
-            "channels",
+            "channel",
             "type",
             "level",
             "ig",
