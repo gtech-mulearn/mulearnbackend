@@ -278,7 +278,7 @@ class ShareUserProfileAPI(APIView):
 
                 img = qr.make_image(fill_color="black", back_color="white")
 
-                logo_url = "http://localhost:5173/favicon.ico/"  # Replace with your logo URL
+                logo_url = f"{base_url}/favicon.ico/"  # Replace with your logo URL
                 logo_response = requests.get(logo_url)
 
                 if logo_response.status_code == 200:
