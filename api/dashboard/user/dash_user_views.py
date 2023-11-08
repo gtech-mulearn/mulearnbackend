@@ -12,7 +12,7 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.files.storage import FileSystemStorage
-from decouple import config as decouple_config
+
 
 class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -26,14 +26,9 @@ class UserInfoAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        response = dash_user_serializer.UserSerializer(
-            user,
-            many=False
-        ).data
+        response = dash_user_serializer.UserSerializer(user, many=False).data
 
-        return CustomResponse(
-            response=response
-        ).get_success_response()
+        return CustomResponse(response=response).get_success_response()
 
 
 class UserGetPatchDeleteAPI(APIView):
@@ -50,9 +45,7 @@ class UserGetPatchDeleteAPI(APIView):
 
         serializer = dash_user_serializer.UserDetailsSerializer(user)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
@@ -63,7 +56,8 @@ class UserGetPatchDeleteAPI(APIView):
                 general_message="User Not Available"
             ).get_failure_response()
 
-        user.active = False
+        user.deleted_by = User.objects.get(pk=JWTUtils.fetch_user_id(request))
+        user.deleted_at = DateTimeUtils.get_current_utc_time()
         user.save()
 
         return CustomResponse(
@@ -77,24 +71,19 @@ class UserGetPatchDeleteAPI(APIView):
         request.data["admin"] = JWTUtils.fetch_user_id(request)
 
         serializer = dash_user_serializer.UserDetailsEditSerializer(
-            user, data=request.data,
-            partial=True
+            user, data=request.data, partial=True
         )
         if serializer.is_valid():
             serializer.save()
 
             DiscordWebhooks.general_updates(
-                WebHookCategory.USER.value,
-                WebHookActions.UPDATE.value,
-                user_id
+                WebHookCategory.USER.value, WebHookActions.UPDATE.value, user_id
             )
             return CustomResponse(
                 general_message="User Edited Successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
 
 class UserAPI(APIView):
@@ -103,9 +92,7 @@ class UserAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = User.objects.select_related(
-            "wallet_user",
-            "user_lvl_link_user",
-            "user_lvl_link_user__level"
+            "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
         ).all()
 
         queryset = CommonUtils.get_paginated_queryset(
@@ -127,13 +114,11 @@ class UserAPI(APIView):
             },
         )
         serializer = dash_user_serializer.UserDashboardSerializer(
-            queryset.get("queryset"),
-            many=True
+            queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=queryset.get("pagination")
+            data=serializer.data, pagination=queryset.get("pagination")
         )
 
 
@@ -143,20 +128,14 @@ class UserManagementCSV(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
         user_queryset = User.objects.select_related(
-            "wallet_user",
-            "user_lvl_link_user",
-            "user_lvl_link_user__level"
+            "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
         ).all()
 
         serializer = dash_user_serializer.UserDashboardSerializer(
-            user_queryset,
-            many=True
+            user_queryset, many=True
         )
 
-        return CommonUtils.generate_csv(
-            serializer.data,
-            "User"
-        )
+        return CommonUtils.generate_csv(serializer.data, "User")
 
 
 class UserVerificationAPI(APIView):
@@ -164,13 +143,10 @@ class UserVerificationAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related(
-            "user",
-            "role"
-        ).filter(
+        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
             verified=False
         )
-        
+
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
@@ -191,15 +167,11 @@ class UserVerificationAPI(APIView):
             },
         )
         serializer = dash_user_serializer.UserVerificationSerializer(
-            queryset.get(
-                "queryset"
-            ),
-            many=True
+            queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=queryset.get("pagination")
+            data=serializer.data, pagination=queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
@@ -207,9 +179,7 @@ class UserVerificationAPI(APIView):
         user = UserRoleLink.objects.get(id=link_id)
 
         user_serializer = dash_user_serializer.UserVerificationSerializer(
-            user,
-            data=request.data,
-            partial=True
+            user, data=request.data, partial=True
         )
 
         if not user_serializer.is_valid():
@@ -251,19 +221,14 @@ class UserVerificationCSV(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related(
-            "user",
-            "role"
-        ).filter(verified=False)
-        
+        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+            verified=False
+        )
+
         serializer = dash_user_serializer.UserVerificationSerializer(
-            user_queryset,
-            many=True
+            user_queryset, many=True
         )
-        return CommonUtils.generate_csv(
-            serializer.data,
-            "User"
-        )
+        return CommonUtils.generate_csv(serializer.data, "User")
 
 
 class ForgotPasswordAPI(APIView):
@@ -272,8 +237,7 @@ class ForgotPasswordAPI(APIView):
 
         if not (
             user := User.objects.filter(
-                Q(muid=email_muid) |
-                Q(email=email_muid)
+                Q(muid=email_muid) | Q(email=email_muid)
             ).first()
         ):
             return CustomResponse(
@@ -284,10 +248,7 @@ class ForgotPasswordAPI(APIView):
         expiry = created_at + timedelta(seconds=900)  # 15 minutes
 
         forget_user = ForgotPassword.objects.create(
-            id=uuid.uuid4(),
-            user=user,
-            expiry=expiry,
-            created_at=created_at
+            id=uuid.uuid4(), user=user, expiry=expiry, created_at=created_at
         )
 
         receiver_mail = user.email
@@ -311,7 +272,6 @@ class ForgotPasswordAPI(APIView):
 class ResetPasswordVerifyTokenAPI(APIView):
     def post(self, request, token):
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):
-
             return CustomResponse(
                 general_message="Invalid Token"
             ).get_failure_response()
@@ -320,9 +280,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
 
         if forget_user.expiry > current_time:
             muid = forget_user.user.muid
-            return CustomResponse(
-                response={"muid": muid}
-            ).get_success_response()
+            return CustomResponse(response={"muid": muid}).get_success_response()
         else:
             forget_user.delete()
             return CustomResponse(
@@ -333,24 +291,17 @@ class ResetPasswordVerifyTokenAPI(APIView):
 class ResetPasswordConfirmAPI(APIView):
     def post(self, request, token):
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):
-
             return CustomResponse(
                 general_message="Invalid Token"
             ).get_failure_response()
 
         current_time = DateTimeUtils.get_current_utc_time()
         if forget_user.expiry > current_time:
-
-            return self.save_password(
-                request,
-                forget_user
-            )
+            return self.save_password(request, forget_user)
 
         forget_user.delete()
 
-        return CustomResponse(
-            general_message="Link is expired"
-        ).get_failure_response()
+        return CustomResponse(general_message="Link is expired").get_failure_response()
 
     def save_password(self, request, forget_user):
         new_password = request.data.get("password")
@@ -364,11 +315,11 @@ class ResetPasswordConfirmAPI(APIView):
             general_message="New Password Saved Successfully"
         ).get_success_response()
 
-class UserProfilePictureView(APIView):
 
+class UserProfilePictureView(APIView):
     # def get(self, request, user_id):
     #     user = User.objects.filter(id=user_id).first()
-        
+
     #     if user is None:
     #         return CustomResponse(
     #             general_message="No user data available"
@@ -382,50 +333,46 @@ class UserProfilePictureView(APIView):
     #             general_message="No Profile picture available"
     #         ).get_failure_response()
 
-    def patch(self,request):
+    def patch(self, request):
         DiscordWebhooks.general_updates(
-                WebHookCategory.USER_PROFILE.value,
-                WebHookActions.UPDATE.value,
-                JWTUtils.fetch_user_id(request)
-            )
+            WebHookCategory.USER_PROFILE.value,
+            WebHookActions.UPDATE.value,
+            JWTUtils.fetch_user_id(request),
+        )
         return CustomResponse(
-                general_message="Successfully updated"
-            ).get_success_response()
-    
+            general_message="Successfully updated"
+        ).get_success_response()
+
     def post(self, request):
-        user_id = request.data.get('user_id')
+        user_id = request.data.get("user_id")
         user = User.objects.filter(id=user_id).first()
 
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
             ).get_failure_response()
-        
-        pic = request.FILES.get('profile')
-        
+
+        pic = request.FILES.get("profile")
+
         if pic is None:
             return CustomResponse(
                 general_message="No profile picture"
             ).get_failure_response()
-        
+
         if not pic.content_type.startswith("image/"):
             return CustomResponse(
                 general_message="Expected an image"
             ).get_failure_response()
-        
-        extention = '.png' # os.path.splitext(pic.name)[1]
+
+        extention = ".png"  # os.path.splitext(pic.name)[1]
         fs = FileSystemStorage()
         filename = f"user/profile/{user_id}{extention}"
         if fs.exists(filename):
             fs.delete(filename)
         filename = fs.save(filename, pic)
         file_url = fs.url(filename)
-        uploaded_file_url = f"{decouple_config('FR_DOMAIN_NAME')}{file_url}"
-        
+        uploaded_file_url = f"{request.build_absolute_uri('/')}{file_url[1:]}"
+
         return CustomResponse(
-            response={
-                'user_id':user.id,
-                'profile_pic':uploaded_file_url
-            }
+            response={"user_id": user.id, "profile_pic": uploaded_file_url}
         ).get_success_response()
-        
