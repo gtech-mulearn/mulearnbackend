@@ -19,5 +19,5 @@ urlpatterns = [
     path('dynamic-management/', include('api.dashboard.dynamic_management.urls')),
     path('error-log/', include('api.dashboard.error_log.urls')),
     path('affiliation/',include('api.dashboard.affiliation.urls')),
-    path('channel/',include('api.dashboard.channel.urls'))
+    path('channels/',include('api.dashboard.channel.urls'))
 ]
