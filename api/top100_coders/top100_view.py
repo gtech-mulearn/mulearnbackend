@@ -10,7 +10,7 @@ class Leaderboard(APIView):
 		SELECT 
 		u.first_name, 
 		u.last_name, 
-		SUM(kal.karma) AS karma, 
+		SUM(kal.karma) AS total_karma, 
 		org.title AS org, 
 		COALESCE(org.dis, d.name) AS district,
 		COALESCE(org.state, s.name) AS state,
