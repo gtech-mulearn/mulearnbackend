@@ -21,5 +21,7 @@ urlpatterns = [
     path('departments/edit/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
     path('departments/delete/<str:department_id>/', organisation_views.DepartmentAPI.as_view()),
     path('affiliation/list/', organisation_views.AffiliationListAPI.as_view()),
-    path('merge_organizations/<str:organisation_id>/', organisation_views.OrganizationMergerView.as_view())
+    path('merge_organizations/<str:organisation_id>/', organisation_views.OrganizationMergerView.as_view()),
+    path('karma-type/create/', organisation_views.OrganizationKarmaTypeGetPostPatchDeleteAPI.as_view()),
+    path('karma-log/create/', organisation_views.OrganizationKarmaLogGetPostPatchDeleteAPI.as_view()),
 ]
