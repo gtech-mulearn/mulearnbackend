@@ -11,11 +11,12 @@ class LocationSerializer(serializers.ModelSerializer):
     value = serializers.CharField(source="id")
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
+
     class Meta:
         model = Country
         fields = [
             "label",
-            "value" ,
+            "value",
             "created_at",
             "updated_at",
             "created_by",
@@ -29,7 +30,7 @@ class CountryCreateEditSerializer(serializers.ModelSerializer):
     # value = serializers.CharField(source="id")
     class Meta:
         model = Country
-        fields = ["label","updated_by", "created_by"]
+        fields = ["label", "updated_by", "created_by"]
 
 
 class StateRetrievalSerializer(serializers.ModelSerializer):
@@ -38,6 +39,7 @@ class StateRetrievalSerializer(serializers.ModelSerializer):
     value = serializers.CharField(source="id")
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
+
     class Meta:
         model = State
         fields = [
@@ -61,16 +63,21 @@ class StateCreateEditSerializer(serializers.ModelSerializer):
 
 
 class ZoneRetrievalSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(
+        source="state.country.name", required=False, default=None
+    )
     state = serializers.CharField(source="state.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
+
     class Meta:
         model = Zone
         fields = [
             "label",
             "value",
+            "country",
             "state",
             "created_at",
             "updated_at",
@@ -89,16 +96,25 @@ class ZoneCreateEditSerializer(serializers.ModelSerializer):
 
 
 class DistrictRetrievalSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(
+        source="zone.state.country.name", required=False, default=None
+    )
+    state = serializers.CharField(
+        source="zone.state.name", required=False, default=None
+    )
     zone = serializers.CharField(source="zone.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
+
     class Meta:
         model = District
         fields = [
             "label",
             "value",
+            "country",
+            "state",
             "zone",
             "created_at",
             "updated_at",
@@ -113,4 +129,4 @@ class DistrictCreateEditSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["label","created_by", "updated_by"]
+        fields = ["label", "created_by", "updated_by"]
