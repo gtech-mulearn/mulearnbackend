@@ -38,7 +38,6 @@ class UserShareQrcode(serializers.ModelSerializer):
             qrcode_image = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
         else:
             return None  
-        print(qrcode_image,"qrcodeImage")
         return qrcode_image
 
 class UserProfileSerializer(serializers.ModelSerializer):
