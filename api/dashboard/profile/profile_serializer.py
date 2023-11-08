@@ -59,7 +59,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_roles(self, obj):
-        return list({link.role.title for link in obj.user_role_link_user.all()})
+        return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
 
     def get_college_id(self, obj):
         org_type = (
