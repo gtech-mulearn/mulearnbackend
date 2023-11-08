@@ -10,9 +10,10 @@ class Leaderboard(APIView):
 		SELECT 
 		u.first_name, 
 		u.last_name, 
+                u.profile_pic,
 		SUM(kal.karma) AS total_karma, 
 		org.title AS org, 
-		COALESCE(org.dis, d.name) AS district,
+		COALESCE(org.dis, d.name) AS dis,
 		COALESCE(org.state, s.name) AS state,
 		MAX(kal.created_at) AS time_
 		FROM karma_activity_log AS kal
