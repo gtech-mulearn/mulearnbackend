@@ -16,9 +16,11 @@ class CountryDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, country_id=None):
         if country_id:
-            countries = Country.objects.filter(id=country_id)
+            countries = Country.objects.filter(id=country_id).select_related(
+                "created_by", "updated_by"
+            )
         else:
-            countries = Country.objects.all()
+            countries = Country.objects.all().select_related("created_by", "updated_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             countries, request, ["name"], {"label": "name"}
@@ -79,12 +81,16 @@ class StateDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, state_id=None):
         if state_id:
-            states = State.objects.filter(
-                Q(pk=state_id) | Q(country__pk=state_id)
-            ).all()
+            states = (
+                State.objects.filter(Q(pk=state_id) | Q(country__pk=state_id))
+                .all()
+                .select_related("country", "created_by", "updated_by")
+            )
 
         else:
-            states = State.objects.all()
+            states = State.objects.all().select_related(
+                "country", "created_by", "updated_by"
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             states, request, ["name"], {"name": "name"}
@@ -112,9 +118,7 @@ class StateDataAPI(APIView):
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
@@ -130,9 +134,7 @@ class StateDataAPI(APIView):
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(
             general_message="State edited successfully"
@@ -154,12 +156,18 @@ class ZoneDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, zone_id=None):
         if zone_id:
-            zones = Zone.objects.filter(
-                Q(pk=zone_id) | Q(state__pk=zone_id) | Q(state__country__pk=zone_id)
-            ).all()
+            zones = (
+                Zone.objects.filter(
+                    Q(pk=zone_id) | Q(state__pk=zone_id) | Q(state__country__pk=zone_id)
+                )
+                .all()
+                .select_related("state", "state__country", "created_by", "updated_by")
+            )
 
         else:
-            zones = Zone.objects.all()
+            zones = Zone.objects.all().select_related(
+                "state", "state__country", "created_by", "updated_by"
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             zones, request, ["name"], {"name": "name"}
@@ -180,34 +188,29 @@ class ZoneDataAPI(APIView):
             "updated_by"
         ] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.ZoneCreateEditSerializer(
-            data=request.data, 
+            data=request.data,
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, zone_id):
-        
         zone = Zone.objects.get(id=zone_id)
         request_data = request.data
         request_data["updated_by"] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.ZoneCreateEditSerializer(
-            zone, data=request.data,partial=True
+            zone, data=request.data, partial=True
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
@@ -227,15 +230,31 @@ class DistrictDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, district_id=None):
         if district_id:
-            districts = District.objects.filter(
-                Q(pk=district_id)
-                | Q(zone__pk=district_id)
-                | Q(zone__state__pk=district_id)
-                | Q(zone__state__country__pk=district_id)
-            ).all()
+            districts = (
+                District.objects.filter(
+                    Q(pk=district_id)
+                    | Q(zone__pk=district_id)
+                    | Q(zone__state__pk=district_id)
+                    | Q(zone__state__country__pk=district_id)
+                )
+                .all()
+                .select_related(
+                    "zone",
+                    "zone__state",
+                    "zone__state__country",
+                    "created_by",
+                    "updated_by",
+                )
+            )
 
         else:
-            districts = District.objects.all()
+            districts = District.objects.all().select_related(
+                "zone",
+                "zone__state",
+                "zone__state__country",
+                "created_by",
+                "updated_by",
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             districts, request, ["name"], {"name": "name"}
@@ -257,14 +276,12 @@ class DistrictDataAPI(APIView):
         ] = JWTUtils.fetch_user_id(request)
 
         serializer = location_serializer.DistrictCreateEditSerializer(
-            data=request.data, 
+            data=request.data,
         )
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(
             general_message="Zone created successfully"
@@ -282,9 +299,7 @@ class DistrictDataAPI(APIView):
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
