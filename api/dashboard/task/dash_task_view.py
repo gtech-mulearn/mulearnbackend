@@ -12,6 +12,8 @@ from .dash_task_serializer import (
     TaskImportSerializer,
     TaskListSerializer,
     TaskModifySerializer,
+    TaskTypeCreateUpdateSerializer,
+    TasktypeSerializer,
 )
 
 from openpyxl import load_workbook
@@ -537,3 +539,64 @@ class TaskBaseTemplateAPI(APIView):
                 f.seek(0)
                 new_file_object = f.read()
         return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')
+    
+class TaskTypeCrudAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
+    def get(self,request):
+        taskType=TaskType.objects.all()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            taskType, request, [ "title"],{"title":"title","updated_by":"updated_by","created_by":"created_by","updated_at":"updated_at","created_at":"created_at"}
+        )
+        serializer = TasktypeSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
+    
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        serializer = TaskTypeCreateUpdateSerializer(
+            data=request.data, context={"user_id": user_id}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Task type added successfully"
+            ).get_success_response()
+
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
+    
+    @role_required([RoleType.ADMIN.value])
+    def delete(self, request, task_type_id):
+        taskType = TaskType.objects.filter(id=task_type_id).first()
+        if taskType is None:
+            return CustomResponse(
+                general_message="task type doesnt exist"
+            ).get_failure_response()
+        taskType.delete()
+        return CustomResponse(
+            general_message=f"{taskType.title} Deleted Successfully"
+        ).get_success_response()
+    
+    @role_required([RoleType.ADMIN.value])
+    def put(self, request, task_type_id):
+        taskType = TaskType.objects.filter(id=task_type_id).first()
+        if taskType is None:
+            return CustomResponse(general_message="task type not found").get_failure_response()
+        serializer = TaskTypeCreateUpdateSerializer(
+           taskType, data=request.data, context={"request": request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message=f"{taskType.title} updated successfully"
+            ).get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()

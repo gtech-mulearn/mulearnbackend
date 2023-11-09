@@ -1,6 +1,9 @@
+import uuid
 from rest_framework import serializers
 
-from db.task import TaskList, KarmaActivityLog
+from db.task import TaskList, KarmaActivityLog, TaskType
+from utils.permission import JWTUtils
+from utils.utils import DateTimeUtils
 
 
 class TaskListSerializer(serializers.ModelSerializer):
@@ -100,3 +103,40 @@ class TaskImportSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+class TasktypeSerializer(serializers.ModelSerializer):
+    updated_by=serializers.CharField(source='updated_by.fullname')
+    created_by=serializers.CharField(source='created_by.fullname')
+
+    class Meta:
+        model = TaskType
+        fields = ["id", "title","updated_by","updated_at","created_by","created_at"]
+
+class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model=TaskType
+        fields=["title"]
+
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        return TaskType.objects.create(
+            id=uuid.uuid4(),
+            title=validated_data.get("title"),
+            updated_by_id=user_id,
+            updated_at=DateTimeUtils.get_current_utc_time(),
+            created_by_id=user_id,
+            created_at=DateTimeUtils.get_current_utc_time(),
+        )
+    def update(self, instance, validated_data):
+        updated_title = validated_data.get("title")
+        instance.title = updated_title
+        user_id = JWTUtils.fetch_user_id(self.context.get("request"))
+        instance.updated_by_id = user_id
+        instance.updated_at=DateTimeUtils.get_current_utc_time(),
+        instance.save()
+        return instance
+
+
+
+
