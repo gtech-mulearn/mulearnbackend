@@ -26,7 +26,7 @@ class UserInfoAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        response = dash_user_serializer.UserSerializer(user, many=False).data
+        response = dash_user_serializer.UserSerializer(user, many=False,context={'request':request}).data
 
         return CustomResponse(response=response).get_success_response()
 
