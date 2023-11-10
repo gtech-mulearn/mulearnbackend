@@ -1,6 +1,11 @@
 from django.db.models import Prefetch
 from rest_framework.views import APIView
-
+import qrcode
+import requests
+import decouple
+from django.http import HttpResponse
+from PIL import Image
+from io import BytesIO
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level
 from db.user import Role
@@ -11,7 +16,9 @@ from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DiscordWebhooks
 from . import profile_serializer
+from django.core.files.base import ContentFile
 from .profile_serializer import LinkSocials
+from django.core.files.storage import FileSystemStorage
 
 
 class UserProfileEditView(APIView):
@@ -202,32 +209,24 @@ class UserLogAPI(APIView):
         return CustomResponse(
             response=serializer.data
         ).get_success_response()
-
-
 class ShareUserProfileAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
-        user_settings = UserSettings.objects.filter(
-            user_id=user_id
-        ).first()
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
 
         if user_settings is None:
-
             return CustomResponse(
-                general_message="No data available "
+                general_message="No data available"
             ).get_failure_response()
 
         serializer = profile_serializer.ShareUserProfileUpdateSerializer(
             user_settings,
             data=request.data,
-            context={
-                "request": request
-            }
+            context={"request": request}
         )
-
+    
         if serializer.is_valid():
             serializer.save()
 
@@ -245,6 +244,80 @@ class ShareUserProfileAPI(APIView):
             message=serializer.errors
         ).get_failure_response()
 
+    # function for generating profile qr code
+
+    def get(self, request, uuid=None):
+        base_url = decouple.config("FR_DOMAIN_NAME")
+        fs = FileSystemStorage()
+        if uuid is not None:
+            user = User.objects.filter(id=uuid).first()
+
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+            else:
+                user_uuid = JWTUtils.fetch_user_id(request)
+                data = f"{base_url}/profile/{user_uuid}"
+
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=10,
+                    border=4,
+                )
+                qr.add_data(data)
+                qr.make(fit=True)
+
+                img = qr.make_image(fill_color="black", back_color="white")
+
+                logo_url = f"{base_url}/favicon.ico/"  # Replace with your logo URL
+                logo_response = requests.get(logo_url)
+
+                if logo_response.status_code == 200:
+                    logo_image = Image.open(BytesIO(logo_response.content))
+                else:
+                    return CustomResponse(
+                        general_message="Failed to download the logo from the URL"
+                    ).get_failure_response()
+
+                logo_width, logo_height = logo_image.size
+                basewidth = 100
+                wpercent = (basewidth / float(logo_width))
+                hsize = int((float(logo_height) * float(wpercent)))
+                resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
+
+                QRcode = qrcode.QRCode(
+                    error_correction=qrcode.constants.ERROR_CORRECT_H
+                )
+                
+                QRcode.add_data(data)
+                QRcolor = 'black'
+                QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
+
+                pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
+                # image = Image.open(BytesIO("image_response.content"))
+                QRimg.paste(resized_logo, pos)
+                image_io = BytesIO()
+                QRimg.save(image_io, format='PNG')
+                image_io.seek(0)
+                image_data: bytes =image_io.getvalue()
+                file_path = f'user/qr/{user_uuid}.png'
+                fs.exists(file_path) and fs.delete(file_path)
+                file = fs.save(file_path, ContentFile(image_io.read()))
+               
+                return CustomResponse(
+                    general_message="QR code image with logo saved locally"
+                ).get_success_response()
+
+        
 
 class UserLevelsAPI(APIView):
     def get(self, request, muid=None):
@@ -378,3 +451,34 @@ class SocialsAPI(APIView):
         return CustomResponse(
             response=serializer.errors
         ).get_failure_response()
+
+class QrcodeRetrieveAPI(APIView):
+ def get(self, request, uuid):
+        try:
+            user = User.objects.prefetch_related().get(id=uuid or JWTUtils.fetch_user_id(request))
+          
+            user_settings = UserSettings.objects.filter(
+                user_id=user
+            ).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+
+            
+
+            serializer = profile_serializer.UserShareQrcode(
+                user,
+                many=False,
+                context={'request':request}
+            )
+           
+            return CustomResponse(
+                response=serializer.data
+            ).get_success_response()
+
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given UUID seems to be invalid"
+            ).get_failure_response()

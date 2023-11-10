@@ -14,7 +14,6 @@ from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
 from django.core.files.storage import FileSystemStorage
 
-
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source="task.title")
     created_date = serializers.CharField(source="created_at")
@@ -23,6 +22,23 @@ class UserLogSerializer(ModelSerializer):
         model = KarmaActivityLog
         fields = ["task_name", "karma", "created_date"]
 
+
+class UserShareQrcode(serializers.ModelSerializer):  
+    profile_pic = serializers.SerializerMethodField()
+    class Meta:
+        model = User  
+        fields = ['profile_pic'] 
+
+
+    def get_profile_pic(self,obj):
+        # Here the media url in settings.py is /home/mishal/../../uid.png
+        fs = FileSystemStorage()
+        path = f'user/qr/{obj.id}.png'
+        if fs.exists(path):
+            qrcode_image = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+        else:
+            return None  
+        return qrcode_image
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
@@ -234,7 +250,8 @@ class UserRankSerializer(ModelSerializer):
     def get_interest_groups(self, obj):
         return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]
 
-
+# is public true then pass the qrcode vice versa delete the image
+# another api when passing muid is give its corresponding image is returned
 class ShareUserProfileUpdateSerializer(ModelSerializer):
     updated_by = serializers.CharField(required=False)
     updated_at = serializers.CharField(required=False)
