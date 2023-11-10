@@ -9,7 +9,7 @@ from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-
+from django.core.files.storage import FileSystemStorage
 
 class UserDashboardSerializer(serializers.ModelSerializer):
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
@@ -34,6 +34,7 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
+    profile_pic = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -50,6 +51,15 @@ class UserSerializer(serializers.ModelSerializer):
             "roles",
             "profile_pic",
         ]
+
+    def get_profile_pic(self,obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
 
     def get_roles(self, obj):
         return [
