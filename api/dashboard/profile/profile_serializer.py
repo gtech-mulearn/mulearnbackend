@@ -13,6 +13,9 @@ from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
 from django.core.files.storage import FileSystemStorage
+from decouple import config as decouple_config
+
+BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source="task.title")
@@ -80,7 +83,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fs = FileSystemStorage()
         path = f'user/profile/{obj.id}.png'
         if fs.exists(path):
-            profile_pic = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
         else:
             profile_pic = obj.profile_pic
         return profile_pic
