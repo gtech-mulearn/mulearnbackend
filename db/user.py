@@ -1,6 +1,7 @@
 import uuid
 
 from django.db import models
+from .managers import user_manager
 
 # fmt: off
 # noinspection PyPep8
@@ -17,11 +18,16 @@ class User(models.Model):
     gender         = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"),("Female", "Female")])
     dob            = models.DateField(blank=True, null=True)
     admin          = models.BooleanField(default=False)
-    active         = models.BooleanField(default=True)
     exist_in_guild = models.BooleanField(default=False)
     profile_pic    = models.CharField(max_length=200, blank=True, null=True)
-    district       = models.ForeignKey("District",on_delete=models.CASCADE, blank=True, null=True)
+    district       = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
+    suspended_at   = models.DateTimeField(blank=True, null=True)
+    suspended_by   = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="suspended_by_user", db_column="suspended_by")
+    deleted_at     = models.DateTimeField(blank=True, null=True)
+    deleted_by     = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="deleted_by_user", db_column="deleted_by")
+    objects        = user_manager.ActiveUserManager()
+    every          = models.Manager()
 
     class Meta:
         managed = False

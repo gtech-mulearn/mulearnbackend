@@ -15,76 +15,55 @@ class CountryDataAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, country_id=None):
-
         if country_id:
-            countries = Country.objects.filter(id=country_id)
+            countries = Country.objects.filter(id=country_id).select_related(
+                "created_by", "updated_by"
+            )
         else:
-            countries = Country.objects.all()
+            countries = Country.objects.all().select_related("created_by", "updated_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            countries,
-            request,
-            [
-                "name"
-            ],
-            {
-                "label": "name"
-            }
+            countries, request, ["name"], {"label": "name"}
         )
 
         serializer = location_serializer.LocationSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
+            paginated_queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get("pagination")
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-
+        request_data = request.data
+        request_data["created_by"] = request_data[
+            "updated_by"
+        ] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.CountryCreateEditSerializer(
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            data=request_data,
         )
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(
-                general_message="Country created Successfully"
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, country_id):
-        user_id = JWTUtils.fetch_user_id(request)
         country = Country.objects.get(id=country_id)
-
+        request_data = request.data
+        request_data["updated_by"] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.CountryCreateEditSerializer(
-            country,
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            country, data=request_data, partial=True
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message="Country edited successfully"
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, country_id):
@@ -101,78 +80,61 @@ class StateDataAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, state_id=None):
-
         if state_id:
-            states = State.objects.filter(
-                Q(pk=state_id) |
-                Q(country__pk=state_id)
-            ).all()
+            states = (
+                State.objects.filter(Q(pk=state_id) | Q(country__pk=state_id))
+                .all()
+                .select_related("country", "created_by", "updated_by")
+            )
 
         else:
-            states = State.objects.all()
+            states = State.objects.all().select_related(
+                "country", "created_by", "updated_by"
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            states,
-            request,
-            [
-                "name"
-            ],
-            {
-                "name": "name"
-            }
+            states, request, ["name"], {"name": "name"}
         )
 
         serializer = location_serializer.StateRetrievalSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
+            paginated_queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get("pagination")
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        request_data = request.data
+        request_data["created_by"] = request_data[
+            "updated_by"
+        ] = JWTUtils.fetch_user_id(request)
 
         serializer = location_serializer.StateCreateEditSerializer(
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            data=request_data,
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message="State created successfully"
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, state_id):
-        user_id = JWTUtils.fetch_user_id(request)
         state = State.objects.get(id=state_id)
-
+        request_data = request.data
+        request_data["updated_by"] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.StateCreateEditSerializer(
-            state,
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            state, data=request_data, partial=True
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(
             general_message="State edited successfully"
@@ -193,83 +155,64 @@ class ZoneDataAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, zone_id=None):
-
         if zone_id:
-            zones = Zone.objects.filter(
-                Q(pk=zone_id) |
-                Q(state__pk=zone_id) |
-                Q(state__country__pk=zone_id)
-            ).all()
+            zones = (
+                Zone.objects.filter(
+                    Q(pk=zone_id) | Q(state__pk=zone_id) | Q(state__country__pk=zone_id)
+                )
+                .all()
+                .select_related("state", "state__country", "created_by", "updated_by")
+            )
 
         else:
-            zones = Zone.objects.all()
+            zones = Zone.objects.all().select_related(
+                "state", "state__country", "created_by", "updated_by"
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            zones,
-            request,
-            [
-                "name"
-            ],
-            {
-                "name": "name"
-            }
+            zones, request, ["name"], {"name": "name"}
         )
 
         serializer = location_serializer.ZoneRetrievalSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
+            paginated_queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get("pagination")
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-
+        request_data = request.data
+        request_data["created_by"] = request_data[
+            "updated_by"
+        ] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.ZoneCreateEditSerializer(
             data=request.data,
-            context={
-                "user_id": user_id
-            }
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message="Zone created successfully"
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, zone_id):
-        user_id = JWTUtils.fetch_user_id(request)
         zone = Zone.objects.get(id=zone_id)
-
+        request_data = request.data
+        request_data["updated_by"] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.ZoneCreateEditSerializer(
-            zone,
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            zone, data=request.data, partial=True
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message="zone edited successfully"
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, zone_id):
@@ -286,55 +229,59 @@ class DistrictDataAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, district_id=None):
-
         if district_id:
-            districts = District.objects.filter(
-                Q(pk=district_id) |
-                Q(zone__pk=district_id) |
-                Q(zone__state__pk=district_id) |
-                Q(zone__state__country__pk=district_id)
-            ).all()
+            districts = (
+                District.objects.filter(
+                    Q(pk=district_id)
+                    | Q(zone__pk=district_id)
+                    | Q(zone__state__pk=district_id)
+                    | Q(zone__state__country__pk=district_id)
+                )
+                .all()
+                .select_related(
+                    "zone",
+                    "zone__state",
+                    "zone__state__country",
+                    "created_by",
+                    "updated_by",
+                )
+            )
 
         else:
-            districts = District.objects.all()
+            districts = District.objects.all().select_related(
+                "zone",
+                "zone__state",
+                "zone__state__country",
+                "created_by",
+                "updated_by",
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            districts,
-            request,
-            [
-                "name"
-            ],
-            {
-                "name": "name"
-            }
+            districts, request, ["name"], {"name": "name"}
         )
 
         serializer = location_serializer.DistrictRetrievalSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
+            paginated_queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(
-            data=serializer.data,
-            pagination=paginated_queryset.get("pagination")
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        request_data = request.data
+        request_data["created_by"] = request_data[
+            "updated_by"
+        ] = JWTUtils.fetch_user_id(request)
 
         serializer = location_serializer.DistrictCreateEditSerializer(
             data=request.data,
-            context={
-                "user_id": user_id
-            }
         )
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         return CustomResponse(
             general_message="Zone created successfully"
@@ -342,27 +289,19 @@ class DistrictDataAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, district_id):
-        user_id = JWTUtils.fetch_user_id(request)
         district = District.objects.get(id=district_id)
-
+        request_data = request.data
+        request_data["updated_by"] = JWTUtils.fetch_user_id(request)
         serializer = location_serializer.DistrictCreateEditSerializer(
-            district,
-            data=request.data,
-            context={
-                "user_id": user_id
-            }
+            district, data=request.data, partial=True
         )
 
         if serializer.is_valid():
             serializer.save()
 
-            return CustomResponse(
-                general_message="Zone edited successfully"
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, district_id):
@@ -376,35 +315,20 @@ class DistrictDataAPI(APIView):
 
 class CountryListApi(APIView):
     def get(self, request):
-        country = Country.objects.all().values(
-            'id',
-            'name'
-        ).order_by('name')
+        country = Country.objects.all().values("id", "name").order_by("name")
 
-        return CustomResponse(
-            response=country
-        ).get_success_response()
+        return CustomResponse(response=country).get_success_response()
 
 
 class StateListApi(APIView):
     def get(self, request):
-        state = State.objects.all().values(
-            'id',
-            'name'
-        ).order_by('name')
+        state = State.objects.all().values("id", "name").order_by("name")
 
-        return CustomResponse(
-            response=state
-        ).get_success_response()
+        return CustomResponse(response=state).get_success_response()
 
 
 class ZoneListApi(APIView):
     def get(self, request):
-        zone = Zone.objects.all().values(
-            'id',
-            'name'
-        ).order_by('name')
+        zone = Zone.objects.all().values("id", "name").order_by("name")
 
-        return CustomResponse(
-            response=zone
-        ).get_success_response()
+        return CustomResponse(response=zone).get_success_response()

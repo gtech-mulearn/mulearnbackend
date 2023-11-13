@@ -19,7 +19,8 @@ from .serializers import (
     InstitutionCreateUpdateSerializer,
     InstitutionSerializer,
     InstitutionPrefillSerializer,
-    OrganizationMergerSerializer,
+    OrganizationMergerSerializer, OrganizationKarmaTypeGetPostPatchDeleteSerializer,
+    OrganizationKarmaLogGetPostPatchDeleteSerializer,
 )
 
 
@@ -470,3 +471,48 @@ class OrganizationMergerView(APIView):
             return CustomResponse(
                 general_message="An organization with the given id doesn't exist"
             ).get_failure_response()
+
+
+class OrganizationKarmaTypeGetPostPatchDeleteAPI(APIView):
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        serializer = OrganizationKarmaTypeGetPostPatchDeleteSerializer(
+            data=request.data,
+            context={
+                'user_id': user_id
+            }
+        )
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                "Organization karma type created successfully"
+            ).get_success_response()
+
+        return CustomResponse(
+            serializer.errors
+        ).get_failure_response()
+
+
+class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        serializer = OrganizationKarmaLogGetPostPatchDeleteSerializer(
+            data=request.data,
+            context={
+                'user_id': user_id
+            }
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                "Organization karma Log created successfully"
+            ).get_success_response()
+
+        return CustomResponse(
+            serializer.errors
+        ).get_failure_response()

@@ -199,7 +199,7 @@ class TaskListCSV(APIView):
         task_queryset = TaskList.objects.select_related(
             "created_by",
             "updated_by",
-            "channels",
+            "channel",
             "type",
             "level",
             "ig",
@@ -508,7 +508,7 @@ class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     def get(self, request):
-        wb = load_workbook('./api/dashboard/task/assets/base_template.xlsx')
+        wb = load_workbook('./api/dashboard/task/assets/task_base_template.xlsx')
         ws = wb['Data Definitions']
         levels = Level.objects.all().values_list('name', flat=True)
         channels = Channel.objects.all().values_list('name', flat=True)
@@ -536,4 +536,4 @@ class TaskBaseTemplateAPI(APIView):
             with open(tmp.name, 'rb') as f:
                 f.seek(0)
                 new_file_object = f.read()
-        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='base_template.xlsx')
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')

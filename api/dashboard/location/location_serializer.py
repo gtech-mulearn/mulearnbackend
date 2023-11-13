@@ -9,84 +9,81 @@ from utils.utils import DateTimeUtils
 class LocationSerializer(serializers.ModelSerializer):
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
 
     class Meta:
         model = Country
-        fields = ["label", "value"]
+        fields = [
+            "label",
+            "value",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
 
 
 class CountryCreateEditSerializer(serializers.ModelSerializer):
     label = serializers.CharField(source="name")
-    # value = serializers.CharField(source="id")
 
+    # value = serializers.CharField(source="id")
     class Meta:
         model = Country
-        fields = ["label"]
-
-    def create(self, validated_data):
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data["updated_at"] = validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = validated_data["created_by_id"] = self.context.get("user_id")
-
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = self.context.get("user_id")
-
-        return super().update(instance, validated_data)
-
-    def validate_label(self, country):
-        country_obj = Country.objects.filter(name=country).first()
-        if country_obj:
-            raise serializers.ValidationError('Country with this name is already exists')
-        return country
+        fields = ["label", "updated_by", "created_by"]
 
 
 class StateRetrievalSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(source="country.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
 
     class Meta:
-        model = Country
-        fields = ["label", "value"]
+        model = State
+        fields = [
+            "label",
+            "value",
+            "country",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
 
 
 class StateCreateEditSerializer(serializers.ModelSerializer):
     label = serializers.CharField(source="name")
-    # value = serializers.CharField(source="id")
 
+    # value = serializers.CharField(source="id")
     class Meta:
         model = State
-        fields = ["label", "country"]
-
-    def create(self, validated_data):
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data["updated_at"] = validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = validated_data["created_by_id"] = self.context.get("user_id")
-
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = self.context.get("user_id")
-
-        return super().update(instance, validated_data)
-
-    def validate_label(self, state):
-        state_obj = State.objects.filter(name=state).first()
-        if state_obj:
-            raise serializers.ValidationError("State with this name is already exists")
-        return state
+        fields = ["label", "created_by", "updated_by"]
 
 
 class ZoneRetrievalSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(
+        source="state.country.name", required=False, default=None
+    )
+    state = serializers.CharField(source="state.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
 
     class Meta:
-        model = Country
-        fields = ["label", "value"]
+        model = Zone
+        fields = [
+            "label",
+            "value",
+            "country",
+            "state",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
 
 
 class ZoneCreateEditSerializer(serializers.ModelSerializer):
@@ -95,35 +92,35 @@ class ZoneCreateEditSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Zone
-        fields = ["label", "state"]
-
-    def create(self, validated_data):
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data["updated_at"] = validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = validated_data["created_by_id"] = self.context.get("user_id")
-
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = self.context.get("user_id")
-
-        return super().update(instance, validated_data)
-
-    def validate_label(self, zone):
-        zone_obj = Zone.objects.filter(name=zone).first()
-        if zone_obj:
-            raise serializers.ValidationError("Zone with this name is already exists")
-        return zone
+        fields = ["label", "created_by", "updated_by"]
 
 
 class DistrictRetrievalSerializer(serializers.ModelSerializer):
+    country = serializers.CharField(
+        source="zone.state.country.name", required=False, default=None
+    )
+    state = serializers.CharField(
+        source="zone.state.name", required=False, default=None
+    )
+    zone = serializers.CharField(source="zone.name", required=False, default=None)
     label = serializers.CharField(source="name")
     value = serializers.CharField(source="id")
+    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.fullname")
 
     class Meta:
-        model = Country
-        fields = ["label", "value"]
+        model = District
+        fields = [
+            "label",
+            "value",
+            "country",
+            "state",
+            "zone",
+            "created_at",
+            "updated_at",
+            "created_by",
+            "updated_by",
+        ]
 
 
 class DistrictCreateEditSerializer(serializers.ModelSerializer):
@@ -132,23 +129,4 @@ class DistrictCreateEditSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["label", "zone"]
-
-    def create(self, validated_data):
-        validated_data['id'] = str(uuid.uuid4())
-        validated_data["updated_at"] = validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = validated_data["created_by_id"] = self.context.get("user_id")
-
-        return super().create(validated_data)
-
-    def update(self, instance, validated_data):
-        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
-        validated_data["updated_by_id"] = self.context.get("user_id")
-
-        return super().update(instance, validated_data)
-
-    def validate_label(self, district):
-        district_obj = District.objects.filter(name=district).first()
-        if district_obj:
-            raise serializers.ValidationError("District with this name is already exists")
-        return district
+        fields = ["label", "created_by", "updated_by"]

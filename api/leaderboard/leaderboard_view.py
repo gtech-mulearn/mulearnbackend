@@ -17,7 +17,6 @@ class StudentsLeaderboard(APIView):
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 exist_in_guild=True,
-                active=True,
             )
             .distinct()
             .select_related("wallet_user")
@@ -49,7 +48,6 @@ class StudentsMonthlyLeaderboard(APIView):
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 exist_in_guild=True,
-                active=True,
             )
             .annotate(
                 full_name=Concat(F("first_name"), Value(" "), F("last_name")),
@@ -86,7 +84,6 @@ class CollegeLeaderboard(APIView):
             Organization.objects.filter(
                 org_type=OrganizationType.COLLEGE.value,
                 user_organization_link_org__user__user_role_link_user__role__title=RoleType.STUDENT.value,
-                user_organization_link_org__user__active=True,
                 user_organization_link_org__user__exist_in_guild=True,
             )
             .distinct()
