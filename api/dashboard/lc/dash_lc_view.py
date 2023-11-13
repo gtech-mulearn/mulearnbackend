@@ -16,7 +16,7 @@ from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleCreateEditDeleteSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberListSerializer, MeetCreateEditDeleteSerializer
+    LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -399,24 +399,34 @@ class LearningCircleHomeApi(APIView):
         return CustomResponse(general_message='Left').get_success_response()
 
 
-class MeetGetPostPatchDeleteAPI(APIView):
+class MeetRecordsGetPostPatchDeleteAPI(APIView):
 
-    def get(self, request, meet_id):
+    def get(self, request, circle_id=None, meet_id=None):
 
-        circle_meeting_log = CircleMeetingLog.objects.filter(
-            id=meet_id
-        ).values(
-            "id",
-            "meet_time",
-            "meet_place",
-            "day",
-            "attendees",
-            "agenda",
-            meet_created_by=F("created_by__first_name"),
-            meet_created_at=F("created_at"),
-            meet_updated_by=F("updated_by__first_name"),
-            meet_updated_at=F("updated_at"),
-        )
+        if meet_id:
+            circle_meeting_log = CircleMeetingLog.objects.filter(
+                id=meet_id
+            ).values(
+                "id",
+                "meet_time",
+                "meet_place",
+                "day",
+                "attendees",
+                "agenda",
+                meet_created_by=F("created_by__first_name"),
+                meet_created_at=F("created_at"),
+                meet_updated_by=F("updated_by__first_name"),
+                meet_updated_at=F("updated_at"),
+            )
+
+        if circle_id:
+            circle_meeting_log = CircleMeetingLog.objects.filter(
+                circle_id=circle_id
+            ).values(
+                "id",
+                "meet_time",
+                "day"
+            )
 
         return CustomResponse(
             response=circle_meeting_log
@@ -425,7 +435,7 @@ class MeetGetPostPatchDeleteAPI(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = MeetCreateEditDeleteSerializer(
+        serializer = MeetRecordsCreateEditDeleteSerializer(
             data=request.data,
             context={
                 'user_id': user_id,
@@ -450,7 +460,7 @@ class MeetGetPostPatchDeleteAPI(APIView):
             id=circle_id
         ).first()
 
-        serializer = MeetCreateEditDeleteSerializer(
+        serializer = MeetRecordsCreateEditDeleteSerializer(
             learning_circle,
             data=request.data,
             context={
