@@ -17,7 +17,6 @@ from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 
-
 class CommonUtils:
     @staticmethod
     def get_paginated_queryset(
@@ -171,7 +170,6 @@ class ImportCSV:
         workbook.close()
 
         return rows
-
 
 def send_template_mail(
         context: dict, subject: str, address: list[str], attachment: str = None):

@@ -11,6 +11,8 @@ from db.organization import (
     State,
     OrgAffiliation,
     Department,
+    OrgKarmaType,
+    OrgKarmaLog,
 )
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
@@ -256,7 +258,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
         },
     )
 
-    def validate_source_code(self, attrs):
+    def validate_source_org(self, attrs):
         if self.instance.code == attrs.code:
             raise serializers.ValidationError(
                 "You can't merge an organization into itself."
@@ -361,3 +363,39 @@ class OrganizationMergerSerializer(serializers.Serializer):
             source_org.delete()
 
         return instance
+
+
+class OrganizationKarmaTypeGetPostPatchDeleteSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = OrgKarmaType
+        fields = [
+            "title",
+            "karma",
+            "description",
+        ]
+
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        validated_data["updated_by_id"] = user_id
+        validated_data["created_by_id"] = user_id
+
+        return OrgKarmaType.objects.create(**validated_data)
+
+
+class OrganizationKarmaLogGetPostPatchDeleteSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = OrgKarmaLog
+        fields = [
+            "org",
+            "karma",
+            "type",
+        ]
+
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        validated_data["updated_by_id"] = user_id
+        validated_data["created_by_id"] = user_id
+
+        return OrgKarmaLog.objects.create(**validated_data)

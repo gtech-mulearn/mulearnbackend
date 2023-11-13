@@ -12,7 +12,10 @@ from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
+from django.core.files.storage import FileSystemStorage
+from decouple import config as decouple_config
 
+BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source="task.title")
@@ -22,6 +25,23 @@ class UserLogSerializer(ModelSerializer):
         model = KarmaActivityLog
         fields = ["task_name", "karma", "created_date"]
 
+
+class UserShareQrcode(serializers.ModelSerializer):  
+    profile_pic = serializers.SerializerMethodField()
+    class Meta:
+        model = User  
+        fields = ['profile_pic'] 
+
+
+    def get_profile_pic(self,obj):
+        # Here the media url in settings.py is /home/mishal/../../uid.png
+        fs = FileSystemStorage()
+        path = f'user/qr/{obj.id}.png'
+        if fs.exists(path):
+            qrcode_image = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+        else:
+            return None  
+        return qrcode_image
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
@@ -35,6 +55,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
+    profile_pic = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -57,7 +78,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
         )
-
+    
+    def get_profile_pic(self,obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
+    
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.all()})
 
@@ -223,7 +253,8 @@ class UserRankSerializer(ModelSerializer):
     def get_interest_groups(self, obj):
         return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]
 
-
+# is public true then pass the qrcode vice versa delete the image
+# another api when passing muid is give its corresponding image is returned
 class ShareUserProfileUpdateSerializer(ModelSerializer):
     updated_by = serializers.CharField(required=False)
     updated_at = serializers.CharField(required=False)
