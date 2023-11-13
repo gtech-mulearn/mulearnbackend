@@ -1,21 +1,41 @@
 import uuid
 from utils.utils import DateTimeUtils
 from rest_framework import serializers
-from db.organization import College, Organization, OrgDiscordLink
+from db.organization import College, Organization, OrgDiscordLink, UserOrganizationLink
+from db.user import User
+from utils.types import RoleType
+from django.db.models import Count
 
 
 class CollegeListSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
     org = serializers.CharField(source="org.title")
-    discord_link = serializers.SerializerMethodField()
+    number_of_students = serializers.SerializerMethodField()
+    leadname = serializers.CharField(source="lead.fullname")
+    # discord_link = serializers.SerializerMethodField()
 
     class Meta:
         model = College
-        fields = "__all__"
+        fields = [
+            "id",
+            "level",
+            "org",
+            "updated_by",
+            "created_by",
+            "updated_at",
+            "created_at",
+            "number_of_students",
+            "leadname",
+        ]
 
-    def get_discord_link(self, obj):
-        return obj.org.org_discord_link_org_id.exists()
+    def get_number_of_students(self, obj):
+        return obj.org.user_organization_link_org.annotate(
+            user_count=Count("user")
+        ).count()
+
+    # def get_discord_link(self, obj):
+    #     return obj.org.org_discord_link_org_id.exists()
 
 
 class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
