@@ -12,7 +12,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.fullname")
     org = serializers.CharField(source="org.title")
     number_of_students = serializers.SerializerMethodField()
-    leadname = serializers.CharField(source="lead.fullname")
+    leadname = serializers.CharField(source="lead.fullname",default=None)
     # discord_link = serializers.SerializerMethodField()
 
     class Meta:
@@ -30,9 +30,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
         ]
 
     def get_number_of_students(self, obj):
-        return obj.org.user_organization_link_org.annotate(
-            user_count=Count("user")
-        ).count()
+        return obj.org.user_organization_link_org.filter(user__user_role_link_user__role__title=RoleType.STUDENT.value).count()
 
     # def get_discord_link(self, obj):
     #     return obj.org.org_discord_link_org_id.exists()

@@ -16,9 +16,7 @@ class CountryDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, country_id=None):
         if country_id:
-            countries = Country.objects.filter(id=country_id).select_related(
-                "created_by", "updated_by"
-            )
+            countries = Country.objects.filter(id=country_id)
         else:
             countries = Country.objects.all().select_related("created_by", "updated_by")
 
@@ -82,9 +80,7 @@ class StateDataAPI(APIView):
     def get(self, request, state_id=None):
         if state_id:
             states = (
-                State.objects.filter(Q(pk=state_id) | Q(country__pk=state_id))
-                .all()
-                .select_related("country", "created_by", "updated_by")
+                State.objects.filter(pk=state_id).select_related("country", "created_by", "updated_by")
             )
 
         else:
