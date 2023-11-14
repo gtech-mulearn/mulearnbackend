@@ -135,7 +135,6 @@ class TaskAPI(APIView):
     )
     def get(self, request, task_id):
         task_queryset = TaskList.objects.get(pk=task_id)
-
         task_serializer = TaskModifySerializer(task_queryset, many=False)
         return CustomResponse(response=task_serializer.data).get_success_response()
 

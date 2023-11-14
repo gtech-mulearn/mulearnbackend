@@ -12,11 +12,12 @@ urlpatterns = [
     path('user-log/', profile_view.UserLogAPI.as_view()),
     path('user-log/<str:muid>/', profile_view.UserLogAPI.as_view()),
     path('share-user-profile/', profile_view.ShareUserProfileAPI.as_view()),
+    path('share-user-profile/<str:uuid>/', profile_view.ShareUserProfileAPI.as_view()),
     path('rank/<str:muid>/', profile_view.UserRankAPI.as_view()),
     path('get-user-levels/', profile_view.UserLevelsAPI.as_view()),
     path('get-user-levels/<str:muid>/', profile_view.UserLevelsAPI.as_view()),
     path('socials/edit/', profile_view.SocialsAPI.as_view()),
     path('socials/', profile_view.GetSocialsAPI.as_view()),
     path('socials/<str:muid>/', profile_view.GetSocialsAPI.as_view()),
-
+    path('qrcode-get/<str:uuid>/', profile_view.QrcodeRetrieveAPI.as_view())
 ]

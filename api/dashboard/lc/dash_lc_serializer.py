@@ -408,7 +408,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
         )
 
     def get_previous_meetings(self, obj):
-        previous_meetings = obj.circle_meeting_log_learning_circle.all().values(
+        return obj.circle_meeting_log_learning_circle.all().values(
             "id",
             "meet_time",
             "day",
@@ -504,7 +504,7 @@ class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
         return instance
 
 
-class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
+class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CircleMeetingLog

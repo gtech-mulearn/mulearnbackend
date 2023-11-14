@@ -9,13 +9,13 @@ https://docs.djangoproject.com/en/4.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
+
 import os
 from pathlib import Path
 
 from decouple import config as decouple_config
 
 import logging
-
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -127,7 +127,6 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
-
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
@@ -229,4 +228,4 @@ DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
 import socket
 
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
-INTERNAL_IPS = [ip[:-1] + '1' for ip in ips] + ['127.0.0.1', '10.0.2.2']
+INTERNAL_IPS = [f'{ip[:-1]}1' for ip in ips] + ['127.0.0.1', '10.0.2.2']
