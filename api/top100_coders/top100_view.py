@@ -10,9 +10,10 @@ class Leaderboard(APIView):
 		SELECT 
 		u.first_name, 
 		u.last_name, 
-                u.profile_pic,
+		u.profile_pic,
 		SUM(kal.karma) AS total_karma, 
 		org.title AS org, 
+		org.org_type AS org_type,
 		COALESCE(org.dis, d.name) AS dis,
 		COALESCE(org.state, s.name) AS state,
 		MAX(kal.created_at) AS time_
@@ -23,7 +24,8 @@ class Leaderboard(APIView):
 		SELECT 
 			uol.user_id, 
 			org.id, 
-			org.title AS title, 
+			org.title AS title,
+			org.org_type AS org_type,
 			d.name dis, 
 			s.name state
 		FROM user_organization_link AS uol
@@ -32,6 +34,11 @@ class Leaderboard(APIView):
 		LEFT JOIN zone AS z ON z.id = d.zone_id
 		LEFT JOIN state AS s ON s.id = z.state_id
 		GROUP BY uol.user_id
+		ORDER BY 
+		  CASE WHEN org.org_type = 'College' THEN 1
+				WHEN  org.org_type = 'Company' THEN 2
+		        ELSE 3
+			END
 		) AS org ON org.user_id = u.id
 		LEFT JOIN district AS d ON d.id = u.district_id
 		LEFT JOIN zone AS z ON d.zone_id = z.id
@@ -43,7 +50,8 @@ class Leaderboard(APIView):
 		INNER JOIN task_list AS tl ON tl.id = kal.task_id
 		WHERE tl.hashtag = '#thc-realworld-problem-proposal' and kal.appraiser_approved = TRUE)
 		GROUP BY u.id
-		ORDER BY total_karma DESC, time_;
+		ORDER BY 
+		    total_karma DESC, time_;
 
         """
         query2 = """
