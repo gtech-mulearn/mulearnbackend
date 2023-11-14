@@ -79,10 +79,7 @@ class StateDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, state_id=None):
         if state_id:
-            states = (
-                State.objects.filter(pk=state_id).select_related("country", "created_by", "updated_by")
-            )
-
+            states = State.objects.filter(pk=state_id).select_related("country", "created_by", "updated_by")
         else:
             states = State.objects.all().select_related(
                 "country", "created_by", "updated_by"
@@ -152,14 +149,7 @@ class ZoneDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, zone_id=None):
         if zone_id:
-            zones = (
-                Zone.objects.filter(
-                    Q(pk=zone_id) | Q(state__pk=zone_id) | Q(state__country__pk=zone_id)
-                )
-                .all()
-                .select_related("state", "state__country", "created_by", "updated_by")
-            )
-
+            zones = Zone.objects.filter(pk=zone_id)
         else:
             zones = Zone.objects.all().select_related(
                 "state", "state__country", "created_by", "updated_by"
@@ -226,23 +216,8 @@ class DistrictDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, district_id=None):
         if district_id:
-            districts = (
-                District.objects.filter(
-                    Q(pk=district_id)
-                    | Q(zone__pk=district_id)
-                    | Q(zone__state__pk=district_id)
-                    | Q(zone__state__country__pk=district_id)
-                )
-                .all()
-                .select_related(
-                    "zone",
-                    "zone__state",
-                    "zone__state__country",
-                    "created_by",
-                    "updated_by",
-                )
-            )
-
+            districts = District.objects.filter(pk=district_id)
+                
         else:
             districts = District.objects.all().select_related(
                 "zone",
