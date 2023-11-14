@@ -504,7 +504,7 @@ class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
         return instance
 
 
-class MeetCreateEditDeleteSerializer(serializers.ModelSerializer):
+class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = CircleMeetingLog
