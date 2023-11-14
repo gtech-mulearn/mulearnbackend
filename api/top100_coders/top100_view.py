@@ -36,8 +36,9 @@ class Leaderboard(APIView):
 		GROUP BY uol.user_id
 		ORDER BY 
 		  CASE WHEN org.org_type = 'College' THEN 1
-				WHEN  org.org_type = 'Company' THEN 2
-		        ELSE 3
+				WHEN  org.org_type = 'School' THEN 2
+				WHEN  org.org_type = 'Company' THEN 3
+		        ELSE 4
 			END
 		) AS org ON org.user_id = u.id
 		LEFT JOIN district AS d ON d.id = u.district_id
