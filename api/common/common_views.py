@@ -326,3 +326,9 @@ class GTASANDSHOREAPI(APIView):
                 # If it doesn't exist, create a new entry
                 grouped_colleges[cleaned_college] = int(count)
         return CustomResponse(response=grouped_colleges).get_success_response()
+
+
+class UserProfilePicAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.filter(muid=muid).values(image="profile_pic")
+        return CustomResponse(response=user).get_success_response()
