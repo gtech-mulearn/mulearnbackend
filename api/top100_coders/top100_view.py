@@ -51,7 +51,7 @@ class Leaderboard(APIView):
             INNER JOIN task_list AS tl ON tl.id = kal.task_id
             WHERE tl.hashtag = '#thc-realworld-problem-proposal' AND kal.appraiser_approved = TRUE)
             GROUP BY u.id
-            ORDER BY karma DESC, time_;
+            ORDER BY total_karma DESC, time_;
             """
         with connection.cursor() as cursor:
             cursor.execute(query)
