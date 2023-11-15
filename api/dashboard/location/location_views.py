@@ -79,7 +79,9 @@ class StateDataAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def get(self, request, state_id=None):
         if state_id:
-            states = State.objects.filter(pk=state_id).select_related("country", "created_by", "updated_by")
+            states = State.objects.filter(pk=state_id).select_related(
+                "country", "created_by", "updated_by"
+            )
         else:
             states = State.objects.all().select_related(
                 "country", "created_by", "updated_by"
@@ -129,9 +131,7 @@ class StateDataAPI(APIView):
 
             return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message="State edited successfully"
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, state_id):
@@ -217,7 +217,7 @@ class DistrictDataAPI(APIView):
     def get(self, request, district_id=None):
         if district_id:
             districts = District.objects.filter(pk=district_id)
-                
+
         else:
             districts = District.objects.all().select_related(
                 "zone",
@@ -254,9 +254,7 @@ class DistrictDataAPI(APIView):
 
             return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(
-            general_message="Zone created successfully"
-        ).get_failure_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, district_id):

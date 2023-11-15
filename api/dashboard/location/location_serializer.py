@@ -59,7 +59,7 @@ class StateCreateEditSerializer(serializers.ModelSerializer):
     # value = serializers.CharField(source="id")
     class Meta:
         model = State
-        fields = ["label", "created_by", "updated_by"]
+        fields = ["label", "country", "created_by", "updated_by"]
 
 
 class ZoneRetrievalSerializer(serializers.ModelSerializer):
@@ -92,7 +92,7 @@ class ZoneCreateEditSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Zone
-        fields = ["label", "created_by", "updated_by"]
+        fields = ["label", "state", "created_by", "updated_by"]
 
 
 class DistrictRetrievalSerializer(serializers.ModelSerializer):
@@ -129,4 +129,4 @@ class DistrictCreateEditSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = District
-        fields = ["label", "created_by", "updated_by"]
+        fields = ["label", "zone","created_by", "updated_by"]
