@@ -330,5 +330,5 @@ class GTASANDSHOREAPI(APIView):
 
 class UserProfilePicAPI(APIView):
     def get(self, request, muid):
-        user = User.objects.filter(muid=muid).values(image="profile_pic")
+        user = User.objects.filter(muid=muid).annotate(image=F("profile_pic")).values("image")
         return CustomResponse(response=user).get_success_response()
