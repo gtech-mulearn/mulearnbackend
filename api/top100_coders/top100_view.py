@@ -7,50 +7,52 @@ from utils.response import CustomResponse
 class Leaderboard(APIView):
     def get(self, request):
         query = """
-                SELECT 
-                u.id,
-                u.first_name, 
-                u.last_name, 
-                SUM(kal.karma) AS karma,
-                COALESCE(org.title, comm.title) AS org,
-                COALESCE(org.dis, d.name) AS district,
-                COALESCE(org.state, s.name) AS state,
-                MAX(kal.created_at) AS time_
-                FROM karma_activity_log AS kal
-                INNER JOIN user AS u ON kal.user_id = u.id
-                INNER JOIN task_list AS tl ON tl.id = kal.task_id
-                LEFT JOIN (
-                    SELECT 
-                        uol.user_id, 
-                        org.id, 
-                        org.title AS title, 
-                        d.name dis, 
-                        s.name state
-                    FROM user_organization_link AS uol
-                    INNER JOIN organization AS org ON org.id = uol.org_id AND org.org_type IN ('College', 'School', 'Company')
-                    LEFT JOIN district AS d ON d.id = org.district_id
-                    LEFT JOIN zone AS z ON z.id = d.zone_id
-                    LEFT JOIN state AS s ON s.id = z.state_id
-                    GROUP BY uol.user_id 
-                    ) AS org ON org.user_id = u.id
-                    LEFT JOIN (SELECT 
-                        uol.user_id, 
-                        org.id, 
-                        org.title AS title
-                    FROM user_organization_link AS uol
-                    INNER JOIN organization AS org ON org.id = uol.org_id AND org.org_type IN ('Community')
-                    GROUP BY uol.user_id) AS comm ON comm.user_id = u.id
-                    LEFT JOIN district AS d ON d.id = u.district_id
-                    LEFT JOIN zone AS z ON d.zone_id = z.id
-                    LEFT JOIN state AS s ON z.state_id = s.id
-                    WHERE 
-                        tl.event = 'TOP100' AND
-                        kal.appraiser_approved = TRUE 
-                        AND u.id IN (select user_id from karma_activity_log as kal
-                    INNER JOIN task_list AS tl ON tl.id = kal.task_id
-                    WHERE tl.hashtag = '#thc-realworld-problem-proposal' AND kal.appraiser_approved = TRUE)
-                    GROUP BY u.id
-                    ORDER BY karma DESC, time_;
+		SELECT 
+		u.first_name, 
+		u.last_name, 
+		u.profile_pic,
+		SUM(kal.karma) AS total_karma, 
+		org.title AS org, 
+		org.org_type AS org_type,
+		COALESCE(org.dis, d.name) AS dis,
+		COALESCE(org.state, s.name) AS state,
+		MAX(kal.created_at) AS time_
+		FROM karma_activity_log AS kal
+		INNER JOIN user AS u ON kal.user_id = u.id
+		INNER JOIN task_list AS tl ON tl.id = kal.task_id
+		LEFT JOIN (
+		SELECT 
+			uol.user_id, 
+			org.id, 
+			org.title AS title,
+			org.org_type AS org_type,
+			d.name dis, 
+			s.name state
+		FROM user_organization_link AS uol
+		INNER JOIN organization AS org ON org.id = uol.org_id
+		LEFT JOIN district AS d ON d.id = org.district_id
+		LEFT JOIN zone AS z ON z.id = d.zone_id
+		LEFT JOIN state AS s ON s.id = z.state_id
+		GROUP BY uol.user_id
+		ORDER BY 
+		  CASE WHEN org.org_type = 'College' THEN 1
+				WHEN  org.org_type = 'School' THEN 2
+				WHEN  org.org_type = 'Company' THEN 3
+		        ELSE 4
+			END
+		) AS org ON org.user_id = u.id
+		LEFT JOIN district AS d ON d.id = u.district_id
+		LEFT JOIN zone AS z ON d.zone_id = z.id
+		LEFT JOIN state AS s ON z.state_id = s.id
+		WHERE 
+		tl.event = 'TOP100' AND
+		kal.appraiser_approved = TRUE 
+		AND u.id IN (select user_id from karma_activity_log as kal
+		INNER JOIN task_list AS tl ON tl.id = kal.task_id
+		WHERE tl.hashtag = '#thc-realworld-problem-proposal' and kal.appraiser_approved = TRUE)
+		GROUP BY u.id
+		ORDER BY 
+		    total_karma DESC, time_;
 
         """
         with connection.cursor() as cursor:
