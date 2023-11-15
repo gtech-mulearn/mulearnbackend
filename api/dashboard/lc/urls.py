@@ -9,6 +9,7 @@ urlpatterns = [
     path('list-all/', dash_lc_view.TotalLearningCircleListApi.as_view()),
     path('create/', dash_lc_view.LearningCircleCreateApi.as_view()),
     path('list-members/<str:circle_id>/', dash_lc_view.LearningCircleListMembersApi.as_view()),
+    path('schedule-meet/<str:circle_id>/', dash_lc_view.ScheduleMeetAPI.as_view()),
     # path('invite/', dash_lc_view.LearningCircleInviteLeadAPI.as_view()),
     path('list-all/<str:circle_code>/', dash_lc_view.TotalLearningCircleListApi.as_view()),
     path('join/<str:circle_id>/', dash_lc_view.LearningCircleJoinApi.as_view()),

@@ -14,7 +14,7 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
-    LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleCreateEditDeleteSerializer, \
+    LearningCircleUpdateSerializer, LearningCircleJoinSerializer, ScheduleMeetingSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer
 
@@ -664,5 +664,27 @@ class LearningCircleInvitationStatus(APIView):
             return CustomResponse(
                 general_message='User rejected invitation'
             ).get_failure_response()
+
+
+class ScheduleMeetAPI(APIView):
+    def put(self, request, circle_id):
+        learning_circle = LearningCircle.objects.filter(
+            id=circle_id
+        ).first()
+
+        serializer = ScheduleMeetingSerializer(
+            learning_circle,
+            data=request.data
+        )
+        if serializer.is_valid():
+            data = serializer.save()
+
+            return CustomResponse(
+                general_message=f"meet scheduled on {data.meet_time}"
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
 
 
