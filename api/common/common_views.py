@@ -17,29 +17,103 @@ from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer
 
 
+# class LcDashboardAPI(APIView):
+#     def get(self, request):
+#         date = request.query_params.get("date")
+#         if date:
+#             learning_circle_count = LearningCircle.objects.filter(created_at__gt=date).count()
+#             total_no_enrollment = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).count()
+#             user_circle_link_count = UserCircleLink.objects.filter(created_at__gt=date, circle=OuterRef('pk')).values(
+#                 'circle_id').annotate(
+#                 total_users=Count('id')).values('total_users')
+#
+#             query = InterestGroup.objects.annotate(
+#                 total_circles=Count("learning_circle_ig", distinct=True),
+#                 total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
+#             ).values("name", "total_circles", "total_users")
+#
+#             circle_count_by_ig = (
+#                 query.values("name")
+#                 .order_by("name")
+#                 .annotate(
+#                     total_circles=Count("learning_circle_ig", distinct=True),
+#                     total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
+#                 )
+#             )
+#             unique_user_count = (
+#                 UserCircleLink.objects.filter(created_at__gt=date, accepted=True)
+#                 .values("user")
+#                 .distinct()
+#                 .count()
+#             )
+#         else:
+#             learning_circle_count = LearningCircle.objects.all().count()
+#             total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
+#
+#             user_circle_link_count = UserCircleLink.objects.filter(circle=OuterRef('pk')).values('circle_id').annotate(
+#                 total_users=Count('id')).values('total_users')
+#
+#             query = InterestGroup.objects.annotate(
+#                 total_circles=Count("learning_circle_ig", distinct=True),
+#                 total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
+#             ).values("name", "total_circles", "total_users")
+#
+#             circle_count_by_ig = (
+#                 query.values("name")
+#                 .order_by("name")
+#                 .annotate(
+#                     total_circles=Count("learning_circle_ig", distinct=True),
+#                     total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
+#                 )
+#             )
+#
+#             unique_user_count = (
+#                 UserCircleLink.objects.filter(accepted=True)
+#                 .values("user")
+#                 .distinct()
+#                 .count()
+#             )
+#
+#         return CustomResponse(
+#             response={
+#                 "lc_count": learning_circle_count,
+#                 "total_enrollment": total_no_enrollment,
+#                 "circle_count_by_ig": circle_count_by_ig,
+#                 "unique_users": unique_user_count,
+#             }
+#         ).get_success_response()
+#
 class LcDashboardAPI(APIView):
     def get(self, request):
         date = request.query_params.get("date")
         if date:
             learning_circle_count = LearningCircle.objects.filter(created_at__gt=date).count()
             total_no_enrollment = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).count()
-            user_circle_link_count = UserCircleLink.objects.filter(created_at__gt=date, circle=OuterRef('pk')).values(
-                'circle_id').annotate(
-                total_users=Count('id')).values('total_users')
+
+            user_circle_link_count = UserCircleLink.objects.filter(
+                circle=OuterRef('pk'),
+                created_at__gt=date
+            ).values('circle_id').annotate(
+                total_users=Count('id')
+            ).values('total_users')
 
             query = InterestGroup.objects.annotate(
                 total_circles=Count("learning_circle_ig", distinct=True),
-                total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
+                total_users=Coalesce(Subquery(user_circle_link_count, output_field=models.IntegerField()), 0),
+            ).filter(
+                learning_circle_ig__created_at__gt=date
             ).values("name", "total_circles", "total_users")
 
             circle_count_by_ig = (
-                query.values("name")
+                query.filter(learning_circle_ig__created_at__gt=date)
+                .values("name")
                 .order_by("name")
                 .annotate(
                     total_circles=Count("learning_circle_ig", distinct=True),
-                    total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
+                    total_users=Coalesce(Count("learning_circle_ig__user_circle_link_circle", distinct=True), 0),
                 )
             )
+
             unique_user_count = (
                 UserCircleLink.objects.filter(created_at__gt=date, accepted=True)
                 .values("user")
