@@ -12,6 +12,9 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.files.storage import FileSystemStorage
+from decouple import config as decouple_config
+
+BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
 
 class UserInfoAPI(APIView):
@@ -236,9 +239,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(muid=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(muid=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"
@@ -371,7 +374,7 @@ class UserProfilePictureView(APIView):
             fs.delete(filename)
         filename = fs.save(filename, pic)
         file_url = fs.url(filename)
-        uploaded_file_url = f"{request.build_absolute_uri('/')}{file_url[1:]}"
+        uploaded_file_url = f"{BE_DOMAIN_NAME}{file_url}"
 
         return CustomResponse(
             response={"user_id": user.id, "profile_pic": uploaded_file_url}

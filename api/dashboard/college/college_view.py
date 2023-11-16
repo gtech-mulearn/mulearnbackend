@@ -13,18 +13,22 @@ from django.db.models import Prefetch
 
 class CollegeApi(APIView):
     def get(self, request, college_code=None):
-        colleges = (
-            College.objects.select_related("created_by", "updated_by", "org")
-            .prefetch_related(
-                Prefetch(
-                    "org__org_discord_link_org_id",
-                    queryset=OrgDiscordLink.objects.all(),
-                )
-            )
-            .all()
-        )
         if college_code:
-            colleges = colleges.filter(org__code=college_code)
+            colleges = College.objects.filter(id=college_code)
+        else:
+            colleges = College.objects.all()
+
+        # College.objects.select_related("created_by", "updated_by", "org")
+        # .prefetch_related(
+        #     Prefetch(
+        #         "org__org_discord_link_org_id",
+        #         queryset=OrgDiscordLink.objects.all(),
+        #     )
+        # )
+        # .all()
+
+        # if college_code:
+        #     colleges = colleges.filter(org__code=college_code)
         serializer = CollegeListSerializer(colleges, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
