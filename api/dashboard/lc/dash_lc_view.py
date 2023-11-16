@@ -214,8 +214,7 @@ class LearningCircleJoinApi(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-            lead = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first().user_id
-
+            lead = User.objects.filter(id=UserCircleLink.objects.filter(circle_id=circle_id, lead=True).user).first()
             NotificationUtils.insert_notification(
                 user=lead,
                 title="Member Request",
