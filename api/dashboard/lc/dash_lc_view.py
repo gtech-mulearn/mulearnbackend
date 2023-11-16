@@ -6,7 +6,6 @@ from django.db.models import Q, F
 from django.shortcuts import redirect
 from rest_framework.views import APIView
 
-
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
 from db.user import User
@@ -32,6 +31,7 @@ class LearningCircleListApi(APIView):
         CustomResponse: A custom response containing a list of learning circles
         associated with the user.
     """
+
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -177,7 +177,6 @@ class TotalLearningCircleListApi(APIView):
                     Q(circle_code=circle_code) |
                     Q(name__icontains=circle_code)
             ).exists():
-
                 return CustomResponse(
                     general_message='invalid circle code or Circle Name'
                 ).get_failure_response()
@@ -205,14 +204,7 @@ class LearningCircleJoinApi(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
-
         full_name = f'{user.fullname}'
-
-        user_learning_circle = UserCircleLink.objects.filter(
-            circle_id=circle_id,
-            lead=True
-        ).first()
-
         serializer = LearningCircleJoinSerializer(
             data=request.data,
             context={
@@ -222,12 +214,10 @@ class LearningCircleJoinApi(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-            user = User.objects.filter(
-                id=user_learning_circle.user.id
-            ).first()
+            lead = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first().user_id
 
             NotificationUtils.insert_notification(
-                user=user,
+                user=lead,
                 title="Member Request",
                 description=f"{full_name} has requested to join your learning circle",
                 button="LC",
@@ -251,7 +241,6 @@ class LearningCircleHomeApi(APIView):
         if not LearningCircle.objects.filter(
                 id=circle_id
         ).exists():
-
             return CustomResponse(
                 general_message='Learning Circle not found'
             ).get_failure_response()
@@ -300,7 +289,6 @@ class LearningCircleHomeApi(APIView):
         ).exists() or not LearningCircle.objects.filter(
             id=circle_id
         ).exists():
-
             return CustomResponse(
                 general_message='Learning Circle Not Available'
             ).get_failure_response()
@@ -368,7 +356,7 @@ class LearningCircleHomeApi(APIView):
         usr_circle_link = UserCircleLink.objects.filter(
             circle__id=circle_id,
             user__id=user_id
-            ).first()
+        ).first()
 
         if not usr_circle_link:
             return CustomResponse(general_message='User not part of circle').get_failure_response()
@@ -377,7 +365,7 @@ class LearningCircleHomeApi(APIView):
             if (
                     next_lead := UserCircleLink.objects.filter(
                         circle__id=circle_id, accepted=1
-                        )
+                    )
                             .exclude(user__id=user_id)
                             .order_by('accepted_at')
                             .first()
@@ -392,7 +380,7 @@ class LearningCircleHomeApi(APIView):
         if not UserCircleLink.objects.filter(circle__id=circle_id).exists():
             if learning_circle := LearningCircle.objects.filter(
                     id=circle_id
-                    ).first():
+            ).first():
                 learning_circle.delete()
                 return CustomResponse(general_message='Learning Circle Deleted').get_success_response()
 
@@ -496,7 +484,6 @@ class LearningCircleLeadTransfer(APIView):
         if not LearningCircle.objects.filter(
                 id=circle_id
         ).exists():
-
             return CustomResponse(
                 general_message='Learning Circle not found'
             ).get_failure_response()
@@ -545,7 +532,7 @@ class LearningCircleInviteLeadAPI(APIView):
                 from_mail,
                 [user.email],
                 fail_silently=False,
-                )
+            )
             return CustomResponse(general_message='User Invited').get_success_response()
 
 
@@ -596,12 +583,12 @@ class LearningCircleInviteMemberAPI(APIView):
             "circle_id": circle_id,
             "muid": muid,
             "email": receiver_email,
-            }
+        }
         status = send_template_mail(
             context=context,
             subject="MuLearn - Invitation to learning circle",
             address=html_address,
-            )
+        )
 
         if status == 1:
             UserCircleLink.objects.create(
@@ -611,7 +598,7 @@ class LearningCircleInviteMemberAPI(APIView):
                 is_invited=True,
                 accepted=False,
                 created_at=DateTimeUtils.get_current_utc_time(),
-                )
+            )
 
             return CustomResponse(
                 general_message='User Invited'
@@ -664,5 +651,3 @@ class LearningCircleInvitationStatus(APIView):
             return CustomResponse(
                 general_message='User rejected invitation'
             ).get_failure_response()
-
-
