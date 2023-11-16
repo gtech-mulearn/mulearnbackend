@@ -10,5 +10,7 @@ urlpatterns = [
     path('lc-report/csv/', common_views.LcReportDownloadAPI.as_view()),
     path('global-count/', common_views.GlobalCountAPI.as_view()),
     path('gta-sandshore/', common_views.GTASANDSHOREAPI.as_view()),
-    path('profile-pic/<str:muid>/', common_views.UserProfilePicAPI.as_view())
+    path('profile-pic/<str:muid>/', common_views.UserProfilePicAPI.as_view()),
+    path('list-ig/', common_views.ListIGAPI.as_view()),
+    path('list-ig-top100/', common_views.ListTopIgUsersAPI.as_view()),
 ]
