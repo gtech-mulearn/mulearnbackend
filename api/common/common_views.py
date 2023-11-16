@@ -349,5 +349,5 @@ class ListTopIgUsersAPI(APIView):
             task__ig__name=ig_name, appraiser_approved=True
         ).values(muid=F('user__muid'), first_name=F('user__first_name'), last_name=F('user__last_name')).annotate(
             ig_karma=Sum('karma')
-        ).order_by('-total_karma')[:100]
+        ).order_by('-ig_karma')[:100]
         return CustomResponse(response=user_karma_by_ig).get_success_response()
