@@ -13,7 +13,7 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
-    LearningCircleUpdateSerializer, LearningCircleJoinSerializer, LearningCircleCreateEditDeleteSerializer, \
+    LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer
 
