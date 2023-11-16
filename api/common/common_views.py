@@ -1,5 +1,6 @@
 import json
 import requests
+import requests
 from django.db import models
 from django.db.models import Count, Subquery, OuterRef
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
@@ -9,7 +10,7 @@ from rest_framework.views import APIView
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog
 from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
@@ -332,3 +333,21 @@ class UserProfilePicAPI(APIView):
     def get(self, request, muid):
         user = User.objects.filter(muid=muid).annotate(image=F("profile_pic")).values("image")
         return CustomResponse(response=user).get_success_response()
+
+
+class ListIGAPI(APIView):
+
+    def get(self, request):
+        return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
+
+
+class ListTopIgUsersAPI(APIView):
+
+    def get(self, request):
+        ig_name = request.query_params.get("ig_name")
+        user_karma_by_ig = KarmaActivityLog.objects.filter(
+            task__ig__name=ig_name, appraiser_approved=True
+        ).values(muid=F('user__muid'), first_name=F('user__first_name'), last_name=F('user__last_name')).annotate(
+            total_karma=Sum('karma')
+        ).order_by('-total_karma')[:100]
+        return CustomResponse(response=user_karma_by_ig).get_success_response()
