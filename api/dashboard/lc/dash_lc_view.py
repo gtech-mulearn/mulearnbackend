@@ -203,6 +203,7 @@ class TotalLearningCircleListApi(APIView):
 class LearningCircleJoinApi(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+
         user = User.objects.filter(id=user_id).first()
         full_name = f'{user.fullname}'
         serializer = LearningCircleJoinSerializer(
@@ -214,9 +215,9 @@ class LearningCircleJoinApi(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-            lead = User.objects.filter(id=UserCircleLink.objects.filter(circle_id=circle_id, lead=True).user).first()
+            lead = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first()
             NotificationUtils.insert_notification(
-                user=lead,
+                user=lead.user,
                 title="Member Request",
                 description=f"{full_name} has requested to join your learning circle",
                 button="LC",
