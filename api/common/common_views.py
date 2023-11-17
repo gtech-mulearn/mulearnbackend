@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
-from db.task import InterestGroup, KarmaActivityLog
+from db.task import InterestGroup, KarmaActivityLog, UserIgLink
 from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
@@ -344,10 +344,42 @@ class ListIGAPI(APIView):
 class ListTopIgUsersAPI(APIView):
 
     def get(self, request):
-        ig_name = request.query_params.get("ig_name")
+        ig_name = request.query_params.getlist("ig_name", [])
+
         user_karma_by_ig = KarmaActivityLog.objects.filter(
-            task__ig__name=ig_name, appraiser_approved=True
-        ).values(muid=F('user__muid'), first_name=F('user__first_name'), last_name=F('user__last_name')).annotate(
+            task__ig__name__in=ig_name, appraiser_approved=True
+        ).values(
+            userid=F('user__id'),
+            muid=F('user__muid'),
+            first_name=F('user__first_name'),
+            last_name=F('user__last_name'),
+        ).annotate(
             ig_karma=Sum('karma')
         ).order_by('-ig_karma')[:100]
+
+        # Extract 'userid' values into a new list
+        userid_list = [entry['userid'] for entry in user_karma_by_ig]
+
+        # Fetch user muid and interest group as a list
+        results = UserIgLink.objects.filter(user__id__in=userid_list).values_list('user__muid', 'ig__name', named=True)
+
+        # Process the results to create the desired structure
+        user_ig_dict = {}
+        for result in results:
+            muid = result.user__muid
+            ig = result.ig__name
+
+            if muid not in user_ig_dict:
+                user_ig_dict[muid] = {'muid': muid, 'igs': [ig]}
+            else:
+                user_ig_dict[muid]['igs'].append(ig)
+
+        # Iterate through user_karma_by_ig and add 'igs' information
+        for user_karma in user_karma_by_ig:
+            muid = user_karma['muid']
+            if muid in user_ig_dict:
+                user_karma['igs'] = user_ig_dict[muid]['igs']
+            else:
+                user_karma['igs'] = []
+
         return CustomResponse(response=user_karma_by_ig).get_success_response()
