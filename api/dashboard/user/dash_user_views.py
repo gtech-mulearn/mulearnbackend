@@ -16,6 +16,7 @@ from decouple import config as decouple_config
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
+
 class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -238,9 +239,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-            user := User.objects.filter(
-                Q(muid=email_muid) | Q(email=email_muid)
-            ).first()
+                user := User.objects.filter(
+                    Q(muid=email_muid) | Q(email=email_muid)
+                ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

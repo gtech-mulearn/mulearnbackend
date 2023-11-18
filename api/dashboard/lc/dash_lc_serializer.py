@@ -486,7 +486,7 @@ class LearningCircleNoteSerializer(serializers.ModelSerializer):
         return instance
 
 
-class LearningCircleCreateEditDeleteSerializer(serializers.ModelSerializer):
+class ScheduleMeetingSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
         fields = [
