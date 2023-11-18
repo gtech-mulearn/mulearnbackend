@@ -115,14 +115,14 @@ class Department(models.Model):
 
 
 class College(models.Model):
-    id             = models.CharField(primary_key=True, max_length=36)
+    id             = models.CharField(primary_key=True, max_length=36,default=uuid.uuid4())
     level          = models.IntegerField()
     org            = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='college_org', unique=True)
     updated_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='college_updated_by')
     updated_at     = models.DateTimeField(auto_now=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='college_created_by')
     created_at     = models.DateTimeField(auto_now_add=True)
-    lead = models.ForeignKey('User', on_delete=models.CASCADE, related_name='college_lead_name', blank=True, null=True)
+    lead = models.ForeignKey(User, on_delete=models.CASCADE, related_name='college_lead_name', blank=True, null=True)
     class Meta:
         managed = False
         db_table = 'college'
