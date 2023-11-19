@@ -490,7 +490,7 @@ class ResetPasswordAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        self.save_password(request, user)
+        return self.save_password(request, user)
 
     def save_password(self, request, user_obj):
         new_password = request.data.get("password")
@@ -498,6 +498,4 @@ class ResetPasswordAPI(APIView):
 
         user_obj.password = hashed_pwd
         user_obj.save()
-        return CustomResponse(
-            general_message="New Password Saved Successfully"
-        ).get_success_response()
+        return CustomResponse(general_message="New Password Saved Successfully").get_success_response()
