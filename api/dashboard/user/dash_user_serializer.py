@@ -1,5 +1,7 @@
 import uuid
 
+from decouple import config as decouple_config
+from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from rest_framework import serializers
 
@@ -9,10 +11,9 @@ from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-from django.core.files.storage import FileSystemStorage
-from decouple import config as decouple_config
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
+
 
 class UserDashboardSerializer(serializers.ModelSerializer):
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
@@ -55,7 +56,7 @@ class UserSerializer(serializers.ModelSerializer):
             "profile_pic",
         ]
 
-    def get_profile_pic(self,obj):
+    def get_profile_pic(self, obj):
         fs = FileSystemStorage()
         path = f'user/profile/{obj.id}.png'
         if fs.exists(path):
@@ -74,7 +75,7 @@ class UserSerializer(serializers.ModelSerializer):
 class CollegeSerializer(serializers.ModelSerializer):
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.pk", allow_null=True)
-    country = serializers.CharField(source="country.pk")
+    country = serializers.CharField(source="country.pk", allow_null=True)
     state = serializers.CharField(source="state.pk")
     district = serializers.CharField(source="district.pk")
 
