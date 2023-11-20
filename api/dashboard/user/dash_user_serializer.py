@@ -75,9 +75,9 @@ class UserSerializer(serializers.ModelSerializer):
 class CollegeSerializer(serializers.ModelSerializer):
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.pk", allow_null=True)
-    country = serializers.CharField(source="country.pk", allow_null=True)
-    state = serializers.CharField(source="state.pk")
-    district = serializers.CharField(source="district.pk")
+    country = serializers.CharField(source="org.district.zone.state.country.pk", allow_null=True)
+    state = serializers.CharField(source="org.district.zone.state.pk", allow_null=True)
+    district = serializers.CharField(source="org.district.pk", allow_null=True)
 
     class Meta:
         model = UserOrganizationLink
