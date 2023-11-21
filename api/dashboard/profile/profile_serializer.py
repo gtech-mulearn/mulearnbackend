@@ -89,7 +89,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return profile_pic
     
     def get_roles(self, obj):
-        return list({link.role.title for link in obj.user_role_link_user.all()})
+        return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
 
     def get_college_id(self, obj):
         org_type = (
@@ -120,17 +120,19 @@ class UserProfileSerializer(serializers.ModelSerializer):
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
             ).count()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
             ).count()
         else:
             ranks = (
-                Wallet.objects.filter(karma__gte=user_karma)
+                Wallet.objects.filter(karma__gte=user_karma, user__user_role_link_user__verified=True, )
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
@@ -224,17 +226,19 @@ class UserRankSerializer(ModelSerializer):
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
             ).count()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
             ).count()
         else:
             ranks = (
-                Wallet.objects.filter(karma__gte=user_karma)
+                Wallet.objects.filter(karma__gte=user_karma,user__user_role_link_user__verified=True)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
