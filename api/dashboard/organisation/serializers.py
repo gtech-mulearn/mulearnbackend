@@ -399,3 +399,33 @@ class OrganizationKarmaLogGetPostPatchDeleteSerializer(serializers.ModelSerializ
         validated_data["created_by_id"] = user_id
 
         return OrgKarmaLog.objects.create(**validated_data)
+
+class OrganizationImportSerializer(serializers.ModelSerializer):
+    created_by_id = serializers.CharField(required=True, allow_null=False)
+    updated_by_id = serializers.CharField(required=True, allow_null=False)
+    affiliation_id = serializers.CharField(required=False, allow_null=True)
+    district_id = serializers.CharField(required=False, allow_null=True)
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "org_type",
+            "affiliation_id",
+            "district_id",
+            "created_by_id",
+            "updated_by_id",
+        ]
+
+    # def to_representation(self, instance):
+    #     representation = super().to_representation(instance)
+
+    #     representation['channel_id'] = instance.channel.name if instance.channel else None
+    #     representation['type_id'] = instance.type.title if instance.type else None
+    #     representation['org_id'] = instance.org.code if instance.org else None
+    #     representation['level_id'] = instance.level.name if instance.level else None
+    #     representation['ig_id'] = instance.ig.name if instance.ig else None
+
+        # return representation
