@@ -1,11 +1,18 @@
-from django.db.models import Prefetch
-from rest_framework.views import APIView
+from io import BytesIO
 
+import decouple
+import qrcode
+import requests
+from PIL import Image
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level
 from db.user import Role
 from db.user import User, UserSettings, UserRoleLink, Socials
-from utils.exception import CustomException
+from django.contrib.auth.hashers import make_password
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
+from django.db.models import Prefetch
+from rest_framework.views import APIView
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
@@ -91,7 +98,6 @@ class UserIgEditView(APIView):
         )
 
         if not serializer.is_valid():
-
             return CustomResponse(
                 response=serializer.errors
             ).get_failure_response()
@@ -139,8 +145,7 @@ class UserProfileAPI(APIView):
 
             serializer = profile_serializer.UserProfileSerializer(
                 user,
-                many=False,
-                context={'request':request}
+                many=False
             )
 
             return CustomResponse(
@@ -162,7 +167,6 @@ class UserLogAPI(APIView):
             ).first()
 
             if user is None:
-
                 return CustomResponse(
                     general_message="Invalid muid"
                 ).get_failure_response()
@@ -172,7 +176,6 @@ class UserLogAPI(APIView):
             ).first()
 
             if not user_settings.is_public:
-
                 return CustomResponse(
                     general_message="Private Profile"
                 ).get_failure_response()
@@ -209,23 +212,17 @@ class ShareUserProfileAPI(APIView):
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-
-        user_settings = UserSettings.objects.filter(
-            user_id=user_id
-        ).first()
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
 
         if user_settings is None:
-
             return CustomResponse(
-                general_message="No data available "
+                general_message="No data available"
             ).get_failure_response()
 
         serializer = profile_serializer.ShareUserProfileUpdateSerializer(
             user_settings,
             data=request.data,
-            context={
-                "request": request
-            }
+            context={"request": request}
         )
 
         if serializer.is_valid():
@@ -244,6 +241,79 @@ class ShareUserProfileAPI(APIView):
         return CustomResponse(
             message=serializer.errors
         ).get_failure_response()
+
+    # function for generating profile qr code
+
+    def get(self, request, uuid=None):
+        base_url = decouple.config("FR_DOMAIN_NAME")
+        fs = FileSystemStorage()
+        if uuid is not None:
+            user = User.objects.filter(id=uuid).first()
+
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+            else:
+                user_uuid = JWTUtils.fetch_user_id(request)
+                data = f"{base_url}/profile/{user_uuid}"
+
+                qr = qrcode.QRCode(
+                    version=1,
+                    error_correction=qrcode.constants.ERROR_CORRECT_H,
+                    box_size=10,
+                    border=4,
+                )
+                qr.add_data(data)
+                qr.make(fit=True)
+
+                img = qr.make_image(fill_color="black", back_color="white")
+
+                logo_url = f"{base_url}/favicon.ico/"  # Replace with your logo URL
+                logo_response = requests.get(logo_url)
+
+                if logo_response.status_code == 200:
+                    logo_image = Image.open(BytesIO(logo_response.content))
+                else:
+                    return CustomResponse(
+                        general_message="Failed to download the logo from the URL"
+                    ).get_failure_response()
+
+                logo_width, logo_height = logo_image.size
+                basewidth = 100
+                wpercent = (basewidth / float(logo_width))
+                hsize = int((float(logo_height) * float(wpercent)))
+                resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
+
+                QRcode = qrcode.QRCode(
+                    error_correction=qrcode.constants.ERROR_CORRECT_H
+                )
+
+                QRcode.add_data(data)
+                QRcolor = 'black'
+                QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
+
+                pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
+                # image = Image.open(BytesIO("image_response.content"))
+                QRimg.paste(resized_logo, pos)
+                image_io = BytesIO()
+                QRimg.save(image_io, format='PNG')
+                image_io.seek(0)
+                image_data: bytes = image_io.getvalue()
+                file_path = f'user/qr/{user_uuid}.png'
+                fs.exists(file_path) and fs.delete(file_path)
+                file = fs.save(file_path, ContentFile(image_io.read()))
+
+                return CustomResponse(
+                    general_message="QR code image with logo saved locally"
+                ).get_success_response()
 
 
 class UserLevelsAPI(APIView):
@@ -318,7 +388,6 @@ class GetSocialsAPI(APIView):
                 muid=muid
             ).first()
             if user is None:
-
                 return CustomResponse(
                     general_message="Invalid muid"
                 ).get_failure_response()
@@ -328,7 +397,6 @@ class GetSocialsAPI(APIView):
             ).first()
 
             if not user_settings.is_public:
-
                 return CustomResponse(
                     general_message="Private Profile"
                 ).get_failure_response()
@@ -378,3 +446,56 @@ class SocialsAPI(APIView):
         return CustomResponse(
             response=serializer.errors
         ).get_failure_response()
+
+
+class QrcodeRetrieveAPI(APIView):
+    def get(self, request, uuid):
+        try:
+            user = User.objects.prefetch_related().get(id=uuid or JWTUtils.fetch_user_id(request))
+
+            user_settings = UserSettings.objects.filter(
+                user_id=user
+            ).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+
+            serializer = profile_serializer.UserShareQrcode(
+                user,
+                many=False,
+                context={'request': request}
+            )
+
+            return CustomResponse(
+                response=serializer.data
+            ).get_success_response()
+
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given UUID seems to be invalid"
+            ).get_failure_response()
+
+
+class ResetPasswordAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+        user_muid = JWTUtils.fetch_muid(request)
+        user = User.objects.filter(muid=user_muid).first()
+
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        return self.save_password(request, user)
+
+    def save_password(self, request, user_obj):
+        new_password = request.data.get("password")
+        hashed_pwd = make_password(new_password)
+
+        user_obj.password = hashed_pwd
+        user_obj.save()
+        return CustomResponse(general_message="New Password Saved Successfully").get_success_response()

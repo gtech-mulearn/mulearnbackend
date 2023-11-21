@@ -1,5 +1,7 @@
 import uuid
 
+from decouple import config as decouple_config
+from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from rest_framework import serializers
 
@@ -9,6 +11,8 @@ from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
+
+BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -34,6 +38,7 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
+    profile_pic = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -51,6 +56,15 @@ class UserSerializer(serializers.ModelSerializer):
             "profile_pic",
         ]
 
+    def get_profile_pic(self, obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
+
     def get_roles(self, obj):
         return [
             user_role_link.role.title
@@ -61,9 +75,9 @@ class UserSerializer(serializers.ModelSerializer):
 class CollegeSerializer(serializers.ModelSerializer):
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.pk", allow_null=True)
-    country = serializers.CharField(source="country.pk")
-    state = serializers.CharField(source="state.pk")
-    district = serializers.CharField(source="district.pk")
+    country = serializers.CharField(source="org.district.zone.state.country.pk", allow_null=True)
+    state = serializers.CharField(source="org.district.zone.state.pk", allow_null=True)
+    district = serializers.CharField(source="org.district.pk", allow_null=True)
 
     class Meta:
         model = UserOrganizationLink
