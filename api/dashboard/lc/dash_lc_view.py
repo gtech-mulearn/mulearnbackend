@@ -6,16 +6,18 @@ from django.db.models import Q, F
 from django.shortcuts import redirect
 from rest_framework.views import APIView
 
+
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
 from db.user import User
+from db.task import TaskList
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer
+    LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -177,6 +179,7 @@ class TotalLearningCircleListApi(APIView):
                     Q(circle_code=circle_code) |
                     Q(name__icontains=circle_code)
             ).exists():
+
                 return CustomResponse(
                     general_message='invalid circle code or Circle Name'
                 ).get_failure_response()
@@ -205,6 +208,7 @@ class LearningCircleJoinApi(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user = User.objects.filter(id=user_id).first()
+
         full_name = f'{user.fullname}'
         serializer = LearningCircleJoinSerializer(
             data=request.data,
@@ -241,6 +245,7 @@ class LearningCircleHomeApi(APIView):
         if not LearningCircle.objects.filter(
                 id=circle_id
         ).exists():
+
             return CustomResponse(
                 general_message='Learning Circle not found'
             ).get_failure_response()
@@ -289,6 +294,7 @@ class LearningCircleHomeApi(APIView):
         ).exists() or not LearningCircle.objects.filter(
             id=circle_id
         ).exists():
+
             return CustomResponse(
                 general_message='Learning Circle Not Available'
             ).get_failure_response()
@@ -651,3 +657,44 @@ class LearningCircleInvitationStatus(APIView):
             return CustomResponse(
                 general_message='User rejected invitation'
             ).get_failure_response()
+
+
+class ScheduleMeetAPI(APIView):
+    def put(self, request, circle_id):
+        learning_circle = LearningCircle.objects.filter(
+            id=circle_id
+        ).first()
+
+        serializer = ScheduleMeetingSerializer(
+            learning_circle,
+            data=request.data
+        )
+        if serializer.is_valid():
+            data = serializer.save()
+
+            return CustomResponse(
+                general_message=f"meet scheduled on {data.meet_time}"
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
+
+
+class IgTaskDetailsAPI(APIView):
+    def get(self, request, ig_id):
+        task_list = TaskList.objects.filter(
+            ig=ig_id
+        ).first()
+
+        serializer = IgTaskDetailsSerializer(
+            task_list,
+            many=False,
+            context={
+                'ig': ig_id
+            }
+        ).data
+
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()

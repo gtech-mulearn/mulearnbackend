@@ -1,10 +1,10 @@
 import uuid
 
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
-from db.task import TaskList
+from db.task import TaskList, UserIgLink
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 from utils.types import OrganizationType
@@ -548,3 +548,28 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         ])
 
         return attendees
+
+
+class IgTaskDetailsSerializer(serializers.ModelSerializer):
+    task = serializers.CharField(source='title')
+    is_completed = serializers.SerializerMethodField()
+
+    class Meta:
+        model = TaskList
+        fields = [
+            "task",
+            "is_completed"
+        ]
+
+    def get_is_completed(self, obj):
+        ig_id = self.context.get('ig_id')
+
+        user_ig_links = UserIgLink.objects.filter(ig=ig_id).select_related('user')
+
+        for user_ig_link in user_ig_links:
+            if not obj.karma_activity_log_task.filter(
+                    user=user_ig_link.user,
+                    peer_approved=True
+            ).exists():
+                return False
+        return True

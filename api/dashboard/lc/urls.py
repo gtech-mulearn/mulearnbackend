@@ -23,4 +23,5 @@ urlpatterns = [
     path('member/invite/<str:circle_id>/<str:muid>/', dash_lc_view.LearningCircleInviteMemberAPI.as_view()),
     path('member/invite/status/<str:circle_id>/<str:muid>/<str:status>/', dash_lc_view.LearningCircleInvitationStatus.as_view()),
     path('lead/<str:circle_id>/<str:lead_id>/', dash_lc_view.LearningCircleLeadTransfer.as_view()),
+    path('ig-task/<str:ig_id>/', dash_lc_view.IgTaskDetailsAPI.as_view()),
     ]
