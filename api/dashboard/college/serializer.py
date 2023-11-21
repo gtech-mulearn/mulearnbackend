@@ -4,6 +4,7 @@ from rest_framework import serializers
 from db.organization import College, Organization
 from utils.types import RoleType, OrganizationType
 from django.db.models import Sum
+from db.learning_circle import LearningCircle
 
 
 class CollegeListSerializer(serializers.ModelSerializer):
@@ -14,6 +15,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
     lead_name = serializers.CharField(source="lead.fullname", default=None)
     lead_contact = serializers.CharField(source="lead.mobile", default=None)
     total_karma = serializers.SerializerMethodField()
+    no_of_lc = serializers.SerializerMethodField()
 
     class Meta:
         model = College
@@ -29,7 +31,12 @@ class CollegeListSerializer(serializers.ModelSerializer):
             "lead_name",
             "lead_contact",
             "total_karma",
+            "no_of_lc",
         ]
+
+    def get_no_of_lc(self, obj):
+        learning_circle_count = LearningCircle.objects.filter(org=obj.org).count()
+        return learning_circle_count
 
     def get_number_of_students(self, obj):
         return obj.org.user_organization_link_org.filter(
@@ -38,12 +45,12 @@ class CollegeListSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         return (
-            obj.org.user_organization_link_org.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-                user__wallet_user__isnull=False,
-            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-            or 0
+                obj.org.user_organization_link_org.filter(
+                    org__org_type=OrganizationType.COLLEGE.value,
+                    verified=True,
+                    user__wallet_user__isnull=False,
+                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+                or 0
         )
 
 
