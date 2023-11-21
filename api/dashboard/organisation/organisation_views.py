@@ -523,61 +523,12 @@ class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
             serializer.errors
         ).get_failure_response()
 
-# class OrganizationBaseTemplateAPI(APIView):
-#     authentication_classes = [CustomizePermission]
-    
-#     def get(self, request):
-#         wb = load_workbook('./api/dashboard/task/assets/task_base_template.xlsx')
-#         ws = wb['Data Definitions']
-#         levels = Level.objects.all().values_list('name', flat=True)
-#         channels = Channel.objects.all().values_list('name', flat=True)
-#         task_types = TaskType.objects.all().values_list('title', flat=True)
-#         igs = InterestGroup.objects.all().values_list('name', flat=True)
-#         orgs = Organization.objects.all().values_list('code', flat=True)
-#         events = Events.get_all_values()
-
-#         data = {
-#             'level': levels,
-#             'channel': channels,
-#             'type': task_types,
-#             'ig': igs,
-#             'org': orgs,
-#             'event': events
-#         }
-#         # Write data column-wise
-#         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
-#             for row, value in enumerate(col_values, start=2):
-#                 ws.cell(row=row, column=col_num, value=value)
-#         # Save the file
-#         with NamedTemporaryFile() as tmp:
-#             tmp.close() # with statement opened tmp, close it so wb.save can open it
-#             wb.save(tmp.name)
-#             with open(tmp.name, 'rb') as f:
-#                 f.seek(0)
-#                 new_file_object = f.read()
-#         return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')
-    
-from openpyxl import Workbook, load_workbook
-
 class OrganisationBaseTemplateAPI(APIView):
-    # authentication_classes = [CustomizePermission]
-
+    authentication_classes = [CustomizePermission]
+    
     def get(self, request):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Sheet1"
-
-        ws.append([
-            "title",
-            "code",
-            "org_type",
-            "affiliation",
-            "district",
-        ])
-
-        ws = wb.create_sheet('Data Defenitions')
-        ws.append(['org_type', 'affiliation', 'district'])
-
+        wb = load_workbook('./api/dashboard/organisation/assets/organisation_base_template.xlsx')
+        ws = wb['Data Definitions']
         affiliations = OrgAffiliation.objects.all().values_list('title', flat=True)
         districts = District.objects.all().values_list('name', flat=True)
         org_types = OrganizationType.get_all_values()
@@ -591,11 +542,11 @@ class OrganisationBaseTemplateAPI(APIView):
         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
             for row, value in enumerate(col_values, start=2):
                 ws.cell(row=row, column=col_num, value=value)
-
-        wb.save('base_template.xlsx')
-
-        return CustomResponse(
-            response={
-                "message": "Base template created successfully"
-                }
-        ).get_success_response()
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='organisation_base_template.xlsx')
