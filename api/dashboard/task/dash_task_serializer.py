@@ -79,6 +79,8 @@ class TaskImportSerializer(serializers.ModelSerializer):
     org_id = serializers.CharField(required=False, allow_null=True)
     level_id = serializers.CharField(required=False, allow_null=True)
     ig_id = serializers.CharField(required=False, allow_null=True)
+    usage_count = serializers.IntegerField(allow_null=True)
+    variable_karma = serializers.BooleanField(allow_null=True)
 
     class Meta:
         model = TaskList
@@ -103,6 +105,27 @@ class TaskImportSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        representation['channel_id'] = instance.channel.name if instance.channel else None
+        representation['type_id'] = instance.type.title if instance.type else None
+        representation['org_id'] = instance.org.code if instance.org else None
+        representation['level_id'] = instance.level.name if instance.level else None
+        representation['ig_id'] = instance.ig.name if instance.ig else None
+
+        return representation
+
+    def validate_usage_count(self, value):
+        if value is None:
+            return 1
+        return value
+    
+    def validate_variable_karma(self, value):
+        if value is None:
+            return False
+        return value
 
 class TasktypeSerializer(serializers.ModelSerializer):
     updated_by=serializers.CharField(source='updated_by.fullname')
