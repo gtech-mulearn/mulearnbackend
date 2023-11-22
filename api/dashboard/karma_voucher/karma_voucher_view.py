@@ -34,7 +34,7 @@ class ImportVoucherLogAPI(APIView):
         except KeyError:
             return CustomResponse(general_message={'File not found.'}).get_failure_response()
         excel_data = ImportCSV()
-        excel_data = excel_data.read_excel_file(file_obj, encoding='ISO-8859-1')
+        excel_data = excel_data.read_excel_file(file_obj)
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
