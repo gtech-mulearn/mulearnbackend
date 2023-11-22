@@ -419,13 +419,10 @@ class OrganizationImportSerializer(serializers.ModelSerializer):
             "updated_by_id",
         ]
 
-    # def to_representation(self, instance):
-    #     representation = super().to_representation(instance)
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
 
-    #     representation['channel_id'] = instance.channel.name if instance.channel else None
-    #     representation['type_id'] = instance.type.title if instance.type else None
-    #     representation['org_id'] = instance.org.code if instance.org else None
-    #     representation['level_id'] = instance.level.name if instance.level else None
-    #     representation['ig_id'] = instance.ig.name if instance.ig else None
+        representation['affiliation_id'] = instance.affiliation.title if instance.affiliation else None
+        representation['district_id'] = instance.district.name if instance.district else None
 
-        # return representation
+        return representation

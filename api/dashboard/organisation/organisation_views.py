@@ -673,15 +673,12 @@ class OrganisationImportAPI(APIView):
             if affiliation and not affiliation_id:
                 row["error"] = f"Invalid affiliation: {affiliation}"
                 error_rows.append(row)
-                print(row)
             elif not district_id:
                 row["error"] = f"Invalid district: {district}"
                 error_rows.append(row)
-                print(row)
             elif org_type not in org_types:
                 row["error"] = f"Invalid org_type: {org_type}"
                 error_rows.append(row)
-                print(row)
             else:
                 user_id = JWTUtils.fetch_user_id(request)
                 row["id"] = str(uuid.uuid4())
@@ -692,33 +689,20 @@ class OrganisationImportAPI(APIView):
                 valid_rows.append(row)
 
         organization_list_serializer = OrganizationImportSerializer(data=valid_rows, many=True)
+        success_data = []
         if organization_list_serializer.is_valid():
             organization_list_serializer.save()
+            for organization_data in organization_list_serializer.data:
+                success_data.append({
+                    'title': organization_data.get('title', ''),
+                    'code': organization_data.get('code', ''),
+                    'org_type': organization_data.get('org_type', ''),
+                    'affiliation': organization_data.get('affiliation_id', ''),
+                    'district': organization_data.get('district_id', ''),
+                })
         else:
             error_rows.append(organization_list_serializer.errors)
-            
-        # task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
-        # success_data = []
-        # if task_list_serializer.is_valid():
-        #     task_list_serializer.save()
-        #     for task_data in task_list_serializer.data:
-        #             success_data.append({
-        #             'hashtag': task_data.get('hashtag', ''),
-        #             'title': task_data.get('title', ''),
-        #             'description': task_data.get('description', ''),
-        #             'karma': task_data.get('karma', ''),
-        #             'usage_count': task_data.get('usage_count', ''),
-        #             'variable_karma': task_data.get('variable_karma', ''),
-        #             'level': task_data.get('level_id', ''),
-        #             'channel': task_data.get('channel_id', ''),
-        #             'type': task_data.get('type_id', ''),
-        #             'ig': task_data.get('ig_id', ''),
-        #             'org': task_data.get('org_id', ''),
-        #             'event': task_data.get('event', ''),
-        #         })
-        # else:
-        #     error_rows.append(task_list_serializer.errors)
 
         return CustomResponse(
-            response={"Success": organization_list_serializer.data, "Failed": error_rows}
+            response={"Success": success_data, "Failed": error_rows}
         ).get_success_response()
