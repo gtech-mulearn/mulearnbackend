@@ -10,7 +10,7 @@ from utils.utils import DateTimeUtils
 class RoleDashboardSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.fullname")
     created_by = serializers.CharField(source="created_by.fullname")
-    users_with_role = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     class Meta:
         model = Role
@@ -21,8 +21,11 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
             "updated_at",
-            "users_with_role",
+            "members",
         ]
+
+    def get_members(self, obj):
+        return len(UserRoleLink.objects.filter(role_id=obj.id, verified=True))
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context["request"])
@@ -45,8 +48,7 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
 
         return super().create(validated_data)
 
-    def get_users_with_role(self, obj):
-        return len(UserRoleLink.objects.filter(role_id=obj.id, verified=True))
+
 
 
 class UserRoleSearchSerializer(serializers.ModelSerializer):
@@ -56,7 +58,7 @@ class UserRoleSearchSerializer(serializers.ModelSerializer):
 
 
 class UserRoleCreateSerializer(serializers.ModelSerializer):
-    
+
     user_id = serializers.CharField(required=True, source="user.id")
     role_id = serializers.CharField(required=True, source="role.id")
     class Meta:
@@ -70,11 +72,11 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
             return user_role_link
 
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        
+
         validated_data["user_id"] = (validated_data.pop("user"))["id"]
         validated_data["role_id"] = (validated_data.pop("role"))["id"]
         validated_data["verified"] = True
         validated_data["created_by_id"] = user_id
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
-        
+
         return super().create(validated_data)
