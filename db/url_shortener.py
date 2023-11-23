@@ -27,7 +27,6 @@ class UrlShortenerTracker(models.Model):
     browser          = models.CharField(max_length=255, blank=True, null=True)
     operating_system = models.CharField(max_length=255, blank=True, null=True)
     version          = models.CharField(max_length=255, blank=True, null=True)
-    created_at       = models.DateTimeField(blank=True, null=True)
     device_type      = models.CharField(max_length=255, blank=True, null=True)
     url_shortener    = models.ForeignKey(UrlShortener, on_delete=models.CASCADE, blank=True, null=True)
     city             = models.CharField(max_length=36, blank=True, null=True)
