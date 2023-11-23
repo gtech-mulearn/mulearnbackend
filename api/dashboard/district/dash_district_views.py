@@ -17,7 +17,7 @@ from .dash_district_helper import get_user_college_link
 class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ADMIN.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
