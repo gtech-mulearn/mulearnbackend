@@ -23,9 +23,9 @@ class User(models.Model):
     district       = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
     suspended_at   = models.DateTimeField(blank=True, null=True)
-    suspended_by   = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="suspended_by_user", db_column="suspended_by")
+    suspended_by   = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="user_suspended_by_user", db_column="suspended_by")
     deleted_at     = models.DateTimeField(blank=True, null=True)
-    deleted_by     = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="deleted_by_user", db_column="deleted_by")
+    deleted_by     = models.ForeignKey("self", on_delete=models.CASCADE, blank=True, null=True, related_name="user_deleted_by_user", db_column="deleted_by")
     objects        = user_manager.ActiveUserManager()
     every          = models.Manager()
 

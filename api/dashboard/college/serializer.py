@@ -1,74 +1,71 @@
 import uuid
 from utils.utils import DateTimeUtils
 from rest_framework import serializers
-from db.organization import College, Organization, OrgDiscordLink
+from db.organization import College, Organization
+from utils.types import RoleType, OrganizationType
+from django.db.models import Sum
+from db.learning_circle import LearningCircle
 
 
 class CollegeListSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
     org = serializers.CharField(source="org.title")
-    discord_link = serializers.SerializerMethodField()
+    number_of_students = serializers.SerializerMethodField()
+    lead_name = serializers.CharField(source="lead.fullname", default=None)
+    lead_contact = serializers.CharField(source="lead.mobile", default=None)
+    total_karma = serializers.SerializerMethodField()
+    no_of_lc = serializers.SerializerMethodField()
 
     class Meta:
         model = College
-        fields = "__all__"
+        fields = [
+            "id",
+            "level",
+            "org",
+            "updated_by",
+            "created_by",
+            "updated_at",
+            "created_at",
+            "number_of_students",
+            "lead_name",
+            "lead_contact",
+            "total_karma",
+            "no_of_lc",
+        ]
 
-    def get_discord_link(self, obj):
-        return obj.org.org_discord_link_org_id.exists()
+    def get_no_of_lc(self, obj):
+        learning_circle_count = LearningCircle.objects.filter(org=obj.org).count()
+        return learning_circle_count
+
+    def get_number_of_students(self, obj):
+        return obj.org.user_organization_link_org.filter(
+            user__user_role_link_user__role__title=RoleType.STUDENT.value
+        ).count()
+
+    def get_total_karma(self, obj):
+        return (
+                obj.org.user_organization_link_org.filter(
+                    org__org_type=OrganizationType.COLLEGE.value,
+                    verified=True,
+                    user__wallet_user__isnull=False,
+                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+                or 0
+        )
 
 
 class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
-    org_id = serializers.CharField(
-        required=True, error_messages={"required": "note field must not be left blank."}
-    )
-
-    level = serializers.CharField(
-        required=True, error_messages={"required": "note field must not be left blank."}
-    )
-
     class Meta:
         model = College
-        fields = ["level", "org_id"]
-
-    def validate(self, data):
-        if not Organization.objects.filter(id=data.get("org_id")).exists():
-            raise serializers.ValidationError("Invalid college")
-
-        if College.objects.filter(org_id=data.get("org_id")).exists():
-            raise serializers.ValidationError("College already exists")
-
-        return data
-
-    def create(self, validated_data):
-        user_id = self.context.get("user_id")
-        return College.objects.create(
-            id=uuid.uuid4(),
-            org_id=validated_data.get("org_id"),
-            level=validated_data.get("level"),
-            updated_by_id=user_id,
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            created_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time(),
-        )
-
-    def destroy(self, obj):
-        obj.delete()
+        fields = [
+            "level",
+            "org",
+            "updated_by",
+            "created_by",
+        ]
 
 
 class CollegeEditSerializer(serializers.ModelSerializer):
-    level = serializers.CharField(
-        required=True, error_messages={"required": "note field must not be left blank."}
-    )
-
     class Meta:
         model = College
-        fields = ["level"]
-
-    def update(self, instance, validated_data):
-        user_id = self.context.get("user_id")
-        instance.level = validated_data.get("level")
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
-        instance.updated_by_id = user_id
-        instance.save()
-        return instance
+        fields = ["level", "updated_by"]
