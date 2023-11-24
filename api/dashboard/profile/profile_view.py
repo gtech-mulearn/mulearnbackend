@@ -247,6 +247,7 @@ class ShareUserProfileAPI(APIView):
 
     def get(self, request, uuid=None):
         base_url = decouple.config("FR_DOMAIN_NAME")
+        print(base_url,"the base url")
         fs = FileSystemStorage()
         if uuid is not None:
             user = User.objects.filter(id=uuid).first()
@@ -291,7 +292,7 @@ class ShareUserProfileAPI(APIView):
                 basewidth = 100
                 wpercent = (basewidth / float(logo_width))
                 hsize = int((float(logo_height) * float(wpercent)))
-                resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
+                resized_logo = logo_image.resize((basewidth, hsize))
 
                 QRcode = qrcode.QRCode(
                     error_correction=qrcode.constants.ERROR_CORRECT_H
