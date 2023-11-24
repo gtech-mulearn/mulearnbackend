@@ -8,7 +8,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
 
     updated_by = serializers.CharField(source='updated_by.fullname')
     created_by = serializers.CharField(source='created_by.fullname')
-    user_ig_link_ig = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
 
     class Meta:
         model = InterestGroup
@@ -17,14 +17,14 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "name",
             "icon",
             "code",
-            "user_ig_link_ig",
+            "members",
             "updated_by",
             "updated_at",
             "created_by",
             "created_at",
         ]
 
-    def get_user_ig_link_ig(self, obj):
+    def get_members(self, obj):
         return obj.user_ig_link_ig.all().count()
 
 

@@ -12,6 +12,8 @@ from .dash_task_serializer import (
     TaskImportSerializer,
     TaskListSerializer,
     TaskModifySerializer,
+    TaskTypeCreateUpdateSerializer,
+    TasktypeSerializer,
 )
 
 from openpyxl import load_workbook
@@ -267,6 +269,8 @@ class ImportTaskListCSV(APIView):
         valid_rows = []
         error_rows = []
 
+        hashtags_excel = set()
+        hashtags_db = TaskList.objects.values_list("hashtag", flat=True)
         channels_to_fetch = set()
         task_types_to_fetch = set()
         levels_to_fetch = set()
@@ -275,6 +279,31 @@ class ImportTaskListCSV(APIView):
 
         for row in excel_data[1:]:
             hashtag = row.get("hashtag")
+            if not hashtag:
+                row["error"] = "Missing hashtag."
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            elif hashtag in hashtags_excel:
+                row["error"] = f"Duplicate hashtag in excel: {hashtag}"
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            elif hashtag in hashtags_db:
+                row["error"] = f"Duplicate hashtag in database: {hashtag}"
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            else:
+                hashtags_excel.add(hashtag)
+
+            title = row.get("title")
+            if not title:
+                row["error"] = "Missing title."
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+                
             level = row.get("level")
             channel = row.get("channel")
             task_type = row.get("type")
@@ -329,9 +358,9 @@ class ImportTaskListCSV(APIView):
         levels_dict = {level["name"]: level["id"] for level in levels}
         igs_dict = {ig["name"]: ig["id"] for ig in igs}
         orgs_dict = {org["code"]: org["id"] for org in orgs}
+        events = Events.get_all_values()
 
         for row in excel_data[1:]:
-            hashtag = row.get("hashtag")
             level = row.pop("level")
             channel = row.pop("channel")
             task_type = row.pop("type")
@@ -343,24 +372,25 @@ class ImportTaskListCSV(APIView):
             level_id = levels_dict.get(level) if level is not None else None
             ig_id = igs_dict.get(ig) if ig is not None else None
             org_id = orgs_dict.get(org) if org is not None else None
+            event = row.get("event")
 
-            if TaskList.objects.filter(hashtag=hashtag).exists():
-                row["error"] = f"Hashtag already exists: {hashtag}"
-                error_rows.append(row)
-            elif channel and not channel_id:
-                row["error"] = f"Invalid channel ID: {channel}"
+            if channel and not channel_id:
+                row["error"] = f"Invalid channel: {channel}"
                 error_rows.append(row)
             elif not task_type_id:
-                row["error"] = f"Invalid task type ID: {task_type}"
+                row["error"] = f"Invalid task type: {task_type}"
                 error_rows.append(row)
             elif level and not level_id:
-                row["error"] = f"Invalid level ID: {level}"
+                row["error"] = f"Invalid level: {level}"
                 error_rows.append(row)
             elif ig and not ig_id:
-                row["error"] = f"Invalid interest group ID: {ig}"
+                row["error"] = f"Invalid interest group: {ig}"
                 error_rows.append(row)
             elif org and not org_id:
-                row["error"] = f"Invalid organization ID: {org}"
+                row["error"] = f"Invalid organization: {org}"
+                error_rows.append(row)
+            elif event is not None and event not in events:
+                row["error"] = f"Invalid event: {event}"
                 error_rows.append(row)
             else:
                 user_id = JWTUtils.fetch_user_id(request)
@@ -378,13 +408,29 @@ class ImportTaskListCSV(APIView):
                 valid_rows.append(row)
 
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
+        success_data = []
         if task_list_serializer.is_valid():
             task_list_serializer.save()
+            for task_data in task_list_serializer.data:
+                    success_data.append({
+                    'hashtag': task_data.get('hashtag', ''),
+                    'title': task_data.get('title', ''),
+                    'description': task_data.get('description', ''),
+                    'karma': task_data.get('karma', ''),
+                    'usage_count': task_data.get('usage_count', ''),
+                    'variable_karma': task_data.get('variable_karma', ''),
+                    'level': task_data.get('level_id', ''),
+                    'channel': task_data.get('channel_id', ''),
+                    'type': task_data.get('type_id', ''),
+                    'ig': task_data.get('ig_id', ''),
+                    'org': task_data.get('org_id', ''),
+                    'event': task_data.get('event', ''),
+                })
         else:
             error_rows.append(task_list_serializer.errors)
 
         return CustomResponse(
-            response={"Success": task_list_serializer.data, "Failed": error_rows}
+            response={"Success": success_data, "Failed": error_rows}
         ).get_success_response()
 
 
@@ -536,3 +582,64 @@ class TaskBaseTemplateAPI(APIView):
                 f.seek(0)
                 new_file_object = f.read()
         return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')
+    
+class TaskTypeCrudAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
+    def get(self,request):
+        taskType=TaskType.objects.all()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            taskType, request, [ "title"],{"title":"title","updated_by":"updated_by","created_by":"created_by","updated_at":"updated_at","created_at":"created_at"}
+        )
+        serializer = TasktypeSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
+    
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        serializer = TaskTypeCreateUpdateSerializer(
+            data=request.data, context={"user_id": user_id}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Task type added successfully"
+            ).get_success_response()
+
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
+    
+    @role_required([RoleType.ADMIN.value])
+    def delete(self, request, task_type_id):
+        taskType = TaskType.objects.filter(id=task_type_id).first()
+        if taskType is None:
+            return CustomResponse(
+                general_message="task type doesnt exist"
+            ).get_failure_response()
+        taskType.delete()
+        return CustomResponse(
+            general_message=f"{taskType.title} Deleted Successfully"
+        ).get_success_response()
+    
+    @role_required([RoleType.ADMIN.value])
+    def put(self, request, task_type_id):
+        taskType = TaskType.objects.filter(id=task_type_id).first()
+        if taskType is None:
+            return CustomResponse(general_message="task type not found").get_failure_response()
+        serializer = TaskTypeCreateUpdateSerializer(
+           taskType, data=request.data, context={"request": request}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message=f"{taskType.title} updated successfully"
+            ).get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
