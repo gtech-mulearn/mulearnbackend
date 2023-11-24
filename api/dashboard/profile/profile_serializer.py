@@ -34,13 +34,12 @@ class UserShareQrcode(serializers.ModelSerializer):
 
 
     def get_profile_pic(self,obj):
-        # Here the media url in settings.py is /home/mishal/../../uid.png
         fs = FileSystemStorage()
         path = f'user/qr/{obj.id}.png'
         if fs.exists(path):
-            qrcode_image = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
+            qrcode_image = f"{self.context.get('request').build_absolute_uri(BE_DOMAIN_NAME)}{fs.url(path)[1:]}"
         else:
-            return None  
+            return None 
         return qrcode_image
 
 class UserProfileSerializer(serializers.ModelSerializer):
