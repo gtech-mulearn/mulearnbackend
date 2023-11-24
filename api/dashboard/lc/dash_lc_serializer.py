@@ -517,6 +517,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         ]
 
     def create(self, validated_data):
+        validated_data['id'] = uuid.uuid4()
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
@@ -539,7 +540,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
                 id=uuid.uuid4(),
                 user_id=user,
                 karma=Lc.KARMA.value,
-                task_id=task.id,
+                task=task,
                 updated_by_id=user_id,
                 created_by_id=user_id,
             )
