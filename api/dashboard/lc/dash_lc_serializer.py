@@ -540,7 +540,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
                 id=uuid.uuid4(),
                 user_id=user,
                 karma=Lc.KARMA.value,
-                task_id=task.id,
+                task=task,
                 updated_by_id=user_id,
                 created_by_id=user_id,
             )
