@@ -1,7 +1,4 @@
-import decouple
-import requests
 from django.db.models import Q
-
 from rest_framework.views import APIView
 
 from db.organization import Country, Department, District, Organization, State, Zone
@@ -95,6 +92,7 @@ class LearningCircleUserViewAPI(APIView):
 
 
 class RegisterDataAPI(APIView):
+
     def post(self, request):
         data = request.data
         data = {key: value for key, value in data.items() if value}

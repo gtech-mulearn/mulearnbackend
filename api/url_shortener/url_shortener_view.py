@@ -3,6 +3,7 @@ from rest_framework.views import APIView
 from api.url_shortener.serializers import (
     ShowShortenUrlsSerializer,
     ShortenUrlsCreateUpdateSerializer,
+    ShowShortenUrlsTrackerSerializer
 )
 from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import CustomizePermission
@@ -10,6 +11,7 @@ from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
+from django.db.models import Count
 
 
 class UrlShortenerAPI(APIView):
@@ -126,32 +128,51 @@ class UrlShortenerAPI(APIView):
 
 
 class UrlAnalyticsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
+    )
     def get(self, request, url_id):
-        url_shortener_object = UrlShortener.objects.get(
-            id=url_id
+        url_tracker_obj = UrlShortener.objects.filter(id=url_id).first()
+
+        if url_tracker_obj is None:
+            return CustomResponse(
+                general_message="No URL related data available"
+            ).get_failure_response()
+            
+        queryset = UrlShortenerTracker.objects.filter(url_shortener_id = url_tracker_obj.id)
+        device_counts = UrlShortenerTracker.objects.values('device_type').annotate(count=Count('device_type')).order_by('device_type')
+        platform_counts = UrlShortenerTracker.objects.values('operating_system').annotate(count=Count('operating_system')).order_by('operating_system')
+        browser_counts = UrlShortenerTracker.objects.values('browser').annotate(count=Count('browser')).order_by('browser')
+        
+        countset={}
+        countset[1] = device_counts
+        countset[2] = platform_counts
+        countset[3] = browser_counts
+        
+        print(countset)
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            ["id","ip_address","device_type","operating_system","browser",]
+
         )
 
-        url_data = UrlShortenerTracker.objects.filter(
-            url_shortener_id=url_shortener_object.id
+        serializer = ShowShortenUrlsTrackerSerializer(
+            paginated_queryset.get("queryset"),
+            many=True
         )
 
-        print(url_data)
+        return CustomResponse(
+            general_message="URL Stats",
+            response=countset
+                ).paginated_response(
+                    data=serializer.data,
+                    pagination=paginated_queryset.get(
+                        "pagination"
+                    )
+                )
 
-        location_data = UrlShortenerTracker.objects.filter(
-            url_shortener=url_shortener_object
-        ).values(
-            'city',
-            'region',
-            'country'
-        )
-        print(location_data) 
 
-        # Browsers through which users accessed
-        browsers_data = UrlShortenerTracker.objects.filter(
-            url_shortener=url_shortener_object
-        ).values(
-            'browser'
-        ).count()
-
-        print(browsers_data)
             

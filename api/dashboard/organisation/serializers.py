@@ -122,6 +122,7 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         instance.title = validated_data.get("title", instance.title)
         instance.code = validated_data.get("code", instance.code)
         instance.affiliation = validated_data.get("affiliation", instance.affiliation)
+        instance.district = validated_data.get("district", instance.district)
         instance.updated_by_id = user_id
         instance.save()
         return instance
@@ -399,3 +400,30 @@ class OrganizationKarmaLogGetPostPatchDeleteSerializer(serializers.ModelSerializ
         validated_data["created_by_id"] = user_id
 
         return OrgKarmaLog.objects.create(**validated_data)
+
+class OrganizationImportSerializer(serializers.ModelSerializer):
+    created_by_id = serializers.CharField(required=True, allow_null=False)
+    updated_by_id = serializers.CharField(required=True, allow_null=False)
+    affiliation_id = serializers.CharField(required=False, allow_null=True)
+    district_id = serializers.CharField(required=False, allow_null=True)
+
+    class Meta:
+        model = Organization
+        fields = [
+            "id",
+            "title",
+            "code",
+            "org_type",
+            "affiliation_id",
+            "district_id",
+            "created_by_id",
+            "updated_by_id",
+        ]
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        representation['affiliation_id'] = instance.affiliation.title if instance.affiliation else None
+        representation['district_id'] = instance.district.name if instance.district else None
+
+        return representation

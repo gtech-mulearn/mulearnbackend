@@ -24,4 +24,7 @@ urlpatterns = [
     path('merge_organizations/<str:organisation_id>/', organisation_views.OrganizationMergerView.as_view()),
     path('karma-type/create/', organisation_views.OrganizationKarmaTypeGetPostPatchDeleteAPI.as_view()),
     path('karma-log/create/', organisation_views.OrganizationKarmaLogGetPostPatchDeleteAPI.as_view()),
+
+    path('base-template/', organisation_views.OrganisationBaseTemplateAPI.as_view()),
+    path('import/', organisation_views.OrganisationImportAPI.as_view()),
 ]

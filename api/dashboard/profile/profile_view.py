@@ -4,15 +4,16 @@ import decouple
 import qrcode
 import requests
 from PIL import Image
-from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level
-from db.user import Role
-from db.user import User, UserSettings, UserRoleLink, Socials
 from django.contrib.auth.hashers import make_password
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch
 from rest_framework.views import APIView
+
+from db.organization import UserOrganizationLink
+from db.task import InterestGroup, KarmaActivityLog, Level
+from db.user import Role
+from db.user import User, UserSettings, UserRoleLink, Socials
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
@@ -290,7 +291,7 @@ class ShareUserProfileAPI(APIView):
                 basewidth = 100
                 wpercent = (basewidth / float(logo_width))
                 hsize = int((float(logo_height) * float(wpercent)))
-                resized_logo = logo_image.resize((basewidth, hsize), Image.ANTIALIAS)
+                resized_logo = logo_image.resize((basewidth, hsize))
 
                 QRcode = qrcode.QRCode(
                     error_correction=qrcode.constants.ERROR_CORRECT_H
@@ -448,6 +449,31 @@ class SocialsAPI(APIView):
         ).get_failure_response()
 
 
+class ResetPasswordAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+        user_muid = JWTUtils.fetch_muid(request)
+        user = User.objects.filter(muid=user_muid).first()
+
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        self.save_password(user)
+
+    def save_password(self, request, user_obj):
+        new_password = request.data.get("password")
+        hashed_pwd = make_password(new_password)
+
+        user_obj.password = hashed_pwd
+        user_obj.save()
+        return CustomResponse(
+            general_message="New Password Saved Successfully"
+        ).get_success_response()
+
+
 class QrcodeRetrieveAPI(APIView):
     def get(self, request, uuid):
         try:
@@ -476,26 +502,3 @@ class QrcodeRetrieveAPI(APIView):
             return CustomResponse(
                 response="The given UUID seems to be invalid"
             ).get_failure_response()
-
-
-class ResetPasswordAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def post(self, request):
-        user_muid = JWTUtils.fetch_muid(request)
-        user = User.objects.filter(muid=user_muid).first()
-
-        if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
-
-        return self.save_password(request, user)
-
-    def save_password(self, request, user_obj):
-        new_password = request.data.get("password")
-        hashed_pwd = make_password(new_password)
-
-        user_obj.password = hashed_pwd
-        user_obj.save()
-        return CustomResponse(general_message="New Password Saved Successfully").get_success_response()
