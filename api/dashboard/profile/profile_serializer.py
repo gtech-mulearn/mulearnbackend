@@ -131,7 +131,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             ).count()
         else:
             ranks = (
-                Wallet.objects.filter(karma__gte=user_karma, user__user_role_link_user__verified=True, )
+                Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
