@@ -1,6 +1,7 @@
 from rest_framework.views import APIView
-
-from db.organization import College, OrgDiscordLink
+from utils.types import OrganizationType, RoleType
+from db.organization import College
+from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from .serializer import (
@@ -9,7 +10,7 @@ from .serializer import (
     CollegeEditSerializer,
 )
 from utils.utils import CommonUtils
-
+from django.db.models import Case,When,CharField,F
 
 class CollegeApi(APIView):
     def get(self, request, college_code=None):
@@ -17,9 +18,26 @@ class CollegeApi(APIView):
             colleges = College.objects.filter(id=college_code)
         else:
             colleges = College.objects.all().select_related(
-                "created_by", "updated_by", "org", "lead"
+                "created_by", "updated_by", "org"
             )
 
+        leads = (
+            User.objects.filter(
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
+            )
+            .distinct()
+            .annotate(
+                college=Case(
+                    When(
+                        user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                        then=F("user_organization_link_user__org__id"),
+                    ),
+                    default=None,
+                    output_field=CharField(),
+                )
+            )
+        )
         paginated_queryset = CommonUtils.get_paginated_queryset(
             colleges,
             request,
@@ -27,7 +45,7 @@ class CollegeApi(APIView):
             sort_fields={"created_by": "created_by__firstname"},
         )
         serializer = CollegeListSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"), many=True,context={"leads":leads}
         )
 
         return CustomResponse().paginated_response(

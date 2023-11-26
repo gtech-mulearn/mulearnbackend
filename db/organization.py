@@ -122,7 +122,7 @@ class College(models.Model):
     updated_at     = models.DateTimeField(auto_now=True)
     created_by     = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='college_created_by')
     created_at     = models.DateTimeField(auto_now_add=True)
-    lead = models.ForeignKey(User, on_delete=models.CASCADE, related_name='college_lead_name', blank=True, null=True)
+    
     class Meta:
         managed = False
         db_table = 'college'
