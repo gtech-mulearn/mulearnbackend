@@ -13,7 +13,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
     org = serializers.CharField(source="org.title")
     number_of_students = serializers.SerializerMethodField()
     total_karma = serializers.SerializerMethodField()
-    
+    no_of_lc = serializers.SerializerMethodField()
 
     class Meta:
         model = College
