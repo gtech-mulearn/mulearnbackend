@@ -112,7 +112,7 @@ class Events(Enum):
 
 class Lc(Enum):
     KARMA = 5
-    TASK_HASHTAG = 'Basics'
+    TASK_HASHTAG = '#lcmeetreport'
 
 
 DEFAULT_HACKATHON_FORM_FIELDS = {
