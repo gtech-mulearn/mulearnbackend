@@ -1,11 +1,15 @@
 import uuid
 from email.mime.image import MIMEImage
+from io import BytesIO
+from tempfile import NamedTemporaryFile
 
 import decouple
 from django.core.mail import EmailMessage
 from django.db import transaction
 from django.db.models import Value
 from django.db.models.functions import Coalesce
+from django.http import FileResponse
+from openpyxl import load_workbook
 from rest_framework.views import APIView
 
 from db.task import VoucherLog, TaskList
@@ -19,10 +23,6 @@ from utils.utils import ImportCSV, CommonUtils
 from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer, \
     VoucherLogUpdateSerializer
 
-from openpyxl import load_workbook
-from tempfile import NamedTemporaryFile
-from io import BytesIO
-from django.http import FileResponse
 
 class ImportVoucherLogAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -165,10 +165,10 @@ class ImportVoucherLogAPI(APIView):
             text = f"""Greetings from GTech µLearn!
 
             Great news! You are just one step away from claiming your internship/contribution Karma points.
-            
+
             Name: {full_name}
             Email: {email}
-            
+
             To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
             """
 
@@ -327,7 +327,8 @@ class ExportVoucherLogAPI(APIView):
         voucher_serializer_data = VoucherLogSerializer(voucher_serializer, many=True).data
 
         return CommonUtils.generate_csv(voucher_serializer_data, 'Voucher Log')
-    
+
+
 class VoucherBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -347,7 +348,7 @@ class VoucherBaseTemplateAPI(APIView):
                 ws.cell(row=row, column=col_num, value=value)
         # Save the file
         with NamedTemporaryFile() as tmp:
-            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            tmp.close()  # with statement opened tmp, close it so wb.save can open it
             wb.save(tmp.name)
             with open(tmp.name, 'rb') as f:
                 f.seek(0)

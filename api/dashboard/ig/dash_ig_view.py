@@ -1,3 +1,4 @@
+from django.db.models import Count
 from rest_framework.views import APIView
 
 from db.task import InterestGroup
@@ -19,7 +20,7 @@ class InterestGroupAPI(APIView):
     def get(self, request):
         ig_queryset = (
             InterestGroup.objects.select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
+            .prefetch_related("user_ig_link_ig").annotate(members=Count("user_ig_link_ig"))
             .all()
         )
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -34,6 +35,7 @@ class InterestGroupAPI(APIView):
             ],
             {
                 "name": "name",
+                "members": "members",
                 "updated_on": "updated_at",
                 "updated_by": "updated_by__first_name",
                 "created_on": "created_at",
@@ -132,7 +134,7 @@ class InterestGroupCSV(APIView):
     def get(self, request):
         ig_serializer = (
             InterestGroup.objects.select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
+            .prefetch_related("user_ig_link_ig").annotate(members=Count("user_ig_link_ig"))
             .all()
         )
 

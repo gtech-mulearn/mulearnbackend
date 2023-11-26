@@ -1,55 +1,79 @@
 import json
-
 import requests
+import requests
+from django.db import models
+from django.db.models import Count, Subquery, OuterRef
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
-from django.db import models
+
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog, UserIgLink
 from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer
-from django.db.models import Count, Subquery, OuterRef
+
 
 class LcDashboardAPI(APIView):
     def get(self, request):
         date = request.query_params.get("date")
         if date:
-            learning_circle_count = LearningCircle.objects.filter(
-                created_at__gt=date
-            ).count()
+            learning_circle_count = LearningCircle.objects.filter(created_at__gt=date).count()
+            total_no_enrollment = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).count()
+            user_circle_link_count = UserCircleLink.objects.filter(created_at__gt=date, circle=OuterRef('pk')).values(
+                'circle_id').annotate(
+                total_users=Count('id')).values('total_users')
+
+            query = InterestGroup.objects.annotate(
+                total_circles=Count("learning_circle_ig", distinct=True),
+                total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
+            ).values("name", "total_circles", "total_users")
+
+            circle_count_by_ig = (
+                query.values("name")
+                .order_by("name")
+                .annotate(
+                    total_circles=Count("learning_circle_ig", distinct=True),
+                    total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
+                )
+            )
+            unique_user_count = (
+                UserCircleLink.objects.filter(created_at__gt=date, accepted=True)
+                .values("user")
+                .distinct()
+                .count()
+            )
         else:
             learning_circle_count = LearningCircle.objects.all().count()
+            total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
 
-        total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
-        user_circle_link_count = UserCircleLink.objects.filter(circle=OuterRef('pk')).values('circle_id').annotate(
-            total_users=Count('id')).values('total_users')
+            user_circle_link_count = UserCircleLink.objects.filter(circle=OuterRef('pk')).values('circle_id').annotate(
+                total_users=Count('id')).values('total_users')
 
-        query = InterestGroup.objects.annotate(
-            total_circles=Count("learning_circle_ig", distinct=True),
-            total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
-        ).values("name", "total_circles", "total_users")
-
-        circle_count_by_ig = (
-            query.values("name")
-            .order_by("name")
-            .annotate(
+            query = InterestGroup.objects.annotate(
                 total_circles=Count("learning_circle_ig", distinct=True),
-                total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
-            )
-        )
+                total_users=Subquery(user_circle_link_count, output_field=models.IntegerField())
+            ).values("name", "total_circles", "total_users")
 
-        unique_user_count = (
-            UserCircleLink.objects.filter(accepted=True)
-            .values("user")
-            .distinct()
-            .count()
-        )
+            circle_count_by_ig = (
+                query.values("name")
+                .order_by("name")
+                .annotate(
+                    total_circles=Count("learning_circle_ig", distinct=True),
+                    total_users=Count("learning_circle_ig__user_circle_link_circle", distinct=True),
+                )
+            )
+
+            unique_user_count = (
+                UserCircleLink.objects.filter(accepted=True)
+                .values("user")
+                .distinct()
+                .count()
+            )
 
         return CustomResponse(
             response={
@@ -303,3 +327,59 @@ class GTASANDSHOREAPI(APIView):
                 # If it doesn't exist, create a new entry
                 grouped_colleges[cleaned_college] = int(count)
         return CustomResponse(response=grouped_colleges).get_success_response()
+
+
+class UserProfilePicAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.filter(muid=muid).annotate(image=F("profile_pic")).values("image")
+        return CustomResponse(response=user).get_success_response()
+
+
+class ListIGAPI(APIView):
+
+    def get(self, request):
+        return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
+
+
+class ListTopIgUsersAPI(APIView):
+
+    def get(self, request):
+        ig_name = request.query_params.getlist("ig_name", [])
+
+        user_karma_by_ig = KarmaActivityLog.objects.filter(
+            task__ig__name__in=ig_name, appraiser_approved=True
+        ).values(
+            userid=F('user__id'),
+            muid=F('user__muid'),
+            first_name=F('user__first_name'),
+            last_name=F('user__last_name'),
+        ).annotate(
+            ig_karma=Sum('karma')
+        ).order_by('-ig_karma')[:100]
+
+        # Extract 'userid' values into a new list
+        userid_list = [entry['userid'] for entry in user_karma_by_ig]
+
+        # Fetch user muid and interest group as a list
+        results = UserIgLink.objects.filter(user__id__in=userid_list).values_list('user__muid', 'ig__name', named=True)
+
+        # Process the results to create the desired structure
+        user_ig_dict = {}
+        for result in results:
+            muid = result.user__muid
+            ig = result.ig__name
+
+            if muid not in user_ig_dict:
+                user_ig_dict[muid] = {'muid': muid, 'igs': [ig]}
+            else:
+                user_ig_dict[muid]['igs'].append(ig)
+
+        # Iterate through user_karma_by_ig and add 'igs' information
+        for user_karma in user_karma_by_ig:
+            muid = user_karma['muid']
+            if muid in user_ig_dict:
+                user_karma['igs'] = user_ig_dict[muid]['igs']
+            else:
+                user_karma['igs'] = []
+
+        return CustomResponse(response=user_karma_by_ig).get_success_response()

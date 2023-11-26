@@ -6,7 +6,6 @@ from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks
-
 from . import dash_roles_serializer
 
 
@@ -32,12 +31,14 @@ class RoleAPI(APIView):
             {
                 "title": "title",
                 "description": "description",
+                "members": "userrolelink",
                 "updated_by": "updated_by__first_name",
                 "created_by": "created_by__first_name",
                 "updated_at": "updated_at",
                 "created_at": "created_at",
             },
         )
+
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             queryset.get("queryset"), many=True
         )

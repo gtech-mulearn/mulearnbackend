@@ -51,6 +51,9 @@ class OrganizationType(Enum):
     COMPANY = 'Company'
     COMMUNITY = 'Community'
 
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
 
 class WebHookActions(Enum):
     SEPARATOR = '<|=|>'
@@ -109,7 +112,7 @@ class Events(Enum):
 
 class Lc(Enum):
     KARMA = 5
-    TASK_HASHTAG = 'Basics'
+    TASK_HASHTAG = '#lcmeetreport'
 
 
 DEFAULT_HACKATHON_FORM_FIELDS = {
