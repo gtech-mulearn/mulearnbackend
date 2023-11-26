@@ -11,9 +11,8 @@ class CollegeListSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.fullname")
     org = serializers.CharField(source="org.title")
     number_of_students = serializers.SerializerMethodField()
-    lead_name = serializers.CharField(source="lead.fullname", default=None)
-    lead_contact = serializers.CharField(source="lead.mobile", default=None)
     total_karma = serializers.SerializerMethodField()
+    
 
     class Meta:
         model = College
@@ -26,9 +25,8 @@ class CollegeListSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_at",
             "number_of_students",
-            "lead_name",
-            "lead_contact",
             "total_karma",
+            
         ]
 
     def get_number_of_students(self, obj):
@@ -45,6 +43,16 @@ class CollegeListSerializer(serializers.ModelSerializer):
             ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
             or 0
         )
+
+    # def get_lead_name(self, obj):
+    #     leads = self.context.get("leads")
+    #     college_lead = [lead for lead in leads if lead.college == obj.id]
+    #     return college_lead.fullname if college_lead else None
+
+    # def get_lead_contact(self, obj):
+    #     leads = self.context.get("leads")
+    #     college_lead = [lead for lead in leads if lead.college == obj.id]
+    #     return college_lead.mobile if college_lead else None
 
 
 class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
