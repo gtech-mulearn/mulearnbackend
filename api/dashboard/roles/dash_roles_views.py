@@ -207,41 +207,14 @@ class UserRole(APIView):
             general_message="User Role deleted successfully"
         ).get_success_response()
 
-from openpyxl import Workbook
-from openpyxl.styles import Font
-
 class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = Workbook()
-        ws = wb.active
-        ws.title = "Sheet1"
-
-        ws.append([
-            "muid",
-            "role",
-        ])
-
-        # Set column headers font as bold
-        bold_font = Font(bold=True)
-        for cell in ws[1]:
-            cell.font = bold_font
-
-        # Set column width
-        ws.column_dimensions['A'].width = 50
-        ws.column_dimensions['B'].width = 40
-
-        ws = wb.create_sheet('Data Definitions')
-        ws.append(['role'])
-
-        # set column header as bold and set width
-        for cell in ws[1]:
-            cell.font = bold_font
-        ws.column_dimensions['A'].width = 40
+        wb = load_workbook('./api/dashboard/roles/assets/role_base_template.xlsx')
+        ws = wb['Data Definitions']
 
         roles = Role.objects.all().values_list('title', flat=True)
-
         data = {
             'role': roles
         }
@@ -249,11 +222,13 @@ class RoleBaseTemplateAPI(APIView):
         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
             for row, value in enumerate(col_values, start=2):
                 ws.cell(row=row, column=col_num, value=value)
-
-        wb.save('role_base_template.xlsx')
-
-        return CustomResponse(
-            response={
-                "message": "Base template created successfully"
-                }
-        ).get_success_response()
+        
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='role_base_template.xlsx')
+    
