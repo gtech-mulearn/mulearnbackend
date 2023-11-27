@@ -5,6 +5,7 @@ from . import dash_roles_views
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
     path('user-role/<str:role_id>/', dash_roles_views.UserRoleSearchAPI.as_view(), name='search-user-role'),
+    path('base-template/', dash_roles_views.RoleBaseTemplateAPI.as_view(), name="roles-base-template"),
     path('user-role/', dash_roles_views.UserRole.as_view(), name='create-delete-user-role'),
     path('', dash_roles_views.RoleAPI.as_view(), name="roles-list"),
     path('', dash_roles_views.RoleAPI.as_view(), name="roles-create"),

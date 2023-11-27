@@ -8,6 +8,10 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks
 from . import dash_roles_serializer
 
+from openpyxl import load_workbook
+from tempfile import NamedTemporaryFile
+from io import BytesIO
+from django.http import FileResponse
 
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -201,4 +205,55 @@ class UserRole(APIView):
         )
         return CustomResponse(
             general_message="User Role deleted successfully"
+        ).get_success_response()
+
+from openpyxl import Workbook
+from openpyxl.styles import Font
+
+class RoleBaseTemplateAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        wb = Workbook()
+        ws = wb.active
+        ws.title = "Sheet1"
+
+        ws.append([
+            "muid",
+            "role",
+        ])
+
+        # Set column headers font as bold
+        bold_font = Font(bold=True)
+        for cell in ws[1]:
+            cell.font = bold_font
+
+        # Set column width
+        ws.column_dimensions['A'].width = 50
+        ws.column_dimensions['B'].width = 40
+
+        ws = wb.create_sheet('Data Definitions')
+        ws.append(['role'])
+
+        # set column header as bold and set width
+        for cell in ws[1]:
+            cell.font = bold_font
+        ws.column_dimensions['A'].width = 40
+
+        roles = Role.objects.all().values_list('title', flat=True)
+
+        data = {
+            'role': roles
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+
+        wb.save('role_base_template.xlsx')
+
+        return CustomResponse(
+            response={
+                "message": "Base template created successfully"
+                }
         ).get_success_response()
