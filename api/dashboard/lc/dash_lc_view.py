@@ -2,7 +2,8 @@ import uuid
 
 from decouple import config
 from django.core.mail import send_mail
-from django.db.models import Q, F
+from django.db.models import Q, F, Value, CharField
+from django.db.models.functions import Concat
 from django.shortcuts import redirect
 from rest_framework.views import APIView
 
@@ -412,6 +413,24 @@ class MeetRecordsGetPostPatchDeleteAPI(APIView):
                 meet_updated_by=F("updated_by__first_name"),
                 meet_updated_at=F("updated_at"),
             )
+            for meeting in circle_meeting_log:
+
+                attendees = meeting.get('attendees', '')
+                attendees_list = attendees.split(',')
+
+                attendees_first_names = User.objects.filter(
+                    id__in=attendees_list
+                ).values(
+                    'profile_pic',
+                    fullname=Concat(
+                        'first_name',
+                        Value(' '),
+                        'last_name',
+                        output_field=CharField()
+                    ),
+                )
+
+                meeting['attendees'] = list(attendees_first_names)
 
         if circle_id:
             circle_meeting_log = CircleMeetingLog.objects.filter(
