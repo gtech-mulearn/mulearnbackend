@@ -1,12 +1,14 @@
 import uuid
 
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Value, CharField
+from django.db.models.functions import Concat
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
 from db.task import TaskList, UserIgLink
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+from db.user import User
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from utils.types import Lc
@@ -505,16 +507,41 @@ class ScheduleMeetingSerializer(serializers.ModelSerializer):
 
 
 class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
+    attendees_details = serializers.SerializerMethodField()
+    meet_created_by = serializers.CharField(source='created_by.fullname', required=False)
+    meet_created_at = serializers.CharField(source='created_at', required=False)
+    meet_id = serializers.CharField(source='id', required=False)
 
     class Meta:
         model = CircleMeetingLog
         fields = [
+            "meet_id",
             "meet_time",
             "meet_place",
             "day",
             "attendees",
             "agenda",
+            "attendees_details",
+            "meet_created_by",
+            "meet_created_at"
         ]
+
+    def get_attendees_details(self, obj):
+        attendees_list = obj.attendees.split(',')
+
+        attendees_details_list = User.objects.filter(
+            id__in=attendees_list
+        ).values(
+            'profile_pic',
+            fullname=Concat(
+                'first_name',
+                Value(' '),
+                'last_name',
+                output_field=CharField()
+            ),
+        )
+
+        return attendees_details_list
 
     def create(self, validated_data):
         validated_data['id'] = uuid.uuid4()
@@ -548,6 +575,16 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         ])
 
         return attendees
+
+
+class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CircleMeetingLog
+        fields = [
+            "id",
+            "meet_time",
+            "day",
+        ]
 
 
 class IgTaskDetailsSerializer(serializers.ModelSerializer):
