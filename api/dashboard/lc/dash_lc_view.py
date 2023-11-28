@@ -18,7 +18,8 @@ from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
-    LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, ScheduleMeetingSerializer
+    LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, \
+    ScheduleMeetingSerializer, ListAllMeetRecordsSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -396,53 +397,24 @@ class LearningCircleHomeApi(APIView):
 
 class MeetRecordsGetPostPatchDeleteAPI(APIView):
 
-    def get(self, request, circle_id=None, meet_id=None):
-
+    def get(self, request, meet_id=None, circle_id=None):
         if meet_id:
-            circle_meeting_log = CircleMeetingLog.objects.filter(
-                id=meet_id
-            ).values(
-                "id",
-                "meet_time",
-                "meet_place",
-                "day",
-                "attendees",
-                "agenda",
-                meet_created_by=F("created_by__first_name"),
-                meet_created_at=F("created_at"),
-                meet_updated_by=F("updated_by__first_name"),
-                meet_updated_at=F("updated_at"),
-            )
-            for meeting in circle_meeting_log:
+            circle_meeting_log = CircleMeetingLog.objects.get(id=meet_id)
 
-                attendees = meeting.get('attendees', '')
-                attendees_list = attendees.split(',')
-
-                attendees_first_names = User.objects.filter(
-                    id__in=attendees_list
-                ).values(
-                    'profile_pic',
-                    fullname=Concat(
-                        'first_name',
-                        Value(' '),
-                        'last_name',
-                        output_field=CharField()
-                    ),
-                )
-
-                meeting['attendees'] = list(attendees_first_names)
+            serializer = MeetRecordsCreateEditDeleteSerializer(
+                circle_meeting_log,
+                many=False
+            ).data
 
         if circle_id:
-            circle_meeting_log = CircleMeetingLog.objects.filter(
-                circle_id=circle_id
-            ).values(
-                "id",
-                "meet_time",
-                "day"
-            )
+            circle_meeting_log = CircleMeetingLog.objects.filter(circle_id=circle_id)
+            serializer = ListAllMeetRecordsSerializer(
+                circle_meeting_log,
+                many=True
+            ).data
 
         return CustomResponse(
-            response=circle_meeting_log
+            response=serializer
         ).get_success_response()
 
     def post(self, request, circle_id):
