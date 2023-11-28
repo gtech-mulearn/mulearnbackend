@@ -121,6 +121,8 @@ class CampusStudentDetailsAPI(APIView):
                 karma=F("wallet_user__karma"),
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
+                department=F('user_organization_link_user__department__title'),
+                graduation_year=F("user_organization_link_user__graduation_year")
             ))
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
