@@ -531,7 +531,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     def validate_attendees(self, attendees):
         task = TaskList.objects.filter(hashtag=Lc.TASK_HASHTAG.value).first()
 
-        attendees = attendees.split(',')
+        attendees_list = attendees.split(',')
 
         user_id = self.context.get('user_id')
 
@@ -544,7 +544,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
                 updated_by_id=user_id,
                 created_by_id=user_id,
             )
-            for user in attendees
+            for user in attendees_list
         ])
 
         return attendees

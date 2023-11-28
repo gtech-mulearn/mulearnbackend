@@ -44,6 +44,7 @@ class RoleType(Enum):
     IG_FACILITATOR = "IG Facilitator"
     TECH_TEAM = 'Tech Team'
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
+    LEAD_ENABLER = "Lead Enabler"
 
 
 class OrganizationType(Enum):
