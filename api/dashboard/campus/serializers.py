@@ -23,6 +23,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
 
     lead = serializers.SerializerMethodField()
+    department = serializers.CharField(source="department.title")
 
     class Meta:
         model = UserOrganizationLink
@@ -37,6 +38,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "active_members",
             "rank",
             "lead",
+            "graduation_year",
+            "department"
         ]
 
     def get_lead(self, obj):
