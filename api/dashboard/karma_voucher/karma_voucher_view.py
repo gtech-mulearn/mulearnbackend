@@ -70,11 +70,11 @@ class ImportVoucherLogAPI(APIView):
 
         count = 1
         for row in excel_data[1:]:
-            task_hashtag = row.get('hashtag')
+            task_hashtag = row.pop('hashtag')
             karma = row.get('karma')
             month = row.get('month')
             week = row.get('week')
-            muid = row.get('muid')
+            muid = row.pop('muid')
             description = row.get('description')
             event = row.get('event')
             user_info = user_dict.get(muid)
@@ -123,10 +123,15 @@ class ImportVoucherLogAPI(APIView):
 
         # Serializing and saving valid voucher rows to the database
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
-        if voucher_serializer.is_valid():
-            with transaction.atomic():
-                voucher_serializer.save()
-                vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
+        with transaction.atomic():
+            if voucher_serializer.is_valid():
+                    voucher_serializer.save()
+            else:
+                error_rows.append(voucher_serializer.errors)
+                return CustomResponse(
+                    response={"Success": [], "Failed": error_rows}
+                ).get_success_response()
+            vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
                     'code',
                     'user__muid',
                     'month',
@@ -136,12 +141,10 @@ class ImportVoucherLogAPI(APIView):
                     week_value=Coalesce('week', Value('')),
                     event_value=Coalesce('event', Value(''))
                 )
-                if len(vouchers_to_send) != len(valid_rows):
-                    transaction.set_rollback(True)
-                    return CustomResponse(
-                        general_message='Something went wrong. Please try again.').get_failure_response()
-        else:
-            error_rows.append(voucher_serializer.errors)
+            if len(vouchers_to_send) != len(valid_rows):
+                transaction.set_rollback(True)
+                return CustomResponse(
+                    general_message='Something went wrong. Please try again.').get_failure_response()
 
         for voucher in vouchers_to_send:
             muid = voucher['user__muid']
