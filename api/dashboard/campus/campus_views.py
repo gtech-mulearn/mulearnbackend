@@ -122,7 +122,8 @@ class CampusStudentDetailsAPI(APIView):
                 level=F("user_lvl_link_user__level__name"),
                 join_date=F("created_at"),
                 department=F('user_organization_link_user__department__title'),
-                graduation_year=F("user_organization_link_user__graduation_year")
+                graduation_year=F("user_organization_link_user__graduation_year"),
+                is_alumni=F('user_organization_link_user__is_alumni'),
             ))
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
