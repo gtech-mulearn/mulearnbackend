@@ -674,17 +674,15 @@ class ScheduleMeetAPI(APIView):
 
 class IgTaskDetailsAPI(APIView):
     def get(self, request, ig_id):
-        task_list = TaskList.objects.filter(
-            ig=ig_id
-        ).first()
+        task_list = TaskList.objects.filter(ig=ig_id)
 
         serializer = IgTaskDetailsSerializer(
             task_list,
-            many=False,
+            many=True,
             context={
                 'ig': ig_id
             }
-        ).data
+        )
 
         return CustomResponse(
             response=serializer.data
