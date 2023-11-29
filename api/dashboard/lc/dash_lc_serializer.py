@@ -589,16 +589,28 @@ class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
 
 class IgTaskDetailsSerializer(serializers.ModelSerializer):
     task = serializers.CharField(source='title')
-    is_completed = serializers.SerializerMethodField()
+    task_status = serializers.SerializerMethodField()
+    task_id = serializers.CharField(source='id')
+    task_level = serializers.CharField(source='level.level_order')
+    task_level_karma = serializers.CharField(source='level.karma')
+    task_karma = serializers.CharField(source='karma')
+    task_description = serializers.CharField(source='description')
+    interest_group = serializers.CharField(source='ig.name')
 
     class Meta:
         model = TaskList
         fields = [
+            "task_id",
             "task",
-            "is_completed"
+            "task_karma",
+            "task_description",
+            "interest_group",
+            "task_status",
+            "task_level",
+            "task_level_karma",
         ]
 
-    def get_is_completed(self, obj):
+    def get_task_status(self, obj):
         ig_id = self.context.get('ig_id')
 
         user_ig_links = UserIgLink.objects.filter(ig=ig_id).select_related('user')
