@@ -4,7 +4,8 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle
-from db.organization import College
+from db.organization import College, UserOrganizationLink
+from db.task import KarmaActivityLog
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 
@@ -38,9 +39,10 @@ class CollegeListSerializer(serializers.ModelSerializer):
 
     def get_no_of_lc(self, obj):
         learning_circle_count = LearningCircle.objects.filter(org=obj.org).count()
-        LearningCircle.objects.filter(org=obj.org,
-                                      created_at__lte=DateTimeUtils.get_current_utc_time() - timedelta(days=30)).count()
-        return {'lc_count': learning_circle_count, 'no_of_lc_increased': 1}
+        no_of_lc_increased = LearningCircle.objects.filter(org=obj.org,
+                                                           created_at__lte=DateTimeUtils.get_current_utc_time() - timedelta(
+                                                               days=30)).count()
+        return {'lc_count': learning_circle_count, 'no_of_lc_increased': no_of_lc_increased}
 
     def get_number_of_members(self, obj):
         member_count = obj.org.user_organization_link_org.all().count()
@@ -51,25 +53,27 @@ class CollegeListSerializer(serializers.ModelSerializer):
         return {'member_count': member_count, 'no_of_members_increased': no_of_members_increased}
 
     def get_total_karma(self, obj):
+        user_org_links = UserOrganizationLink.objects.filter(
+            org=obj.org,
+            org__org_type=OrganizationType.COLLEGE.value,
+            verified=True
+        )
         total_karma_gained = (
-                obj.org.user_organization_link_org.filter(
-                    org__org_type=OrganizationType.COLLEGE.value,
-                    is_alumni=False,
-                    verified=True,
-                    user__wallet_user__isnull=False,
-                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+                KarmaActivityLog.objects.filter(
+                    user__in=user_org_links.values('user'),
+                ).aggregate(total_karma=Sum("karma"))["total_karma"]
                 or 0
         )
+
         total_karma_increased = (
-                obj.org.user_organization_link_org.filter(
-                    org__org_type=OrganizationType.COLLEGE.value,
-                    is_alumni=False,
-                    verified=True,
-                    user__wallet_user__isnull=False,
-                    user__wallet_user__created_at__gt=DateTimeUtils.get_current_utc_time() - timedelta(days=30),
-                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+                KarmaActivityLog.objects.filter(
+                    user__in=user_org_links.values('user'),
+                    created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(
+                        days=30),
+                ).aggregate(total_karma=Sum("karma"))["total_karma"]
                 or 0
         )
-        increased_percentage = total_karma_increased * 100 / 100
+
+        increased_percentage = (total_karma_increased / total_karma_gained) * 100
         return {'total_karma_gained': total_karma_gained, 'total_karma_increased': total_karma_increased,
                 'increased_percentage': increased_percentage}
