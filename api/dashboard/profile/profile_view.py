@@ -3,21 +3,21 @@ from io import BytesIO
 import decouple
 import qrcode
 import requests
-from PIL import Image
 from django.contrib.auth.hashers import make_password
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch
+from PIL import Image
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level
-from db.user import Role
-from db.user import User, UserSettings, UserRoleLink, Socials
+from db.user import Role, Socials, User, UserRoleLink, UserSettings
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
-from utils.utils import DiscordWebhooks
+from utils.utils import DateTimeUtils, DiscordWebhooks
+
 from . import profile_serializer
 from .profile_serializer import LinkSocials
 
@@ -34,23 +34,16 @@ class UserProfileEditView(APIView):
                 general_message="User Not Exists"
             ).get_failure_response()
 
-        serializer = profile_serializer.UserProfileEditSerializer(
-            user,
-            many=False
-        )
+        serializer = profile_serializer.UserProfileEditSerializer(user, many=False)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
 
         serializer = profile_serializer.UserProfileEditSerializer(
-            user,
-            data=request.data,
-            partial=True
+            user, data=request.data, partial=True
         )
 
         if serializer.is_valid():
@@ -62,13 +55,20 @@ class UserProfileEditView(APIView):
                 user_id,
             )
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    def delete(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id)
+        user.deleted_by = user
+        user.deleted_at = DateTimeUtils.get_current_utc_time()
+        user.save()
 
         return CustomResponse(
-            response=serializer.errors
-        ).get_failure_response()
+            general_message="User deleted successfully"
+        ).get_success_response()
 
 
 class UserIgEditView(APIView):
@@ -77,18 +77,11 @@ class UserIgEditView(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_ig = InterestGroup.objects.filter(
-            user_ig_link_ig__user_id=user_id
-        ).all()
+        user_ig = InterestGroup.objects.filter(user_ig_link_ig__user_id=user_id).all()
 
-        serializer = profile_serializer.UserIgListSerializer(
-            user_ig,
-            many=True
-        )
+        serializer = profile_serializer.UserIgListSerializer(user_ig, many=True)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -99,9 +92,7 @@ class UserIgEditView(APIView):
         )
 
         if not serializer.is_valid():
-            return CustomResponse(
-                response=serializer.errors
-            ).get_failure_response()
+            return CustomResponse(response=serializer.errors).get_failure_response()
 
         serializer.save()
         DiscordWebhooks.general_updates(
@@ -121,8 +112,7 @@ class UserProfileAPI(APIView):
                 Prefetch(
                     "user_organization_link_user",
                     queryset=UserOrganizationLink.objects.all().select_related(
-                        "org",
-                        "department"
+                        "org", "department"
                     ),
                 ),
                 Prefetch(
@@ -132,9 +122,7 @@ class UserProfileAPI(APIView):
             ).get(muid=muid or JWTUtils.fetch_muid(request))
 
             if muid:
-                user_settings = UserSettings.objects.filter(
-                    user_id=user
-                ).first()
+                user_settings = UserSettings.objects.filter(user_id=user).first()
 
                 if not user_settings.is_public:
                     return CustomResponse(
@@ -144,14 +132,9 @@ class UserProfileAPI(APIView):
             else:
                 JWTUtils.is_jwt_authenticated(request)
 
-            serializer = profile_serializer.UserProfileSerializer(
-                user,
-                many=False
-            )
+            serializer = profile_serializer.UserProfileSerializer(user, many=False)
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         except User.DoesNotExist:
             return CustomResponse(
@@ -161,20 +144,15 @@ class UserProfileAPI(APIView):
 
 class UserLogAPI(APIView):
     def get(self, request, muid=None):
-
         if muid is not None:
-            user = User.objects.filter(
-                muid=muid
-            ).first()
+            user = User.objects.filter(muid=muid).first()
 
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
                 ).get_failure_response()
 
-            user_settings = UserSettings.objects.filter(
-                user_id=user
-            ).first()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
 
             if not user_settings.is_public:
                 return CustomResponse(
@@ -187,25 +165,17 @@ class UserLogAPI(APIView):
             user_id = JWTUtils.fetch_user_id(request)
 
         karma_activity_log = KarmaActivityLog.objects.filter(
-            user=user_id,
-            appraiser_approved=True
-        ).order_by(
-            "-created_at"
-        )
+            user=user_id, appraiser_approved=True
+        ).order_by("-created_at")
 
         if karma_activity_log is None:
             return CustomResponse(
                 general_message="No karma details available for user"
             ).get_success_response()
 
-        serializer = profile_serializer.UserLogSerializer(
-            karma_activity_log,
-            many=True
-        )
+        serializer = profile_serializer.UserLogSerializer(karma_activity_log, many=True)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class ShareUserProfileAPI(APIView):
@@ -221,9 +191,7 @@ class ShareUserProfileAPI(APIView):
             ).get_failure_response()
 
         serializer = profile_serializer.ShareUserProfileUpdateSerializer(
-            user_settings,
-            data=request.data,
-            context={"request": request}
+            user_settings, data=request.data, context={"request": request}
         )
 
         if serializer.is_valid():
@@ -239,9 +207,7 @@ class ShareUserProfileAPI(APIView):
                 general_message=general_message
             ).get_success_response()
 
-        return CustomResponse(
-            message=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
     # function for generating profile qr code
 
@@ -289,7 +255,7 @@ class ShareUserProfileAPI(APIView):
 
                 logo_width, logo_height = logo_image.size
                 basewidth = 100
-                wpercent = (basewidth / float(logo_width))
+                wpercent = basewidth / float(logo_width)
                 hsize = int((float(logo_height) * float(wpercent)))
                 resized_logo = logo_image.resize((basewidth, hsize))
 
@@ -298,17 +264,22 @@ class ShareUserProfileAPI(APIView):
                 )
 
                 QRcode.add_data(data)
-                QRcolor = 'black'
-                QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert('RGB')
+                QRcolor = "black"
+                QRimg = QRcode.make_image(
+                    fill_color=QRcolor, back_color="white"
+                ).convert("RGB")
 
-                pos = ((QRimg.size[0] - resized_logo.size[0]) // 2, (QRimg.size[1] - resized_logo.size[1]) // 2)
+                pos = (
+                    (QRimg.size[0] - resized_logo.size[0]) // 2,
+                    (QRimg.size[1] - resized_logo.size[1]) // 2,
+                )
                 # image = Image.open(BytesIO("image_response.content"))
                 QRimg.paste(resized_logo, pos)
                 image_io = BytesIO()
-                QRimg.save(image_io, format='PNG')
+                QRimg.save(image_io, format="PNG")
                 image_io.seek(0)
                 image_data: bytes = image_io.getvalue()
-                file_path = f'user/qr/{user_uuid}.png'
+                file_path = f"user/qr/{user_uuid}.png"
                 fs.exists(file_path) and fs.delete(file_path)
                 file = fs.save(file_path, ContentFile(image_io.read()))
 
@@ -319,7 +290,6 @@ class ShareUserProfileAPI(APIView):
 
 class UserLevelsAPI(APIView):
     def get(self, request, muid=None):
-
         if muid is not None:
             user = User.objects.filter(muid=muid).first()
 
@@ -328,9 +298,7 @@ class UserLevelsAPI(APIView):
                     general_message="Invalid muid"
                 ).get_failure_response()
 
-            user_settings = UserSettings.objects.filter(
-                user_id=user
-            ).first()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
 
             if not user_settings.is_public:
                 return CustomResponse(
@@ -344,58 +312,37 @@ class UserLevelsAPI(APIView):
 
         user_levels_link_query = Level.objects.all().order_by("level_order")
         serializer = profile_serializer.UserLevelSerializer(
-            user_levels_link_query,
-            many=True,
-            context={
-                "user_id": user_id
-            }
+            user_levels_link_query, many=True, context={"user_id": user_id}
         )
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class UserRankAPI(APIView):
     def get(self, request, muid):
-        user = User.objects.filter(
-            muid=muid
-        ).first()
+        user = User.objects.filter(muid=muid).first()
 
         if user is None:
-            return CustomResponse(
-                general_message="Invalid muid"
-            ).get_failure_response()
+            return CustomResponse(general_message="Invalid muid").get_failure_response()
 
         roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
 
         serializer = profile_serializer.UserRankSerializer(
-            user,
-            many=False,
-            context={
-                "roles": roles
-            }
+            user, many=False, context={"roles": roles}
         )
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class GetSocialsAPI(APIView):
     def get(self, request, muid=None):
-
         if muid is not None:
-            user = User.objects.filter(
-                muid=muid
-            ).first()
+            user = User.objects.filter(muid=muid).first()
             if user is None:
                 return CustomResponse(
                     general_message="Invalid muid"
                 ).get_failure_response()
 
-            user_settings = UserSettings.objects.filter(
-                user_id=user
-            ).first()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
 
             if not user_settings.is_public:
                 return CustomResponse(
@@ -407,17 +354,11 @@ class GetSocialsAPI(APIView):
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
 
-        social_instance = Socials.objects.filter(
-            user_id=user_id
-        ).first()
+        social_instance = Socials.objects.filter(user_id=user_id).first()
 
-        serializer = LinkSocials(
-            instance=social_instance
-        )
+        serializer = LinkSocials(instance=social_instance)
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class SocialsAPI(APIView):
@@ -425,16 +366,10 @@ class SocialsAPI(APIView):
 
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        social_instance = Socials.objects.filter(
-            user_id=user_id
-        ).first()
+        social_instance = Socials.objects.filter(user_id=user_id).first()
 
         serializer = LinkSocials(
-            instance=social_instance,
-            data=request.data,
-            context={
-                "request": request
-            }
+            instance=social_instance, data=request.data, context={"request": request}
         )
 
         if serializer.is_valid():
@@ -444,9 +379,7 @@ class SocialsAPI(APIView):
                 general_message="Socials Updated"
             ).get_success_response()
 
-        return CustomResponse(
-            response=serializer.errors
-        ).get_failure_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
 
 
 class ResetPasswordAPI(APIView):
@@ -461,7 +394,7 @@ class ResetPasswordAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        return self.save_password(request,user)
+        return self.save_password(request, user)
 
     def save_password(self, request, user_obj):
         new_password = request.data.get("password")
@@ -477,11 +410,11 @@ class ResetPasswordAPI(APIView):
 class QrcodeRetrieveAPI(APIView):
     def get(self, request, uuid):
         try:
-            user = User.objects.prefetch_related().get(id=uuid or JWTUtils.fetch_user_id(request))
+            user = User.objects.prefetch_related().get(
+                id=uuid or JWTUtils.fetch_user_id(request)
+            )
 
-            user_settings = UserSettings.objects.filter(
-                user_id=user
-            ).first()
+            user_settings = UserSettings.objects.filter(user_id=user).first()
 
             if not user_settings.is_public:
                 return CustomResponse(
@@ -489,14 +422,10 @@ class QrcodeRetrieveAPI(APIView):
                 ).get_failure_response()
 
             serializer = profile_serializer.UserShareQrcode(
-                user,
-                many=False,
-                context={'request': request}
+                user, many=False, context={"request": request}
             )
 
-            return CustomResponse(
-                response=serializer.data
-            ).get_success_response()
+            return CustomResponse(response=serializer.data).get_success_response()
 
         except User.DoesNotExist:
             return CustomResponse(
