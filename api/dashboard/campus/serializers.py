@@ -121,6 +121,8 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     join_date = serializers.CharField()
     email = serializers.CharField()
     mobile = serializers.CharField()
+    graduation_year = serializers.CharField()
+    department = serializers.CharField()
 
     class Meta:
         fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date")
