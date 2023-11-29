@@ -489,6 +489,9 @@ class LearningCircleNoteSerializer(serializers.ModelSerializer):
 
 
 class ScheduleMeetingSerializer(serializers.ModelSerializer):
+    meet_time = serializers.CharField(required=True)
+    day = serializers.CharField(required=True)
+
     class Meta:
         model = LearningCircle
         fields = [
