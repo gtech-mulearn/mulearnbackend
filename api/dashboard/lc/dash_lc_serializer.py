@@ -1,12 +1,14 @@
 import uuid
 
-from django.db.models import Sum, Count
+from django.db.models import Sum, Count, Value, CharField
+from django.db.models.functions import Concat
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
 from db.task import TaskList, UserIgLink
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+from db.user import User
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from utils.types import Lc
@@ -505,16 +507,41 @@ class ScheduleMeetingSerializer(serializers.ModelSerializer):
 
 
 class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
+    attendees_details = serializers.SerializerMethodField()
+    meet_created_by = serializers.CharField(source='created_by.fullname', required=False)
+    meet_created_at = serializers.CharField(source='created_at', required=False)
+    meet_id = serializers.CharField(source='id', required=False)
 
     class Meta:
         model = CircleMeetingLog
         fields = [
+            "meet_id",
             "meet_time",
             "meet_place",
             "day",
             "attendees",
             "agenda",
+            "attendees_details",
+            "meet_created_by",
+            "meet_created_at"
         ]
+
+    def get_attendees_details(self, obj):
+        attendees_list = obj.attendees.split(',')
+
+        attendees_details_list = User.objects.filter(
+            id__in=attendees_list
+        ).values(
+            'profile_pic',
+            fullname=Concat(
+                'first_name',
+                Value(' '),
+                'last_name',
+                output_field=CharField()
+            ),
+        )
+
+        return attendees_details_list
 
     def create(self, validated_data):
         validated_data['id'] = uuid.uuid4()
@@ -531,7 +558,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     def validate_attendees(self, attendees):
         task = TaskList.objects.filter(hashtag=Lc.TASK_HASHTAG.value).first()
 
-        attendees = attendees.split(',')
+        attendees_list = attendees.split(',')
 
         user_id = self.context.get('user_id')
 
@@ -544,24 +571,46 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
                 updated_by_id=user_id,
                 created_by_id=user_id,
             )
-            for user in attendees
+            for user in attendees_list
         ])
 
         return attendees
 
 
+class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CircleMeetingLog
+        fields = [
+            "id",
+            "meet_time",
+            "day",
+        ]
+
+
 class IgTaskDetailsSerializer(serializers.ModelSerializer):
     task = serializers.CharField(source='title')
-    is_completed = serializers.SerializerMethodField()
+    task_status = serializers.SerializerMethodField()
+    task_id = serializers.CharField(source='id')
+    task_level = serializers.CharField(source='level.level_order')
+    task_level_karma = serializers.CharField(source='level.karma')
+    task_karma = serializers.CharField(source='karma')
+    task_description = serializers.CharField(source='description')
+    interest_group = serializers.CharField(source='ig.name')
 
     class Meta:
         model = TaskList
         fields = [
+            "task_id",
             "task",
-            "is_completed"
+            "task_karma",
+            "task_description",
+            "interest_group",
+            "task_status",
+            "task_level",
+            "task_level_karma",
         ]
 
-    def get_is_completed(self, obj):
+    def get_task_status(self, obj):
         ig_id = self.context.get('ig_id')
 
         user_ig_links = UserIgLink.objects.filter(ig=ig_id).select_related('user')

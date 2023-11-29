@@ -1,18 +1,18 @@
 import uuid
 from datetime import timedelta
 
+from decouple import config as decouple_config
 from django.contrib.auth.hashers import make_password
+from django.core.files.storage import FileSystemStorage
 from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
-from utils.response import CustomResponse, ImageResponse
+from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
-from django.core.files.storage import FileSystemStorage
-from decouple import config as decouple_config
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
@@ -50,7 +50,6 @@ class UserGetPatchDeleteAPI(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
         user = User.objects.filter(id=user_id).first()
 

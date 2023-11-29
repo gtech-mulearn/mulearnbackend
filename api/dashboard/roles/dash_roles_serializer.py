@@ -80,3 +80,26 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
 
         return super().create(validated_data)
+    
+class UserRoleBulkAssignSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(required=True)
+    role_id = serializers.CharField(required=True)
+    created_by_id = serializers.CharField(required=True, allow_null=False)
+    class Meta:
+        model = UserRoleLink
+        fields = [
+            "id",
+            "user_id",
+            "role_id",
+            "verified",
+            "created_by_id",
+            "created_at",
+        ]
+
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        representation['user_id'] = instance.user.fullname if instance.user else None
+        representation['role_id'] = instance.role.title if instance.role else None
+        return representation
+    
