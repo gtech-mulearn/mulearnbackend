@@ -7,7 +7,7 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils, DiscordWebhooks
 from utils.types import WebHookActions, WebHookCategory
 from django.db.models import Q
-
+from django.db import transaction
 
 class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
     """
@@ -49,14 +49,14 @@ class RoleAssignmentSerializer(serializers.Serializer):
         user_roles_to_create = [
             UserRoleLink(user=user, **validated_data) for user in users
         ]
-
-        DiscordWebhooks.general_updates(
-            WebHookCategory.BULK_ROLE.value,
-            WebHookActions.UPDATE.value,
-            validated_data["role"].title,
-            ",".join(list(users.values_list("id", flat=True))),
-        )
-        UserRoleLink.objects.bulk_create(user_roles_to_create)
+        with transaction.atomic():
+            UserRoleLink.objects.bulk_create(user_roles_to_create)
+            DiscordWebhooks.general_updates(
+                WebHookCategory.BULK_ROLE.value,
+                WebHookActions.UPDATE.value,
+                validated_data["role"].title,
+                ",".join(list(users.values_list("id", flat=True))),
+            )
         return user_roles_to_create
 
 
