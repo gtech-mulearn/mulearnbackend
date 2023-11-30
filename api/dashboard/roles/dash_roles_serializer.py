@@ -4,7 +4,9 @@ from rest_framework import serializers
 
 from db.user import Role, User, UserRoleLink
 from utils.permission import JWTUtils
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, DiscordWebhooks
+from utils.types import WebHookActions, WebHookCategory
+from django.db.models import Q
 
 
 class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
@@ -28,13 +30,17 @@ class RoleAssignmentSerializer(serializers.Serializer):
     users = serializers.ListField(child=serializers.UUIDField())
     created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
 
-    def validate_users(self, attrs):
-        attrs = set(attrs)
-        users = User.objects.filter(pk__in=attrs)
+    def validate(self, attrs):
+        data = super().validate(attrs)
+        attrs = set(attrs["users"])
+        users = User.objects.filter(
+            ~Q(user_role_link_user__role=data["role"]), pk__in=attrs
+        )
         if users.count() != len(attrs):
             raise serializers.ValidationError("One or more user IDs are invalid.")
         else:
-            return users
+            data["users"] = users
+            return data
 
     def create(self, validated_data):
         users = validated_data.pop("users")
@@ -43,7 +49,13 @@ class RoleAssignmentSerializer(serializers.Serializer):
         user_roles_to_create = [
             UserRoleLink(user=user, **validated_data) for user in users
         ]
-        # TODO: Implement the user assigning in discord too
+
+        DiscordWebhooks.general_updates(
+            WebHookCategory.BULK_ROLE.value,
+            WebHookActions.UPDATE.value,
+            validated_data["role"].title,
+            ",".join(list(users.values_list("id", flat=True))),
+        )
         UserRoleLink.objects.bulk_create(user_roles_to_create)
         return user_roles_to_create
 
