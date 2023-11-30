@@ -12,6 +12,7 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
     task_id = serializers.CharField(required=True, allow_null=False)
     created_by_id = serializers.CharField(required=True, allow_null=False)
     updated_by_id = serializers.CharField(required=True, allow_null=False)
+    week = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = VoucherLog
@@ -32,6 +33,30 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
             'description'
             ]   
 
+    def validate(self, data):
+        response_data = {}
+        response_data["code"] = data.get('code')
+        week = data.get('week')
+        if week and len(str(week)) > 2:
+            response_data["error"] = "Week must not exceed 2 characters in length and should be of the format 'W1'"
+            raise serializers.ValidationError(response_data)
+        return data
+    
+    def to_representation(self, instance):
+        representation = super().to_representation(instance)
+
+        representation['code'] = instance.code
+        representation['fullname'] = instance.user.fullname
+        representation['email'] = instance.user.email
+        representation['muid'] = instance.user.muid 
+        representation['hashtag'] = instance.task.hashtag
+        representation['month'] = instance.month
+        representation['karma'] = instance.karma
+        representation['week'] = instance.week if instance.week else None
+        representation['description'] = instance.description if instance.description else None
+        representation['event'] = instance.event if instance.event else None
+
+        return representation
 
 class VoucherLogSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source='user.fullname')
