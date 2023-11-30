@@ -19,7 +19,7 @@ from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSe
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, \
-    ScheduleMeetingSerializer, ListAllMeetRecordsSerializer
+    ScheduleMeetingSerializer, ListAllMeetRecordsSerializer, AddMemberSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -687,3 +687,34 @@ class IgTaskDetailsAPI(APIView):
         return CustomResponse(
             response=serializer.data
         ).get_success_response()
+
+
+class AddMemberAPI(APIView):
+    def post(self, request):
+        muid = request.data.get('muid')
+        circle_id = request.data.get('circle_id')
+
+        user = User.objects.filter(muid=muid).first()
+        if not user:
+            return CustomResponse(
+                general_message="invalid user"
+            ).get_failure_response()
+
+        serializer = AddMemberSerializer(
+            data=request.data,
+            context={
+                'user': user,
+                'muid': muid,
+                'circle_id': circle_id,
+            }
+        )
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                general_message='user added successfully'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
