@@ -5,7 +5,7 @@ from django.db.models.functions import Concat
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
-from db.task import TaskList, UserIgLink
+from db.task import TaskList, UserIgLink, Wallet
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 from db.user import User
@@ -316,6 +316,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     is_lead = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
     ig_code = serializers.CharField(source='ig.code')
+    ig_id = serializers.CharField(source='ig.id')
     previous_meetings = serializers.SerializerMethodField()
 
     class Meta:
@@ -334,6 +335,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "total_karma",
             "is_lead",
             "is_member",
+            "ig_id",
             "ig_code",
             "previous_meetings",
         ]
@@ -398,6 +400,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
                 'profile_pic': member.user.profile_pic or None,
                 'karma': total_ig_karma,
                 'is_lead': member.lead,
+                'level': member.user.user_lvl_link_user.level.level_order
             })
 
         return member_info
@@ -606,19 +609,21 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         attendees_list = attendees.split(',')
 
         user_id = self.context.get('user_id')
-
-        KarmaActivityLog.objects.bulk_create([
-            KarmaActivityLog(
-                id=uuid.uuid4(),
-                user_id=user,
-                karma=Lc.KARMA.value,
-                task=task,
-                updated_by_id=user_id,
-                created_by_id=user_id,
-            )
-            for user in attendees_list
-        ])
-
+        for user in attendees_list:
+            KarmaActivityLog.objects.bulk_create([
+                KarmaActivityLog(
+                    id=uuid.uuid4(),
+                    user_id=user,
+                    karma=Lc.KARMA.value,
+                    task=task,
+                    updated_by_id=user_id,
+                    created_by_id=user_id,
+                )
+            ])
+            wallet = Wallet.objects.filter(user_id=user).first()
+            wallet.karma += Lc.KARMA.value
+            wallet.updated_at = DateTimeUtils.get_current_utc_time()
+            wallet.save()
         return attendees
 
 
@@ -656,17 +661,14 @@ class IgTaskDetailsSerializer(serializers.ModelSerializer):
         ]
 
     def get_task_status(self, obj):
-        ig_id = self.context.get('ig_id')
-
-        user_ig_links = UserIgLink.objects.filter(ig=ig_id).select_related('user')
-
+        user_ig_links = UserIgLink.objects.filter(ig=obj.ig).select_related('user')
         for user_ig_link in user_ig_links:
-            if not obj.karma_activity_log_task.filter(
+            if obj.karma_activity_log_task.filter(
                     user=user_ig_link.user,
-                    peer_approved=True
-            ).exists():
+                    peer_approved=True).exists():
+                return True
+            else:
                 return False
-        return True
 
 
 class AddMemberSerializer(serializers.ModelSerializer):
