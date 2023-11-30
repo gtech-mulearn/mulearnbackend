@@ -128,7 +128,7 @@ class Wallet(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="wallet_user")
     karma = models.IntegerField(default=0)
-    karma_last_update_at = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    # karma_last_update_at = models.DateTimeField(blank=True, null=True, auto_now_add=True)
     coin = models.FloatField(default=0)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
                                    related_name="wallet_updated_by")

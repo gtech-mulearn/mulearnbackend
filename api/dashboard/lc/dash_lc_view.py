@@ -403,7 +403,7 @@ class LearningCircleHomeApi(APIView):
 
 class SingleReportDetailAPI(APIView):
 
-    def get(self, request, circle_id, report_id):
+    def get(self, request, circle_id, report_id=None):
         circle_meeting_log = CircleMeetingLog.objects.get(id=report_id)
 
         serializer = MeetRecordsCreateEditDeleteSerializer(
@@ -671,15 +671,12 @@ class ScheduleMeetAPI(APIView):
 
 
 class IgTaskDetailsAPI(APIView):
-    def get(self, request, ig_id):
-        task_list = TaskList.objects.filter(ig=ig_id)
+    def get(self, request, circle_id):
+        task_list = TaskList.objects.filter(ig__learning_circle_ig__id=circle_id)
 
         serializer = IgTaskDetailsSerializer(
             task_list,
             many=True,
-            context={
-                'ig': ig_id
-            }
         )
 
         return CustomResponse(
