@@ -301,8 +301,8 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         validated_data['user_id'] = user_id
         validated_data['circle_id'] = circle_id
         validated_data['lead'] = False
-        validated_data['accepted'] = None
-        validated_data['accepted_at'] = None
+        validated_data['accepted'] = True
+        validated_data['accepted_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
         return UserCircleLink.objects.create(**validated_data)
 

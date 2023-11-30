@@ -25,7 +25,7 @@ domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
 
 
-class LearningCircleListApi(APIView):
+class UserLearningCircleListApi(APIView):
     """
     API endpoint for listing a user's learning circles.
 
@@ -401,11 +401,11 @@ class LearningCircleHomeApi(APIView):
         return CustomResponse(general_message='Left').get_success_response()
 
 
-class MeetRecordsGetPostPatchDeleteAPI(APIView):
+class SingleReportDetailAPI(APIView):
 
-    def get(self, request, meet_id=None, circle_id=None):
-        if meet_id:
-            circle_meeting_log = CircleMeetingLog.objects.get(id=meet_id)
+    def get(self, request, report_id=None, circle_id=None):
+        if report_id:
+            circle_meeting_log = CircleMeetingLog.objects.get(id=report_id)
 
             serializer = MeetRecordsCreateEditDeleteSerializer(
                 circle_meeting_log,
@@ -444,34 +444,34 @@ class MeetRecordsGetPostPatchDeleteAPI(APIView):
             message=serializer.errors
         ).get_failure_response()
 
-    def patch(self, request, circle_id):
-        user_id = JWTUtils.fetch_user_id(request)
-
-        learning_circle = LearningCircle.objects.filter(
-            id=circle_id
-        ).first()
-
-        serializer = MeetRecordsCreateEditDeleteSerializer(
-            learning_circle,
-            data=request.data,
-            context={
-                'user_id': user_id
-            }
-        )
-        if serializer.is_valid():
-            serializer.save()
-
-            return CustomResponse(
-                general_message='Meet updated successfully'
-            ).get_success_response()
-
-        return CustomResponse(
-            message=serializer.errors
-        ).get_failure_response()
+    # def patch(self, request, circle_id):
+    #     user_id = JWTUtils.fetch_user_id(request)
+    #
+    #     learning_circle = LearningCircle.objects.filter(
+    #         id=circle_id
+    #     ).first()
+    #
+    #     serializer = MeetRecordsCreateEditDeleteSerializer(
+    #         learning_circle,
+    #         data=request.data,
+    #         context={
+    #             'user_id': user_id
+    #         }
+    #     )
+    #     if serializer.is_valid():
+    #         serializer.save()
+    #
+    #         return CustomResponse(
+    #             general_message='Meet updated successfully'
+    #         ).get_success_response()
+    #
+    #     return CustomResponse(
+    #         message=serializer.errors
+    #     ).get_failure_response()
 
 
 class LearningCircleLeadTransfer(APIView):
-    def patch(self, request, circle_id, lead_id):
+    def patch(self, request, circle_id, new_lead_id):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_circle_link = UserCircleLink.objects.filter(
@@ -479,9 +479,9 @@ class LearningCircleLeadTransfer(APIView):
             user__id=user_id
         ).first()
 
-        lead_circle_link = UserCircleLink.objects.filter(
+        new_lead_circle_link = UserCircleLink.objects.filter(
             circle__id=circle_id,
-            user__id=lead_id
+            user__id=new_lead_id
         ).first()
 
         if not LearningCircle.objects.filter(
@@ -496,15 +496,15 @@ class LearningCircleLeadTransfer(APIView):
                 general_message='User is not lead'
             ).get_failure_response()
 
-        if lead_circle_link is None:
+        if new_lead_circle_link is None:
             return CustomResponse(
                 general_message='New lead not found in the circle'
             ).get_failure_response()
 
         user_circle_link.lead = None
-        lead_circle_link.lead = 1
+        new_lead_circle_link.lead = 1
         user_circle_link.save()
-        lead_circle_link.save()
+        new_lead_circle_link.save()
 
         return CustomResponse(
             general_message='Lead transferred successfully'
@@ -696,9 +696,8 @@ class IgTaskDetailsAPI(APIView):
 
 
 class AddMemberAPI(APIView):
-    def post(self, request):
+    def post(self, request, circle_id):
         muid = request.data.get('muid')
-        circle_id = request.data.get('circle_id')
 
         user = User.objects.filter(muid=muid).first()
         if not user:
