@@ -2,8 +2,7 @@ from rest_framework.views import APIView
 
 from api.url_shortener.serializers import (
     ShowShortenUrlsSerializer,
-    ShortenUrlsCreateUpdateSerializer,
-    ShowShortenUrlsTrackerSerializer
+    ShortenUrlsCreateUpdateSerializer
 )
 from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import CustomizePermission
@@ -11,7 +10,6 @@ from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from django.db.models import Count
 
 
 class UrlShortenerAPI(APIView):
@@ -134,45 +132,43 @@ class UrlAnalyticsAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def get(self, request, url_id):
-        url_tracker_obj = UrlShortener.objects.filter(id=url_id).first()
+        queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
 
-        if url_tracker_obj is None:
-            return CustomResponse(
-                general_message="No URL related data available"
-            ).get_failure_response()
-            
-        queryset = UrlShortenerTracker.objects.filter(url_shortener_id = url_tracker_obj.id)
-        device_counts = UrlShortenerTracker.objects.values('device_type').annotate(count=Count('device_type')).order_by('device_type')
-        platform_counts = UrlShortenerTracker.objects.values('operating_system').annotate(count=Count('operating_system')).order_by('operating_system')
-        browser_counts = UrlShortenerTracker.objects.values('browser').annotate(count=Count('browser')).order_by('browser')
-        
-        countset={}
-        countset[1] = device_counts
-        countset[2] = platform_counts
-        countset[3] = browser_counts
-        
-        print(countset)
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            queryset,
-            request,
-            ["id","ip_address","device_type","operating_system","browser",]
+        browsers = {}
+        operating_systems = {}
+        devices = {}
+        referrer = {}
 
-        )
+        for query in queryset:
+            # Counting browsers
+            if browsers.get(query.browser):
+                browsers[query.browser] += 1
+            else:
+                browsers[query.browser] = 1
 
-        serializer = ShowShortenUrlsTrackerSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
-        )
+            # Counting operating systems
+            if operating_systems.get(query.operating_system):
+                operating_systems[query.operating_system] += 1
+            else:
+                operating_systems[query.operating_system] = 1
 
-        return CustomResponse(
-            general_message="URL Stats",
-            response=countset
-                ).paginated_response(
-                    data=serializer.data,
-                    pagination=paginated_queryset.get(
-                        "pagination"
-                    )
-                )
+            # Counting devices
+            if devices.get(query.device_type):
+                devices[query.device_type] += 1
+            else:
+                devices[query.device_type] = 1
 
+            if referrer.get(query.referrer):
+                referrer[query.referrer] += 1
+            else:
+                referrer[query.referrer] = 1
 
-            
+        result = {
+            'total_clicks': query.url_shortener.count,
+            'browsers': browsers,
+            'platforms': operating_systems,
+            'devices': devices,
+            'sources': referrer,
+        }
+
+        return CustomResponse(response=result).get_success_response()
