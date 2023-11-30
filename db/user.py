@@ -81,6 +81,9 @@ class UserRoleLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_role_link'
+        constraints = [
+            models.UniqueConstraint(fields=['role', 'user'], name="UserToRole")
+        ]
 
 
 class Socials(models.Model):
