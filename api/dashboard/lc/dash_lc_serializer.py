@@ -196,38 +196,66 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         return lc
 
 
+# class LearningCircleMemberListSerializer(serializers.ModelSerializer):
+#     members = serializers.SerializerMethodField()
+#
+#     class Meta:
+#         model = LearningCircle
+#         fields = [
+#             'members',
+#         ]
+#
+#     def get_members(self, obj):
+#         # user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
+#         # return [
+#         #     {
+#         #         'full_name': f'{member.user.fullname}',
+#         #         'discord_id': member.user.discord_id,
+#         #     }
+#         #     for member in user_circle_link
+#         # ]
+#         user_circle_link = obj.user_circle_link_circle.filter(
+#             circle=obj,
+#             accepted=True
+#         ).values(
+#             full_name=Concat(
+#                 'user__first_name',
+#                 Value(' '),
+#                 'user__last_name',
+#                 output_field=CharField()
+#             ),
+#             discord_id=F('user__discord_id'),
+#             level=F('user__user_lvl_link_user__level__name')
+#         )
+#         return user_circle_link
+
 class LearningCircleMemberListSerializer(serializers.ModelSerializer):
-    members = serializers.SerializerMethodField()
+    fullname = serializers.CharField(source='user.fullname')
+    discord_id = serializers.CharField(source='user.discord_id')
+    level = serializers.CharField(source='user.user_lvl_link_user.level.name')
+    lc_karma = serializers.SerializerMethodField()
 
     class Meta:
-        model = LearningCircle
+        model = UserCircleLink
         fields = [
-            'members',
+            'fullname',
+            'discord_id',
+            'level',
+            'lc_karma'
         ]
 
-    def get_members(self, obj):
-        # user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
-        # return [
-        #     {
-        #         'full_name': f'{member.user.fullname}',
-        #         'discord_id': member.user.discord_id,
-        #     }
-        #     for member in user_circle_link
-        # ]
-        user_circle_link = obj.user_circle_link_circle.filter(
-            circle=obj,
-            accepted=True
-        ).values(
-            full_name=Concat(
-                'user__first_name',
-                Value(' '),
-                'user__last_name',
-                output_field=CharField()
-            ),
-            discord_id=F('user__discord_id'),
-            level=F('user__user_lvl_link_user__level__name')
-        )
-        return user_circle_link
+    def get_lc_karma(self, obj):
+        circle_id = self.context.get('circle_id')
+        karma_activity_log = KarmaActivityLog.objects.filter(
+            user=obj.user,
+            task__ig__learning_circle_ig__id=circle_id
+        ).aggregate(
+            karma=Sum(
+                'karma'
+            )
+        )['karma']
+
+        return karma_activity_log if karma_activity_log else 0
 
 
 class LearningCircleJoinSerializer(serializers.ModelSerializer):

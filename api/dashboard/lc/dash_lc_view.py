@@ -138,18 +138,24 @@ class LearningCircleCreateApi(APIView):
 
 class LearningCircleListMembersApi(APIView):
     def get(self, request, circle_id):
-        learning_circle = LearningCircle.objects.filter(
-            id=circle_id
+        # learning_circle = LearningCircle.objects.filter(
+        #     id=circle_id
+        # )
+        user_learning_circle = UserCircleLink.objects.filter(
+            circle_id=circle_id
         )
 
-        if learning_circle is None:
+        if user_learning_circle is None:
             return CustomResponse(
                 general_message='Learning Circle Not Exists'
             ).get_failure_response()
 
         serializer = LearningCircleMemberListSerializer(
-            learning_circle,
-            many=True
+            user_learning_circle,
+            many=True,
+            context={
+                'circle_id': circle_id
+            }
         )
 
         return CustomResponse(
