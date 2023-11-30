@@ -39,6 +39,7 @@ class RoleAssignmentSerializer(serializers.Serializer):
     def create(self, validated_data):
         users = validated_data.pop("users")
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        validated_data["verified"] = True
         user_roles_to_create = [
             UserRoleLink(user=user, **validated_data) for user in users
         ]
