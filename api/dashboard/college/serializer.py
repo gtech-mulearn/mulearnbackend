@@ -73,7 +73,10 @@ class CollegeListSerializer(serializers.ModelSerializer):
                 ).aggregate(total_karma=Sum("karma"))["total_karma"]
                 or 0
         )
-
-        increased_percentage = (total_karma_increased / total_karma_gained) * 100
+        try:
+            increased_percentage = (total_karma_increased / total_karma_gained) * 100
+        except Exception as e:
+            increased_percentage = 0
+            return increased_percentage
         return {'total_karma_gained': total_karma_gained, 'total_karma_increased': total_karma_increased,
                 'increased_percentage': increased_percentage}
