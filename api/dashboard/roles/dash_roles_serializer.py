@@ -7,6 +7,46 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
 
+class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
+    """
+    Serializer used by UserRoleLinkManagement API to lists the
+    details of the user with a specific role
+    """
+
+    class Meta:
+        model = User
+        fields = ["id", "muid", "fullname"]
+
+
+class RoleAssignmentSerializer(serializers.Serializer):
+    """
+    Used by UserRoleLinkManagement to assign
+    a role to a large number of users
+    """
+
+    role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
+    users = serializers.ListField(child=serializers.UUIDField())
+    created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
+
+    def validate_users(self, attrs):
+        attrs = set(attrs)
+        users = User.objects.filter(pk__in=attrs)
+        if users.count() != len(attrs):
+            raise serializers.ValidationError("One or more user IDs are invalid.")
+        else:
+            return users
+
+    def create(self, validated_data):
+        users = validated_data.pop("users")
+        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        user_roles_to_create = [
+            UserRoleLink(user=user, **validated_data) for user in users
+        ]
+        # TODO: Implement the user assigning in discord too
+        UserRoleLink.objects.bulk_create(user_roles_to_create)
+        return user_roles_to_create
+
+
 class RoleDashboardSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.fullname")
     created_by = serializers.CharField(source="created_by.fullname")
@@ -49,8 +89,6 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
         return super().create(validated_data)
 
 
-
-
 class UserRoleSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
@@ -58,9 +96,9 @@ class UserRoleSearchSerializer(serializers.ModelSerializer):
 
 
 class UserRoleCreateSerializer(serializers.ModelSerializer):
-
     user_id = serializers.CharField(required=True, source="user.id")
     role_id = serializers.CharField(required=True, source="role.id")
+
     class Meta:
         model = UserRoleLink
         fields = ["user_id", "role_id"]
@@ -80,11 +118,13 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
 
         return super().create(validated_data)
-    
+
+
 class UserRoleBulkAssignSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(required=True)
     role_id = serializers.CharField(required=True)
     created_by_id = serializers.CharField(required=True, allow_null=False)
+
     class Meta:
         model = UserRoleLink
         fields = [
@@ -99,7 +139,6 @@ class UserRoleBulkAssignSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
 
-        representation['user_id'] = instance.user.fullname if instance.user else None
-        representation['role_id'] = instance.role.title if instance.role else None
+        representation["user_id"] = instance.user.fullname if instance.user else None
+        representation["role_id"] = instance.role.title if instance.role else None
         return representation
-    
