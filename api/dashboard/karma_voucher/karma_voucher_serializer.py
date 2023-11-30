@@ -12,6 +12,7 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
     task_id = serializers.CharField(required=True, allow_null=False)
     created_by_id = serializers.CharField(required=True, allow_null=False)
     updated_by_id = serializers.CharField(required=True, allow_null=False)
+    week = serializers.CharField(required=False, allow_null=True)
 
     class Meta:
         model = VoucherLog
@@ -31,7 +32,22 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
             'event', 
             'description'
             ]   
+    
+    # def validate_week(self, value):
+    #     if value and len(str(value)) > 2:
+    #         raise serializers.ValidationError("Week must not exceed 2 characters in length.")
+    #     return value
 
+    def validate(self, data):
+        response_data = {}
+        response_data["code"] = data.get('code')
+        week = data.get('week')
+
+        if week and len(str(week)) > 2:
+            response_data["error"] = "Week must not exceed 2 characters in length."
+            raise serializers.ValidationError(response_data)
+        
+        return data
 
 class VoucherLogSerializer(serializers.ModelSerializer):
     user = serializers.CharField(source='user.fullname')

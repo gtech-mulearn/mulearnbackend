@@ -70,11 +70,11 @@ class ImportVoucherLogAPI(APIView):
 
         count = 1
         for row in excel_data[1:]:
-            task_hashtag = row.pop('hashtag')
+            task_hashtag = row.get('hashtag')
             karma = row.get('karma')
             month = row.get('month')
             week = row.get('week')
-            muid = row.pop('muid')
+            muid = row.get('muid')
             description = row.get('description')
             event = row.get('event')
             user_info = user_dict.get(muid)
@@ -127,8 +127,32 @@ class ImportVoucherLogAPI(APIView):
             if voucher_serializer.is_valid():
                     voucher_serializer.save()
             else:
-                error_rows.append(voucher_serializer.errors)
+                code_error_dict = {}
+                for error in voucher_serializer.errors:
+                    code_error = error.get('code')
+                    error_msg = error.get('error')
+
+                    # code_errors = [str(error_detail) for error_detail in error.get('code', [])][0]
+                    code = str(code_error[0])
+                    error_value = str(error_msg[0])
+                    code_error_dict[code] = error_value
+
+                for row in valid_rows:
+                    code = row['code']
+                    row_to_append = {}
+                    if code in code_error_dict:
+                        row_to_append['muid'] = row['muid']
+                        row_to_append['karma'] = row['karma']
+                        row_to_append['week'] = row['week']
+                        row_to_append['month'] = row['month']
+                        row_to_append['hashtag'] = row['hashtag']
+                        row_to_append['description'] = row['description']
+                        row_to_append['event'] = row['event']
+                        row_to_append['error'] = code_error_dict[code]
+                        error_rows.append(row_to_append)
+                    
                 return CustomResponse(
+                    message={"popup": 'Fix the errors and try again the entire excel file.'},
                     response={"Success": [], "Failed": error_rows}
                 ).get_success_response()
             vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
