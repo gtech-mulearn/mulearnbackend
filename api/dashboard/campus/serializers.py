@@ -121,9 +121,12 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     join_date = serializers.CharField()
     email = serializers.CharField()
     mobile = serializers.CharField()
+    graduation_year = serializers.CharField()
+    department = serializers.CharField()
+    is_alumni = serializers.CharField()
 
     class Meta:
-        fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date")
+        fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date", "is_alumni")
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
