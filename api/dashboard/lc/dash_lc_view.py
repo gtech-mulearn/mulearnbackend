@@ -19,7 +19,7 @@ from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSe
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, \
-    ScheduleMeetingSerializer, ListAllMeetRecordsSerializer
+    ScheduleMeetingSerializer, ListAllMeetRecordsSerializer, AddMemberSerializer
 
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
@@ -138,18 +138,24 @@ class LearningCircleCreateApi(APIView):
 
 class LearningCircleListMembersApi(APIView):
     def get(self, request, circle_id):
-        learning_circle = LearningCircle.objects.filter(
-            id=circle_id
+        # learning_circle = LearningCircle.objects.filter(
+        #     id=circle_id
+        # )
+        user_learning_circle = UserCircleLink.objects.filter(
+            circle_id=circle_id
         )
 
-        if learning_circle is None:
+        if user_learning_circle is None:
             return CustomResponse(
                 general_message='Learning Circle Not Exists'
             ).get_failure_response()
 
         serializer = LearningCircleMemberListSerializer(
-            learning_circle,
-            many=True
+            user_learning_circle,
+            many=True,
+            context={
+                'circle_id': circle_id
+            }
         )
 
         return CustomResponse(
@@ -674,18 +680,47 @@ class ScheduleMeetAPI(APIView):
 
 class IgTaskDetailsAPI(APIView):
     def get(self, request, ig_id):
-        task_list = TaskList.objects.filter(
-            ig=ig_id
-        ).first()
+        task_list = TaskList.objects.filter(ig=ig_id)
 
         serializer = IgTaskDetailsSerializer(
             task_list,
-            many=False,
+            many=True,
             context={
                 'ig': ig_id
             }
-        ).data
+        )
 
         return CustomResponse(
             response=serializer.data
         ).get_success_response()
+
+
+class AddMemberAPI(APIView):
+    def post(self, request):
+        muid = request.data.get('muid')
+        circle_id = request.data.get('circle_id')
+
+        user = User.objects.filter(muid=muid).first()
+        if not user:
+            return CustomResponse(
+                general_message="invalid user"
+            ).get_failure_response()
+
+        serializer = AddMemberSerializer(
+            data=request.data,
+            context={
+                'user': user,
+                'muid': muid,
+                'circle_id': circle_id,
+            }
+        )
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                general_message='user added successfully'
+            ).get_success_response()
+
+        return CustomResponse(
+            message=serializer.errors
+        ).get_failure_response()
