@@ -16,6 +16,9 @@ urlpatterns = [
 
     # rework user accept, reject api
 
+    # TODO: new api for note updation
+    # path('<str:circle_id>/note/edit/', dash_lc_view.LearningCircleLeadTransfer.as_view(), name='edit-note'),
+
     path('<str:circle_id>/<str:member_id>/', dash_lc_view.LearningCircleHomeApi.as_view()),  # user accept or reject, also for removal
     path('list/', dash_lc_view.LearningCircleMainApi.as_view(), name='list'), # public page listing
     path('list-all/', dash_lc_view.TotalLearningCircleListApi.as_view(), name='list-all'), # dashboard search listing

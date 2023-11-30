@@ -403,24 +403,16 @@ class LearningCircleHomeApi(APIView):
 
 class SingleReportDetailAPI(APIView):
 
-    def get(self, request, report_id=None, circle_id=None):
-        if report_id:
-            circle_meeting_log = CircleMeetingLog.objects.get(id=report_id)
+    def get(self, request, circle_id, report_id):
+        circle_meeting_log = CircleMeetingLog.objects.get(id=report_id)
 
-            serializer = MeetRecordsCreateEditDeleteSerializer(
-                circle_meeting_log,
-                many=False
-            ).data
-
-        if circle_id:
-            circle_meeting_log = CircleMeetingLog.objects.filter(circle_id=circle_id)
-            serializer = ListAllMeetRecordsSerializer(
-                circle_meeting_log,
-                many=True
-            ).data
+        serializer = MeetRecordsCreateEditDeleteSerializer(
+            circle_meeting_log,
+            many=False
+        )
 
         return CustomResponse(
-            response=serializer
+            response=serializer.data
         ).get_success_response()
 
     def post(self, request, circle_id):
