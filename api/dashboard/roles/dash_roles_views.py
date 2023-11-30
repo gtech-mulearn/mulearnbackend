@@ -371,6 +371,7 @@ class UserRoleBulkAssignAPI(APIView):
         )
         users_dict = {user["muid"]: user["id"] for user in users}
         roles_dict = {role["title"]: role["id"] for role in roles}
+        users_by_role = {role_title: [] for role_title in roles_dict.keys()}
 
         for row in excel_data[1:]:
             user = row.pop("muid")
@@ -395,6 +396,7 @@ class UserRoleBulkAssignAPI(APIView):
                 row["error"] = f"User {user} already has role {role}"
                 error_rows.append(row)
             else:
+                users_by_role[role].append(user_id)
                 request_user_id = JWTUtils.fetch_user_id(request)
                 row["id"] = str(uuid.uuid4())
                 row["user_id"] = user_id
@@ -418,6 +420,14 @@ class UserRoleBulkAssignAPI(APIView):
                 )
         else:
             error_rows.append(user_roles_serializer.errors)
+
+        for role,user_set in users_by_role.items():
+            DiscordWebhooks.general_updates(
+                WebHookCategory.BULK_ROLE.value,
+                WebHookActions.UPDATE.value,
+                role,
+                ",".join(user_set)
+            )
 
         return CustomResponse(
             response={"Success": success_data, "Failed": error_rows}
