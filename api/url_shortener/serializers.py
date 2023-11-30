@@ -4,7 +4,7 @@ import uuid
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from db.url_shortener import UrlShortener,UrlShortenerTracker
+from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -55,7 +55,7 @@ class ShortenUrlsCreateUpdateSerializer(ModelSerializer):
 
 
 class ShowShortenUrlsTrackerSerializer(ModelSerializer):
-    
+
     class Meta:
         model = UrlShortenerTracker
-        fields = ["id","ip_address","device_type","operating_system","browser"]
+        fields = ["ip_address", "device_type", "operating_system", "browser"]
