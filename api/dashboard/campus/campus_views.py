@@ -193,52 +193,95 @@ class CampusStudentDetailsCSVAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
-
-        start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
+        is_alumni = request.query_params.get("is_alumni")
 
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
-
-        rank = (
-            Wallet.objects.filter(
-                user__user_organization_link_user__org=user_org_link.org,
-                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            )
-            .distinct()
-            .order_by("-karma", "-created_at")
-            .values(
-                "user_id",
-                "karma",
-            )
-        )
-
-        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
-
-        user_org_links = (
-            User.objects.filter(
-                user_organization_link_user__org=user_org_link.org,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            )
-            .distinct()
-            .annotate(
-                user_id=F("id"),
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name"),
-                join_date=F("created_at"),
-            )
-            .annotate(
-                is_active=Case(
-                    When(
-                        Q(
-                            karma_activity_log_user__created_at__range=(
-                                start_date,
-                                end_date)),
-                        then=Value("Active")),
-                    default=Value("Not Active")
+        if is_alumni:
+            rank = (
+                Wallet.objects.filter(
+                    user__user_organization_link_user__org=user_org_link.org,
+                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    user__user_organization_link_user__is_alumni=is_alumni,
                 )
-            ))
+                .distinct()
+                .order_by("-karma", "-created_at")
+                .values(
+                    "user_id",
+                    "karma",
+                )
+            )
+
+            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+            user_org_links = (
+                User.objects.filter(
+                    user_organization_link_user__org=user_org_link.org,
+                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    user_organization_link_user__is_alumni=is_alumni,
+                )
+                .distinct()
+                .annotate(
+                    user_id=F("id"),
+                    email_=F("email"),
+                    mobile_=F("mobile"),
+                    karma=F("wallet_user__karma"),
+                    level=F("user_lvl_link_user__level__name"),
+                    join_date=F("created_at"),
+                    department=F('user_organization_link_user__department__title'),
+                    graduation_year=F("user_organization_link_user__graduation_year"),
+                    is_alumni=F('user_organization_link_user__is_alumni'),
+                ))
+        else:
+            rank = (
+                Wallet.objects.filter(
+                    user__user_organization_link_user__org=user_org_link.org,
+                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                )
+                .distinct()
+                .order_by("-karma", "-created_at")
+                .values(
+                    "user_id",
+                    "karma",
+                )
+            )
+
+            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+            user_org_links = (
+                User.objects.filter(
+                    user_organization_link_user__org=user_org_link.org,
+                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                )
+                .distinct()
+                .annotate(
+                    user_id=F("id"),
+                    email_=F("email"),
+                    mobile_=F("mobile"),
+                    karma=F("wallet_user__karma"),
+                    level=F("user_lvl_link_user__level__name"),
+                    join_date=F("created_at"),
+                    department=F('user_organization_link_user__department__title'),
+                    graduation_year=F("user_organization_link_user__graduation_year"),
+                    is_alumni=F('user_organization_link_user__is_alumni'),
+                ))
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            user_org_links,
+            request,
+            ["first_name", "last_name", "level"],
+            {
+                "first_name": "first_name",
+                "last_name": "last_name",
+                "muid": "muid",
+                "karma": "wallet_user__karma",
+                "level": "user_lvl_link_user__level__level_order",
+                # "is_active": "karma_activity_log_user__created_at",
+                "joined_at": "created_at"
+            },
+        )
 
         serializer = serializers.CampusStudentDetailsSerializer(
             user_org_links, many=True, context={"ranks": ranks}
