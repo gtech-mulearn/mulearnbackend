@@ -1,6 +1,6 @@
 import uuid
 
-from django.db.models import Sum, Count, Value, CharField
+from django.db.models import Sum, Count, Value, CharField, F
 from django.db.models.functions import Concat
 from rest_framework import serializers
 
@@ -206,14 +206,28 @@ class LearningCircleMemberListSerializer(serializers.ModelSerializer):
         ]
 
     def get_members(self, obj):
-        user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
-        return [
-            {
-                'full_name': f'{member.user.fullname}',
-                'discord_id': member.user.discord_id,
-            }
-            for member in user_circle_link
-        ]
+        # user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
+        # return [
+        #     {
+        #         'full_name': f'{member.user.fullname}',
+        #         'discord_id': member.user.discord_id,
+        #     }
+        #     for member in user_circle_link
+        # ]
+        user_circle_link = obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=True
+        ).values(
+            full_name=Concat(
+                'user__first_name',
+                Value(' '),
+                'user__last_name',
+                output_field=CharField()
+            ),
+            discord_id=F('user__discord_id'),
+            level=F('user__user_lvl_link_user__level__name')
+        )
+        return user_circle_link
 
 
 class LearningCircleJoinSerializer(serializers.ModelSerializer):
@@ -625,3 +639,27 @@ class IgTaskDetailsSerializer(serializers.ModelSerializer):
             ).exists():
                 return False
         return True
+
+
+class AddMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserCircleLink
+        fields = []
+
+    def validate(self, data):
+        user = self.context.get('user')
+        circle_id = self.context.get('circle_id')
+
+        if UserCircleLink.objects.filter(user=user).exists():
+            raise serializers.ValidationError('user already part of the learning circle')
+
+        if UserCircleLink.objects.filter(circle_id=circle_id).count() >= 5:
+            raise serializers.ValidationError('maximum members reached in learning circle')
+
+        return data
+
+    def create(self, validated_data):
+        validated_data['id'] = uuid.uuid4()
+        validated_data['user'] = self.context.get('user')
+        validated_data['circle_id'] = self.context.get('circle_id')
+        return UserCircleLink.objects.create(**validated_data)
