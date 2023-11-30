@@ -88,10 +88,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.all()
+            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values("org")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
-        ).order_by("-user__wallet_user__karma")
+        ).order_by("-user__wallet_user__karma", "user_organization_link_org__org__created_at")
 
         rank_dict = {
             data["org"]: data["total_karma"] if data["total_karma"] is not None else 0
