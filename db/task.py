@@ -238,3 +238,18 @@ class VoucherLog(models.Model):
     class Meta:
         managed = False
         db_table = "voucher_log"
+
+
+class Events(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    name = models.CharField(max_length=75)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+                                   related_name="event_updated_by")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+                                   related_name="event_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "events"
