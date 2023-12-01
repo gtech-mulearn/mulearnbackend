@@ -133,21 +133,16 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 karma__gte=user_karma,
             ).order_by('-karma', '-updated_at', 'created_at')
         else:
-            ranks = (
-                Wallet.objects.filter(karma__gte=user_karma).order_by('-karma', '-updated_at', 'created_at')
-            )
+            # ranks = (
+            #     Wallet.objects.filter(karma__gte=user_karma).order_by('-karma', '-updated_at', 'created_at')
+            # )
 
-                # ranks = (
-                #     Wallet.objects.filter(karma__gte=user_karma)
-                #     .exclude(
-                #         Q(
-                #             user__user_role_link_user__role__title__in=[
-                #                 RoleType.ENABLER.value,
-                #                 RoleType.MENTOR.value,
-                #             ]
-                #         )
-                #     ).order_by('-karma')
-                # )
+            ranks = (
+                Wallet.objects.filter(karma__gte=user_karma)
+                .exclude(
+                    Q(user__user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value])
+                ).order_by('-karma')
+            )
 
         count = 0
         for _rank in ranks:
