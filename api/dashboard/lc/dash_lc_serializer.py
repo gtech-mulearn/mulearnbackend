@@ -307,7 +307,7 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.create(**validated_data)
 
 
-class LearningCircleHomeSerializer(serializers.ModelSerializer):
+class LearningCircleDetailsSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -317,6 +317,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     is_member = serializers.SerializerMethodField()
     ig_code = serializers.CharField(source='ig.code')
     ig_id = serializers.CharField(source='ig.id')
+    ig_name = serializers.CharField(source='ig.name')
     previous_meetings = serializers.SerializerMethodField()
 
     class Meta:
@@ -336,6 +337,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "is_lead",
             "is_member",
             "ig_id",
+            "ig_name",
             "ig_code",
             "previous_meetings",
         ]

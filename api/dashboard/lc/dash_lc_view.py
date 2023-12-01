@@ -15,7 +15,7 @@ from db.task import TaskList
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
-from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleHomeSerializer, \
+from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleDetailsSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, \
@@ -246,27 +246,34 @@ class LearningCircleJoinApi(APIView):
         ).get_failure_response()
 
 
-class LearningCircleHomeApi(APIView):
+class LearningCircleDetailsApi(APIView):
     def get(self, request, circle_id, member_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
-        if not LearningCircle.objects.filter(
-                id=circle_id
-        ).exists():
+        user_circle_link = UserCircleLink.objects.filter(
+            user_id=user_id,
+            circle_id=circle_id,
+            accepted=True
+        ).first()
 
+        if user_circle_link is None:
+            return CustomResponse(
+                general_message='your are not a part of this learning circle circle'
+            ).get_failure_response()
+
+        if not LearningCircle.objects.filter(id=circle_id).exists():
             return CustomResponse(
                 general_message='Learning Circle not found'
             ).get_failure_response()
 
-        learning_circle = LearningCircle.objects.filter(
-            id=circle_id
-        ).first()
+        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
 
-        serializer = LearningCircleHomeSerializer(
+        serializer = LearningCircleDetailsSerializer(
             learning_circle,
             many=False,
             context={
-                "user_id": user_id
+                "user_id": user_id,
+                "circle_id": circle_id
             }
         )
 
