@@ -17,11 +17,12 @@ from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 
+
 class CommonUtils:
     @staticmethod
     def get_paginated_queryset(
-            queryset: QuerySet, request, search_fields, sort_fields: dict = None
-    ) -> QuerySet:
+            queryset: QuerySet, request, search_fields, sort_fields: dict = None,
+            is_pagination: bool = True) -> QuerySet:
         if sort_fields is None:
             sort_fields = {}
 
@@ -44,27 +45,29 @@ class CommonUtils:
                     sort_field_name = f"-{sort_field_name}"
 
                 queryset = queryset.order_by(sort_field_name)
+        if is_pagination:
+            paginator = Paginator(queryset, per_page)
+            try:
+                queryset = paginator.page(page)
+            except PageNotAnInteger:
+                queryset = paginator.page(1)
+            except EmptyPage:
+                queryset = paginator.page(paginator.num_pages)
 
-        paginator = Paginator(queryset, per_page)
-        try:
-            queryset = paginator.page(page)
-        except PageNotAnInteger:
-            queryset = paginator.page(1)
-        except EmptyPage:
-            queryset = paginator.page(paginator.num_pages)
+            return {
+                "queryset": queryset,
+                "pagination": {
+                    "count": paginator.count,
+                    "totalPages": paginator.num_pages,
+                    "isNext": queryset.has_next(),
+                    "isPrev": queryset.has_previous(),
+                    "nextPage": queryset.next_page_number()
+                    if queryset.has_next()
+                    else None,
+                },
+            }
 
-        return {
-            "queryset": queryset,
-            "pagination": {
-                "count": paginator.count,
-                "totalPages": paginator.num_pages,
-                "isNext": queryset.has_next(),
-                "isPrev": queryset.has_previous(),
-                "nextPage": queryset.next_page_number()
-                if queryset.has_next()
-                else None,
-            },
-        }
+        return queryset
 
     @staticmethod
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
@@ -171,6 +174,7 @@ class ImportCSV:
         workbook.close()
 
         return rows
+
 
 def send_template_mail(
         context: dict, subject: str, address: list[str], attachment: str = None):
