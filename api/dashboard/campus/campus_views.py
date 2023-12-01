@@ -1,5 +1,5 @@
 from django.db.models import Count, F
-from django.db.models import Q, Case, When, Value
+from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
@@ -8,7 +8,7 @@ from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import CommonUtils
 from . import serializers
 from .dash_campus_helper import get_user_college_link
 
@@ -29,7 +29,7 @@ class CampusDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     # Use the role_required decorator to specify the allowed roles for this view
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         # Fetch the user's ID from the request using JWTUtils
         user_id = JWTUtils.fetch_user_id(request)
@@ -54,7 +54,7 @@ class CampusDetailsAPI(APIView):
 class CampusStudentInEachLevelAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -80,7 +80,7 @@ class CampusStudentInEachLevelAPI(APIView):
 class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
@@ -121,6 +121,7 @@ class CampusStudentDetailsAPI(APIView):
                     karma=F("wallet_user__karma"),
                     level=F("user_lvl_link_user__level__name"),
                     join_date=F("created_at"),
+                    last_karma_gained=F("wallet_user__karma_last_update_at"),
                     department=F('user_organization_link_user__department__title'),
                     graduation_year=F("user_organization_link_user__graduation_year"),
                     is_alumni=F('user_organization_link_user__is_alumni'),
@@ -154,6 +155,7 @@ class CampusStudentDetailsAPI(APIView):
                     karma=F("wallet_user__karma"),
                     level=F("user_lvl_link_user__level__name"),
                     join_date=F("created_at"),
+                    last_karma_gained=F("wallet_user__karma_last_update_at"),
                     department=F('user_organization_link_user__department__title'),
                     graduation_year=F("user_organization_link_user__graduation_year"),
                     is_alumni=F('user_organization_link_user__is_alumni'),
@@ -189,7 +191,7 @@ class CampusStudentDetailsAPI(APIView):
 class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_org_link = get_user_college_link(user_id)
@@ -292,7 +294,7 @@ class CampusStudentDetailsCSVAPI(APIView):
 class WeeklyKarmaAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -310,7 +312,7 @@ class WeeklyKarmaAPI(APIView):
 class ChangeStudentTypeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def patch(self, request, member_id):
         user_id = JWTUtils.fetch_user_id(request)
 

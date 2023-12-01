@@ -1,5 +1,7 @@
 import uuid
 
+from decouple import config as decouple_config
+from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from django.db.models import F, Sum, Q
 from rest_framework import serializers
@@ -12,10 +14,9 @@ from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType, MainRoles
 from utils.utils import DateTimeUtils
-from django.core.files.storage import FileSystemStorage
-from decouple import config as decouple_config
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
+
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source="task.title")
@@ -26,21 +27,22 @@ class UserLogSerializer(ModelSerializer):
         fields = ["task_name", "karma", "created_date"]
 
 
-class UserShareQrcode(serializers.ModelSerializer):  
+class UserShareQrcode(serializers.ModelSerializer):
     profile_pic = serializers.SerializerMethodField()
+
     class Meta:
-        model = User  
-        fields = ['profile_pic'] 
+        model = User
+        fields = ['profile_pic']
 
-
-    def get_profile_pic(self,obj):
+    def get_profile_pic(self, obj):
         fs = FileSystemStorage()
         path = f'user/qr/{obj.id}.png'
         if fs.exists(path):
             qrcode_image = f"{self.context.get('request').build_absolute_uri(BE_DOMAIN_NAME)}{fs.url(path)[1:]}"
         else:
-            return None 
+            return None
         return qrcode_image
+
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
@@ -77,8 +79,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
         )
-    
-    def get_profile_pic(self,obj):
+
+    def get_profile_pic(self, obj):
         fs = FileSystemStorage()
         path = f'user/profile/{obj.id}.png'
         if fs.exists(path):
@@ -86,7 +88,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         else:
             profile_pic = obj.profile_pic
         return profile_pic
-    
+
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
 
@@ -115,6 +117,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return None
 
     def get_rank(self, obj):
+
         roles = self.get_roles(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
@@ -122,27 +125,30 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).count()
+            ).order_by('-karma', '-updated_at', 'created_at')
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).count()
+            ).order_by('-karma', '-updated_at', 'created_at')
         else:
+            # ranks = (
+            #     Wallet.objects.filter(karma__gte=user_karma).order_by('-karma', '-updated_at', 'created_at')
+            # )
+
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
-                    Q(
-                        user__user_role_link_user__role__title__in=[
-                            RoleType.ENABLER.value,
-                            RoleType.MENTOR.value,
-                        ]
-                    )
-                )
-                .count()
+                    Q(user__user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value])
+                ).order_by('-karma')
             )
-        return ranks if ranks > 0 else None
+
+        count = 0
+        for _rank in ranks:
+            count += 1
+            if obj == _rank.user:
+                return count
 
     def get_karma_distribution(self, obj):
         return (
@@ -237,7 +243,7 @@ class UserRankSerializer(ModelSerializer):
             ).count()
         else:
             ranks = (
-                Wallet.objects.filter(karma__gte=user_karma,user__user_role_link_user__verified=True)
+                Wallet.objects.filter(karma__gte=user_karma, user__user_role_link_user__verified=True)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
@@ -255,6 +261,7 @@ class UserRankSerializer(ModelSerializer):
 
     def get_interest_groups(self, obj):
         return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]
+
 
 # is public true then pass the qrcode vice versa delete the image
 # another api when passing muid is give its corresponding image is returned

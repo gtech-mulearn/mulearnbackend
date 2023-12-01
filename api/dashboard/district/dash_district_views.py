@@ -41,11 +41,12 @@ class DistrictTopThreeCampusAPI(APIView):
 
         org_karma_dict = (
             UserOrganizationLink.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value,
                 org__district=user_org_link.org.district,
                 verified=True,
             )
             .values("org")
-            .annotate(total_karma=Sum("user__wallet_user__karma"))
+            .annotate(total_karma=Sum("user__wallet_user__karma")).order_by('-total_karma', 'org__created_at')
         )
 
         org_ranks = {
@@ -102,7 +103,7 @@ class DistrictStudentDetailsAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma", "-created_at")
+            .order_by("-karma", '-update_at', "created_at")
             .values(
                 "user_id",
                 "karma",
@@ -164,7 +165,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma", "-created_at")
+            .order_by("-karma", '-updated_at', "created_at")
             .values(
                 "user_id",
                 "karma",

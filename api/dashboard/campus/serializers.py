@@ -15,7 +15,6 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="org.title")
     campus_code = serializers.ReadOnlyField(source="org.code")
     campus_zone = serializers.ReadOnlyField(source="org.district.zone.name")
-    campus_lead = serializers.ReadOnlyField(source="user.fullname")
     campus_level = serializers.SerializerMethodField()
     total_karma = serializers.SerializerMethodField()
     total_members = serializers.SerializerMethodField()
@@ -28,7 +27,6 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         model = UserOrganizationLink
         fields = [
             "college_name",
-            "campus_lead",
             "campus_code",
             "campus_zone",
             "campus_level",
@@ -52,7 +50,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         enabler = User.objects.filter(
             user_organization_link_user__org=obj.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            user_role_link_user__role__title=RoleType.ENABLER.value,
+            user_role_link_user__role__title=RoleType.LEAD_ENABLER.value,
         ).first()
         if enabler:
             enabler = enabler.fullname
@@ -90,10 +88,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.all()
+            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values("org")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
-        )
+        ).order_by("-total_karma", "org__created_at")
 
         rank_dict = {
             data["org"]: data["total_karma"] if data["total_karma"] is not None else 0
@@ -119,6 +117,7 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     level = serializers.CharField()
     # is_active = serializers.CharField()
     join_date = serializers.CharField()
+    last_karma_gained = serializers.CharField()
     email = serializers.CharField()
     mobile = serializers.CharField()
     graduation_year = serializers.CharField()
@@ -126,7 +125,8 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     is_alumni = serializers.CharField()
 
     class Meta:
-        fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date", "is_alumni")
+        fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date", "is_alumni",
+                  "last_karma_update_at")
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
