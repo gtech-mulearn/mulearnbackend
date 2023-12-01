@@ -179,10 +179,8 @@ class CampusStudentDetailsAPI(APIView):
             },
         )
 
-        serializer = serializers.CampusStudentDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True, context={"ranks": ranks}
-        )
-
+        serializer = serializers.CampusStudentDetailsSerializer(paginated_queryset.get("queryset"), many=True,
+                                                                context={"ranks": ranks})
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -204,6 +202,7 @@ class CampusStudentDetailsCSVAPI(APIView):
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
+
         if is_alumni:
             rank = (
                 Wallet.objects.filter(
