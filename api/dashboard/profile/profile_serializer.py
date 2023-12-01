@@ -57,6 +57,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
     profile_pic = serializers.SerializerMethodField()
+    percentile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -78,7 +79,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "profile_pic",
             "interest_groups",
             "is_public",
+            "percentile",
         )
+
+    def get_percentile(self, obj):
+        try:
+            user_count = Wallet.objects.filter(karma__lt=obj.wallet_user.karma).count()
+            usr_count = User.objects.all().count()
+            if usr_count == 0:
+                return 0
+            return (user_count * 100) / usr_count
+        except Exception as e:
+            return 0
 
     def get_profile_pic(self, obj):
         fs = FileSystemStorage()
