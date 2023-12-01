@@ -12,7 +12,7 @@ from db.user import User
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from utils.types import Lc
-
+from .lc_support_functions import get_today_start_end, get_week_start_end
 
 class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
@@ -307,7 +307,7 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.create(**validated_data)
 
 
-class LearningCircleHomeSerializer(serializers.ModelSerializer):
+class LearningCircleDetailsSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -317,6 +317,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     is_member = serializers.SerializerMethodField()
     ig_code = serializers.CharField(source='ig.code')
     ig_id = serializers.CharField(source='ig.id')
+    ig_name = serializers.CharField(source='ig.name')
     previous_meetings = serializers.SerializerMethodField()
 
     class Meta:
@@ -336,6 +337,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "is_lead",
             "is_member",
             "ig_id",
+            "ig_name",
             "ig_code",
             "previous_meetings",
         ]
@@ -626,6 +628,32 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
             wallet.updated_at = DateTimeUtils.get_current_utc_time()
             wallet.save()
         return attendees
+
+    def validate_meet_time(self, meet_time):
+        circle_id = self.context.get('circle_id')
+
+        start_of_day, end_of_day = get_today_start_end(meet_time)
+        start_of_week, end_of_week = get_week_start_end(meet_time)
+
+        if CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            meet_time__range=(
+                start_of_day,
+                end_of_day
+            )
+        ).exists():
+            raise serializers.ValidationError(f'Another meet already scheduled on {meet_time.date()}')
+
+        if CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            meet_time__range=(
+                start_of_week,
+                end_of_week
+            )
+        ).count() >= 5:
+            raise serializers.ValidationError('you can create only 5 meeting in a week')
+
+        return meet_time
 
 
 class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
