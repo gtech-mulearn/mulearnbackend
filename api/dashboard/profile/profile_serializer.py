@@ -133,10 +133,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 karma__gte=user_karma,
             ).order_by('-karma', '-updated_at', 'created_at')
         else:
-            # ranks = (
-            #     Wallet.objects.filter(karma__gte=user_karma).order_by('-karma', '-updated_at', 'created_at')
-            # )
-
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
@@ -144,9 +140,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 ).order_by('-karma')
             )
 
-        count = 0
-        for _rank in ranks:
-            count += 1
+        for count, _rank in enumerate(ranks, start=0):
             if obj == _rank.user:
                 return count
 
