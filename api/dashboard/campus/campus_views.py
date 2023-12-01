@@ -172,14 +172,15 @@ class CampusStudentDetailsAPI(APIView):
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
                 # "is_active": "karma_activity_log_user__created_at",
-                "joined_at": "created_at"
+                "join_date": "created_at",
+                "email": "email_",
+                "mobile": "mobile_",
+                "is_alumni": "is_alumni",
             },
         )
 
-        serializer = serializers.CampusStudentDetailsSerializer(
-            paginated_queryset.get("queryset"), many=True, context={"ranks": ranks}
-        )
-
+        serializer = serializers.CampusStudentDetailsSerializer(paginated_queryset.get("queryset"), many=True,
+                                                                context={"ranks": ranks})
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -201,6 +202,7 @@ class CampusStudentDetailsCSVAPI(APIView):
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
+
         if is_alumni:
             rank = (
                 Wallet.objects.filter(
@@ -232,6 +234,7 @@ class CampusStudentDetailsCSVAPI(APIView):
                     karma=F("wallet_user__karma"),
                     level=F("user_lvl_link_user__level__name"),
                     join_date=F("created_at"),
+                    last_karma_gained=F("wallet_user__karma_last_update_at"),
                     department=F('user_organization_link_user__department__title'),
                     graduation_year=F("user_organization_link_user__graduation_year"),
                     is_alumni=F('user_organization_link_user__is_alumni'),
@@ -265,6 +268,7 @@ class CampusStudentDetailsCSVAPI(APIView):
                     karma=F("wallet_user__karma"),
                     level=F("user_lvl_link_user__level__name"),
                     join_date=F("created_at"),
+                    last_karma_gained=F("wallet_user__karma_last_update_at"),
                     department=F('user_organization_link_user__department__title'),
                     graduation_year=F("user_organization_link_user__graduation_year"),
                     is_alumni=F('user_organization_link_user__is_alumni'),
@@ -281,7 +285,10 @@ class CampusStudentDetailsCSVAPI(APIView):
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
                 # "is_active": "karma_activity_log_user__created_at",
-                "joined_at": "created_at"
+                "join_date": "created_at",
+                "email": "email_",
+                "mobile": "mobile_",
+                "is_alumni": "is_alumni",
             },
         )
 

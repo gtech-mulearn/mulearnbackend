@@ -122,7 +122,7 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     mobile = serializers.CharField()
     graduation_year = serializers.CharField()
     department = serializers.CharField()
-    is_alumni = serializers.CharField()
+    is_alumni = serializers.BooleanField()
 
     class Meta:
         fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date", "is_alumni",
