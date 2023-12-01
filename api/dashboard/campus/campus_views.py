@@ -172,7 +172,10 @@ class CampusStudentDetailsAPI(APIView):
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
                 # "is_active": "karma_activity_log_user__created_at",
-                "joined_at": "created_at"
+                "join_date": "created_at",
+                "email": "email_",
+                "mobile": "mobile_",
+                "is_alumni": "is_alumni",
             },
         )
 
@@ -281,7 +284,10 @@ class CampusStudentDetailsCSVAPI(APIView):
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
                 # "is_active": "karma_activity_log_user__created_at",
-                "joined_at": "created_at"
+                "join_date": "created_at",
+                "email": "email_",
+                "mobile": "mobile_",
+                "is_alumni": "is_alumni",
             },
         )
 
