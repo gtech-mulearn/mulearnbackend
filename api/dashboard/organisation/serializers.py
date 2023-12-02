@@ -13,6 +13,7 @@ from db.organization import (
     Department,
     OrgKarmaType,
     OrgKarmaLog,
+    College
 )
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
@@ -114,8 +115,10 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         validated_data["id"] = str(uuid.uuid4())
         validated_data["created_by_id"] = user_id
         validated_data["updated_by_id"] = user_id
-
-        return Organization.objects.create(**validated_data)
+        orgobj = Organization.objects.create(**validated_data)
+        if validated_data.get("org_type") == OrganizationType.COLLEGE.value:
+            College.objects.create(org = orgobj, created_by_id=user_id, updated_by_id = user_id )
+        return orgobj
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
