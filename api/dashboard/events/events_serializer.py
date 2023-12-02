@@ -15,7 +15,7 @@ class EventsListSerializer(serializers.ModelSerializer):
 class EventsCUDSerializer(serializers.ModelSerializer):
     class Meta:
         model = Events
-        fields = ['name']
+        fields = ['name', 'description']
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
