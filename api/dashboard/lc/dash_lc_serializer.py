@@ -624,7 +624,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
             ])
             wallet = Wallet.objects.filter(user_id=user).first()
             wallet.karma += Lc.KARMA.value
-            wallet.karma_last_update_at = DateTimeUtils.get_current_utc_time()
+            wallet.karma_last_updated_at = DateTimeUtils.get_current_utc_time()
             wallet.updated_at = DateTimeUtils.get_current_utc_time()
             wallet.save()
         return attendees

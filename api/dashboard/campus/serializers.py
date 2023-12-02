@@ -73,7 +73,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         return obj.org.user_organization_link_org.filter(
             verified=True,
             user__wallet_user__isnull=False,
-            user__wallet_user__karma_last_update_at__gte=last_month,
+            user__wallet_user__karma_last_updated_at__gte=last_month,
         ).count()
 
     def get_total_karma(self, obj):
