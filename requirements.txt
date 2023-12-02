@@ -18,3 +18,4 @@ service-identity==23.1.0
 tzdata==2023.3
 zope.interface==6.1
 qrcode==7.4.2
+pymysql==1.0.2
