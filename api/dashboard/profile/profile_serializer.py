@@ -86,20 +86,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
         try:
             user_count = Wallet.objects.filter(karma__lt=obj.wallet_user.karma).count()
             usr_count = User.objects.all().count()
-            if usr_count == 0:
-                return 0
-            return (user_count * 100) / usr_count
+            return 0 if usr_count == 0 else (user_count * 100) / usr_count
         except Exception as e:
             return 0
-
-    def get_profile_pic(self, obj):
-        fs = FileSystemStorage()
-        path = f'user/profile/{obj.id}.png'
-        if fs.exists(path):
-            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
-        else:
-            profile_pic = obj.profile_pic
-        return profile_pic
 
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
