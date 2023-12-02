@@ -2,7 +2,8 @@ import uuid
 
 from django.db import models
 from .managers import user_manager
-
+from django.core.files.storage import FileSystemStorage
+from decouple import config as decouple_config
 # fmt: off
 # noinspection PyPep8
 
@@ -19,7 +20,6 @@ class User(models.Model):
     dob            = models.DateField(blank=True, null=True)
     admin          = models.BooleanField(default=False)
     exist_in_guild = models.BooleanField(default=False)
-    profile_pic    = models.CharField(max_length=200, blank=True, null=True)
     district       = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at     = models.DateTimeField(auto_now_add=True)
     suspended_at   = models.DateTimeField(blank=True, null=True)
@@ -39,6 +39,13 @@ class User(models.Model):
             return self.first_name
 
         return f"{self.first_name} {self.last_name}"
+
+    @property
+    def profile_pic(self):
+        fs = FileSystemStorage()
+        path = f'user/profile/{self.id}.png'
+        if fs.exists(path):
+            return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
 
 
 class UserReferralLink(models.Model):
