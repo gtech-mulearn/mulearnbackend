@@ -7,6 +7,7 @@ urlpatterns = [
     path('<str:circle_id>/details/', dash_lc_view.LearningCircleDetailsApi.as_view(), name='lc-detailed'),  # individual ls details
     path('<str:circle_id>/schedule-meet/', dash_lc_view.ScheduleMeetAPI.as_view(), name='schedule-meet'),
     path('<str:circle_id>/report/create/', dash_lc_view.SingleReportDetailAPI.as_view(), name='create-report'),
+    path('<str:circle_id>/report/create/validate/', dash_lc_view.ValidateUserMeetCreateAPI.as_view(), name='validate-report'),
     path('<str:circle_id>/report/<str:report_id>/show/', dash_lc_view.SingleReportDetailAPI.as_view(), name='show-report'),
     path('<str:circle_id>/add-member/', dash_lc_view.AddMemberAPI.as_view(), name='add-member'),
     path('create/', dash_lc_view.LearningCircleCreateApi.as_view(), name='create'),
