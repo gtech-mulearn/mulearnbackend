@@ -1,11 +1,11 @@
 import uuid
-from django.db.models import F, Prefetch, Sum
-from rest_framework.views import APIView
-
-from openpyxl import load_workbook
-from tempfile import NamedTemporaryFile
 from io import BytesIO
+from tempfile import NamedTemporaryFile
+
+from django.db.models import F, Prefetch, Sum
 from django.http import FileResponse
+from openpyxl import load_workbook
+from rest_framework.views import APIView
 
 from db.organization import (
     Department,
@@ -18,7 +18,6 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks, ImportCSV
-
 from .serializers import (
     AffiliationCreateUpdateSerializer,
     AffiliationSerializer,
@@ -81,8 +80,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             serializer.save()
 
             if (
-                request.data.get("title") != old_title
-                and old_type == OrganizationType.COMMUNITY.value
+                    request.data.get("title") != old_title
+                    and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -92,8 +91,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                request.data.get("orgType") != OrganizationType.COMMUNITY.value
-                and old_type == OrganizationType.COMMUNITY.value
+                    request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                    and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -102,8 +101,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                old_type != OrganizationType.COMMUNITY.value
-                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+                    old_type != OrganizationType.COMMUNITY.value
+                    and request.data.get("orgType") == OrganizationType.COMMUNITY.value
             ):
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
@@ -525,9 +524,10 @@ class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
             serializer.errors
         ).get_failure_response()
 
+
 class OrganisationBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
-    
+
     def get(self, request):
         wb = load_workbook('./api/dashboard/organisation/assets/organisation_base_template.xlsx')
         ws = wb['Data Definitions']
@@ -546,13 +546,14 @@ class OrganisationBaseTemplateAPI(APIView):
                 ws.cell(row=row, column=col_num, value=value)
         # Save the file
         with NamedTemporaryFile() as tmp:
-            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            tmp.close()  # with statement opened tmp, close it so wb.save can open it
             wb.save(tmp.name)
             with open(tmp.name, 'rb') as f:
                 f.seek(0)
                 new_file_object = f.read()
         return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='organisation_base_template.xlsx')
-    
+
+
 class OrganisationImportAPI(APIView):
     authentication_classes = [CustomizePermission]
 

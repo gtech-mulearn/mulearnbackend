@@ -21,6 +21,7 @@ from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
 
+
 class TaskListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -32,7 +33,6 @@ class TaskListAPI(APIView):
         ]
     )
     def get(self, request):
-
         task_queryset = TaskList.objects.select_related(
             "created_by",
             "updated_by",
@@ -183,7 +183,7 @@ class TaskAPI(APIView):
 
         return CustomResponse(
             general_message="Task deleted successfully"
-            ).get_success_response()
+        ).get_success_response()
 
 
 class TaskListCSV(APIView):
@@ -303,7 +303,7 @@ class ImportTaskListCSV(APIView):
                 error_rows.append(row)
                 excel_data.remove(row)
                 continue
-                
+
             level = row.get("level")
             channel = row.get("channel")
             task_type = row.get("type")
@@ -400,7 +400,7 @@ class ImportTaskListCSV(APIView):
                 row["created_by_id"] = user_id
                 row["created_at"] = DateTimeUtils.get_current_utc_time()
                 row["active"] = True
-                row["channel_id"] = channel_id or None 
+                row["channel_id"] = channel_id or None
                 row["type_id"] = task_type_id
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
@@ -412,7 +412,7 @@ class ImportTaskListCSV(APIView):
         if task_list_serializer.is_valid():
             task_list_serializer.save()
             for task_data in task_list_serializer.data:
-                    success_data.append({
+                success_data.append({
                     'hashtag': task_data.get('hashtag', ''),
                     'title': task_data.get('title', ''),
                     'description': task_data.get('description', ''),
@@ -549,9 +549,10 @@ class EventDropDownApi(APIView):
             response=events
         ).get_success_response()
 
+
 class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
-    
+
     def get(self, request):
         wb = load_workbook('./api/dashboard/task/assets/task_base_template.xlsx')
         ws = wb['Data Definitions']
@@ -576,24 +577,28 @@ class TaskBaseTemplateAPI(APIView):
                 ws.cell(row=row, column=col_num, value=value)
         # Save the file
         with NamedTemporaryFile() as tmp:
-            tmp.close() # with statement opened tmp, close it so wb.save can open it
+            tmp.close()  # with statement opened tmp, close it so wb.save can open it
             wb.save(tmp.name)
             with open(tmp.name, 'rb') as f:
                 f.seek(0)
                 new_file_object = f.read()
         return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')
-    
+
+
 class TaskTypeCrudAPI(APIView):
     authentication_classes = [CustomizePermission]
+
     @role_required(
         [
             RoleType.ADMIN.value,
         ]
     )
-    def get(self,request):
-        taskType=TaskType.objects.all()
+    def get(self, request):
+        taskType = TaskType.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            taskType, request, [ "title"],{"title":"title","updated_by":"updated_by","created_by":"created_by","updated_at":"updated_at","created_at":"created_at"}
+            taskType, request, ["title"],
+            {"title": "title", "updated_by": "updated_by", "created_by": "created_by", "updated_at": "updated_at",
+             "created_at": "created_at"}
         )
         serializer = TasktypeSerializer(
             paginated_queryset.get("queryset"), many=True
@@ -602,7 +607,7 @@ class TaskTypeCrudAPI(APIView):
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
-    
+
     @role_required([RoleType.ADMIN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -616,7 +621,7 @@ class TaskTypeCrudAPI(APIView):
             ).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
-    
+
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
@@ -628,14 +633,14 @@ class TaskTypeCrudAPI(APIView):
         return CustomResponse(
             general_message=f"{taskType.title} Deleted Successfully"
         ).get_success_response()
-    
+
     @role_required([RoleType.ADMIN.value])
     def put(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
         if taskType is None:
             return CustomResponse(general_message="task type not found").get_failure_response()
         serializer = TaskTypeCreateUpdateSerializer(
-           taskType, data=request.data, context={"request": request}
+            taskType, data=request.data, context={"request": request}
         )
         if serializer.is_valid():
             serializer.save()
