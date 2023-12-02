@@ -8,7 +8,9 @@ from decouple import config
 import django
 import sys
 
-sys.path.insert(0, 'path_to_mulearnbackend')
+
+os.chdir('..')
+sys.path.append(os.getcwd())
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mulearnbackend.settings')
 django.setup()
 
