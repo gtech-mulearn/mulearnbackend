@@ -56,6 +56,15 @@ class UserSerializer(serializers.ModelSerializer):
             "profile_pic",
         ]
 
+    def get_profile_pic(self, obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
+
     def get_roles(self, obj):
         return [
             user_role_link.role.title

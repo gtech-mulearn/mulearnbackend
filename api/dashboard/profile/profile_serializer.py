@@ -90,6 +90,15 @@ class UserProfileSerializer(serializers.ModelSerializer):
         except Exception as e:
             return 0
 
+    def get_profile_pic(self, obj):
+        fs = FileSystemStorage()
+        path = f'user/profile/{obj.id}.png'
+        if fs.exists(path):
+            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
+        else:
+            profile_pic = obj.profile_pic
+        return profile_pic
+
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
 

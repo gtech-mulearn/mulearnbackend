@@ -1,31 +1,24 @@
 import os
-import pymysql
 import requests
 from io import BytesIO
 from os.path import splitext
 from django.core.files.storage import FileSystemStorage
-from decouple import config
 import django
 import sys
-
 
 os.chdir('..')
 sys.path.append(os.getcwd())
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mulearnbackend.settings')
 django.setup()
 
-
-def fetch_data(connection, query):
-    with connection.cursor() as cursor:
-        cursor.execute(query)
-        return cursor.fetchall()
+from db.user import User
+from db.settings import SystemSetting
 
 
 def save_image(user_id, url):
     try:
         response = requests.get(url)
         response.raise_for_status()
-
         extension = splitext(url)[-1].split("?")[0]
         pic = BytesIO(response.content)
         fs = FileSystemStorage()
@@ -36,14 +29,10 @@ def save_image(user_id, url):
 
 
 if __name__ == "__main__":
-    db_config = {
-        'host': config('DATABASE_HOST'),
-        'user': config('DATABASE_USER'),
-        'password': config('DATABASE_PASSWORD'),
-        'db': config('DATABASE_NAME'),
-    }
+    users = User.objects.filter(profile_pic__isnull=False)
+    for user in users:
+        save_image(user.id, user.profile_pic)
 
-    with pymysql.connect(**db_config) as connection:
-        data = fetch_data(connection, "SELECT id, profile_pic FROM user WHERE profile_pic IS NOT NULL;")
-        for user_id, profile_pic in data:
-            img = save_image(user_id, profile_pic)
+    settings = SystemSetting.objects.filter(key="db.version").first()
+    settings.value = "1.39"
+    settings.save()
