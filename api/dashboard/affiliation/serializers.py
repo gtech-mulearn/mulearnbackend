@@ -15,7 +15,7 @@ class AffiliationListSerializer(serializers.ModelSerializer):
         fields = ['id','title','organization_count', 'created_by', 'updated_by']
     
     def get_organization_count(self,obj):
-        return obj.organizations.count()
+        return obj.organization_affiliation.count()
 
 
 
