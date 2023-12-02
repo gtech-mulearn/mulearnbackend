@@ -40,7 +40,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
     def get_no_of_lc(self, obj):
         learning_circle_count = LearningCircle.objects.filter(org=obj.org).count()
         no_of_lc_increased = LearningCircle.objects.filter(org=obj.org,
-                                                           created_at__lte=DateTimeUtils.get_current_utc_time() - timedelta(
+                                                           created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(
                                                                days=30)).count()
         return {'lc_count': learning_circle_count, 'no_of_lc_increased': no_of_lc_increased}
 
@@ -48,7 +48,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
         member_count = obj.org.user_organization_link_org.all().count()
 
         no_of_members_increased = obj.org.user_organization_link_org.filter(
-            created_at__lte=DateTimeUtils.get_current_utc_time() - timedelta(days=30)
+            created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(days=30)
         ).count()
         return {'member_count': member_count, 'no_of_members_increased': no_of_members_increased}
 
@@ -73,7 +73,10 @@ class CollegeListSerializer(serializers.ModelSerializer):
                 ).aggregate(total_karma=Sum("karma"))["total_karma"]
                 or 0
         )
-
-        increased_percentage = (total_karma_increased / total_karma_gained) * 100
+        try:
+            increased_percentage = (total_karma_increased / total_karma_gained) * 100
+        except Exception as e:
+            increased_percentage = 0
+            return increased_percentage
         return {'total_karma_gained': total_karma_gained, 'total_karma_increased': total_karma_increased,
                 'increased_percentage': increased_percentage}

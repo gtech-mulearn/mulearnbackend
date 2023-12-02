@@ -114,6 +114,8 @@ class TaskList(models.Model):
     active = models.BooleanField(default=True)
     variable_karma = models.BooleanField(default=False)
     usage_count = models.IntegerField(default=1)
+    bonus_time = models.DateTimeField(blank=True, null=True)
+    bonus_karma = models.IntegerField(blank=True, null=True)
     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column="updated_by", related_name="task_list_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column="created_by", related_name="task_list_created_by")
@@ -128,7 +130,7 @@ class Wallet(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="wallet_user")
     karma = models.IntegerField(default=0)
-    karma_last_update_at = models.DateTimeField(blank=True, null=True, auto_now_add=True)
+    karma_last_updated_at = models.DateTimeField(blank=True, null=True, auto_now=True)
     coin = models.FloatField(default=0)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
                                    related_name="wallet_updated_by")
@@ -236,3 +238,19 @@ class VoucherLog(models.Model):
     class Meta:
         managed = False
         db_table = "voucher_log"
+
+
+class Events(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    name = models.CharField(max_length=75)
+    description = models.CharField(max_length=200, null=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+                                   related_name="event_updated_by")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+                                   related_name="event_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "events"

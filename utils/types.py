@@ -78,6 +78,7 @@ class WebHookCategory(Enum):
     USER = 'user'
     USER_NAME = 'user-name'
     USER_PROFILE = 'user-profile'
+    BULK_ROLE = 'bulk-role'
 
 
 class RefferalType(Enum):
@@ -112,7 +113,7 @@ class Events(Enum):
 
 
 class Lc(Enum):
-    KARMA = 5
+    KARMA = 20
     TASK_HASHTAG = '#lcmeetreport'
 
 
