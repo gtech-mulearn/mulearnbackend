@@ -6,6 +6,7 @@ from rest_framework import serializers
 from db.organization import UserOrganizationLink, District
 from db.task import KarmaActivityLog, Level
 from db.user import User
+from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 
 
@@ -30,10 +31,10 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.all()
+            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values("org__district__zone")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
-        )
+        ).order_by("-total_karma", "org__created_at")
 
         rank_dict = {
             data["org__district__zone"]: data["total_karma"]
@@ -53,11 +54,13 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
+            org_org_type=OrganizationType.COLLEGE.value,
             org__district__zone=obj.org.district.zone,
         ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
         return UserOrganizationLink.objects.filter(
+            org_org_type=OrganizationType.COLLEGE.value,
             org__district__zone=obj.org.district.zone,
         ).count()
 
@@ -69,6 +72,7 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
         ) - timedelta(days=1)
 
         return KarmaActivityLog.objects.filter(
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             user__user_organization_link_user__org__district__zone=obj.org.district.zone,
             created_at__range=(start_date, end_date),
         ).count()
@@ -103,6 +107,7 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
         zone = self.context.get("zone")
         return (
             User.objects.filter(
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_organization_link_user__org__district__zone=zone,
                 user_lvl_link_user__level=obj,
             )

@@ -1,7 +1,8 @@
 import uuid
+
 from rest_framework import serializers
 
-from db.task import TaskList, KarmaActivityLog, TaskType
+from db.task import TaskList, TaskType
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -39,10 +40,11 @@ class TaskListSerializer(serializers.ModelSerializer):
             "updated_by",
             "created_by",
             "created_at",
+            "bonus_time",
+            "bonus_karma",
         ]
 
     def get_total_karma_gainers(self, obj):
-
         return obj.karma_activity_log_task.filter(
             appraiser_approved=True
         ).count()
@@ -68,6 +70,8 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "event",
             "updated_by",
             "created_by",
+            "bonus_karma",
+            "bonus_time",
         )
 
 
@@ -121,25 +125,26 @@ class TaskImportSerializer(serializers.ModelSerializer):
         if value is None:
             return 1
         return value
-    
+
     def validate_variable_karma(self, value):
         if value is None:
             return False
         return value
 
+
 class TasktypeSerializer(serializers.ModelSerializer):
-    updated_by=serializers.CharField(source='updated_by.fullname')
-    created_by=serializers.CharField(source='created_by.fullname')
+    updated_by = serializers.CharField(source='updated_by.fullname')
+    created_by = serializers.CharField(source='created_by.fullname')
 
     class Meta:
         model = TaskType
-        fields = ["id", "title","updated_by","updated_at","created_by","created_at"]
+        fields = ["id", "title", "updated_by", "updated_at", "created_by", "created_at"]
+
 
 class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
-
     class Meta:
-        model=TaskType
-        fields=["title"]
+        model = TaskType
+        fields = ["title"]
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
@@ -151,15 +156,12 @@ class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
             created_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time(),
         )
+
     def update(self, instance, validated_data):
         updated_title = validated_data.get("title")
         instance.title = updated_title
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.updated_by_id = user_id
-        instance.updated_at=DateTimeUtils.get_current_utc_time(),
+        instance.updated_at = DateTimeUtils.get_current_utc_time(),
         instance.save()
         return instance
-
-
-
-

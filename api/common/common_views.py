@@ -1,8 +1,8 @@
 import json
-import requests
+
 import requests
 from django.db import models
-from django.db.models import Count, Subquery, OuterRef
+from django.db.models import Subquery, OuterRef
 from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
@@ -15,7 +15,7 @@ from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
-from .serializer import StudentInfoSerializer, CollegeInfoSerializer
+from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer
 
 
 class LcDashboardAPI(APIView):
@@ -23,7 +23,9 @@ class LcDashboardAPI(APIView):
         date = request.query_params.get("date")
         if date:
             learning_circle_count = LearningCircle.objects.filter(created_at__gt=date).count()
-            total_no_enrollment = UserCircleLink.objects.filter(accepted=True, created_at__gt=date).count()
+            total_no_enrollment = UserCircleLink.objects.filter(accepted=True,
+                                                                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                                                                created_at__gt=date).count()
             user_circle_link_count = UserCircleLink.objects.filter(created_at__gt=date, circle=OuterRef('pk')).values(
                 'circle_id').annotate(
                 total_users=Count('id')).values('total_users')
@@ -49,7 +51,8 @@ class LcDashboardAPI(APIView):
             )
         else:
             learning_circle_count = LearningCircle.objects.all().count()
-            total_no_enrollment = UserCircleLink.objects.filter(accepted=True).count()
+            total_no_enrollment = UserCircleLink.objects.filter(accepted=True,
+                                                                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).count()
 
             user_circle_link_count = UserCircleLink.objects.filter(circle=OuterRef('pk')).values('circle_id').annotate(
                 total_users=Count('id')).values('total_users')
@@ -154,7 +157,7 @@ class LcReportAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             student_info,
             request,
-            search_fields=["first_name", "last_name", "muid", "circle_name", 'circle_ig', "organisation", "dwms_id",
+            search_fields=["first_name", "last_name", "muid", "circle_name", 'circle_ig', "organisation",
                            "karma_earned"],
             sort_fields={"first_name": "first_name", "last_name": "last_name", "muid": "muid",
                          "circle_name": "circle_name",
@@ -216,14 +219,22 @@ class CollegeWiseLcReportCSV(APIView):
             LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values(org_title=F("org__title"))
             .annotate(
-                learning_circle_count=Count("id"), user_count=Count("usercirclelink")
+                learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
             )
             .order_by("org_title")
         )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            learning_circles_info,
+            request,
+            search_fields=["org_title", "learning_circle_count", "user_count"],
+            sort_fields={"org_title": "org_title", "learning_circle_count": "learning_circle_count",
+                         "user_count": "user_count"},
+            is_pagination=False
+        )
 
-        learning_circles_info = CollegeInfoSerializer(learning_circles_info, many=True).data
+        lc_report = CollegeInfoSerializer(paginated_queryset, many=True).data
 
-        return CommonUtils.generate_csv(learning_circles_info, "Learning Circle Report")
+        return CommonUtils.generate_csv(lc_report, "Learning Circle Report")
 
 
 class CollegeWiseLcReport(APIView):
@@ -261,6 +272,149 @@ class CollegeWiseLcReport(APIView):
         return CustomResponse().paginated_response(
             data=collegewise_info_data, pagination=paginated_queryset.get("pagination")
         )
+
+
+class HackathonDataAPI(APIView):
+
+    def get(self, request):
+        hackathon_data = {
+            'hackathons': {
+                'Beyond Us': {
+                    "Domain": ["Software", "Design (UI,UX)"],
+                    "total_applicants_registered": 374,
+                    "short_listed_candidates": 231,
+                    "total_teams_shortlisted": {"total": 58, "domains": {"Software": 40, "Design (UI,UX)": 18}},
+                    "no_of_offer_given": {'count': 1, "status": "Offer Rejected by the candidate"},
+                    "no_of_placements": {"count": 0, "status": None},
+                    "attended_people": None,
+                    "hackathon_type": "Online",
+                    "location": "Discord"
+                },
+                'GTA: CodeStorm': {
+                    "Domain": ["Software", "Design (UI/UX)", "Hardware", "Civil"],
+                    "total_applicants_registered": 451,
+                    "short_listed_candidates": 202,
+                    "total_teams_shortlisted": {"total": 62,
+                                                "domains": {"Software": 18, "Design (UI/UX)": 17, "Hardware": 18,
+                                                            "Civil": 9}},
+                    "no_of_offer_given": {'count': 15, "status": "5 Rejected by the candidates"},
+                    "no_of_placements": {'count': 10, "status": "2 Full time positions + 8 full time internships"},
+                    "attended_people": 168,
+                    "hackathon_type": "Offline",
+                    "location": "Kochi",
+                },
+                'GTA: SandShores': {
+                    "Domain": ["Web Development", "App Development", "AI/ML", "AR/VR"],
+                    "total_applicants_registered": 1765,
+                    "short_listed_candidates": 120,
+                    "total_teams_shortlisted": {"total": 29,
+                                                "domains": {"Web Development": 12, "App Development": 7, "AI/ML": 7,
+                                                            "AR/VR": 3}},
+                    "no_of_offer_given": {'count': 0, "status": "In Progress"},
+                    "no_of_placements": {'count': 0, "status": "In Progress"},
+                    "attended_people": None,
+                    "hackathon_type": "Offline",
+                    "location": "Thrissur",
+                },
+            }
+        }
+        pass
+
+
+class LearningCircleEnrollment(APIView):
+
+    def get(self, request):
+        total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
+                                                             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
+            first_name=F("user__first_name"),
+            last_name=F("user__last_name"),
+            email=F("user__email"),
+            muid=F("user__muid"),
+            circle_name=F("circle__name"),
+            district=F("user__user_organization_link_user__org__district__name"),
+            circle_ig=F("circle__ig__name"),
+            organisation=F("user__user_organization_link_user__org__title"),
+
+        )
+        .annotate(
+            karma_earned=Sum(
+                "user__karma_activity_log_user__task__karma",
+                filter=Q(
+                    user__karma_activity_log_user__task__ig=F("circle__ig")
+                ),
+            ),
+            dwms_id=Case(
+                When(
+                    user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                    then=F(
+                        "user__integration_authorization_user__additional_field"
+                    ),
+                ),
+                default=Value(None, output_field=CharField()),
+                output_field=CharField(),
+            ),
+        )
+        )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            total_no_enrollment,
+            request,
+            search_fields=["first_name", "last_name", "email", "muid", "circle_name", "district", "circle_ig",
+                           "organisation", "karma_earned"],
+            sort_fields={"first_name": "first_name", "last_name": "last_name", "email": "email", "muid": "muid",
+                         "circle_name": "circle_name", "district": "district", "circle_ig": "circle_ig",
+                         "organisation": "organisation", "dwms_id": "dwms_id", "karma_earned": "karma_earned"},
+            is_pagination=False)
+        lc_enrollment = LearningCircleEnrollmentSerializer(paginated_queryset, many=True).data
+
+        return CustomResponse(response=lc_enrollment).get_success_response()
+
+
+class LearningCircleEnrollmentCSV(APIView):
+    def get(self, request):
+        total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
+                                                             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
+            first_name=F("user__first_name"),
+            last_name=F("user__last_name"),
+            email=F("user__email"),
+            muid=F("user__muid"),
+            circle_name=F("circle__name"),
+            district=F("user__user_organization_link_user__org__district__name"),
+            circle_ig=F("circle__ig__name"),
+            organisation=F("user__user_organization_link_user__org__title"),
+
+        )
+        .annotate(
+            karma_earned=Sum(
+                "user__karma_activity_log_user__task__karma",
+                filter=Q(
+                    user__karma_activity_log_user__task__ig=F("circle__ig")
+                ),
+            ),
+            dwms_id=Case(
+                When(
+                    user__integration_authorization_user__integration__name=IntegrationType.KKEM.value,
+                    then=F(
+                        "user__integration_authorization_user__additional_field"
+                    ),
+                ),
+                default=Value(None, output_field=CharField()),
+                output_field=CharField(),
+            ),
+        )
+        )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            total_no_enrollment,
+            request,
+            search_fields=["first_name", "last_name", "email", "muid", "circle_name", "district", "circle_ig",
+                           "organisation", "karma_earned"],
+            sort_fields={"first_name": "first_name", "last_name": "last_name", "email": "email", "muid": "muid",
+                         "circle_name": "circle_name", "district": "district", "circle_ig": "circle_ig",
+                         "organisation": "organisation", "dwms_id": "dwms_id", "karma_earned": "karma_earned"},
+            is_pagination=False)
+
+        lc_enrollment = LearningCircleEnrollmentSerializer(paginated_queryset, many=True).data
+
+        return CommonUtils.generate_csv(lc_enrollment, "Learning Enrollment Report")
 
 
 class GlobalCountAPI(APIView):
@@ -361,7 +515,8 @@ class ListTopIgUsersAPI(APIView):
         userid_list = [entry['userid'] for entry in user_karma_by_ig]
 
         # Fetch user muid and interest group as a list
-        results = UserIgLink.objects.filter(user__id__in=userid_list).values_list('user__muid', 'ig__name', named=True)
+        results = UserIgLink.objects.filter(user__id__in=userid_list).values_list('user__muid', 'ig__name',
+                                                                                  named=True)
 
         # Process the results to create the desired structure
         user_ig_dict = {}

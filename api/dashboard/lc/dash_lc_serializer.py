@@ -5,14 +5,14 @@ from django.db.models.functions import Concat
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
-from db.task import TaskList, UserIgLink
+from db.task import TaskList, UserIgLink, Wallet
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 from db.user import User
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from utils.types import Lc
-
+from .lc_support_functions import get_today_start_end, get_week_start_end
 
 class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
@@ -301,13 +301,13 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         validated_data['user_id'] = user_id
         validated_data['circle_id'] = circle_id
         validated_data['lead'] = False
-        validated_data['accepted'] = True
-        validated_data['accepted_at'] = DateTimeUtils.get_current_utc_time()
+        validated_data['accepted'] = None
+        validated_data['accepted_at'] = None
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
         return UserCircleLink.objects.create(**validated_data)
 
 
-class LearningCircleHomeSerializer(serializers.ModelSerializer):
+class LearningCircleDetailsSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -316,6 +316,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     is_lead = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
     ig_code = serializers.CharField(source='ig.code')
+    ig_id = serializers.CharField(source='ig.id')
+    ig_name = serializers.CharField(source='ig.name')
     previous_meetings = serializers.SerializerMethodField()
 
     class Meta:
@@ -334,6 +336,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "total_karma",
             "is_lead",
             "is_member",
+            "ig_id",
+            "ig_name",
             "ig_code",
             "previous_meetings",
         ]
@@ -398,6 +402,7 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
                 'profile_pic': member.user.profile_pic or None,
                 'karma': total_ig_karma,
                 'is_lead': member.lead,
+                'level': member.user.user_lvl_link_user.level.level_order
             })
 
         return member_info
@@ -606,20 +611,49 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         attendees_list = attendees.split(',')
 
         user_id = self.context.get('user_id')
-
-        KarmaActivityLog.objects.bulk_create([
-            KarmaActivityLog(
-                id=uuid.uuid4(),
-                user_id=user,
-                karma=Lc.KARMA.value,
-                task=task,
-                updated_by_id=user_id,
-                created_by_id=user_id,
-            )
-            for user in attendees_list
-        ])
-
+        for user in attendees_list:
+            KarmaActivityLog.objects.bulk_create([
+                KarmaActivityLog(
+                    id=uuid.uuid4(),
+                    user_id=user,
+                    karma=Lc.KARMA.value,
+                    task=task,
+                    updated_by_id=user_id,
+                    created_by_id=user_id,
+                )
+            ])
+            wallet = Wallet.objects.filter(user_id=user).first()
+            wallet.karma += Lc.KARMA.value
+            wallet.karma_last_update_at = DateTimeUtils.get_current_utc_time()
+            wallet.updated_at = DateTimeUtils.get_current_utc_time()
+            wallet.save()
         return attendees
+
+    def validate_meet_time(self, meet_time):
+        circle_id = self.context.get('circle_id')
+
+        start_of_day, end_of_day = get_today_start_end(meet_time)
+        start_of_week, end_of_week = get_week_start_end(meet_time)
+
+        if CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            meet_time__range=(
+                start_of_day,
+                end_of_day
+            )
+        ).exists():
+            raise serializers.ValidationError(f'Another meet already scheduled on {meet_time.date()}')
+
+        if CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            meet_time__range=(
+                start_of_week,
+                end_of_week
+            )
+        ).count() >= 5:
+            raise serializers.ValidationError('you can create only 5 meeting in a week')
+
+        return meet_time
 
 
 class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
@@ -656,17 +690,14 @@ class IgTaskDetailsSerializer(serializers.ModelSerializer):
         ]
 
     def get_task_status(self, obj):
-        ig_id = self.context.get('ig_id')
-
-        user_ig_links = UserIgLink.objects.filter(ig=ig_id).select_related('user')
-
+        user_ig_links = UserIgLink.objects.filter(ig=obj.ig).select_related('user')
         for user_ig_link in user_ig_links:
-            if not obj.karma_activity_log_task.filter(
+            if obj.karma_activity_log_task.filter(
                     user=user_ig_link.user,
-                    peer_approved=True
-            ).exists():
+                    peer_approved=True).exists():
+                return True
+            else:
                 return False
-        return True
 
 
 class AddMemberSerializer(serializers.ModelSerializer):

@@ -113,7 +113,7 @@ class Events(Enum):
 
 
 class Lc(Enum):
-    KARMA = 5
+    KARMA = 20
     TASK_HASHTAG = '#lcmeetreport'
 
 
