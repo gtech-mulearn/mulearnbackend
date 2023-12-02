@@ -1,4 +1,5 @@
 from contextlib import suppress
+import hashlib
 import hmac
 import json
 import json
@@ -106,14 +107,6 @@ class UniversalErrorHandlerMiddleware:
             exception: The exception object.
 
         """
-        error_message = (
-            f"Exception Type: {type(exception).__name__}; "
-            f"Exception Message: {str(exception)}; "
-            f"Traceback: {traceback.format_exc()}"
-        )
-        logger.error(error_message)
-
-        print(error_message)
 
         body = request._body.decode("utf-8") if hasattr(request, "_body") else "No body"
         auth = request.auth if hasattr(request, "auth") else "No Auth data"
@@ -124,16 +117,29 @@ class UniversalErrorHandlerMiddleware:
 
         with suppress(json.JSONDecodeError):
             auth = json.dumps(auth, indent=4)
-
+        
+        exception_id = self.generate_error_id(exception)
+            
         request_info = (
-            f"Request Info: METHOD: {request.method}; \n"
-            f"PATH: {request.path}; \n"
-            f"AUTH: \n{auth} \n"
+            f"EXCEPTION INFO:\n"
+            f"ID: {exception_id}\n"
+            f"TYPE: {type(exception).__name__}\n"
+            f"MESSAGE: {str(exception)}\n"
+            f"METHOD: {request.method}\n"
+            f"PATH: {request.path}\n"
+            f"AUTH: \n{auth}\n"
             f"BODY: \n{body}\n"
+            f"TRACEBACK: {traceback.format_exc()}"
         )
         logger.error(request_info)
 
         print(request_info)
+        
+    def generate_error_id(self, exception):
+        error_info = f"{type(exception).__name__}: {str(exception)}"
+
+        hash_object = hashlib.sha256(error_info.encode())
+        return hash_object.hexdigest()
 
     def process_exception(self, request, exception):
         """
