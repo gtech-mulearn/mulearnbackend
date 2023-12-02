@@ -86,9 +86,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         try:
             user_count = Wallet.objects.filter(karma__lt=obj.wallet_user.karma).count()
             usr_count = User.objects.all().count()
-            if usr_count == 0:
-                return 0
-            return (user_count * 100) / usr_count
+            return 0 if usr_count == 0 else (user_count * 100) / usr_count
         except Exception as e:
             return 0
 

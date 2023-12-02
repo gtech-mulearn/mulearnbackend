@@ -21,6 +21,8 @@ from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSe
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, \
     ScheduleMeetingSerializer, ListAllMeetRecordsSerializer, AddMemberSerializer
 
+from .dash_ig_helper import is_learning_circle_member, is_valid_learning_circle, get_today_start_end, get_week_start_end
+
 domain = config("FR_DOMAIN_NAME")
 from_mail = config("FROM_MAIL")
 
@@ -250,23 +252,19 @@ class LearningCircleDetailsApi(APIView):
     def get(self, request, circle_id, member_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_circle_link = UserCircleLink.objects.filter(
-            user_id=user_id,
-            circle_id=circle_id,
-            accepted=True
+        if not is_valid_learning_circle(circle_id):
+            return CustomResponse(
+                general_message='invalid learning circle'
+            ).get_failure_response()
+
+        if not is_learning_circle_member(user_id, circle_id):
+            return CustomResponse(
+                general_message='unauthorized access'
+            ).get_failure_response()
+
+        learning_circle = LearningCircle.objects.filter(
+            id=circle_id
         ).first()
-
-        if user_circle_link is None:
-            return CustomResponse(
-                general_message='your are not a part of this learning circle circle'
-            ).get_failure_response()
-
-        if not LearningCircle.objects.filter(id=circle_id).exists():
-            return CustomResponse(
-                general_message='Learning Circle not found'
-            ).get_failure_response()
-
-        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
 
         serializer = LearningCircleDetailsSerializer(
             learning_circle,
@@ -719,3 +717,49 @@ class AddMemberAPI(APIView):
         return CustomResponse(
             message=serializer.errors
         ).get_failure_response()
+
+
+class ValidateUserMeetCreateAPI(APIView):
+    def get(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        if not is_valid_learning_circle(circle_id):
+            return CustomResponse(
+                general_message='invalid learning circle'
+            ).get_failure_response()
+
+        if not is_learning_circle_member(user_id, circle_id):
+            return CustomResponse(
+                general_message='unauthorized access'
+            ).get_failure_response()
+
+        today_date_time = DateTimeUtils.get_current_utc_time()
+
+        start_of_day, end_of_day = get_today_start_end(today_date_time)
+        start_of_week, end_of_week = get_week_start_end(today_date_time)
+
+        if CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            meet_time__range=(
+                start_of_day,
+                end_of_day
+            )
+        ).exists():
+            return CustomResponse(
+                general_message=f'Another meet already scheduled on {today_date_time.date()}'
+            ).get_failure_response()
+
+        if CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            meet_time__range=(
+                start_of_week,
+                end_of_week
+            )
+        ).count() >= 5:
+            return CustomResponse(
+                general_message='you can create only 5 meeting in a week'
+            ).get_failure_response()
+
+        return CustomResponse(
+            general_message='success'
+        ).get_success_response()

@@ -243,6 +243,7 @@ class VoucherLog(models.Model):
 class Events(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75)
+    description = models.CharField(max_length=200, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
                                    related_name="event_updated_by")
     updated_at = models.DateTimeField(auto_now=True)

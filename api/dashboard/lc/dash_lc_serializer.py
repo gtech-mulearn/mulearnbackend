@@ -12,7 +12,8 @@ from db.user import User
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from utils.types import Lc
-from .lc_support_functions import get_today_start_end, get_week_start_end
+from .dash_ig_helper import get_today_start_end, get_week_start_end
+
 
 class LearningCircleSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source='created_by.fullname')
@@ -624,7 +625,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
             ])
             wallet = Wallet.objects.filter(user_id=user).first()
             wallet.karma += Lc.KARMA.value
-            wallet.karma_last_update_at = DateTimeUtils.get_current_utc_time()
+            wallet.karma_last_updated_at = DateTimeUtils.get_current_utc_time()
             wallet.updated_at = DateTimeUtils.get_current_utc_time()
             wallet.save()
         return attendees

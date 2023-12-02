@@ -122,7 +122,7 @@ class Department(models.Model):
 
 class College(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
-    level = models.IntegerField(default=1)
+    level = models.IntegerField(default=0)
     org = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='college_org', unique=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='college_updated_by')
