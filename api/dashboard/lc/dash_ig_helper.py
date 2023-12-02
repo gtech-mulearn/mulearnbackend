@@ -1,5 +1,7 @@
 from datetime import datetime, timedelta
 
+from db.learning_circle import UserCircleLink, LearningCircle
+
 
 def get_today_start_end(date_time):
     start_of_day = datetime(
@@ -41,3 +43,24 @@ def get_week_start_end(date_time):
     )
     return start_of_week, end_of_week
 
+
+def is_learning_circle_member(user_id, circle_id):
+    user_circle_link = UserCircleLink.objects.filter(
+        user_id=user_id,
+        circle_id=circle_id,
+        accepted=True
+    ).exists()
+
+    if user_circle_link:
+        return True
+    return False
+
+
+def is_valid_learning_circle(circle_id):
+    learning_circle = LearningCircle.objects.filter(
+        id=circle_id
+    ).exists()
+
+    if learning_circle:
+        return True
+    return False
