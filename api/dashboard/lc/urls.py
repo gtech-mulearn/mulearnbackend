@@ -4,8 +4,6 @@ from . import dash_lc_view
 
 urlpatterns = [
     path('user-list/', dash_lc_view.UserLearningCircleListApi.as_view(), name='main'),  # list all lc's of user
-    #   URL issue
-    path('list-all/<str:circle_code>/', dash_lc_view.TotalLearningCircleListApi.as_view(), name='list-all-search'),
     path('<str:circle_id>/details/', dash_lc_view.LearningCircleDetailsApi.as_view(), name='lc-detailed'),  # individual ls details
     # dashboard search listing
     path('<str:circle_id>/schedule-meet/', dash_lc_view.ScheduleMeetAPI.as_view(), name='schedule-meet'),
@@ -22,8 +20,8 @@ urlpatterns = [
 
     # TODO: new api for note updation
     # path('<str:circle_id>/note/edit/', dash_lc_view.LearningCircleLeadTransfer.as_view(), name='edit-note'),
-
-    path('<str:circle_id>/<str:member_id>/', dash_lc_view.LearningCircleDetailsApi.as_view()),  # user accept or reject, also for removal
+    path('<str:circle_id>/user-accept-reject/<str:member_id>/', dash_lc_view.LearningCircleDetailsApi.as_view()),  # user accept or reject, also for removal
+    path('list-all/<str:circle_code>/', dash_lc_view.TotalLearningCircleListApi.as_view(), name='list-all-search'),
     path('list/', dash_lc_view.LearningCircleMainApi.as_view(), name='list'), # public page listing
     path('list-all/', dash_lc_view.TotalLearningCircleListApi.as_view(), name='list-all'), # dashboard search listing
 
