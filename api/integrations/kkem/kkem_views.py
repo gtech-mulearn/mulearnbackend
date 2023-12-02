@@ -81,7 +81,7 @@ class KKEMIndividualKarmaAPI(APIView):
                 muid=muid,
             )
             .annotate(jsid=F("integration_authorization_user__integration_value"))
-            .get()
+            .first()
         )
 
         if not kkem_user:

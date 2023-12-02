@@ -81,6 +81,9 @@ class ClearErrorLogAPI(APIView):
 
 
 class LoggerAPI(APIView):
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
     def get(self, request):
         error_log = f"{LOG_PATH}/error.log"
         try:
