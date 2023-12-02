@@ -28,21 +28,9 @@ class UserLogSerializer(ModelSerializer):
 
 
 class UserShareQrcode(serializers.ModelSerializer):
-    profile_pic = serializers.SerializerMethodField()
-
     class Meta:
         model = User
         fields = ['profile_pic']
-
-    def get_profile_pic(self, obj):
-        fs = FileSystemStorage()
-        path = f'user/qr/{obj.id}.png'
-        if fs.exists(path):
-            qrcode_image = f"{self.context.get('request').build_absolute_uri(BE_DOMAIN_NAME)}{fs.url(path)[1:]}"
-        else:
-            return None
-        return qrcode_image
-
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
@@ -56,7 +44,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
-    profile_pic = serializers.SerializerMethodField()
     percentile = serializers.SerializerMethodField()
 
     class Meta:
@@ -89,15 +76,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return 0 if usr_count == 0 else (user_count * 100) / usr_count
         except Exception as e:
             return 0
-
-    def get_profile_pic(self, obj):
-        fs = FileSystemStorage()
-        path = f'user/profile/{obj.id}.png'
-        if fs.exists(path):
-            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
-        else:
-            profile_pic = obj.profile_pic
-        return profile_pic
 
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
