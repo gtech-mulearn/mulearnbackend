@@ -91,7 +91,7 @@ class Organization(models.Model):
     title = models.CharField(max_length=100)
     code = models.CharField(unique=True, max_length=12)
     org_type = models.CharField(max_length=25)
-    affiliation = models.ForeignKey(OrgAffiliation, on_delete=models.CASCADE, blank=True, null=True)
+    affiliation = models.ForeignKey(OrgAffiliation, on_delete=models.CASCADE, blank=True, null=True, related_name='organizations')
     district = models.ForeignKey(District, on_delete=models.CASCADE, related_name='organization_district')
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='organization_updated_by')
@@ -122,7 +122,7 @@ class Department(models.Model):
 
 class College(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
-    level = models.IntegerField()
+    level = models.IntegerField(default=1)
     org = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='college_org', unique=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='college_updated_by')
