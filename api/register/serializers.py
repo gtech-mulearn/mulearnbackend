@@ -162,7 +162,7 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     def validate_invite_code(self, invite_code):
         try:
-            return MucoinInviteLog.objects.get(invite_code=invite_code).user
+            return MucoinInviteLog.objects.filter(invite_code=invite_code).first().user
         except MucoinInviteLog.DoesNotExist as e:
             raise serializers.ValidationError(
                 "The provided invite code is not valid."

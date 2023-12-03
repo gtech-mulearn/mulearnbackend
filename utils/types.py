@@ -51,10 +51,12 @@ class OrganizationType(Enum):
     COLLEGE = 'College'
     COMPANY = 'Company'
     COMMUNITY = 'Community'
+    SCHOOL = 'School'
 
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
 
 class WebHookActions(Enum):
     SEPARATOR = '<|=|>'
