@@ -369,25 +369,6 @@ class LinkSocials(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        accounts = [
-            "github",
-            "facebook",
-            "instagram",
-            "linkedin",
-            "dribble",
-            "behance",
-            "stackoverflow",
-            "medium",
-            "hackerrank"
-        ]
-
-        old_accounts = {account: getattr(instance, account) for account in accounts}
-
-        for account in accounts:
-            setattr(
-                instance, account, validated_data.get(account, old_accounts[account])
-            )
-
         def create_karma_activity_log(task_title, karma_value):
             task = TaskList.objects.filter(title=task_title).first()
             if task:
@@ -400,12 +381,11 @@ class LinkSocials(ModelSerializer):
                 )
 
         for account, account_url in validated_data.items():
-            old_account_url = old_accounts[account]
+            old_account_url = getattr(instance, account)
             if account_url != old_account_url:
                 if old_account_url is None:
-                    create_karma_activity_log(f"social_{account}", 50)
+                    create_karma_activity_log(f"social_{account}", 20)
                 elif account_url is None:
-                    create_karma_activity_log(f"social_{account}", -50)
+                    create_karma_activity_log(f"social_{account}", -20)
 
-        instance.save()
-        return instance
+        return super().update(instance, validated_data)
