@@ -463,6 +463,8 @@ class LearningCircleDetailsSerializer(serializers.ModelSerializer):
             "id",
             "meet_time",
             "day",
+        ).order_by(
+            '-meet_time'
         )
         return previous_meetings
 
