@@ -1,7 +1,6 @@
 import uuid
 
 from decouple import config as decouple_config
-from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from rest_framework import serializers
 
@@ -185,7 +184,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
         organizations_data = []
         for link in organization_links:
-            if link.org.org_type == OrganizationType.COLLEGE.value:
+            if link.org.org_type == OrganizationType.COLLEGE.value or OrganizationType.SCHOOL.value:
                 serializer = CollegeSerializer(link)
             else:
                 serializer = OrgSerializer(link)
