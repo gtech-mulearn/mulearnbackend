@@ -81,6 +81,8 @@ class ClearErrorLogAPI(APIView):
 
 
 class LoggerAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
