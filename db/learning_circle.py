@@ -57,6 +57,7 @@ class CircleMeetingLog(models.Model):
     day = models.CharField(max_length=20)
     attendees = models.CharField(max_length=216)
     agenda = models.CharField(max_length=500)
+    meet_report = models.ImageField(max_length=200, upload_to='lc/meet-report')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
                                    related_name='circle_meeting_log_created_by')
     created_at = models.DateTimeField(auto_now=True)
