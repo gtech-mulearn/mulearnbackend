@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 
 from django.db.models import Sum, Count, Value, CharField, F
 from django.db.models.functions import Concat
@@ -567,8 +568,8 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         model = CircleMeetingLog
         fields = [
             "meet_id",
-            "meet_time",
             "meet_place",
+            "meet_report",
             "day",
             "attendees",
             "agenda",
@@ -595,7 +596,15 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         return attendees_details_list
 
     def create(self, validated_data):
+        today_date = DateTimeUtils.get_current_utc_time().date()
+        meet_time_string = self.context.get('time')
+        meet_time = datetime.strptime(meet_time_string, "%H:%M:%S").time()
+
+        combined_meet_time = datetime.combine(today_date, meet_time)
+
         validated_data['id'] = uuid.uuid4()
+        validated_data['meet_time'] = combined_meet_time
+        validated_data['day'] = DateTimeUtils.get_current_utc_time().strftime('%A')
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
@@ -630,11 +639,16 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
             wallet.save()
         return attendees
 
-    def validate_meet_time(self, meet_time):
+    def validate(self, data):
         circle_id = self.context.get('circle_id')
 
-        start_of_day, end_of_day = get_today_start_end(meet_time)
-        start_of_week, end_of_week = get_week_start_end(meet_time)
+        today_date = DateTimeUtils.get_current_utc_time().date()
+        time = self.context.get('time')
+        time = datetime.strptime(time, "%H:%M:%S").time()
+        combined_meet_time = datetime.combine(today_date, time)
+
+        start_of_day, end_of_day = get_today_start_end(combined_meet_time)
+        start_of_week, end_of_week = get_week_start_end(combined_meet_time)
 
         if CircleMeetingLog.objects.filter(
             circle_id=circle_id,
@@ -643,7 +657,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
                 end_of_day
             )
         ).exists():
-            raise serializers.ValidationError(f'Another meet already scheduled on {meet_time.date()}')
+            raise serializers.ValidationError(f'Another meet already scheduled on {today_date}')
 
         if CircleMeetingLog.objects.filter(
             circle_id=circle_id,
@@ -654,7 +668,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         ).count() >= 5:
             raise serializers.ValidationError('you can create only 5 meeting in a week')
 
-        return meet_time
+        return data
 
 
 class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
