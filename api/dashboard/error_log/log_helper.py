@@ -54,14 +54,18 @@ class logHandler:
             dict: extracted log entry
         """
         values = self.get_values(error, *self.get_patterns())
-        return {
-            key: self.get_formatted_time(value)
-            if self.log_entries[key]["type"] == datetime
-            else json.loads(value)
-            if self.log_entries[key]["type"] == dict
-            else value
-            for key, value in values.items()
-        }
+        result_dict = {}
+
+        for key, value in values.items():
+            entry_type = self.log_entries[key]["type"]
+            if entry_type == datetime:
+                result_dict[key] = self.get_formatted_time(value)
+            elif entry_type == dict and value:
+                result_dict[key] = json.loads(value)
+            else:
+                result_dict[key] = value
+
+        return result_dict
 
     def get_formatted_time(self, extracted_timestamp: str) -> datetime:
         """convert datetime from error log to readable datetime
