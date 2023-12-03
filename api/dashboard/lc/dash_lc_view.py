@@ -422,12 +422,14 @@ class SingleReportDetailAPI(APIView):
 
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+        time = request.data.get('time')
 
         serializer = MeetRecordsCreateEditDeleteSerializer(
             data=request.data,
             context={
                 'user_id': user_id,
-                'circle_id': circle_id
+                'circle_id': circle_id,
+                'time': time
             }
         )
         if serializer.is_valid():
