@@ -565,14 +565,15 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     meet_created_by = serializers.CharField(source='created_by.fullname', required=False)
     meet_created_at = serializers.CharField(source='created_at', required=False)
     meet_id = serializers.CharField(source='id', required=False)
+    meet_time = serializers.CharField(required=False)
 
     class Meta:
         model = CircleMeetingLog
         fields = [
             "meet_id",
             "meet_place",
+            "meet_time",
             "meet_report",
-            "day",
             "attendees",
             "agenda",
             "attendees_details",
