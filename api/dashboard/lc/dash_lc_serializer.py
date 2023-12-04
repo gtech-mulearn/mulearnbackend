@@ -401,7 +401,7 @@ class LearningCircleDetailsSerializer(serializers.ModelSerializer):
             member_info.append({
                 'id': member.user.id,
                 'username': f'{member.user.fullname}',
-                'profile_pic': member.user.profile_pic or None,
+                'profile_pic': f'{member.user.profile_pic}' or None,
                 'karma': total_ig_karma,
                 'is_lead': member.lead,
                 'level': member.user.user_lvl_link_user.level.level_order
