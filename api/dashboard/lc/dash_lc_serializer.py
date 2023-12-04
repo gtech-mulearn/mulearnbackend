@@ -1,18 +1,17 @@
 import uuid
 from datetime import datetime
 
-from django.db.models import Sum, Count, Value, CharField, F
-from django.db.models.functions import Concat
+from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
-from db.task import TaskList, UserIgLink, Wallet
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+from db.task import TaskList, UserIgLink, Wallet
 from db.user import User
+from utils.types import Lc
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-from utils.types import Lc
 from .dash_ig_helper import get_today_start_end, get_week_start_end
 
 
@@ -130,7 +129,6 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
                 circle__ig_id=ig_id,
                 accepted=True
         ).exists():
-
             raise serializers.ValidationError(
                 "Already a member of a learning circle with the same interest group"
             )
@@ -279,7 +277,6 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
                 circle_id=circle_id,
                 user_id=user_id
         ).first():
-
             raise serializers.ValidationError(
                 "Cannot send another request at the moment"
             )
@@ -289,7 +286,6 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
                 circle_id__ig_id=ig_id,
                 accepted=True
         ).exists():
-
             raise serializers.ValidationError(
                 "Already a member of learning circle with same interest group"
             )
@@ -566,6 +562,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     meet_created_at = serializers.CharField(source='created_at', required=False)
     meet_id = serializers.CharField(source='id', required=False)
     meet_time = serializers.CharField(required=False)
+    meet_report = serializers.ImageField(required=True)
 
     class Meta:
         model = CircleMeetingLog
@@ -650,20 +647,20 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         start_of_week, end_of_week = get_week_start_end(combined_meet_time)
 
         if CircleMeetingLog.objects.filter(
-            circle_id=circle_id,
-            meet_time__range=(
-                start_of_day,
-                end_of_day
-            )
+                circle_id=circle_id,
+                meet_time__range=(
+                        start_of_day,
+                        end_of_day
+                )
         ).exists():
             raise serializers.ValidationError(f'Another meet already scheduled on {today_date}')
 
         if CircleMeetingLog.objects.filter(
-            circle_id=circle_id,
-            meet_time__range=(
-                start_of_week,
-                end_of_week
-            )
+                circle_id=circle_id,
+                meet_time__range=(
+                        start_of_week,
+                        end_of_week
+                )
         ).count() >= 5:
             raise serializers.ValidationError('you can create only 5 meeting in a week')
 
