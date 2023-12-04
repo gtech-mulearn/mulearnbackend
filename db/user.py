@@ -16,7 +16,7 @@ class User(models.Model):
     email          = models.EmailField(unique=True, max_length=200)
     password       = models.CharField(max_length=200, blank=True, null=True)
     mobile         = models.CharField(unique=True, max_length=15)
-    gender         = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"),("Female", "Female")])
+    gender         = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"), ("Female", "Female")])
     dob            = models.DateField(blank=True, null=True)
     admin          = models.BooleanField(default=False)
     exist_in_guild = models.BooleanField(default=False)
