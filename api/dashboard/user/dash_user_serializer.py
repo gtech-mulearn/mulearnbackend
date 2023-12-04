@@ -99,6 +99,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
+    district = serializers.CharField(source="district.name")
 
     class Meta:
         model = User
@@ -117,6 +118,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             "graduation_year",
             "interest_groups",
             "igs",
+            "district"
         ]
 
     def validate(self, data):
