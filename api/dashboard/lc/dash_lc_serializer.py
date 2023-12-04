@@ -584,17 +584,13 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     def get_attendees_details(self, obj):
         attendees_list = obj.attendees.split(',')
 
-        attendees_details_list = User.objects.filter(
-            id__in=attendees_list
-        ).values(
-            'profile_pic',
-            fullname=Concat(
-                'first_name',
-                Value(' '),
-                'last_name',
-                output_field=CharField()
-            ),
-        )
+        attendees_details_list = []
+        for user_id in attendees_list:
+            user = User.objects.get(id=user_id)
+            attendees_details_list.append({
+                'fullname': user.fullname,
+                'profile_pic': user.profile_pic,
+            })
 
         return attendees_details_list
 
