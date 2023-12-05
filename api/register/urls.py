@@ -17,6 +17,7 @@ urlpatterns = [
     path("college/list/", register_views.CollegeAPI.as_view()),
     path("company/list/", register_views.CompanyAPI.as_view()),
     path("community/list/", register_views.CommunityAPI.as_view()),
+    path("schools/list/", register_views.SchoolAPI.as_view()),
     path("area-of-interest/list/", register_views.AreaOfInterestAPI.as_view()),
     path("lc/user-validation/", register_views.LearningCircleUserViewAPI.as_view()),
     path('email-verification/', register_views.UserEmailVerificationAPI.as_view()),
