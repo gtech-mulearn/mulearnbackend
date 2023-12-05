@@ -245,7 +245,7 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_user")
                 )
                 .order_by("org_title")
             )
@@ -254,7 +254,7 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_user")
                 )
                 .order_by("org_title")
             )
@@ -272,53 +272,6 @@ class CollegeWiseLcReport(APIView):
         return CustomResponse().paginated_response(
             data=collegewise_info_data, pagination=paginated_queryset.get("pagination")
         )
-
-
-class HackathonDataAPI(APIView):
-
-    def get(self, request):
-        hackathon_data = {
-            'hackathons': {
-                'Beyond Us': {
-                    "Domain": ["Software", "Design (UI,UX)"],
-                    "total_applicants_registered": 374,
-                    "short_listed_candidates": 231,
-                    "total_teams_shortlisted": {"total": 58, "domains": {"Software": 40, "Design (UI,UX)": 18}},
-                    "no_of_offer_given": {'count': 1, "status": "Offer Rejected by the candidate"},
-                    "no_of_placements": {"count": 0, "status": None},
-                    "attended_people": None,
-                    "hackathon_type": "Online",
-                    "location": "Discord"
-                },
-                'GTA: CodeStorm': {
-                    "Domain": ["Software", "Design (UI/UX)", "Hardware", "Civil"],
-                    "total_applicants_registered": 451,
-                    "short_listed_candidates": 202,
-                    "total_teams_shortlisted": {"total": 62,
-                                                "domains": {"Software": 18, "Design (UI/UX)": 17, "Hardware": 18,
-                                                            "Civil": 9}},
-                    "no_of_offer_given": {'count': 15, "status": "5 Rejected by the candidates"},
-                    "no_of_placements": {'count': 10, "status": "2 Full time positions + 8 full time internships"},
-                    "attended_people": 168,
-                    "hackathon_type": "Offline",
-                    "location": "Kochi",
-                },
-                'GTA: SandShores': {
-                    "Domain": ["Web Development", "App Development", "AI/ML", "AR/VR"],
-                    "total_applicants_registered": 1765,
-                    "short_listed_candidates": 120,
-                    "total_teams_shortlisted": {"total": 29,
-                                                "domains": {"Web Development": 12, "App Development": 7, "AI/ML": 7,
-                                                            "AR/VR": 3}},
-                    "no_of_offer_given": {'count': 0, "status": "In Progress"},
-                    "no_of_placements": {'count': 0, "status": "In Progress"},
-                    "attended_people": None,
-                    "hackathon_type": "Offline",
-                    "location": "Thrissur",
-                },
-            }
-        }
-        pass
 
 
 class LearningCircleEnrollment(APIView):
@@ -364,9 +317,11 @@ class LearningCircleEnrollment(APIView):
                          "circle_name": "circle_name", "district": "district", "circle_ig": "circle_ig",
                          "organisation": "organisation", "dwms_id": "dwms_id", "karma_earned": "karma_earned"},
             is_pagination=False)
-        lc_enrollment = LearningCircleEnrollmentSerializer(paginated_queryset, many=True).data
+        lc_enrollment = LearningCircleEnrollmentSerializer(paginated_queryset.get('queryset'), many=True).data
 
-        return CustomResponse(response=lc_enrollment).get_success_response()
+        return CustomResponse().paginated_response(
+            data=lc_enrollment, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class LearningCircleEnrollmentCSV(APIView):
