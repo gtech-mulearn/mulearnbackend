@@ -245,7 +245,7 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_user")
                 )
                 .order_by("org_title")
             )
@@ -254,7 +254,7 @@ class CollegeWiseLcReport(APIView):
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_user")
                 )
                 .order_by("org_title")
             )
