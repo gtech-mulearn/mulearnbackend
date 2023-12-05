@@ -346,7 +346,7 @@ class LearningCircleEnrollment(APIView):
             sort_fields={"first_name": "first_name", "last_name": "last_name", "email": "email", "muid": "muid",
                          "circle_name": "circle_name", "district": "district", "circle_ig": "circle_ig",
                          "organisation": "organisation", "dwms_id": "dwms_id", "karma_earned": "karma_earned"},
-            is_pagination=False)
+            is_pagination=True)
         lc_enrollment = LearningCircleEnrollmentSerializer(paginated_queryset.get('queryset'), many=True).data
 
         return CustomResponse().paginated_response(
