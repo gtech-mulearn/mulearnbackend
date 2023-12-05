@@ -128,7 +128,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 ).order_by('-karma')
             )
 
-        for count, _rank in enumerate(ranks, start=0):
+        for count, _rank in enumerate(ranks, start=1):
             if obj == _rank.user:
                 return count
 
