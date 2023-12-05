@@ -5,7 +5,7 @@ from . import dash_task_view
 urlpatterns = [
     #task_type
     path('list-task-type/', dash_task_view.TaskTypeCrudAPI.as_view()),  # get tasktype,create tasktype
-    path('list-task-type/<str:task_type_id>', dash_task_view.TaskTypeCrudAPI.as_view()),  # delete,edit
+    path('task-type/<str:task_type_id>', dash_task_view.TaskTypeCrudAPI.as_view()),  # delete,edit
 
     path('channel/', dash_task_view.ChannelDropdownAPI.as_view()),
     path('ig/', dash_task_view.IGDropdownAPI.as_view()),
