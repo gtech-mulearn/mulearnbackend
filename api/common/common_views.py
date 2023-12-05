@@ -215,11 +215,21 @@ class LcReportDownloadAPI(APIView):
 
 class CollegeWiseLcReportCSV(APIView):
     def get(self, request):
+        learning_circle_count_subquery = (
+            LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+            .values(org_title=F("org__title"))
+            .annotate(learning_circle_count=Count("id"))
+            .filter(org_title=OuterRef("org_title"))
+            .values("learning_circle_count")
+            [:1]
+        )
+
         learning_circles_info = (
             LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values(org_title=F("org__title"))
             .annotate(
-                learning_circle_count=Count("id"), user_count=Count("user_circle_link_circle")
+                learning_circle_count=Subquery(learning_circle_count_subquery),
+                user_count=Count("user_circle_link_circle__user"),
             )
             .order_by("org_title")
         )
@@ -241,20 +251,40 @@ class CollegeWiseLcReport(APIView):
     def get(self, request):
         date = request.query_params.get('date')
         if date:
+            learning_circle_count_subquery = (
+                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
+                .values(org_title=F("org__title"))
+                .annotate(learning_circle_count=Count("id"))
+                .filter(org_title=OuterRef("org_title"))
+                .values("learning_circle_count")
+                [:1]
+            )
+
             learning_circles_info = (
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value, created_at__date=date)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_user")
+                    learning_circle_count=Subquery(learning_circle_count_subquery),
+                    user_count=Count("user_circle_link_circle__user")
                 )
                 .order_by("org_title")
             )
         else:
+            learning_circle_count_subquery = (
+                LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+                .values(org_title=F("org__title"))
+                .annotate(learning_circle_count=Count("id"))
+                .filter(org_title=OuterRef("org_title"))
+                .values("learning_circle_count")
+                [:1]
+            )
+
             learning_circles_info = (
                 LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
                 .values(org_title=F("org__title"))
                 .annotate(
-                    learning_circle_count=Count("id"), user_count=Count("user_circle_link_user")
+                    learning_circle_count=Subquery(learning_circle_count_subquery),
+                    user_count=Count("user_circle_link_circle__user"),
                 )
                 .order_by("org_title")
             )
