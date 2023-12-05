@@ -36,7 +36,7 @@ class PendingTasks(APIView):
         data = {'peer_pending':peerpending,'appraise_pending':appraiserpending}
         return CustomResponse(response = data).get_success_response()
     
-class PeerLeaderBoard(APIView):
+class LeaderBoard(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
