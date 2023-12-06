@@ -13,7 +13,6 @@ django.setup()
 from collections import defaultdict
 
 
-# 'e36958d9-79c7-47a7-9eef-dee286e1ec3f', '1', '0086b865-75b2-4207-8e1a-7345f4e98c31', '508a4b42-f579-49b6-9bd7-c3ce2a4575ac', '2023-04-25 10:32:22', '508a4b42-f579-49b6-9bd7-c3ce2a4575ac', '2023-04-25 10:32:22'
 
 def clg_levels_check():
     results = execute("""
