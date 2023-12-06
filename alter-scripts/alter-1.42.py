@@ -1,10 +1,12 @@
 import os
 import sys
 import uuid
-from decouple import config
+
 import django
+from decouple import config
 
 from connection import execute
+from utils.types import OrganizationType
 
 os.chdir('..')
 sys.path.append(os.getcwd())
@@ -13,9 +15,8 @@ django.setup()
 from collections import defaultdict
 
 
-
 def clg_levels_check():
-    results = execute("""
+    results = execute(f"""
             SELECT
             org.id AS org_id,
             uol.user_id AS user_id,
@@ -31,7 +32,7 @@ def clg_levels_check():
         INNER JOIN
             organization AS org ON uol.org_id = org.id
         WHERE
-            org.org_type = 'College'
+            org.org_type = {OrganizationType.COLLEGE.value}
             AND w.karma_last_updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH)
             AND org.id IN (
                 SELECT org.id FROM organization AS org
