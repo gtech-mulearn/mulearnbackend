@@ -139,32 +139,37 @@ class UrlAnalyticsAPI(APIView):
         devices = {}
         referrer = {}
 
-        for query in queryset:
-            # Counting browsers
-            if browsers.get(query.browser):
-                browsers[query.browser] += 1
-            else:
-                browsers[query.browser] = 1
+        if queryset.exists():  # Check if the queryset is not empty
+            for query in queryset:
+                # Counting browsers
+                if browsers.get(query.browser):
+                    browsers[query.browser] += 1
+                else:
+                    browsers[query.browser] = 1
 
-            # Counting operating systems
-            if operating_systems.get(query.operating_system):
-                operating_systems[query.operating_system] += 1
-            else:
-                operating_systems[query.operating_system] = 1
+                # Counting operating systems
+                if operating_systems.get(query.operating_system):
+                    operating_systems[query.operating_system] += 1
+                else:
+                    operating_systems[query.operating_system] = 1
 
-            # Counting devices
-            if devices.get(query.device_type):
-                devices[query.device_type] += 1
-            else:
-                devices[query.device_type] = 1
+                # Counting devices
+                if devices.get(query.device_type):
+                    devices[query.device_type] += 1
+                else:
+                    devices[query.device_type] = 1
 
-            if referrer.get(query.referrer):
-                referrer[query.referrer] += 1
-            else:
-                referrer[query.referrer] = 1
+                if referrer.get(query.referrer):
+                    referrer[query.referrer] += 1
+                else:
+                    referrer[query.referrer] = 1
+
+            total_clicks = queryset.first().url_shortener.count
+        else:
+            total_clicks = 0
 
         result = {
-            'total_clicks': query.url_shortener.count,
+            'total_clicks': total_clicks,
             'browsers': browsers,
             'platforms': operating_systems,
             'devices': devices,
