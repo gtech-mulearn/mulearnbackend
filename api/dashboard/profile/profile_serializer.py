@@ -379,6 +379,10 @@ class LinkSocials(ModelSerializer):
                     updated_by_id=user_id,
                     created_by_id=user_id,
                 )
+                Wallet.objects.filter(user_id=user_id).update(
+                    karma=F("karma") + karma_value, 
+                    updated_by_id=user_id
+                )
 
         for account, account_url in validated_data.items():
             old_account_url = getattr(instance, account)
