@@ -40,10 +40,7 @@ class LeaderBoard(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        choice = request.query_params.get("option")
-
-        if choice not in ["peer", "appraiser"]:
-            return CustomResponse(response="Bad Request").get_failure_response()
+        choice = request.query_params.get("option", "peer")
 
         approval_field = f"{choice}_approved_by"
         logs_with_approval = KarmaActivityLog.objects.filter(
