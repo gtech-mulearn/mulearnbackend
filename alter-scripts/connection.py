@@ -10,7 +10,7 @@ db_config = {
 
 
 def execute(query):
-    with pymysql.connect(**db_config) as connection:
+    with pymysql.connect(**db_config, autocommit=True) as connection:
         with connection.cursor() as cursor:
             cursor.execute(query)
             return cursor.fetchall()
