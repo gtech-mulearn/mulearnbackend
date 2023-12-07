@@ -374,17 +374,18 @@ class LinkSocials(ModelSerializer):
         def create_karma_activity_log(task_title, karma_value):
             task = TaskList.objects.filter(title=task_title).first()
             if task:
-                KarmaActivityLog.objects.create(
-                    task_id=task.id,
-                    karma=karma_value,
-                    user_id=user_id,
-                    updated_by_id=user_id,
-                    created_by_id=user_id,
-                    peer_approved=True,
-                    peer_approved_by_id=user_id,
-                    appraiser_approved_by_id=user_id,
-                    appraiser_approved=True,
-                )
+                if karma_value > 0:
+                    KarmaActivityLog.objects.create(
+                        task_id=task.id,
+                        karma=karma_value,
+                        user_id=user_id,
+                        updated_by_id=user_id,
+                        created_by_id=user_id,
+                        peer_approved=True,
+                        peer_approved_by_id=user_id,
+                        appraiser_approved_by_id=user_id,
+                        appraiser_approved=True,
+                    )
                 Wallet.objects.filter(user_id=user_id).update(
                     karma=F("karma") + karma_value,
                     updated_by_id=user_id
