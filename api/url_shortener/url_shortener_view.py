@@ -134,6 +134,8 @@ class UrlAnalyticsAPI(APIView):
     )
     def get(self, request, url_id):
         queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
+        # long and short url
+        url_shortener = UrlShortener.objects.filter(id=url_id).first()
 
         if not queryset.exists():
             # Return an appropriate response for the case where no records are found
@@ -178,6 +180,9 @@ class UrlAnalyticsAPI(APIView):
             'countries': countries,
             'dimensions': dimensions,
             'time_based_data': time_based_data,
+            'long_url': url_shortener.long_url,
+            'short_url': url_shortener.short_url,
+            'title': url_shortener.title
         }
 
         return CustomResponse(response=result).get_success_response()
