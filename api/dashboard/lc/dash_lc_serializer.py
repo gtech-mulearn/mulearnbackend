@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-
+from django.conf import settings
 from decouple import config
 from django.db.models import Sum
 from rest_framework import serializers
@@ -582,8 +582,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         ]
 
     def get_image(self, obj):
-        return f"{config('BE_DOMAIN_NAME')}/{obj.images}"
-
+        return f"{config('BE_DOMAIN_NAME')}/{settings.MEDIA_URL}{media}" if (media := obj.images) else None
     def get_attendees_details(self, obj):
         attendees_list = obj.attendees.split(',')
 
