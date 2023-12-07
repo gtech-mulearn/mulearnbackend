@@ -70,7 +70,7 @@ def delete_colleges():
 
 
 def insert_colleges(clgdata):
-    user_id = config("SYSADMIN_ID")
+    user_id = config("SYSTEM_ADMIN_ID")
     for org_id, lvl in clgdata.items():
         execute(f"""
             INSERT INTO college (id, level, org_id, updated_by, updated_at, created_by, created_at)
