@@ -13,12 +13,10 @@ class AffiliationListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = OrgAffiliation
-        fields = ['id','title','organization_count', 'created_by', 'updated_by']
-    
-    def get_organization_count(self,obj):
+        fields = ['id', 'title', 'organization_count', 'created_by', 'updated_by', 'updated_at', 'created_at']
+
+    def get_organization_count(self, obj):
         return obj.organization_affiliation.count()
-
-
 
 
 class AffiliationCUDSerializer(serializers.ModelSerializer):
