@@ -1,6 +1,7 @@
 import uuid
 from datetime import datetime
 
+from decouple import config
 from django.db.models import Sum
 from rest_framework import serializers
 
@@ -563,6 +564,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     meet_id = serializers.CharField(source='id', required=False)
     meet_time = serializers.CharField(required=False)
     images = serializers.ImageField(required=True)
+    image = serializers.SerializerMethodField(required=False)
 
     class Meta:
         model = CircleMeetingLog
@@ -575,8 +577,12 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
             "agenda",
             "attendees_details",
             "meet_created_by",
-            "meet_created_at"
+            "meet_created_at",
+            'image',
         ]
+
+    def get_image(self, obj):
+        return f"{config('BE_DOMAIN_NAME')}/{obj.images}"
 
     def get_attendees_details(self, obj):
         attendees_list = obj.attendees.split(',')
