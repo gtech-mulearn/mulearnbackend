@@ -1,3 +1,4 @@
+from urllib import response
 from rest_framework.views import APIView
 
 from api.url_shortener.serializers import (
@@ -134,46 +135,49 @@ class UrlAnalyticsAPI(APIView):
     def get(self, request, url_id):
         queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
 
+        if not queryset.exists():
+            # Return an appropriate response for the case where no records are found
+            return CustomResponse(
+                general_message="No records found"
+            ).get_failure_response()
+
         browsers = {}
-        operating_systems = {}
+        platforms = {}
         devices = {}
-        referrer = {}
+        sources = {}
+        countries = {}
+        dimensions = {}
+        time_based_data = {'all_time': []}
 
-        if queryset.exists():  # Check if the queryset is not empty
-            for query in queryset:
-                # Counting browsers
-                if browsers.get(query.browser):
-                    browsers[query.browser] += 1
-                else:
-                    browsers[query.browser] = 1
+        for query in queryset:
+            # Counting browsers, platforms, devices, sources, countries, and dimensions
+            browsers[query.browser] = browsers.get(query.browser, 0) + 1
+            platforms[query.operating_system] = platforms.get(
+                query.operating_system, 0) + 1
+            devices[query.device_type] = devices.get(
+                query.device_type, 0) + 1
+            sources[query.referrer] = sources.get(query.referrer, 0) + 1
+            countries[query.country] = countries.get(query.country, 0) + 1
+            dimensions[query.device_type] = dimensions.get(
+                query.device_type, 0) + 1
 
-                # Counting operating systems
-                if operating_systems.get(query.operating_system):
-                    operating_systems[query.operating_system] += 1
-                else:
-                    operating_systems[query.operating_system] = 1
-
-                # Counting devices
-                if devices.get(query.device_type):
-                    devices[query.device_type] += 1
-                else:
-                    devices[query.device_type] = 1
-
-                if referrer.get(query.referrer):
-                    referrer[query.referrer] += 1
-                else:
-                    referrer[query.referrer] = 1
-
-            total_clicks = queryset.first().url_shortener.count
-        else:
-            total_clicks = 0
+            # Create a list of time-based data
+            time_based_data['all_time'].append([
+                query.created_at.strftime(
+                    '%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+                1  # Assuming each record contributes 1 click
+            ])
 
         result = {
-            'total_clicks': total_clicks,
+            'total_clicks': queryset.count(),
+            'created_on': queryset.first().created_at.strftime('%Y-%m-%d'),
             'browsers': browsers,
-            'platforms': operating_systems,
+            'platforms': platforms,
             'devices': devices,
-            'sources': referrer,
+            'sources': sources,
+            'countries': countries,
+            'dimensions': dimensions,
+            'time_based_data': time_based_data,
         }
 
         return CustomResponse(response=result).get_success_response()
