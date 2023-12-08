@@ -1,10 +1,10 @@
 from rest_framework.views import APIView
-from utils.permission import CustomizePermission, JWTUtils, role_required
+
+from db.task import Events
+from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from utils.types import RoleType
 from utils.utils import CommonUtils
 from .events_serializer import EventsCUDSerializer, EventsListSerializer
-from db.task import Events
 
 
 class EventAPI(APIView):
@@ -30,7 +30,6 @@ class EventAPI(APIView):
             )
         )
 
-
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -52,7 +51,6 @@ class EventAPI(APIView):
         return CustomResponse(
             general_message=serializer.errors,
         ).get_failure_response()
-    
 
     def put(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -80,10 +78,9 @@ class EventAPI(APIView):
         return CustomResponse(
             message=serializer.errors
         ).get_failure_response()
-    
 
     def delete(self, request, event_id):
-        
+
         events = Events.objects.filter(id=event_id).first()
 
         if events is None:
