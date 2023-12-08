@@ -12,8 +12,8 @@ from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, Us
 from db.user import User, UserSettings, Socials
 from utils.exception import CustomException
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType, MainRoles
-from utils.utils import DateTimeUtils
+from utils.types import OrganizationType, RoleType, MainRoles, WebHookActions, WebHookCategory
+from utils.utils import DateTimeUtils, DiscordWebhooks
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
@@ -35,8 +35,10 @@ class UserShareQrcode(serializers.ModelSerializer):
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
-    level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
-    is_public = serializers.BooleanField(source="user_settings_user.is_public", default=None)
+    level = serializers.CharField(
+        source="user_lvl_link_user.level.name", default=None)
+    is_public = serializers.BooleanField(
+        source="user_settings_user.is_public", default=None)
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
@@ -72,7 +74,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
 
     def get_percentile(self, obj):
         try:
-            user_count = Wallet.objects.filter(karma__lt=obj.wallet_user.karma).count()
+            user_count = Wallet.objects.filter(
+                karma__lt=obj.wallet_user.karma).count()
             usr_count = User.objects.all().count()
             return 0 if usr_count == 0 else (user_count * 100) / usr_count
         except Exception as e:
@@ -95,7 +98,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_org_district_id(self, obj):
         org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.get_roles(
             obj) else OrganizationType.COLLEGE.value
-        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        user_org_link = obj.user_organization_link_user.filter(
+            org__org_type=org_type).first()
         return user_org_link.org.district.id if user_org_link and hasattr(user_org_link.org, 'district') else None
 
     def get_college_code(self, obj):
@@ -125,7 +129,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
-                    Q(user__user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value])
+                    Q(user__user_role_link_user__role__title__in=[
+                      RoleType.ENABLER.value, RoleType.MENTOR.value])
                 ).order_by('-karma')
             )
 
@@ -149,14 +154,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 if KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
-                   is None
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
+                is None
                 else KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
             )
             interest_groups.append(
                 {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
@@ -173,13 +178,16 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        user_lvl = UserLvlLink.objects.filter(user__id=user_id).first().level.level_order
-        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
+        user_lvl = UserLvlLink.objects.filter(
+            user__id=user_id).first().level.level_order
+        user_igs = UserIgLink.objects.filter(
+            user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
 
         data = []
         for task in tasks:
-            completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
+            completed = KarmaActivityLog.objects.filter(
+                user=user_id, task=task, appraiser_approved=True).exists()
             if task.active or completed:
                 data.append(
                     {
@@ -203,7 +211,8 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role", "rank", "karma", "interest_groups")
+        fields = ("first_name", "last_name", "role",
+                  "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
         roles = self.context.get("roles")
@@ -226,7 +235,8 @@ class UserRankSerializer(ModelSerializer):
             ).count()
         else:
             ranks = (
-                Wallet.objects.filter(karma__gte=user_karma, user__user_role_link_user__verified=True)
+                Wallet.objects.filter(
+                    karma__gte=user_karma, user__user_role_link_user__verified=True)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
@@ -258,7 +268,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        instance.is_public = validated_data.get("is_public", instance.is_public)
+        instance.is_public = validated_data.get(
+            "is_public", instance.is_public)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -298,7 +309,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                     for org_data in community_data
                 ]
 
-                UserOrganizationLink.objects.bulk_create(user_organization_links)
+                UserOrganizationLink.objects.bulk_create(
+                    user_organization_links)
 
             return super().update(instance, validated_data)
 
@@ -385,6 +397,16 @@ class LinkSocials(ModelSerializer):
                         peer_approved_by_id=user_id,
                         appraiser_approved_by_id=user_id,
                         appraiser_approved=True,
+                    )
+
+                    dl = WebHookActions.SEPARATOR.value
+                    discord_id = User.objects.get(id=user_id).discord_id
+                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{task.id}"
+                    
+                    DiscordWebhooks.general_updates(
+                        WebHookCategory.KARMA_INFO.value,
+                        WebHookActions.UPDATE.value,
+                        value
                     )
                 Wallet.objects.filter(user_id=user_id).update(
                     karma=F("karma") + karma_value,
