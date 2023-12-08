@@ -32,6 +32,7 @@ class UserShareQrcode(serializers.ModelSerializer):
         model = User
         fields = ['profile_pic']
 
+
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
@@ -369,6 +370,7 @@ class LinkSocials(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
+
         def create_karma_activity_log(task_title, karma_value):
             task = TaskList.objects.filter(title=task_title).first()
             if task:
@@ -378,18 +380,25 @@ class LinkSocials(ModelSerializer):
                     user_id=user_id,
                     updated_by_id=user_id,
                     created_by_id=user_id,
+                    peer_approved=True,
+                    peer_approved_by_id=user_id,
+                    appraiser_approved_by_id=user_id,
+                    appraiser_approved=True,
                 )
                 Wallet.objects.filter(user_id=user_id).update(
-                    karma=F("karma") + karma_value, 
+                    karma=F("karma") + karma_value,
                     updated_by_id=user_id
                 )
 
         for account, account_url in validated_data.items():
             old_account_url = getattr(instance, account)
-            if account_url != old_account_url:
-                if old_account_url is None:
+            if old_account_url != account_url:
+                # no need of extra checking for "" if only None equivalent to empty social url
+                if old_account_url in [None, ""] and account_url in [None, ""]:
+                    pass
+                elif old_account_url is None or old_account_url == "":
                     create_karma_activity_log(f"social_{account}", 20)
-                elif account_url is None:
+                elif account_url is None or account_url == "":
                     create_karma_activity_log(f"social_{account}", -20)
 
         return super().update(instance, validated_data)
