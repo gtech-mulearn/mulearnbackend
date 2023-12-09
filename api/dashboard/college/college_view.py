@@ -1,6 +1,6 @@
 from rest_framework.views import APIView
 from utils.types import OrganizationType, RoleType
-from db.organization import College
+from db.organization import College, Organization
 from db.user import User
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
@@ -10,34 +10,22 @@ from .serializer import (
     CollegeEditSerializer,
 )
 from utils.utils import CommonUtils
-from django.db.models import Case,When,CharField,F
+from django.db.models import Case, When, CharField, F
+
 
 class CollegeApi(APIView):
     def get(self, request, college_code=None):
-        if college_code:
-            colleges = College.objects.filter(id=college_code)
-        else:
-            colleges = College.objects.all().select_related(
-                "created_by", "updated_by", "org"
-            )
-
-        leads = (
-            User.objects.filter(
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
-            )
-            .distinct()
-            .annotate(
-                college=Case(
-                    When(
-                        user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                        then=F("user_organization_link_user__org__id"),
-                    ),
-                    default=None,
-                    output_field=CharField(),
-                )
-            )
+        colleges = Organization.objects.filter(
+            org_type=OrganizationType.COLLEGE.value
+        ).select_related(
+            "created_by",
+            "updated_by",
+            "affiliation",
+            "district",
         )
+        if college_code:
+            colleges = colleges.filter(code=college_code)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             colleges,
             request,
@@ -45,7 +33,7 @@ class CollegeApi(APIView):
             sort_fields={"created_by": "created_by__firstname"},
         )
         serializer = CollegeListSerializer(
-            paginated_queryset.get("queryset"), many=True,context={"leads":leads}
+            paginated_queryset.get("queryset"), many=True
         )
 
         return CustomResponse().paginated_response(

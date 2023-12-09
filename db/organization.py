@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import models
-
+from utils.types import RoleType, OrganizationType
 from .user import User
 
 # fmt: off
@@ -97,9 +97,14 @@ class Organization(models.Model):
     class Meta:
         managed = False
         db_table = 'organization'
-
-
-
+    
+    @property
+    def lead(self):
+        return (self.user_organization_link_org.filter(
+                user__user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
+                ).first()).user if self.org_type==OrganizationType.COLLEGE.value else None
+         
+        
 class Department(models.Model):
     id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
     title          = models.CharField(max_length=100)
@@ -127,7 +132,7 @@ class College(models.Model):
         managed = False
         db_table = 'college'
 
-
+   
 
 class OrgDiscordLink(models.Model):
     id             = models.CharField(primary_key=True, max_length=36)

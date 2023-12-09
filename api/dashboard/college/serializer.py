@@ -10,17 +10,21 @@ from db.learning_circle import LearningCircle
 class CollegeListSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source="created_by.fullname")
     updated_by = serializers.CharField(source="updated_by.fullname")
-    org = serializers.CharField(source="org.title")
     number_of_students = serializers.SerializerMethodField()
     total_karma = serializers.SerializerMethodField()
-    
+    no_of_lc = serializers.SerializerMethodField()
+    lead_name = serializers.CharField(source="lead.fullname", default=None)
+    lead_contact = serializers.CharField(source="lead.mobile", default=None)
 
     class Meta:
-        model = College
+        model = Organization
         fields = [
             "id",
-            "level",
-            "org",
+            "title",
+            "code",
+            "org_type",
+            "affiliation",
+            "district",
             "updated_by",
             "created_by",
             "updated_at",
@@ -28,6 +32,8 @@ class CollegeListSerializer(serializers.ModelSerializer):
             "number_of_students",
             "total_karma",
             "no_of_lc",
+            "lead_name",
+            "lead_contact",
         ]
 
     def get_no_of_lc(self, obj):
@@ -35,29 +41,19 @@ class CollegeListSerializer(serializers.ModelSerializer):
         return learning_circle_count
 
     def get_number_of_students(self, obj):
-        return obj.org.user_organization_link_org.filter(
+        return obj.user_organization_link_org.filter(
             user__user_role_link_user__role__title=RoleType.STUDENT.value
         ).count()
 
     def get_total_karma(self, obj):
         return (
-                obj.org.user_organization_link_org.filter(
-                    org__org_type=OrganizationType.COLLEGE.value,
-                    verified=True,
-                    user__wallet_user__isnull=False,
-                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-                or 0
+            obj.user_organization_link_org.filter(
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
+                user__wallet_user__isnull=False,
+            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+            or 0
         )
-
-    # def get_lead_name(self, obj):
-    #     leads = self.context.get("leads")
-    #     college_lead = [lead for lead in leads if lead.college == obj.id]
-    #     return college_lead.fullname if college_lead else None
-
-    # def get_lead_contact(self, obj):
-    #     leads = self.context.get("leads")
-    #     college_lead = [lead for lead in leads if lead.college == obj.id]
-    #     return college_lead.mobile if college_lead else None
 
 
 class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
