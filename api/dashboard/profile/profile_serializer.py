@@ -1,5 +1,7 @@
 import uuid
 
+from decouple import config as decouple_config
+from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from django.db.models import F, Sum, Q
 from rest_framework import serializers
@@ -10,12 +12,11 @@ from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, Us
 from db.user import User, UserSettings, Socials
 from utils.exception import CustomException
 from utils.permission import JWTUtils
-from utils.types import OrganizationType, RoleType, MainRoles
-from utils.utils import DateTimeUtils
-from django.core.files.storage import FileSystemStorage
-from decouple import config as decouple_config
+from utils.types import OrganizationType, RoleType, MainRoles, WebHookActions, WebHookCategory
+from utils.utils import DateTimeUtils, DiscordWebhooks
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
+
 
 class UserLogSerializer(ModelSerializer):
     task_name = serializers.ReadOnlyField(source="task.title")
@@ -26,27 +27,18 @@ class UserLogSerializer(ModelSerializer):
         fields = ["task_name", "karma", "created_date"]
 
 
-class UserShareQrcode(serializers.ModelSerializer):  
-    profile_pic = serializers.SerializerMethodField()
+class UserShareQrcode(serializers.ModelSerializer):
     class Meta:
-        model = User  
-        fields = ['profile_pic'] 
+        model = User
+        fields = ['profile_pic']
 
-
-    def get_profile_pic(self,obj):
-        # Here the media url in settings.py is /home/mishal/../../uid.png
-        fs = FileSystemStorage()
-        path = f'user/qr/{obj.id}.png'
-        if fs.exists(path):
-            qrcode_image = f"{self.context.get('request').build_absolute_uri('/')}{fs.url(path)[1:]}"
-        else:
-            return None  
-        return qrcode_image
 
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
-    level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
-    is_public = serializers.BooleanField(source="user_settings_user.is_public", default=None)
+    level = serializers.CharField(
+        source="user_lvl_link_user.level.name", default=None)
+    is_public = serializers.BooleanField(
+        source="user_settings_user.is_public", default=None)
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
@@ -55,7 +47,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
-    profile_pic = serializers.SerializerMethodField()
+    percentile = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -77,19 +69,20 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "profile_pic",
             "interest_groups",
             "is_public",
+            "percentile",
         )
-    
-    def get_profile_pic(self,obj):
-        fs = FileSystemStorage()
-        path = f'user/profile/{obj.id}.png'
-        if fs.exists(path):
-            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
-        else:
-            profile_pic = obj.profile_pic
-        return profile_pic
-    
+
+    def get_percentile(self, obj):
+        try:
+            user_count = Wallet.objects.filter(
+                karma__lt=obj.wallet_user.karma).count()
+            usr_count = User.objects.all().count()
+            return 0 if usr_count == 0 else (user_count * 100) / usr_count
+        except Exception as e:
+            return 0
+
     def get_roles(self, obj):
-        return list({link.role.title for link in obj.user_role_link_user.all()})
+        return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
 
     def get_college_id(self, obj):
         org_type = (
@@ -105,7 +98,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_org_district_id(self, obj):
         org_type = OrganizationType.COMPANY.value if MainRoles.MENTOR.value in self.get_roles(
             obj) else OrganizationType.COLLEGE.value
-        user_org_link = obj.user_organization_link_user.filter(org__org_type=org_type).first()
+        user_org_link = obj.user_organization_link_user.filter(
+            org__org_type=org_type).first()
         return user_org_link.org.district.id if user_org_link and hasattr(user_org_link.org, 'district') else None
 
     def get_college_code(self, obj):
@@ -116,32 +110,33 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return None
 
     def get_rank(self, obj):
+
         roles = self.get_roles(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).count()
+            ).order_by('-karma', '-updated_at', 'created_at')
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).count()
+            ).order_by('-karma', '-updated_at', 'created_at')
         else:
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
-                    Q(
-                        user__user_role_link_user__role__title__in=[
-                            RoleType.ENABLER.value,
-                            RoleType.MENTOR.value,
-                        ]
-                    )
-                )
-                .count()
+                    Q(user__user_role_link_user__role__title__in=[
+                      RoleType.ENABLER.value, RoleType.MENTOR.value])
+                ).order_by('-karma')
             )
-        return ranks if ranks > 0 else None
+
+        for count, _rank in enumerate(ranks, start=1):
+            if obj == _rank.user:
+                return count
 
     def get_karma_distribution(self, obj):
         return (
@@ -159,14 +154,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 if KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
-                   is None
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
+                is None
                 else KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                   .aggregate(Sum("karma"))
-                   .get("karma__sum")
+                .aggregate(Sum("karma"))
+                .get("karma__sum")
             )
             interest_groups.append(
                 {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
@@ -183,13 +178,16 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        user_lvl = UserLvlLink.objects.filter(user__id=user_id).first().level.level_order
-        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list("ig__name", flat=True)
+        user_lvl = UserLvlLink.objects.filter(
+            user__id=user_id).first().level.level_order
+        user_igs = UserIgLink.objects.filter(
+            user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
 
         data = []
         for task in tasks:
-            completed = KarmaActivityLog.objects.filter(user=user_id, task=task, appraiser_approved=True).exists()
+            completed = KarmaActivityLog.objects.filter(
+                user=user_id, task=task, appraiser_approved=True).exists()
             if task.active or completed:
                 data.append(
                     {
@@ -213,7 +211,8 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role", "rank", "karma", "interest_groups")
+        fields = ("first_name", "last_name", "role",
+                  "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
         roles = self.context.get("roles")
@@ -224,17 +223,20 @@ class UserRankSerializer(ModelSerializer):
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
             ).count()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
+                user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
             ).count()
         else:
             ranks = (
-                Wallet.objects.filter(karma__gte=user_karma)
+                Wallet.objects.filter(
+                    karma__gte=user_karma, user__user_role_link_user__verified=True)
                 .exclude(
                     Q(
                         user__user_role_link_user__role__title__in=[
@@ -253,6 +255,7 @@ class UserRankSerializer(ModelSerializer):
     def get_interest_groups(self, obj):
         return [ig_link.ig.name for ig_link in UserIgLink.objects.filter(user=obj)]
 
+
 # is public true then pass the qrcode vice versa delete the image
 # another api when passing muid is give its corresponding image is returned
 class ShareUserProfileUpdateSerializer(ModelSerializer):
@@ -265,7 +268,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        instance.is_public = validated_data.get("is_public", instance.is_public)
+        instance.is_public = validated_data.get(
+            "is_public", instance.is_public)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -312,7 +316,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                     for org_data in community_data
                 ]
 
-                UserOrganizationLink.objects.bulk_create(user_organization_links)
+                UserOrganizationLink.objects.bulk_create(
+                    user_organization_links)
 
             
 
@@ -389,43 +394,46 @@ class LinkSocials(ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
-        accounts = [
-            "github",
-            "facebook",
-            "instagram",
-            "linkedin",
-            "dribble",
-            "behance",
-            "stackoverflow",
-            "medium",
-            "hackerrank"
-        ]
-
-        old_accounts = {account: getattr(instance, account) for account in accounts}
-
-        for account in accounts:
-            setattr(
-                instance, account, validated_data.get(account, old_accounts[account])
-            )
 
         def create_karma_activity_log(task_title, karma_value):
             task = TaskList.objects.filter(title=task_title).first()
             if task:
-                KarmaActivityLog.objects.create(
-                    task_id=task.id,
-                    karma=karma_value,
-                    user_id=user_id,
-                    updated_by_id=user_id,
-                    created_by_id=user_id,
+                if karma_value > 0:
+                    KarmaActivityLog.objects.create(
+                        task_id=task.id,
+                        karma=karma_value,
+                        user_id=user_id,
+                        updated_by_id=user_id,
+                        created_by_id=user_id,
+                        peer_approved=True,
+                        peer_approved_by_id=user_id,
+                        appraiser_approved_by_id=user_id,
+                        appraiser_approved=True,
+                    )
+
+                    dl = WebHookActions.SEPARATOR.value
+                    discord_id = User.objects.get(id=user_id).discord_id
+                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{task.id}"
+                    
+                    DiscordWebhooks.general_updates(
+                        WebHookCategory.KARMA_INFO.value,
+                        WebHookActions.UPDATE.value,
+                        value
+                    )
+                Wallet.objects.filter(user_id=user_id).update(
+                    karma=F("karma") + karma_value,
+                    updated_by_id=user_id
                 )
 
         for account, account_url in validated_data.items():
-            old_account_url = old_accounts[account]
-            if account_url != old_account_url:
-                if old_account_url is None:
-                    create_karma_activity_log(f"social_{account}", 50)
-                elif account_url is None:
-                    create_karma_activity_log(f"social_{account}", -50)
+            old_account_url = getattr(instance, account)
+            if old_account_url != account_url:
+                # no need of extra checking for "" if only None equivalent to empty social url
+                if old_account_url in [None, ""] and account_url in [None, ""]:
+                    pass
+                elif old_account_url is None or old_account_url == "":
+                    create_karma_activity_log(f"social_{account}", 20)
+                elif account_url is None or account_url == "":
+                    create_karma_activity_log(f"social_{account}", -20)
 
-        instance.save()
-        return instance
+        return super().update(instance, validated_data)

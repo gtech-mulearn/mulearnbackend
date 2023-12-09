@@ -1,13 +1,12 @@
 from datetime import timedelta
 
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum
 from rest_framework import serializers
-from django.db.models import Sum, Count, Q, Case, When, IntegerField
-
 
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog, Level
 from db.user import User
+from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 
 
@@ -34,10 +33,10 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.all()
+            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
             .values("org__district")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
-        )
+        ).order_by("-total_karma", "org__created_at")
 
         rank_dict = {
             data["org__district"]: data["total_karma"]
@@ -57,18 +56,21 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
     def get_district_lead(self, obj):
         user_org_link = UserOrganizationLink.objects.filter(
+            org__org_type=OrganizationType.COLLEGE.value,
             org__district=obj.org.district,
-            user__user_role_link_user__role__title="District Campus Lead",
+            user__user_role_link_user__role__title=RoleType.DISTRICT_CAMPUS_LEAD.value,
         ).first()
         return user_org_link.user.fullname if user_org_link else None
 
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
+            org__org_type=OrganizationType.COLLEGE.value,
             org__district=obj.org.district
         ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
         return UserOrganizationLink.objects.filter(
+            org__org_type=OrganizationType.COLLEGE.value,
             org__district=obj.org.district
         ).count()
 
@@ -80,6 +82,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
         ) - timedelta(days=1)
 
         return KarmaActivityLog.objects.filter(
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             user__user_organization_link_user__org__district=obj.org.district,
             created_at__range=(start_date, end_date),
         ).count()
@@ -98,7 +101,7 @@ class DistrictTopThreeCampusSerializer(serializers.ModelSerializer):
         keys_list = list(self.context.get("ranks").keys())
         position = keys_list.index(obj.id)
         return position + 1
-    
+
     def get_karma(self, obj):
         return self.context.get("ranks")[obj.id]
 
@@ -114,6 +117,7 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
         district = self.context.get("district")
         return (
             User.objects.filter(
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_organization_link_user__org__district=district,
                 user_lvl_link_user__level=obj,
             )

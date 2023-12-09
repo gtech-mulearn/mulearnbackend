@@ -4,7 +4,7 @@ import uuid
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from db.url_shortener import UrlShortener
+from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 
@@ -52,3 +52,10 @@ class ShortenUrlsCreateUpdateSerializer(ModelSerializer):
             raise serializers.ValidationError("Your shortened URL should be less than 300 characters in length,"
                                               "only include letters, numbers and following special characters (/_)")
         return value
+
+
+class ShowShortenUrlsTrackerSerializer(ModelSerializer):
+
+    class Meta:
+        model = UrlShortenerTracker
+        fields = ["ip_address", "device_type", "operating_system", "browser"]

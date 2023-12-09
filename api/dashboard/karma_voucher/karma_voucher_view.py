@@ -34,7 +34,7 @@ class ImportVoucherLogAPI(APIView):
         except KeyError:
             return CustomResponse(general_message={'File not found.'}).get_failure_response()
         excel_data = ImportCSV()
-        excel_data = excel_data.read_excel_file(file_obj, encoding='ISO-8859-1')
+        excel_data = excel_data.read_excel_file(file_obj)
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
@@ -109,56 +109,71 @@ class ImportVoucherLogAPI(APIView):
                     row['updated_at'] = DateTimeUtils.get_current_utc_time()
                     count += 1
                     valid_rows.append(row)
-                    success_rows.append({
-                        'muid': muid,
-                        'code': row['code'],
-                        'user': full_name,
-                        'task': task_hashtag,
-                        'karma': karma,
-                        'month': month,
-                        'week': week,
-                        'description': description,
-                        'event': event
-                    })
 
         # Serializing and saving valid voucher rows to the database
         voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
-        if voucher_serializer.is_valid():
-            with transaction.atomic():
-                voucher_serializer.save()
-                vouchers_to_send = VoucherLog.objects.filter(code__in=[row['code'] for row in valid_rows]).values(
-                    'code',
-                    'user__muid',
-                    'month',
-                    'karma',
-                    'task__hashtag',
-                    description_value=Coalesce('description', Value('')),
-                    week_value=Coalesce('week', Value('')),
-                    event_value=Coalesce('event', Value(''))
-                )
-                if len(vouchers_to_send) != len(valid_rows):
-                    transaction.set_rollback(True)
-                    return CustomResponse(
-                        general_message='Something went wrong. Please try again.').get_failure_response()
-        else:
-            error_rows.append(voucher_serializer.errors)
+        with transaction.atomic():
+            if voucher_serializer.is_valid():
+                    voucher_serializer.save()
+            else:
+                code_error_dict = {}
+                for error in voucher_serializer.errors:
+                    code_error = error.get('code')
+                    error_msg = error.get('error')
 
-        for voucher in vouchers_to_send:
-            muid = voucher['user__muid']
+                    code = str(code_error[0])
+                    error_value = str(error_msg[0])
+                    code_error_dict[code] = error_value
+
+                for row in valid_rows:
+                    code = row['code']
+                    error_row = {}
+                    if code in code_error_dict:
+                        error_row['muid'] = row['muid']
+                        error_row['karma'] = row['karma']
+                        error_row['week'] = row['week']
+                        error_row['month'] = row['month']
+                        error_row['hashtag'] = row['hashtag']
+                        error_row['description'] = row['description']
+                        error_row['event'] = row['event']
+                        error_row['error'] = code_error_dict[code]
+                        error_rows.append(error_row)
+                    
+                return CustomResponse(
+                    general_message='Fix the errors and try again ',
+                    response={"Success": [], "Failed": error_rows}
+                    ).get_failure_response()
+            if len(voucher_serializer.data) != len(valid_rows):
+                transaction.set_rollback(True)
+                return CustomResponse(
+                    general_message='Something went wrong. Please try again.').get_failure_response()
+
+        for voucher in voucher_serializer.data:
+            muid = voucher['muid']
             code = voucher['code']
             month = voucher['month']
-            week = voucher['week_value']
+            week = voucher['week']
             karma = voucher['karma']
-            task_hashtag = voucher['task__hashtag']
-            full_name = user_dict.get(muid)[2]
-            email = user_dict.get(muid)[1]
-            description = voucher['description_value']
+            task_hashtag = voucher['hashtag']
+            full_name = voucher['fullname']
+            email = voucher['email']
+            description = voucher['description']
             time_or_event = f'{month}/{week}'
-
-            event = voucher['event_value']
+            event = voucher['event']
             if event != '':
                 time_or_event = f'{event}/{description}'
 
+            success_rows.append({
+                'muid': muid,
+                'code': code,
+                'user': full_name,
+                'task': task_hashtag,
+                'karma': karma,
+                'month': month,
+                'week': week,
+                'description': description,
+                'event': event
+            })
             # Preparing email context and attachment
             from_mail = decouple.config("FROM_MAIL")
             subject = "Congratulations on earning Karma points!"

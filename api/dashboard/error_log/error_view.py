@@ -4,11 +4,12 @@ from decouple import config
 from django.http import FileResponse
 from rest_framework.views import APIView
 
+from api.dashboard.error_log.log_helper import logHandler
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 
-log_path = config("LOGGER_DIR_PATH")
+LOG_PATH = config("LOGGER_DIR_PATH")
 
 
 class DownloadErrorLogAPI(APIView):
@@ -18,7 +19,7 @@ class DownloadErrorLogAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def get(self, request, log_name):
-        error_log = f"{log_path}/{log_name}.log"
+        error_log = f"{LOG_PATH}/{log_name}.log"
         if os.path.exists(error_log):
             response = FileResponse(
                 open(error_log, "rb"), content_type="application/octet-stream"
@@ -37,7 +38,7 @@ class ViewErrorLogAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def get(self, request, log_name):
-        error_log = f"{log_path}/{log_name}.log"
+        error_log = f"{LOG_PATH}/{log_name}.log"
         if os.path.exists(error_log):
             try:
                 with open(error_log, "r") as log_file:
@@ -60,7 +61,7 @@ class ClearErrorLogAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def post(self, request, log_name):
-        error_log = f"{log_path}/{log_name}.log"
+        error_log = f"{LOG_PATH}/{log_name}.log"
         if os.path.exists(error_log):
             try:
                 with open(error_log, "w") as log_file:
@@ -77,3 +78,20 @@ class ClearErrorLogAPI(APIView):
         return CustomResponse(
             general_message=f"{log_name} Not Found"
         ).get_failure_response()
+
+
+class LoggerAPI(APIView):
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    def get(self, request):
+        error_log = f"{LOG_PATH}/error.log"
+        try:
+            with open(error_log, "r") as file:
+                log_data = file.read()
+        except IOError as e:
+            return CustomResponse(response=str(e)).get_failure_response()
+        
+        log_handler = logHandler()
+        formatted_errors = log_handler.parse_logs(log_data)
+        return CustomResponse(response=formatted_errors).get_success_response()

@@ -17,7 +17,8 @@ class AffiliationCRUDAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             affiliation,
             request,
-            ['id', 'title']
+            ['title', ],
+            sort_fields={'title': 'title', }
 
         )
 

@@ -1,8 +1,9 @@
+from urllib import response
 from rest_framework.views import APIView
 
 from api.url_shortener.serializers import (
     ShowShortenUrlsSerializer,
-    ShortenUrlsCreateUpdateSerializer,
+    ShortenUrlsCreateUpdateSerializer
 )
 from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import CustomizePermission
@@ -126,32 +127,62 @@ class UrlShortenerAPI(APIView):
 
 
 class UrlAnalyticsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
+    )
     def get(self, request, url_id):
-        url_shortener_object = UrlShortener.objects.get(
-            id=url_id
-        )
+        queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
+        # long and short url
+        url_shortener = UrlShortener.objects.filter(id=url_id).first()
 
-        url_data = UrlShortenerTracker.objects.filter(
-            url_shortener_id=url_shortener_object.id
-        )
+        if not queryset.exists():
+            # Return an appropriate response for the case where no records are found
+            return CustomResponse(
+                general_message="No records found"
+            ).get_failure_response()
 
-        print(url_data)
+        browsers = {}
+        platforms = {}
+        devices = {}
+        sources = {}
+        countries = {}
+        dimensions = {}
+        time_based_data = {'all_time': []}
 
-        location_data = UrlShortenerTracker.objects.filter(
-            url_shortener=url_shortener_object
-        ).values(
-            'city',
-            'region',
-            'country'
-        )
-        print(location_data) 
+        for query in queryset:
+            # Counting browsers, platforms, devices, sources, countries, and dimensions
+            browsers[query.browser] = browsers.get(query.browser, 0) + 1
+            platforms[query.operating_system] = platforms.get(
+                query.operating_system, 0) + 1
+            devices[query.device_type] = devices.get(
+                query.device_type, 0) + 1
+            sources[query.referrer] = sources.get(query.referrer, 0) + 1
+            countries[query.country] = countries.get(query.country, 0) + 1
+            dimensions[query.device_type] = dimensions.get(
+                query.device_type, 0) + 1
 
-        # Browsers through which users accessed
-        browsers_data = UrlShortenerTracker.objects.filter(
-            url_shortener=url_shortener_object
-        ).values(
-            'browser'
-        ).count()
+            # Create a list of time-based data
+            time_based_data['all_time'].append([
+                query.created_at.strftime(
+                    '%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+                1  # Assuming each record contributes 1 click
+            ])
 
-        print(browsers_data)
-            
+        result = {
+            'total_clicks': queryset.count(),
+            'created_on': queryset.first().created_at.strftime('%Y-%m-%d'),
+            'browsers': browsers,
+            'platforms': platforms,
+            'devices': devices,
+            'sources': sources,
+            'countries': countries,
+            'dimensions': dimensions,
+            'time_based_data': time_based_data,
+            'long_url': url_shortener.long_url,
+            'short_url': url_shortener.short_url,
+            'title': url_shortener.title
+        }
+
+        return CustomResponse(response=result).get_success_response()

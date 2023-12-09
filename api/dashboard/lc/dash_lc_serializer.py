@@ -1,15 +1,19 @@
 import uuid
-
+from datetime import datetime
+from django.conf import settings
+from decouple import config
 from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle, UserCircleLink, InterestGroup, CircleMeetingLog
-from db.task import TaskList
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+from db.task import TaskList, UserIgLink, Wallet
+from db.user import User
+from utils.types import Lc
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
-from utils.types import Lc
+from .dash_ig_helper import get_today_start_end, get_week_start_end
 
 
 class LearningCircleSerializer(serializers.ModelSerializer):
@@ -126,7 +130,6 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
                 circle__ig_id=ig_id,
                 accepted=True
         ).exists():
-
             raise serializers.ValidationError(
                 "Already a member of a learning circle with the same interest group"
             )
@@ -194,24 +197,66 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
         return lc
 
 
+# class LearningCircleMemberListSerializer(serializers.ModelSerializer):
+#     members = serializers.SerializerMethodField()
+#
+#     class Meta:
+#         model = LearningCircle
+#         fields = [
+#             'members',
+#         ]
+#
+#     def get_members(self, obj):
+#         # user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
+#         # return [
+#         #     {
+#         #         'full_name': f'{member.user.fullname}',
+#         #         'discord_id': member.user.discord_id,
+#         #     }
+#         #     for member in user_circle_link
+#         # ]
+#         user_circle_link = obj.user_circle_link_circle.filter(
+#             circle=obj,
+#             accepted=True
+#         ).values(
+#             full_name=Concat(
+#                 'user__first_name',
+#                 Value(' '),
+#                 'user__last_name',
+#                 output_field=CharField()
+#             ),
+#             discord_id=F('user__discord_id'),
+#             level=F('user__user_lvl_link_user__level__name')
+#         )
+#         return user_circle_link
+
 class LearningCircleMemberListSerializer(serializers.ModelSerializer):
-    members = serializers.SerializerMethodField()
+    fullname = serializers.CharField(source='user.fullname')
+    discord_id = serializers.CharField(source='user.discord_id')
+    level = serializers.CharField(source='user.user_lvl_link_user.level.name')
+    lc_karma = serializers.SerializerMethodField()
 
     class Meta:
-        model = LearningCircle
+        model = UserCircleLink
         fields = [
-            'members',
+            'fullname',
+            'discord_id',
+            'level',
+            'lc_karma'
         ]
 
-    def get_members(self, obj):
-        user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
-        return [
-            {
-                'full_name': f'{member.user.fullname}',
-                'discord_id': member.user.discord_id,
-            }
-            for member in user_circle_link
-        ]
+    def get_lc_karma(self, obj):
+        circle_id = self.context.get('circle_id')
+        karma_activity_log = KarmaActivityLog.objects.filter(
+            user=obj.user,
+            task__ig__learning_circle_ig__id=circle_id
+        ).aggregate(
+            karma=Sum(
+                'karma'
+            )
+        )['karma']
+
+        return karma_activity_log if karma_activity_log else 0
 
 
 class LearningCircleJoinSerializer(serializers.ModelSerializer):
@@ -233,7 +278,6 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
                 circle_id=circle_id,
                 user_id=user_id
         ).first():
-
             raise serializers.ValidationError(
                 "Cannot send another request at the moment"
             )
@@ -243,7 +287,6 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
                 circle_id__ig_id=ig_id,
                 accepted=True
         ).exists():
-
             raise serializers.ValidationError(
                 "Already a member of learning circle with same interest group"
             )
@@ -263,7 +306,7 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.create(**validated_data)
 
 
-class LearningCircleHomeSerializer(serializers.ModelSerializer):
+class LearningCircleDetailsSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
@@ -272,6 +315,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
     is_lead = serializers.SerializerMethodField()
     is_member = serializers.SerializerMethodField()
     ig_code = serializers.CharField(source='ig.code')
+    ig_id = serializers.CharField(source='ig.id')
+    ig_name = serializers.CharField(source='ig.name')
     previous_meetings = serializers.SerializerMethodField()
 
     class Meta:
@@ -290,6 +335,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "total_karma",
             "is_lead",
             "is_member",
+            "ig_id",
+            "ig_name",
             "ig_code",
             "previous_meetings",
         ]
@@ -351,9 +398,10 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             member_info.append({
                 'id': member.user.id,
                 'username': f'{member.user.fullname}',
-                'profile_pic': member.user.profile_pic or None,
+                'profile_pic': f'{member.user.profile_pic}' or None,
                 'karma': total_ig_karma,
                 'is_lead': member.lead,
+                'level': member.user.user_lvl_link_user.level.level_order
             })
 
         return member_info
@@ -412,6 +460,8 @@ class LearningCircleHomeSerializer(serializers.ModelSerializer):
             "id",
             "meet_time",
             "day",
+        ).order_by(
+            '-meet_time'
         )
         return previous_meetings
 
@@ -487,6 +537,9 @@ class LearningCircleNoteSerializer(serializers.ModelSerializer):
 
 
 class ScheduleMeetingSerializer(serializers.ModelSerializer):
+    meet_time = serializers.CharField(required=True)
+    day = serializers.CharField(required=True)
+
     class Meta:
         model = LearningCircle
         fields = [
@@ -505,19 +558,54 @@ class ScheduleMeetingSerializer(serializers.ModelSerializer):
 
 
 class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
+    attendees_details = serializers.SerializerMethodField()
+    meet_created_by = serializers.CharField(source='created_by.fullname', required=False)
+    meet_created_at = serializers.CharField(source='created_at', required=False)
+    meet_id = serializers.CharField(source='id', required=False)
+    meet_time = serializers.CharField(required=False)
+    images = serializers.ImageField(required=True)
+    image = serializers.SerializerMethodField(required=False)
 
     class Meta:
         model = CircleMeetingLog
         fields = [
-            "meet_time",
+            "meet_id",
             "meet_place",
-            "day",
+            "meet_time",
+            "images",
             "attendees",
             "agenda",
+            "attendees_details",
+            "meet_created_by",
+            "meet_created_at",
+            'image',
         ]
 
+    def get_image(self, obj):
+        return f"{config('BE_DOMAIN_NAME')}/{settings.MEDIA_URL}{media}" if (media := obj.images) else None
+    def get_attendees_details(self, obj):
+        attendees_list = obj.attendees.split(',')
+
+        attendees_details_list = []
+        for user_id in attendees_list:
+            user = User.objects.get(id=user_id)
+            attendees_details_list.append({
+                'fullname': user.fullname,
+                'profile_pic': user.profile_pic,
+            })
+
+        return attendees_details_list
+
     def create(self, validated_data):
+        today_date = DateTimeUtils.get_current_utc_time().date()
+        meet_time_string = self.context.get('time')
+        meet_time = datetime.strptime(meet_time_string, "%H:%M:%S").time()
+
+        combined_meet_time = datetime.combine(today_date, meet_time)
+
         validated_data['id'] = uuid.uuid4()
+        validated_data['meet_time'] = combined_meet_time
+        validated_data['day'] = DateTimeUtils.get_current_utc_time().strftime('%A')
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
@@ -531,20 +619,122 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     def validate_attendees(self, attendees):
         task = TaskList.objects.filter(hashtag=Lc.TASK_HASHTAG.value).first()
 
-        attendees = attendees.split(',')
+        attendees_list = attendees.split(',')
 
         user_id = self.context.get('user_id')
-
-        KarmaActivityLog.objects.bulk_create([
-            KarmaActivityLog(
-                id=uuid.uuid4(),
-                user_id=user,
-                karma=Lc.KARMA.value,
-                task_id=task.id,
-                updated_by_id=user_id,
-                created_by_id=user_id,
-            )
-            for user in attendees
-        ])
-
+        for user in attendees_list:
+            KarmaActivityLog.objects.bulk_create([
+                KarmaActivityLog(
+                    id=uuid.uuid4(),
+                    user_id=user,
+                    karma=Lc.KARMA.value,
+                    task=task,
+                    updated_by_id=user_id,
+                    created_by_id=user_id,
+                )
+            ])
+            wallet = Wallet.objects.filter(user_id=user).first()
+            wallet.karma += Lc.KARMA.value
+            wallet.karma_last_updated_at = DateTimeUtils.get_current_utc_time()
+            wallet.updated_at = DateTimeUtils.get_current_utc_time()
+            wallet.save()
         return attendees
+
+    def validate(self, data):
+        circle_id = self.context.get('circle_id')
+
+        today_date = DateTimeUtils.get_current_utc_time().date()
+        time = self.context.get('time')
+        time = datetime.strptime(time, "%H:%M:%S").time()
+        combined_meet_time = datetime.combine(today_date, time)
+
+        start_of_day, end_of_day = get_today_start_end(combined_meet_time)
+        start_of_week, end_of_week = get_week_start_end(combined_meet_time)
+
+        if CircleMeetingLog.objects.filter(
+                circle_id=circle_id,
+                meet_time__range=(
+                        start_of_day,
+                        end_of_day
+                )
+        ).exists():
+            raise serializers.ValidationError(f'Another meet already scheduled on {today_date}')
+
+        if CircleMeetingLog.objects.filter(
+                circle_id=circle_id,
+                meet_time__range=(
+                        start_of_week,
+                        end_of_week
+                )
+        ).count() >= 5:
+            raise serializers.ValidationError('you can create only 5 meeting in a week')
+
+        return data
+
+
+class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = CircleMeetingLog
+        fields = [
+            "id",
+            "meet_time",
+            "day",
+        ]
+
+
+class IgTaskDetailsSerializer(serializers.ModelSerializer):
+    task = serializers.CharField(source='title')
+    task_status = serializers.SerializerMethodField()
+    task_id = serializers.CharField(source='id')
+    task_level = serializers.CharField(source='level.level_order')
+    task_level_karma = serializers.CharField(source='level.karma')
+    task_karma = serializers.CharField(source='karma')
+    task_description = serializers.CharField(source='description')
+    interest_group = serializers.CharField(source='ig.name')
+
+    class Meta:
+        model = TaskList
+        fields = [
+            "task_id",
+            "task",
+            "task_karma",
+            "task_description",
+            "interest_group",
+            "task_status",
+            "task_level",
+            "task_level_karma",
+        ]
+
+    def get_task_status(self, obj):
+        user_ig_links = UserIgLink.objects.filter(ig=obj.ig).select_related('user')
+        for user_ig_link in user_ig_links:
+            if obj.karma_activity_log_task.filter(
+                    user=user_ig_link.user,
+                    peer_approved=True).exists():
+                return True
+            else:
+                return False
+
+
+class AddMemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserCircleLink
+        fields = []
+
+    def validate(self, data):
+        user = self.context.get('user')
+        circle_id = self.context.get('circle_id')
+
+        if UserCircleLink.objects.filter(user=user).exists():
+            raise serializers.ValidationError('user already part of the learning circle')
+
+        if UserCircleLink.objects.filter(circle_id=circle_id).count() >= 5:
+            raise serializers.ValidationError('maximum members reached in learning circle')
+
+        return data
+
+    def create(self, validated_data):
+        validated_data['id'] = uuid.uuid4()
+        validated_data['user'] = self.context.get('user')
+        validated_data['circle_id'] = self.context.get('circle_id')
+        return UserCircleLink.objects.create(**validated_data)

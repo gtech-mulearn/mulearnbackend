@@ -1,4 +1,10 @@
+import uuid
+from io import BytesIO
+from tempfile import NamedTemporaryFile
+
 from django.db.models import F, Prefetch, Sum
+from django.http import FileResponse
+from openpyxl import load_workbook
 from rest_framework.views import APIView
 
 from db.organization import (
@@ -6,12 +12,12 @@ from db.organization import (
     OrgAffiliation,
     Organization,
     UserOrganizationLink,
+    District,
 )
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
-from utils.utils import CommonUtils, DiscordWebhooks
-
+from utils.utils import CommonUtils, DiscordWebhooks, ImportCSV
 from .serializers import (
     AffiliationCreateUpdateSerializer,
     AffiliationSerializer,
@@ -21,6 +27,7 @@ from .serializers import (
     InstitutionPrefillSerializer,
     OrganizationMergerSerializer, OrganizationKarmaTypeGetPostPatchDeleteSerializer,
     OrganizationKarmaLogGetPostPatchDeleteSerializer,
+    OrganizationImportSerializer
 )
 
 
@@ -73,8 +80,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             serializer.save()
 
             if (
-                request.data.get("title") != old_title
-                and old_type == OrganizationType.COMMUNITY.value
+                    request.data.get("title") != old_title
+                    and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -84,8 +91,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                request.data.get("orgType") != OrganizationType.COMMUNITY.value
-                and old_type == OrganizationType.COMMUNITY.value
+                    request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                    and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -94,8 +101,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                old_type != OrganizationType.COMMUNITY.value
-                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+                    old_type != OrganizationType.COMMUNITY.value
+                    and request.data.get("orgType") == OrganizationType.COMMUNITY.value
             ):
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
@@ -516,3 +523,187 @@ class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
         return CustomResponse(
             serializer.errors
         ).get_failure_response()
+
+
+class OrganisationBaseTemplateAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        wb = load_workbook('./api/dashboard/organisation/assets/organisation_base_template.xlsx')
+        ws = wb['Data Definitions']
+        affiliations = OrgAffiliation.objects.all().values_list('title', flat=True)
+        districts = District.objects.all().values_list('name', flat=True)
+        org_types = OrganizationType.get_all_values()
+
+        data = {
+            'org_type': org_types,
+            'affiliation': affiliations,
+            'district': districts,
+        }
+        # Write data column-wise
+        for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
+            for row, value in enumerate(col_values, start=2):
+                ws.cell(row=row, column=col_num, value=value)
+        # Save the file
+        with NamedTemporaryFile() as tmp:
+            tmp.close()  # with statement opened tmp, close it so wb.save can open it
+            wb.save(tmp.name)
+            with open(tmp.name, 'rb') as f:
+                f.seek(0)
+                new_file_object = f.read()
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='organisation_base_template.xlsx')
+
+
+class OrganisationImportAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        try:
+            file_obj = request.FILES["organisation_list"]
+        except KeyError:
+            return CustomResponse(
+                general_message="File not found."
+            ).get_failure_response()
+
+        excel_data = ImportCSV()
+        excel_data = excel_data.read_excel_file(file_obj)
+
+        if not excel_data:
+            return CustomResponse(
+                general_message="Empty csv file."
+            ).get_failure_response()
+
+        temp_headers = [
+            "title",
+            "code",
+            "org_type",
+            "affiliation",
+            "district"
+        ]
+        first_entry = excel_data[0]
+        for key in temp_headers:
+            if key not in first_entry:
+                return CustomResponse(
+                    general_message=f"{key} does not exist in the file."
+                ).get_failure_response()
+
+        excel_data = [row for row in excel_data if any(row.values())]
+        valid_rows = []
+        error_rows = []
+
+        title_excel = set()
+        code_excel = set()
+        title_db = Organization.objects.values_list("title", flat=True)
+        code_db = Organization.objects.values_list("code", flat=True)
+
+        affiliations_to_fetch = set()
+        districts_to_fetch = set()
+
+        for row in excel_data[1:]:
+            title = row.get("title")
+            if not title:
+                row["error"] = "Missing title."
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            elif title in title_excel:
+                row["error"] = f"Duplicate title in excel: {title}"
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            elif title in title_db:
+                row["error"] = f"Duplicate title in database: {title}"
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            else:
+                title_excel.add(title)
+
+            code = row.get("code")
+            if not code:
+                row["error"] = "Missing code."
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            elif code in code_excel:
+                row["error"] = f"Duplicate code in excel: {code}"
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            elif code in code_db:
+                row["error"] = f"Duplicate code in database: {code}"
+                error_rows.append(row)
+                excel_data.remove(row)
+                continue
+            else:
+                code_excel.add(code)
+
+            affiliation = row.get("affiliation")
+            district = row.get("district")
+
+            affiliations_to_fetch.add(affiliation)
+            districts_to_fetch.add(district)
+
+        affiliations = OrgAffiliation.objects.filter(
+            title__in=affiliations_to_fetch
+        ).values(
+            "id",
+            "title"
+        )
+
+        districts = District.objects.filter(
+            name__in=districts_to_fetch
+        ).values(
+            "id",
+            "name"
+        )
+
+        affiliations_dict = {affiliation["title"]: affiliation["id"] for affiliation in affiliations}
+        districts_dict = {district["name"]: district["id"] for district in districts}
+        org_types = OrganizationType.get_all_values()
+
+        for row in excel_data[1:]:
+            affiliation = row.pop("affiliation")
+            district = row.pop("district")
+
+            affiliation_id = affiliations_dict.get(affiliation) if affiliation is not None else None
+            district_id = districts_dict.get(district)
+            org_type = row.get("org_type")
+
+            if affiliation and not affiliation_id:
+                row["error"] = f"Invalid affiliation: {affiliation}"
+                error_rows.append(row)
+            elif not district_id:
+                row["error"] = f"Invalid district: {district}"
+                error_rows.append(row)
+            elif org_type not in org_types:
+                row["error"] = f"Invalid org_type: {org_type}"
+                error_rows.append(row)
+            else:
+                user_id = JWTUtils.fetch_user_id(request)
+                row["id"] = str(uuid.uuid4())
+                row["updated_by_id"] = user_id
+                row["created_by_id"] = user_id
+                row["affiliation_id"] = affiliation_id
+                row["district_id"] = district_id
+                valid_rows.append(row)
+
+        organization_list_serializer = OrganizationImportSerializer(data=valid_rows, many=True)
+        success_data = []
+        if organization_list_serializer.is_valid():
+            organization_list_serializer.save()
+            for organization_data in organization_list_serializer.data:
+                success_data.append({
+                    'title': organization_data.get('title', ''),
+                    'code': organization_data.get('code', ''),
+                    'org_type': organization_data.get('org_type', ''),
+                    'affiliation': organization_data.get('affiliation_id', ''),
+                    'district': organization_data.get('district_id', ''),
+                })
+        else:
+            error_rows.append(organization_list_serializer.errors)
+
+        return CustomResponse(
+            response={"Success": success_data, "Failed": error_rows}
+        ).get_success_response()

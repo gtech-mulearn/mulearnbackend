@@ -1,7 +1,4 @@
-import decouple
-import requests
 from django.db.models import Q
-
 from rest_framework.views import APIView
 
 from db.organization import Country, Department, District, Organization, State, Zone
@@ -95,6 +92,7 @@ class LearningCircleUserViewAPI(APIView):
 
 
 class RegisterDataAPI(APIView):
+
     def post(self, request):
         data = request.data
         data = {key: value for key, value in data.items() if value}
@@ -182,6 +180,24 @@ class CollegeAPI(APIView):
             response={
                 "colleges": college_serializer_data,
                 "departments": department_serializer_data,
+            }
+        ).get_success_response()
+
+
+class SchoolAPI(APIView):
+    def post(self, request):
+        org_queryset = Organization.objects.filter(
+            Q(org_type=OrganizationType.SCHOOL.value),
+            Q(district_id=request.data.get("district")),
+        )
+
+        college_serializer_data = serializers.OrgSerializer(
+            org_queryset, many=True
+        ).data
+
+        return CustomResponse(
+            response={
+                "schools": college_serializer_data,
             }
         ).get_success_response()
 

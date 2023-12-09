@@ -162,7 +162,7 @@ class ReferralSerializer(serializers.ModelSerializer):
 
     def validate_invite_code(self, invite_code):
         try:
-            return MucoinInviteLog.objects.get(invite_code=invite_code).user
+            return MucoinInviteLog.objects.filter(invite_code=invite_code).first().user
         except MucoinInviteLog.DoesNotExist as e:
             raise serializers.ValidationError(
                 "The provided invite code is not valid."
@@ -232,7 +232,7 @@ class UserSerializer(serializers.ModelSerializer):
         role = validated_data.pop("role", None)
 
         validated_data["muid"] = register_helper.generate_muid(
-            validated_data["first_name"], validated_data["last_name"]
+            validated_data["first_name"], validated_data.get('last_name', '')
         )
         password = validated_data.pop("password")
         hashed_password = make_password(password)
