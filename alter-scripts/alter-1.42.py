@@ -6,13 +6,14 @@ import django
 from decouple import config
 
 from connection import execute
-from utils.types import OrganizationType
 
 os.chdir('..')
 sys.path.append(os.getcwd())
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mulearnbackend.settings')
 django.setup()
+
 from collections import defaultdict
+from utils.types import OrganizationType
 
 
 def clg_levels_check():
