@@ -69,22 +69,19 @@ def token_required(integration_name: str):
 
     def decorator(func):
         def wrapper(self, request, *args, **kwargs):
-            try:
-                auth_header = request.META.get("HTTP_AUTHORIZATION")
-                if not auth_header or not auth_header.startswith("Bearer "):
-                    raise CustomException("Invalid Authorization header")
+            auth_header = request.META.get("HTTP_AUTHORIZATION")
+            if not auth_header or not auth_header.startswith("Bearer "):
+                raise CustomException("Invalid Authorization header")
 
-                token = auth_header.split(" ")[1]
+            token = auth_header.split(" ")[1]
 
-                if not Integration.objects.filter(
-                    token=token, name=integration_name
-                ).first():
-                    raise CustomException("Invalid Authorization header")
-                else:
-                    result = func(self, request, *args, **kwargs)
-                return result
-            except Exception as e:
-                return CustomResponse(general_message=str(e)).get_failure_response()
+            if not Integration.objects.filter(
+                token=token, name=integration_name
+            ).first():
+                raise CustomException("Invalid Authorization header")
+            else:
+                result = func(self, request, *args, **kwargs)
+            return result
 
         return wrapper
 

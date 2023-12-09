@@ -1,9 +1,9 @@
+from urllib import response
 from rest_framework.views import APIView
 
 from api.url_shortener.serializers import (
     ShowShortenUrlsSerializer,
-    ShortenUrlsCreateUpdateSerializer,
-    ShowShortenUrlsTrackerSerializer
+    ShortenUrlsCreateUpdateSerializer
 )
 from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import CustomizePermission
@@ -11,7 +11,6 @@ from utils.permission import role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from django.db.models import Count
 
 
 class UrlShortenerAPI(APIView):
@@ -134,45 +133,56 @@ class UrlAnalyticsAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def get(self, request, url_id):
-        url_tracker_obj = UrlShortener.objects.filter(id=url_id).first()
+        queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
+        # long and short url
+        url_shortener = UrlShortener.objects.filter(id=url_id).first()
 
-        if url_tracker_obj is None:
+        if not queryset.exists():
+            # Return an appropriate response for the case where no records are found
             return CustomResponse(
-                general_message="No URL related data available"
+                general_message="No records found"
             ).get_failure_response()
-            
-        queryset = UrlShortenerTracker.objects.filter(url_shortener_id = url_tracker_obj.id)
-        device_counts = UrlShortenerTracker.objects.values('device_type').annotate(count=Count('device_type')).order_by('device_type')
-        platform_counts = UrlShortenerTracker.objects.values('operating_system').annotate(count=Count('operating_system')).order_by('operating_system')
-        browser_counts = UrlShortenerTracker.objects.values('browser').annotate(count=Count('browser')).order_by('browser')
-        
-        countset={}
-        countset[1] = device_counts
-        countset[2] = platform_counts
-        countset[3] = browser_counts
-        
-        print(countset)
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            queryset,
-            request,
-            ["id","ip_address","device_type","operating_system","browser",]
 
-        )
+        browsers = {}
+        platforms = {}
+        devices = {}
+        sources = {}
+        countries = {}
+        dimensions = {}
+        time_based_data = {'all_time': []}
 
-        serializer = ShowShortenUrlsTrackerSerializer(
-            paginated_queryset.get("queryset"),
-            many=True
-        )
+        for query in queryset:
+            # Counting browsers, platforms, devices, sources, countries, and dimensions
+            browsers[query.browser] = browsers.get(query.browser, 0) + 1
+            platforms[query.operating_system] = platforms.get(
+                query.operating_system, 0) + 1
+            devices[query.device_type] = devices.get(
+                query.device_type, 0) + 1
+            sources[query.referrer] = sources.get(query.referrer, 0) + 1
+            countries[query.country] = countries.get(query.country, 0) + 1
+            dimensions[query.device_type] = dimensions.get(
+                query.device_type, 0) + 1
 
-        return CustomResponse(
-            general_message="URL Stats",
-            response=countset
-                ).paginated_response(
-                    data=serializer.data,
-                    pagination=paginated_queryset.get(
-                        "pagination"
-                    )
-                )
+            # Create a list of time-based data
+            time_based_data['all_time'].append([
+                query.created_at.strftime(
+                    '%Y-%m-%dT%H:%M:%S.%f')[:-3] + 'Z',
+                1  # Assuming each record contributes 1 click
+            ])
 
+        result = {
+            'total_clicks': queryset.count(),
+            'created_on': queryset.first().created_at.strftime('%Y-%m-%d'),
+            'browsers': browsers,
+            'platforms': platforms,
+            'devices': devices,
+            'sources': sources,
+            'countries': countries,
+            'dimensions': dimensions,
+            'time_based_data': time_based_data,
+            'long_url': url_shortener.long_url,
+            'short_url': url_shortener.short_url,
+            'title': url_shortener.title
+        }
 
-            
+        return CustomResponse(response=result).get_success_response()

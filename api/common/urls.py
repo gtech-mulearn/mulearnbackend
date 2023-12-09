@@ -8,6 +8,8 @@ urlpatterns = [
     path('college-wise-lc-report/', common_views.CollegeWiseLcReport.as_view()),
     path('college-wise-lc-report/csv/', common_views.CollegeWiseLcReportCSV.as_view()),
     path('lc-report/csv/', common_views.LcReportDownloadAPI.as_view()),
+    path('lc-enrollment/', common_views.LearningCircleEnrollment.as_view()),
+    path('lc-enrollment/csv/', common_views.LearningCircleEnrollmentCSV.as_view()),
     path('global-count/', common_views.GlobalCountAPI.as_view()),
     path('gta-sandshore/', common_views.GTASANDSHOREAPI.as_view()),
     path('profile-pic/<str:muid>/', common_views.UserProfilePicAPI.as_view()),

@@ -1,8 +1,9 @@
 import uuid
 
+from django.db import models
+from django.db import transaction
 from django.db.models import Count
 from rest_framework import serializers
-from django.db import models
 
 from db.organization import (
     Organization,
@@ -13,11 +14,10 @@ from db.organization import (
     Department,
     OrgKarmaType,
     OrgKarmaLog,
+    College
 )
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
-from django.db import transaction
-from django.forms.models import model_to_dict
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -114,8 +114,10 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         validated_data["id"] = str(uuid.uuid4())
         validated_data["created_by_id"] = user_id
         validated_data["updated_by_id"] = user_id
-
-        return Organization.objects.create(**validated_data)
+        orgobj = Organization.objects.create(**validated_data)
+        if validated_data.get("org_type") == OrganizationType.COLLEGE.value:
+            College.objects.create(org=orgobj, created_by_id=user_id, updated_by_id=user_id)
+        return orgobj
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
@@ -272,8 +274,8 @@ class OrganizationMergerSerializer(serializers.Serializer):
         # Simulate the transaction
         for relation in Organization._meta.related_objects:
             if isinstance(
-                relation,
-                (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+                    relation,
+                    (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
             ):
                 related_model = relation.related_model
                 related_field_name = relation.field.name
@@ -284,7 +286,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                         field.name
                         for field in related_model._meta.fields
                         if isinstance(field, models.ForeignKey)
-                        and field.related_model == Organization
+                           and field.related_model == Organization
                     ),
                     None,
                 )
@@ -295,7 +297,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                 continue
 
             if existing_relations := related_model.objects.filter(
-                **{related_field_name: instance}
+                    **{related_field_name: instance}
             ):
                 update_summary.append(
                     {
@@ -324,8 +326,8 @@ class OrganizationMergerSerializer(serializers.Serializer):
             for relation in Organization._meta.related_objects:
                 # Determine related model and related field name
                 if isinstance(
-                    relation,
-                    (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+                        relation,
+                        (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
                 ):
                     related_model = relation.related_model
                     related_field_name = relation.field.name
@@ -337,7 +339,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                             field.name
                             for field in related_model._meta.fields
                             if isinstance(field, models.ForeignKey)
-                            and field.related_model == Organization
+                               and field.related_model == Organization
                         ),
                         None,
                     )
@@ -353,7 +355,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                 # Handle OneToOne relationships: delete existing relation if it points to the instance
                 if isinstance(relation, (models.OneToOneField, models.OneToOneRel)):
                     if existing_relation := related_model.objects.filter(
-                        **{related_field_name: instance}
+                            **{related_field_name: instance}
                     ).first():
                         existing_relation.delete()
 
@@ -367,7 +369,6 @@ class OrganizationMergerSerializer(serializers.Serializer):
 
 
 class OrganizationKarmaTypeGetPostPatchDeleteSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = OrgKarmaType
         fields = [
@@ -385,7 +386,6 @@ class OrganizationKarmaTypeGetPostPatchDeleteSerializer(serializers.ModelSeriali
 
 
 class OrganizationKarmaLogGetPostPatchDeleteSerializer(serializers.ModelSerializer):
-
     class Meta:
         model = OrgKarmaLog
         fields = [
@@ -400,6 +400,7 @@ class OrganizationKarmaLogGetPostPatchDeleteSerializer(serializers.ModelSerializ
         validated_data["created_by_id"] = user_id
 
         return OrgKarmaLog.objects.create(**validated_data)
+
 
 class OrganizationImportSerializer(serializers.ModelSerializer):
     created_by_id = serializers.CharField(required=True, allow_null=False)

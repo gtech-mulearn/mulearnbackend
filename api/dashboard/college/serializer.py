@@ -1,10 +1,13 @@
-import uuid
-from utils.utils import DateTimeUtils
+from datetime import timedelta
+
+from django.db.models import Sum
 from rest_framework import serializers
 from db.organization import College, Organization
-from utils.types import RoleType, OrganizationType
-from django.db.models import Sum
 from db.learning_circle import LearningCircle
+from db.organization import College, UserOrganizationLink
+from db.task import KarmaActivityLog
+from utils.types import RoleType, OrganizationType
+from utils.utils import DateTimeUtils
 
 
 class CollegeListSerializer(serializers.ModelSerializer):
@@ -36,14 +39,26 @@ class CollegeListSerializer(serializers.ModelSerializer):
             "lead_contact",
         ]
 
+    def get_no_of_alumni(self, obj):
+        return obj.org.user_organization_link_org.filter(
+            org__org_type=OrganizationType.COLLEGE.value,
+            user__user_role_link_user__role__title=RoleType.STUDENT.value,
+            is_alumni=True,
+            verified=True,
+        ).count()
+
     def get_no_of_lc(self, obj):
         learning_circle_count = LearningCircle.objects.filter(org=obj.org).count()
-        return learning_circle_count
+        no_of_lc_increased = LearningCircle.objects.filter(org=obj.org,
+                                                           created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(
+                                                               days=30)).count()
+        return {'lc_count': learning_circle_count, 'no_of_lc_increased': no_of_lc_increased}
 
     def get_number_of_students(self, obj):
         return obj.user_organization_link_org.filter(
             user__user_role_link_user__role__title=RoleType.STUDENT.value
         ).count()
+        return {'member_count': member_count, 'no_of_members_increased': no_of_members_increased}
 
     def get_total_karma(self, obj):
         return (

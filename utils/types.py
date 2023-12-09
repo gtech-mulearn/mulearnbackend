@@ -44,16 +44,19 @@ class RoleType(Enum):
     IG_FACILITATOR = "IG Facilitator"
     TECH_TEAM = 'Tech Team'
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
+    LEAD_ENABLER = "Lead Enabler"
 
 
 class OrganizationType(Enum):
     COLLEGE = 'College'
     COMPANY = 'Company'
     COMMUNITY = 'Community'
+    SCHOOL = 'School'
 
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
 
 class WebHookActions(Enum):
     SEPARATOR = '<|=|>'
@@ -77,6 +80,8 @@ class WebHookCategory(Enum):
     USER = 'user'
     USER_NAME = 'user-name'
     USER_PROFILE = 'user-profile'
+    BULK_ROLE = 'bulk-role'
+    KARMA_INFO = 'karma-info'
 
 
 class RefferalType(Enum):
@@ -111,7 +116,7 @@ class Events(Enum):
 
 
 class Lc(Enum):
-    KARMA = 5
+    KARMA = 20
     TASK_HASHTAG = '#lcmeetreport'
 
 

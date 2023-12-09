@@ -184,6 +184,24 @@ class CollegeAPI(APIView):
         ).get_success_response()
 
 
+class SchoolAPI(APIView):
+    def post(self, request):
+        org_queryset = Organization.objects.filter(
+            Q(org_type=OrganizationType.SCHOOL.value),
+            Q(district_id=request.data.get("district")),
+        )
+
+        college_serializer_data = serializers.OrgSerializer(
+            org_queryset, many=True
+        ).data
+
+        return CustomResponse(
+            response={
+                "schools": college_serializer_data,
+            }
+        ).get_success_response()
+
+
 class CommunityAPI(APIView):
     def get(self, request):
         community_queryset = Organization.objects.filter(

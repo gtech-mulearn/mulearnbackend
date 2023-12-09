@@ -1,28 +1,24 @@
 from rest_framework.views import APIView
 
-from db.organization import OrgAffiliation
+from db.task import Events
 from utils.permission import CustomizePermission, JWTUtils
-from utils.permission import role_required
 from utils.response import CustomResponse
-from utils.types import RoleType
 from utils.utils import CommonUtils
-from .serializers import AffiliationCUDSerializer, AffiliationListSerializer
+from .events_serializer import EventsCUDSerializer, EventsListSerializer
 
 
-class AffiliationCRUDAPI(APIView):
+class EventAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        affiliation = OrgAffiliation.objects.all()
+        events = Events.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            affiliation,
+            events,
             request,
-            ['title', ],
-            sort_fields={'title': 'title', }
-
+            ['id', 'name']
         )
 
-        serializer = AffiliationListSerializer(
+        serializer = EventsListSerializer(
             paginated_queryset.get("queryset"),
             many=True
         )
@@ -34,12 +30,10 @@ class AffiliationCRUDAPI(APIView):
             )
         )
 
-    @role_required([RoleType.ADMIN.value])
     def post(self, request):
-
         user_id = JWTUtils.fetch_user_id(request)
 
-        serializer = AffiliationCUDSerializer(
+        serializer = EventsCUDSerializer(
             data=request.data,
             context={
                 "user_id": user_id,
@@ -50,7 +44,7 @@ class AffiliationCRUDAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=f"{request.data.get('title')} Affiliation created successfully",
+                general_message=f"{request.data.get('name')} Event created successfully",
                 response=serializer.data
             ).get_success_response()
 
@@ -58,22 +52,18 @@ class AffiliationCRUDAPI(APIView):
             general_message=serializer.errors,
         ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
-    def put(self, request, affiliation_id):
-
+    def put(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
 
-        affiliation = OrgAffiliation.objects.filter(
-            id=affiliation_id
-        ).first()
+        events = Events.objects.filter(id=event_id).first()
 
-        if affiliation is None:
+        if events is None:
             return CustomResponse(
-                general_message="Invalid affiliation id"
+                general_message="Invalid Event id"
             ).get_failure_response()
 
-        serializer = AffiliationCUDSerializer(
-            affiliation,
+        serializer = EventsCUDSerializer(
+            events,
             data=request.data,
             context={"user_id": user_id}
         )
@@ -82,27 +72,24 @@ class AffiliationCRUDAPI(APIView):
             serializer.save()
 
             return CustomResponse(
-                general_message=f"{affiliation.title} Edited Successfully"
+                general_message=f"{events.name} Edited Successfully"
             ).get_success_response()
 
         return CustomResponse(
             message=serializer.errors
         ).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
-    def delete(self, request, affiliation_id):
+    def delete(self, request, event_id):
 
-        affiliation = OrgAffiliation.objects.filter(
-            id=affiliation_id
-        ).first()
+        events = Events.objects.filter(id=event_id).first()
 
-        if affiliation is None:
+        if events is None:
             return CustomResponse(
-                general_message="Invalid affiliation id"
+                general_message="Invalid event id"
             ).get_failure_response()
 
-        affiliation.delete()
+        events.delete()
 
         return CustomResponse(
-            general_message=f"{affiliation.title} Deleted Successfully"
+            general_message=f"{events.name} Deleted Successfully"
         ).get_success_response()
