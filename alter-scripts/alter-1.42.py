@@ -33,7 +33,7 @@ def clg_levels_check():
         INNER JOIN
             organization AS org ON uol.org_id = org.id
         WHERE
-            org.org_type = {OrganizationType.COLLEGE.value}
+            org.org_type = '{OrganizationType.COLLEGE.value}'
             AND w.karma_last_updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH)
             AND org.id IN (
                 SELECT org.id FROM organization AS org
