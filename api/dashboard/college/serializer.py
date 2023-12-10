@@ -68,14 +68,33 @@ class CollegeListSerializer(serializers.ModelSerializer):
         ).count()
 
     def get_total_karma(self, obj):
-        return (
-            obj.user_organization_link_org.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-                user__wallet_user__isnull=False,
-            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-            or 0
+        user_org_links = UserOrganizationLink.objects.filter(
+            org=obj.org,
+            org__org_type=OrganizationType.COLLEGE.value,
+            verified=True
         )
+        total_karma_gained = (
+                KarmaActivityLog.objects.filter(
+                    user__in=user_org_links.values('user'),
+                ).aggregate(total_karma=Sum("karma"))["total_karma"]
+                or 0
+        )
+
+        total_karma_increased = (
+                KarmaActivityLog.objects.filter(
+                    user__in=user_org_links.values('user'),
+                    created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(
+                        days=30),
+                ).aggregate(total_karma=Sum("karma"))["total_karma"]
+                or 0
+        )
+        try:
+            increased_percentage = (total_karma_increased / total_karma_gained) * 100
+        except Exception as e:
+            increased_percentage = 0
+            return increased_percentage
+        return {'total_karma_gained': total_karma_gained, 'total_karma_increased': total_karma_increased,
+                'increased_percentage': increased_percentage}
 
 
 
