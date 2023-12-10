@@ -78,16 +78,6 @@ class CollegeListSerializer(serializers.ModelSerializer):
         )
 
 
-class CollegeCreateDeleteSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = College
-        fields = [
-            "level",
-            "org",
-            "updated_by",
-            "created_by",
-        ]
-
 
 class CollegeEditSerializer(serializers.ModelSerializer):
     class Meta:
