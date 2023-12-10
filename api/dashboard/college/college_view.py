@@ -18,7 +18,7 @@ class CollegeApi(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             colleges,
             request,
-            search_fields=[""],
+            search_fields=["org",],
             sort_fields=None,
         )
         serializer = CollegeListSerializer(
