@@ -6,7 +6,7 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from django.db.models import Case, When, CharField, F
-
+from .serializer import CollegeListSerializer
 
 class CollegeApi(APIView):
     def get(self, request, college_code=None):

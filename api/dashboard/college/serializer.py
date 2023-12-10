@@ -15,6 +15,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.fullname")
     number_of_students = serializers.SerializerMethodField()
     total_karma = serializers.SerializerMethodField()
+    no_of_alumni = serializers.SerializerMethodField()
     no_of_lc = serializers.SerializerMethodField()
     lead_name = serializers.CharField(source="lead.fullname", default=None)
     lead_contact = serializers.CharField(source="lead.mobile", default=None)
@@ -33,14 +34,15 @@ class CollegeListSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_at",
             "number_of_students",
-            "total_karma",
+            "no_of_alumni",
             "no_of_lc",
+            "total_karma",
             "lead_name",
             "lead_contact",
         ]
 
     def get_no_of_alumni(self, obj):
-        return obj.org.user_organization_link_org.filter(
+        return obj.user_organization_link_org.filter(
             org__org_type=OrganizationType.COLLEGE.value,
             user__user_role_link_user__role__title=RoleType.STUDENT.value,
             is_alumni=True,
@@ -48,17 +50,22 @@ class CollegeListSerializer(serializers.ModelSerializer):
         ).count()
 
     def get_no_of_lc(self, obj):
-        learning_circle_count = LearningCircle.objects.filter(org=obj.org).count()
-        no_of_lc_increased = LearningCircle.objects.filter(org=obj.org,
-                                                           created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(
-                                                               days=30)).count()
-        return {'lc_count': learning_circle_count, 'no_of_lc_increased': no_of_lc_increased}
+        learning_circle_count = LearningCircle.objects.filter(
+            org=obj
+        ).count()
+        no_of_lc_increased = LearningCircle.objects.filter(
+            org=obj,
+            created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(days=30),
+        ).count()
+        return {
+            "lc_count": learning_circle_count,
+            "no_of_lc_increased": no_of_lc_increased,
+        }
 
     def get_number_of_students(self, obj):
         return obj.user_organization_link_org.filter(
             user__user_role_link_user__role__title=RoleType.STUDENT.value
         ).count()
-        return {'member_count': member_count, 'no_of_members_increased': no_of_members_increased}
 
     def get_total_karma(self, obj):
         return (
