@@ -6,13 +6,14 @@ import django
 from decouple import config
 
 from connection import execute
-from utils.types import OrganizationType
 
 os.chdir('..')
 sys.path.append(os.getcwd())
 os.environ.setdefault('DJANGO_SETTINGS_MODULE', 'mulearnbackend.settings')
 django.setup()
+
 from collections import defaultdict
+from utils.types import OrganizationType
 
 
 def clg_levels_check():
@@ -32,7 +33,7 @@ def clg_levels_check():
         INNER JOIN
             organization AS org ON uol.org_id = org.id
         WHERE
-            org.org_type = {OrganizationType.COLLEGE.value}
+            org.org_type = '{OrganizationType.COLLEGE.value}'
             AND w.karma_last_updated_at > DATE_SUB(NOW(), INTERVAL 6 MONTH)
             AND org.id IN (
                 SELECT org.id FROM organization AS org
@@ -74,8 +75,23 @@ def insert_colleges(clgdata):
     for org_id, lvl in clgdata.items():
         execute(f"""
             INSERT INTO college (id, level, org_id, updated_by, updated_at, created_by, created_at)
-            VALUES ('{uuid.uuid4()}', '{lvl}', '{org_id}', '{user_id}', NOW(), '{user_id}', NOW())
+            VALUES ('{uuid.uuid4()}', '{lvl}', '{org_id}', '{user_id}',UTC_TIMESTAMP(), '{user_id}', UTC_TIMESTAMP())
             """)
+
+    execute(f"""
+    INSERT INTO college (id, level, org_id, updated_by, updated_at, created_by, created_at)
+    SELECT
+        UUID(),
+        0 AS level,
+        org.id AS org_id,
+        '{user_id}',
+        UTC_TIMESTAMP(),
+        '{user_id}',
+        UTC_TIMESTAMP()
+    FROM organization AS org
+    WHERE org.org_type = '{OrganizationType.COLLEGE.value}'
+        AND org.id NOT IN (SELECT org_id FROM college);
+    """)
     return
 
 
@@ -83,4 +99,4 @@ if __name__ == "__main__":
     data = clg_levels_check()
     delete_colleges()
     insert_colleges(data)
-    execute("UPDATE system_setting SET value = '1.42', updated_at = now() WHERE `key` = 'db.version';")
+    # execute("UPDATE system_setting SET value = '1.42', updated_at = now() WHERE `key` = 'db.version';")
