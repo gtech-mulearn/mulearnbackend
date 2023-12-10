@@ -79,7 +79,4 @@ class CollegeListSerializer(serializers.ModelSerializer):
 
 
 
-class CollegeEditSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = College
-        fields = ["level", "updated_by"]
+
