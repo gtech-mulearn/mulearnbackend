@@ -148,7 +148,9 @@ class UrlAnalyticsAPI(APIView):
         devices = {}
         sources = {}
         countries = {}
-        dimensions = {}
+        ip_address = {}
+        city = {}
+        region = {}
         time_based_data = {'all_time': []}
 
         for query in queryset:
@@ -160,8 +162,10 @@ class UrlAnalyticsAPI(APIView):
                 query.device_type, 0) + 1
             sources[query.referrer] = sources.get(query.referrer, 0) + 1
             countries[query.country] = countries.get(query.country, 0) + 1
-            dimensions[query.device_type] = dimensions.get(
-                query.device_type, 0) + 1
+            ip_address[query.ip_address] = ip_address.get(
+                query.ip_address, 0) + 1
+            city[query.city] = city.get(query.city, 0) + 1
+            region[query.region] = region.get(query.region, 0) + 1
 
             # Create a list of time-based data
             time_based_data['all_time'].append([
@@ -177,8 +181,10 @@ class UrlAnalyticsAPI(APIView):
             'platforms': platforms,
             'devices': devices,
             'sources': sources,
+            'ip_address': ip_address,
+            'city': city,
+            'region': region,
             'countries': countries,
-            'dimensions': dimensions,
             'time_based_data': time_based_data,
             'long_url': url_shortener.long_url,
             'short_url': url_shortener.short_url,
