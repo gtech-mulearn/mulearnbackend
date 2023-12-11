@@ -387,7 +387,7 @@ class LinkSocials(ModelSerializer):
             task = TaskList.objects.filter(title=task_title).first()
             if task:
                 if karma_value > 0:
-                    KarmaActivityLog.objects.create(
+                    karma_log = KarmaActivityLog.objects.create(
                         task_id=task.id,
                         karma=karma_value,
                         user_id=user_id,
@@ -401,13 +401,17 @@ class LinkSocials(ModelSerializer):
 
                     dl = WebHookActions.SEPARATOR.value
                     discord_id = User.objects.get(id=user_id).discord_id
-                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{task.id}"
+                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{karma_log.id}"
                     
                     DiscordWebhooks.general_updates(
                         WebHookCategory.KARMA_INFO.value,
                         WebHookActions.UPDATE.value,
                         value
                     )
+                else:
+                    KarmaActivityLog.objects.filter(
+                        task_id=task.id, user_id=user_id
+                    ).delete()
                 Wallet.objects.filter(user_id=user_id).update(
                     karma=F("karma") + karma_value,
                     updated_by_id=user_id
