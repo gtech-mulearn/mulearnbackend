@@ -251,6 +251,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "department",
             "graduation_year",
             "admin",
+            "district"
         ]
 
     def to_representation(self, instance):
