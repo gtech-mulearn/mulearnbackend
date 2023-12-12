@@ -12,6 +12,7 @@ class EventsListSerializer(serializers.ModelSerializer):
         model = Events
         fields = "__all__"
 
+
 class EventsCUDSerializer(serializers.ModelSerializer):
     class Meta:
         model = Events
@@ -29,8 +30,9 @@ class EventsCUDSerializer(serializers.ModelSerializer):
         user_id = self.context.get("user_id")
 
         instance.name = validated_data.get("name", instance.name)
+        instance.description = validated_data.get("description", instance.description)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
-         
+
         return instance

@@ -1,7 +1,6 @@
 import uuid
 
 from decouple import config as decouple_config
-from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from rest_framework import serializers
 
@@ -38,7 +37,6 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
-    profile_pic = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -55,15 +53,6 @@ class UserSerializer(serializers.ModelSerializer):
             "roles",
             "profile_pic",
         ]
-
-    def get_profile_pic(self, obj):
-        fs = FileSystemStorage()
-        path = f'user/profile/{obj.id}.png'
-        if fs.exists(path):
-            profile_pic = f"{BE_DOMAIN_NAME}{fs.url(path)}"
-        else:
-            profile_pic = obj.profile_pic
-        return profile_pic
 
     def get_roles(self, obj):
         return [
@@ -110,6 +99,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
+    district = serializers.CharField(source="district.id", allow_null=True)
 
     class Meta:
         model = User
@@ -128,6 +118,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             "graduation_year",
             "interest_groups",
             "igs",
+            "district"
         ]
 
     def validate(self, data):
@@ -195,7 +186,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
         organizations_data = []
         for link in organization_links:
-            if link.org.org_type == OrganizationType.COLLEGE.value:
+            if link.org.org_type == OrganizationType.COLLEGE.value or OrganizationType.SCHOOL.value:
                 serializer = CollegeSerializer(link)
             else:
                 serializer = OrgSerializer(link)
@@ -260,6 +251,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "department",
             "graduation_year",
             "admin",
+            "district"
         ]
 
     def to_representation(self, instance):

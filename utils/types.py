@@ -51,10 +51,12 @@ class OrganizationType(Enum):
     COLLEGE = 'College'
     COMPANY = 'Company'
     COMMUNITY = 'Community'
+    SCHOOL = 'School'
 
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
 
 class WebHookActions(Enum):
     SEPARATOR = '<|=|>'
@@ -79,6 +81,7 @@ class WebHookCategory(Enum):
     USER_NAME = 'user-name'
     USER_PROFILE = 'user-profile'
     BULK_ROLE = 'bulk-role'
+    KARMA_INFO = 'karma-info'
 
 
 class RefferalType(Enum):

@@ -1,6 +1,6 @@
 from rest_framework import serializers
 from db.task import KarmaActivityLog
-
+from db.user import User
 
 class KarmaActivityLogSerializer(serializers.ModelSerializer):
     fullname = serializers.CharField(source = 'user.fullname')
@@ -22,4 +22,3 @@ class KarmaActivityLogSerializer(serializers.ModelSerializer):
             return "Pending"
 
 
-    
