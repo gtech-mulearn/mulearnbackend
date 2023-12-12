@@ -46,7 +46,7 @@ class User(models.Model):
         path = f'user/profile/{self.id}.png'
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
-        
+
     def save(self, *args, **kwargs):
         if self.muid is None:
             full_name = f"{self.first_name}{self.last_name or ''}".replace(" ", "").lower()[:85]
