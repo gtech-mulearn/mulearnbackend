@@ -48,7 +48,7 @@ class User(models.Model):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
 
     def save(self, *args, **kwargs):
-        if self.pk is None:
+        if self.muid is None:
             full_name = f"{self.first_name}{self.last_name or ''}".replace(" ", "").lower()[:85]
             self.muid = f"{full_name}@mulearn"
 
@@ -56,7 +56,7 @@ class User(models.Model):
             while User.objects.filter(muid=self.muid).exists():
                 counter += 1
                 self.muid = f"{full_name}-{counter}@mulearn"
-
+                
         return super().save(*args, **kwargs)
 
 
