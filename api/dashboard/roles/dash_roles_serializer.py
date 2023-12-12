@@ -38,9 +38,9 @@ class RoleAssignmentSerializer(serializers.Serializer):
         )
         if users.count() != len(attrs):
             raise serializers.ValidationError("One or more user IDs are invalid.")
-        else:
-            data["users"] = users
-            return data
+        
+        data["users"] = users
+        return data
 
     def create(self, validated_data):
         users = validated_data.pop("users")
@@ -57,7 +57,7 @@ class RoleAssignmentSerializer(serializers.Serializer):
                 validated_data["role"].title,
                 ",".join(list(users.values_list("id", flat=True))),
             )
-        return user_roles_to_create
+        return user_roles_to_create, validated_data["role"]
 
 
 class RoleDashboardSerializer(serializers.ModelSerializer):
