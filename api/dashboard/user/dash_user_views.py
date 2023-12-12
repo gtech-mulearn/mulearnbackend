@@ -58,10 +58,8 @@ class UserGetPatchDeleteAPI(APIView):
             return CustomResponse(
                 general_message="User Not Available"
             ).get_failure_response()
-
-        user.deleted_by = User.objects.get(pk=JWTUtils.fetch_user_id(request))
-        user.deleted_at = DateTimeUtils.get_current_utc_time()
-        user.save()
+            
+        user.delete()
 
         return CustomResponse(
             general_message="User deleted successfully"

@@ -61,11 +61,8 @@ class UserProfileEditView(APIView):
 
     def delete(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.get(id=user_id)
-        user.deleted_by = user
-        user.deleted_at = DateTimeUtils.get_current_utc_time()
-        user.save()
-
+        user = User.objects.get(id=user_id).delete()
+        
         return CustomResponse(
             general_message="User deleted successfully"
         ).get_success_response()
