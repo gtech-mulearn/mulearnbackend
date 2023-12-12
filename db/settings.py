@@ -1,3 +1,4 @@
+from decouple import config as decouple_config
 from django.db import models
 
 
@@ -9,4 +10,4 @@ class SystemSetting(models.Model):
 
     class Meta:
         managed = False
-        db_table = 'system_setting'
+        db_table = "system_setting"

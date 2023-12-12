@@ -1,7 +1,7 @@
+from decouple import config as decouple_config
 from django.db import models
 
 from db.user import User
-
 
 # fmt: off
 # noinspection PyPep8
@@ -12,10 +12,10 @@ class UrlShortener(models.Model):
     short_url = models.CharField(unique=True, max_length=100)
     long_url = models.CharField(max_length=500)
     count = models.IntegerField(blank=True, null=True, default=0)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+    updated_by = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column='updated_by',
                                    related_name='url_shortener_updated_by')
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+    created_by = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column='created_by',
                                    related_name='url_shortener_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
 
