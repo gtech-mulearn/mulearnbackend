@@ -1,3 +1,4 @@
+import logging
 import os
 
 from decouple import config
@@ -97,3 +98,11 @@ class LoggerAPI(APIView):
         log_handler = logHandler()
         formatted_errors = log_handler.parse_logs(log_data)
         return CustomResponse(response=formatted_errors).get_success_response()
+    
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    def patch(self, request, error_id):
+        logger = logging.getLogger("django")
+        logger.error(f"PATCHED : {error_id}")
+        return CustomResponse(response="Updated patch list").get_success_response()
