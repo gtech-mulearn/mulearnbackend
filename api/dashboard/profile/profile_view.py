@@ -3,11 +3,11 @@ from io import BytesIO
 import decouple
 import qrcode
 import requests
+from PIL import Image
 from django.contrib.auth.hashers import make_password
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch
-from PIL import Image
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
@@ -17,7 +17,6 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
 from utils.utils import DateTimeUtils, DiscordWebhooks
-
 from . import profile_serializer
 from .profile_serializer import LinkSocials
 
@@ -104,39 +103,33 @@ class UserIgEditView(APIView):
 
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
-        try:
-            user = User.objects.prefetch_related(
-                Prefetch(
-                    "user_organization_link_user",
-                    queryset=UserOrganizationLink.objects.all().select_related(
-                        "org", "department"
-                    ),
+        user = User.objects.prefetch_related(
+            Prefetch(
+                "user_organization_link_user",
+                queryset=UserOrganizationLink.objects.all().select_related(
+                    "org", "department"
                 ),
-                Prefetch(
-                    "user_role_link_user__role",
-                    queryset=Role.objects.all(),
-                ),
-            ).get(muid=muid or JWTUtils.fetch_muid(request))
+            ),
+            Prefetch(
+                "user_role_link_user__role",
+                queryset=Role.objects.all(),
+            ),
+        ).get(muid=muid or JWTUtils.fetch_muid(request))
 
-            if muid:
-                user_settings = UserSettings.objects.filter(user_id=user).first()
+        if muid:
+            user_settings = UserSettings.objects.filter(user_id=user).first()
 
-                if not user_settings.is_public:
-                    return CustomResponse(
-                        general_message="Private Profile"
-                    ).get_failure_response()
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
 
-            else:
-                JWTUtils.is_jwt_authenticated(request)
+        else:
+            JWTUtils.is_jwt_authenticated(request)
 
-            serializer = profile_serializer.UserProfileSerializer(user, many=False)
+        serializer = profile_serializer.UserProfileSerializer(user, many=False)
 
-            return CustomResponse(response=serializer.data).get_success_response()
-
-        except User.DoesNotExist:
-            return CustomResponse(
-                response="The given μID seems to be invalid"
-            ).get_failure_response()
+        return CustomResponse(response=serializer.data).get_success_response()
 
 
 class UserLogAPI(APIView):
