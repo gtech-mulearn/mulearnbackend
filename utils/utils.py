@@ -21,8 +21,12 @@ from django.template.loader import render_to_string
 class CommonUtils:
     @staticmethod
     def get_paginated_queryset(
-            queryset: QuerySet, request, search_fields, sort_fields: dict = None,
-            is_pagination: bool = True) -> QuerySet:
+        queryset: QuerySet,
+        request,
+        search_fields,
+        sort_fields: dict = None,
+        is_pagination: bool = True,
+    ) -> QuerySet:
         if sort_fields is None:
             sort_fields = {}
 
@@ -177,7 +181,8 @@ class ImportCSV:
 
 
 def send_template_mail(
-        context: dict, subject: str, address: list[str], attachment: str = None):
+    context: dict, subject: str, address: list[str], attachment: str = None
+):
     """
     The function `send_user_mail` sends an email to a user with the provided user data, subject, and
     address.
