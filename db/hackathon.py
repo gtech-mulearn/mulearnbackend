@@ -54,7 +54,7 @@ class HackathonForm(models.Model):
 
 class HackathonOrganiserLink(models.Model):
     id                = models.CharField(primary_key=True, max_length=36)
-    organiser         = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")))
+    organiser         = models.ForeignKey(User, on_delete=models.CASCADE)
     hackathon         = models.ForeignKey(Hackathon, on_delete=models.CASCADE)
     updated_by        = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column='updated_by', related_name='hackathon_organiser_link_updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
