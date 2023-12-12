@@ -485,7 +485,7 @@ class LearningCircleStatsSerializer(serializers.ModelSerializer):
         return obj.values('ig_id').distinct().count()
 
     def get_total_no_of_users(self, obj):
-        return UserCircleLink.objects.all().count()
+        return UserCircleLink.objects.filter(accepted=True).count()
 
     def get_learning_circle(self, obj):
         return obj.count()
