@@ -348,7 +348,7 @@ class VoucherBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook('./api/dashboard/karma_voucher/assets/voucher_base_template.xlsx')
+        wb = load_workbook('./excel-templates/voucher_base_template.xlsx')
         ws = wb['Data Definitions']
         hashtags = TaskList.objects.all().values_list('hashtag', flat=True)
         data = {

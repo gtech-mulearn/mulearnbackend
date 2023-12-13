@@ -298,7 +298,7 @@ class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook("./api/dashboard/roles/assets/role_base_template.xlsx")
+        wb = load_workbook("./excel-templates/role_base_template.xlsx")
         ws = wb["Data Definitions"]
 
         roles = Role.objects.all().values_list("title", flat=True)
