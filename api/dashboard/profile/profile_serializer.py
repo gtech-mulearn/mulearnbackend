@@ -1,7 +1,6 @@
 import uuid
 
 from decouple import config as decouple_config
-from django.core.files.storage import FileSystemStorage
 from django.db import transaction
 from django.db.models import F, Sum, Q
 from rest_framework import serializers
@@ -130,7 +129,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
                     Q(user__user_role_link_user__role__title__in=[
-                      RoleType.ENABLER.value, RoleType.MENTOR.value])
+                        RoleType.ENABLER.value, RoleType.MENTOR.value])
                 ).order_by('-karma')
             )
 
@@ -154,14 +153,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 if KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
+                   .aggregate(Sum("karma"))
+                   .get("karma__sum")
+                   is None
                 else KarmaActivityLog.objects.filter(
                     task__ig=ig_link.ig, user=obj, appraiser_approved=True
                 )
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
+                   .aggregate(Sum("karma"))
+                   .get("karma__sum")
             )
             interest_groups.append(
                 {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
@@ -219,35 +218,32 @@ class UserRankSerializer(ModelSerializer):
         return ["Learner"] if len(roles) == 0 else roles
 
     def get_rank(self, obj):
-        roles = self.context.get("roles")
+        roles = self.get_roles(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).count()
+            ).order_by('-karma', '-updated_at', 'created_at')
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).count()
+            ).order_by('-karma', '-updated_at', 'created_at')
         else:
             ranks = (
-                Wallet.objects.filter(
-                    karma__gte=user_karma, user__user_role_link_user__verified=True)
+                Wallet.objects.filter(karma__gte=user_karma)
                 .exclude(
-                    Q(
-                        user__user_role_link_user__role__title__in=[
-                            RoleType.ENABLER.value,
-                            RoleType.MENTOR.value,
-                        ]
-                    )
-                )
-                .count()
+                    Q(user__user_role_link_user__role__title__in=[
+                        RoleType.ENABLER.value, RoleType.MENTOR.value])
+                ).order_by('-karma')
             )
-        return ranks if ranks > 0 else None
+
+        for count, _rank in enumerate(ranks, start=1):
+            if obj == _rank.user:
+                return count
 
     def get_karma(self, obj):
         return total_karma.karma if (total_karma := obj.wallet_user) else None
@@ -402,7 +398,7 @@ class LinkSocials(ModelSerializer):
                     dl = WebHookActions.SEPARATOR.value
                     discord_id = User.objects.get(id=user_id).discord_id
                     value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{karma_log.id}"
-                    
+
                     DiscordWebhooks.general_updates(
                         WebHookCategory.KARMA_INFO.value,
                         WebHookActions.UPDATE.value,
@@ -411,7 +407,7 @@ class LinkSocials(ModelSerializer):
                 else:
                     KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id
-                    ).delete()
+                    ).first().delete()
                 Wallet.objects.filter(user_id=user_id).update(
                     karma=F("karma") + karma_value,
                     updated_by_id=user_id
