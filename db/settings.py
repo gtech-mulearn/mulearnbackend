@@ -1,4 +1,3 @@
-from decouple import config as decouple_config
 from django.db import models
 
 
