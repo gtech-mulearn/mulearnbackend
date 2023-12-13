@@ -1,4 +1,5 @@
 import uuid
+from collections import defaultdict
 
 from decouple import config
 from django.core.mail import send_mail
@@ -11,7 +12,7 @@ from rest_framework.views import APIView
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
 from db.user import User
-from db.task import TaskList
+from db.task import TaskList,KarmaActivityLog
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
@@ -679,15 +680,20 @@ class ScheduleMeetAPI(APIView):
 
 class IgTaskDetailsAPI(APIView):
     def get(self, request, circle_id):
-        task_list = TaskList.objects.filter(ig__learning_circle_ig__id=circle_id)
-
+        task_list = TaskList.objects.filter(ig__learning_circle_ig__id=circle_id).order_by('level__level_order')
         serializer = IgTaskDetailsSerializer(
             task_list,
             many=True,
         )
-
+        serialized_data = serializer.data
+        grouped_tasks = defaultdict(list)
+        for task in serialized_data:
+            task_level = task['task_level']
+            task.pop('task_level')
+            grouped_tasks[f'Level {task_level}'].append(task)
+        grouped_tasks_dict = dict(grouped_tasks)
         return CustomResponse(
-            response=serializer.data
+            response=grouped_tasks_dict
         ).get_success_response()
 
 
