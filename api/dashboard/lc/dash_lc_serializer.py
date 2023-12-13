@@ -56,6 +56,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
         fields = [
+            'id',
             'name',
             'ig_name',
             'member_count',
