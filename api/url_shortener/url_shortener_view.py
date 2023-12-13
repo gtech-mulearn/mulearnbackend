@@ -43,7 +43,7 @@ class UrlShortenerAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     def get(self, request):
-        url_shortener_objects = UrlShortener.objects.all()
+        url_shortener_objects = UrlShortener.objects.all().order_by('-created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             url_shortener_objects,
