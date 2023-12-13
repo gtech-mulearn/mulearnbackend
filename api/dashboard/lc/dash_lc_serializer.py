@@ -466,7 +466,7 @@ class LearningCircleDetailsSerializer(serializers.ModelSerializer):
         return previous_meetings
 
 
-class LearningCircleDataSerializer(serializers.ModelSerializer):
+class LearningCircleStatsSerializer(serializers.ModelSerializer):
     interest_group = serializers.SerializerMethodField()
     college = serializers.SerializerMethodField()
     learning_circle = serializers.SerializerMethodField()

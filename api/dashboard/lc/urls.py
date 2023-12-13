@@ -4,6 +4,7 @@ from . import dash_lc_view
 
 urlpatterns = [
     path('user-list/', dash_lc_view.UserLearningCircleListApi.as_view(), name='main'),  # list all lc's of user
+    path('stats/', dash_lc_view.LearningCircleStatsAPI.as_view(), name='data'),
     path('<str:circle_id>/details/', dash_lc_view.LearningCircleDetailsApi.as_view(), name='lc-detailed'),  # individual ls details
     # dashboard search listing
     path('<str:circle_id>/schedule-meet/', dash_lc_view.ScheduleMeetAPI.as_view(), name='schedule-meet'),
@@ -25,7 +26,6 @@ urlpatterns = [
     path('list/', dash_lc_view.LearningCircleMainApi.as_view(), name='list'), # public page listing
     path('list-all/', dash_lc_view.TotalLearningCircleListApi.as_view(), name='list-all'), # dashboard search listing
 
-    # path('data/', dash_lc_view.LearningCircleDataAPI.as_view(), name='data'),
     # path('list-members/<str:circle_id>/', dash_lc_view.LearningCircleListMembersApi.as_view(), name='list-members'),
     # path('invite/', dash_lc_view.LearningCircleInviteLeadAPI.as_view()),
     # path('meet-record/list-all/<str:circle_id>/', dash_lc_view.SingleReportDetailAPI.as_view(), name='list-all-meet-record'),  # optim

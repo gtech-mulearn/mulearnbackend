@@ -18,7 +18,7 @@ from utils.response import CustomResponse
 from utils.utils import send_template_mail, DateTimeUtils
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleDetailsSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
-    LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleDataSerializer, \
+    LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleStatsSerializer, \
     LearningCircleMemberListSerializer, MeetRecordsCreateEditDeleteSerializer, IgTaskDetailsSerializer, \
     ScheduleMeetingSerializer, ListAllMeetRecordsSerializer, AddMemberSerializer
 
@@ -91,7 +91,7 @@ class LearningCircleMainApi(APIView):
         ).get_success_response()
 
 
-class LearningCircleDataAPI(APIView):
+class LearningCircleStatsAPI(APIView):
     """
         API endpoint for retrieving basic data about all learning circles.
 
@@ -104,7 +104,7 @@ class LearningCircleDataAPI(APIView):
     def get(self, request):
         learning_circle = LearningCircle.objects.all()
 
-        serializer = LearningCircleDataSerializer(
+        serializer = LearningCircleStatsSerializer(
             learning_circle,
             many=False
         )

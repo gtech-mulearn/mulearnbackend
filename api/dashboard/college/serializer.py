@@ -21,7 +21,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
         model = College
         fields = [
             "id",
-            # "level",
+            "level",
             "org",
             "number_of_members",
             "total_karma",

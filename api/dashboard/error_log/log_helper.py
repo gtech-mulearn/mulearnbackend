@@ -32,6 +32,11 @@ class logHandler:
         Returns:
             list[dict]: formatted errors
         """
+        self.patch_pattern = (
+            r"(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2},\d{3}) ERROR PATCHED : (\w+)"
+        )
+        self.patched_errors = self.extract_patches(log_data)
+
         # Extract all logs in string format
         matches = reversed(re.findall(self.log_pattern, log_data, re.DOTALL))
         formatted_errors = {}
@@ -42,6 +47,12 @@ class logHandler:
             self.aggregate_log_entry(formatted_errors, log_entry)
 
         return formatted_errors.values()
+
+    def extract_patches(self, log_data):
+        return {
+            patch[2]: self.get_formatted_time(patch[1])
+            for patch in re.finditer(self.patch_pattern, log_data)
+        }
 
     def extract_log_entry(self, error: str) -> dict:
         """fetch the value from the details of how to
@@ -58,6 +69,7 @@ class logHandler:
 
         for key, value in values.items():
             entry_type = self.log_entries[key]["type"]
+
             if entry_type == datetime:
                 result_dict[key] = self.get_formatted_time(value)
             elif entry_type == dict and value:
@@ -116,23 +128,35 @@ class logHandler:
         values = self.log_entries.values()
         return [value["regex"] for value in values]
 
-    def aggregate_log_entry(self, formatted_errors: list[dict], log_entry: dict) -> None:
+    def already_patched(self, log_entry: dict) -> bool:
+        """checks if log entry id is in patched 
+            errors and its timestamp is before the error was patched
+        """
+        return (
+            log_entry["id"] in self.patched_errors
+            and log_entry["timestamp"] < self.patched_errors[log_entry["id"]]
+        )
+
+    def aggregate_log_entry(
+        self, formatted_errors: list[dict], log_entry: dict
+    ) -> None:
         """combines all fetched error into one
 
         Args:
             formatted_errors (list[dict]): the list to add everything into
             log_entry (dict):   current log entry
         """
-        log_id = log_entry["id"]
-        log_keys = self.log_entries.keys()
-        if log_id not in formatted_errors:
-            formatted_errors[log_id] = {
-                key: [] if key != "id" else log_id for key in log_keys
-            }
-        for key in log_keys:
-            if (
-                key != "id"
-                and log_entry[key]
-                and log_entry[key] not in formatted_errors[log_id][key]
-            ):
-                formatted_errors[log_id][key].append(log_entry[key])
+        if not self.already_patched(log_entry):
+            log_id = log_entry["id"]
+            log_keys = self.log_entries.keys()
+            if log_id not in formatted_errors:
+                formatted_errors[log_id] = {
+                    key: [] if key != "id" else log_id for key in log_keys
+                }
+            for key in log_keys:
+                if (
+                    key != "id"
+                    and log_entry[key]
+                    and log_entry[key] not in formatted_errors[log_id][key]
+                ):
+                    formatted_errors[log_id][key].append(log_entry[key])

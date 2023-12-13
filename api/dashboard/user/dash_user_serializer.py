@@ -99,7 +99,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
     organizations = serializers.SerializerMethodField(read_only=True)
     interest_groups = serializers.SerializerMethodField(read_only=True)
     role = serializers.SerializerMethodField(read_only=True)
-    district = serializers.CharField(source="district.name", allow_null=True)
+    district = serializers.CharField(source="district.id", allow_null=True)
 
     class Meta:
         model = User
@@ -251,6 +251,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "department",
             "graduation_year",
             "admin",
+            "district"
         ]
 
     def to_representation(self, instance):
