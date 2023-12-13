@@ -6,7 +6,7 @@ from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, District
 from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, Wallet, UserIgLink, UserLvlLink
 from db.user import User, UserSettings, Socials
 from utils.exception import CustomException
@@ -274,7 +274,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
 class UserProfileEditSerializer(serializers.ModelSerializer):
     communities = serializers.ListField(write_only=True)
-
+    
+    
     def to_representation(self, instance):
         data = super().to_representation(instance)
         communities = instance.user_organization_link_user.filter(
@@ -283,6 +284,13 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         data["communities"] = (
             [community.org_id for community in communities] if communities else []
         )
+
+        district = instance.district
+        if district:
+            data["district"] = district.name
+        else:
+            data["district"] = None
+
         return data
 
     def update(self, instance, validated_data):
@@ -292,7 +300,6 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                 instance.user_organization_link_user.filter(
                     org__org_type=OrganizationType.COMMUNITY.value
                 ).delete()
-
                 user_organization_links = [
                     UserOrganizationLink(
                         id=uuid.uuid4(),
@@ -308,6 +315,8 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                 UserOrganizationLink.objects.bulk_create(
                     user_organization_links)
 
+            
+
             return super().update(instance, validated_data)
 
     class Meta:
@@ -320,7 +329,10 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "communities",
             "gender",
             "dob",
+            "district",
+            
         ]
+   
 
 
 class UserIgListSerializer(serializers.ModelSerializer):
