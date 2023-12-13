@@ -38,7 +38,7 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week']
+        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week', 'description', 'event']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
