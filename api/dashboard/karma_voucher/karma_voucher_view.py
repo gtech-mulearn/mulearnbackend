@@ -160,7 +160,7 @@ class ImportVoucherLogAPI(APIView):
             description = voucher['description']
             time_or_event = f'{month}/{week}'
             event = voucher['event']
-            if event != '':
+            if event != '' and event is not None:
                 time_or_event = f'{event}/{description}'
 
             success_rows.append({
