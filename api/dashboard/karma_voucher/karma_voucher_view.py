@@ -38,7 +38,7 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week']
+        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week', 'description', 'event']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -160,7 +160,7 @@ class ImportVoucherLogAPI(APIView):
             description = voucher['description']
             time_or_event = f'{month}/{week}'
             event = voucher['event']
-            if event != '':
+            if event != '' and event is not None:
                 time_or_event = f'{event}/{description}'
 
             success_rows.append({
@@ -348,7 +348,7 @@ class VoucherBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook('./api/dashboard/karma_voucher/assets/voucher_base_template.xlsx')
+        wb = load_workbook('./excel-templates/voucher_base_template.xlsx')
         ws = wb['Data Definitions']
         hashtags = TaskList.objects.all().values_list('hashtag', flat=True)
         data = {

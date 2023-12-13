@@ -298,7 +298,7 @@ class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook("./api/dashboard/roles/assets/role_base_template.xlsx")
+        wb = load_workbook("./excel-templates/role_base_template.xlsx")
         ws = wb["Data Definitions"]
 
         roles = Role.objects.all().values_list("title", flat=True)
@@ -353,7 +353,6 @@ class UserRoleBulkAssignAPI(APIView):
         excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
-
         users_to_fetch = set()
         roles_to_fetch = set()
         user_role_link_to_check = set()
@@ -361,7 +360,6 @@ class UserRoleBulkAssignAPI(APIView):
         for row in excel_data[1:]:
             keys_to_keep = ["muid", "role"]
             row_keys = list(row.keys())
-
             # Remove columns other than "muid" and "role"
             for key in row_keys:
                 if key not in keys_to_keep:
@@ -402,7 +400,6 @@ class UserRoleBulkAssignAPI(APIView):
 
             user_id = users_dict.get(user)
             role_id = roles_dict.get(role)
-
             if not user_id:
                 row["muid"] = user
                 row["role"] = role
@@ -428,6 +425,7 @@ class UserRoleBulkAssignAPI(APIView):
                 row["created_by_id"] = request_user_id
                 valid_rows.append(row)
 
+        users_by_role = {role_title: users for role_title, users in users_by_role.items() if users}
         user_roles_serializer = dash_roles_serializer.UserRoleBulkAssignSerializer(
             data=valid_rows, many=True
         )
@@ -441,16 +439,15 @@ class UserRoleBulkAssignAPI(APIView):
                         "role": user_role_data.get("role_id", ""),
                     }
                 )
+            for role, user_set in users_by_role.items():
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.BULK_ROLE.value,
+                    WebHookActions.UPDATE.value,
+                    role,
+                    ",".join(user_set),
+                )
         else:
             error_rows.append(user_roles_serializer.errors)
-
-        for role, user_set in users_by_role.items():
-            DiscordWebhooks.general_updates(
-                WebHookCategory.BULK_ROLE.value,
-                WebHookActions.UPDATE.value,
-                role,
-                ",".join(user_set),
-            )
 
         return CustomResponse(
             response={"Success": success_data, "Failed": error_rows}
