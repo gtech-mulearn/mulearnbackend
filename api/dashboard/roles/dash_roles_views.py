@@ -197,11 +197,12 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request):
+    def post(self, request, role_id):
         """
         Assigns a large bunch of users a certain role
         """
         request_data = request.data.copy()
+        request_data["role"] = role_id
         request_data["created_by"] = JWTUtils.fetch_user_id(request)
         serialized_users = dash_roles_serializer.RoleAssignmentSerializer(
             data=request_data
@@ -214,31 +215,34 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request):
+    def patch(self, request, role_id):
         """
         Removes a role from a large bunch of users
         """
-        role = Role.objects.get(pk=request.data.get("role"))
-        user_role_links = UserRoleLink.objects.filter(
-            user__pk__in=request.data.get("users"),
-            role=role,
-        )
-        number = user_role_links.count()
-
-        DiscordWebhooks.general_updates(
-            WebHookCategory.BULK_ROLE.value,
-            WebHookActions.DELETE.value,
-            role.title,
-            ",".join(list(user_role_links.values_list("user_id", flat=True))),
-        )
-
-        user_role_links.delete()
-
-        return CustomResponse(
-            general_message=(
-                f"Successfully removed the '{role.title}' role from {number} users"
+        try:
+            role = Role.objects.get(pk=role_id)
+            user_role_links = UserRoleLink.objects.filter(
+                user__pk__in=request.data.get("users"),
+                role=role,
             )
-        ).get_success_response()
+            number = user_role_links.count()
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.BULK_ROLE.value,
+                WebHookActions.DELETE.value,
+                role.title,
+                ",".join(list(user_role_links.values_list("user_id", flat=True))),
+            )
+
+            user_role_links.delete()
+
+            return CustomResponse(
+                general_message=(
+                    f"Successfully removed the '{role.title}' role from {number} users"
+                )
+            ).get_success_response()
+        except Role.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserRole(APIView):
@@ -425,7 +429,9 @@ class UserRoleBulkAssignAPI(APIView):
                 row["created_by_id"] = request_user_id
                 valid_rows.append(row)
 
-        users_by_role = {role_title: users for role_title, users in users_by_role.items() if users}
+        users_by_role = {
+            role_title: users for role_title, users in users_by_role.items() if users
+        }
         user_roles_serializer = dash_roles_serializer.UserRoleBulkAssignSerializer(
             data=valid_rows, many=True
         )
