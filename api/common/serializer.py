@@ -34,7 +34,6 @@ class LearningCircleEnrollmentSerializer(serializers.Serializer):
 
 
 class UserLeaderboardSerializer(serializers.ModelSerializer):
-    rank = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     organizations = serializers.SerializerMethodField()
     karma = serializers.IntegerField(source="wallet_user.karma")
@@ -44,7 +43,6 @@ class UserLeaderboardSerializer(serializers.ModelSerializer):
         model = User
         fields = (
             'fullname',
-            "rank",
             "karma",
             "interest_groups",
             "organizations",
