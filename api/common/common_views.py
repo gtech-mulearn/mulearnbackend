@@ -2,8 +2,8 @@ import json
 
 import requests
 from django.db import models
+from django.db.models import Case, When, Value, CharField, Count, Q, F, Sum
 from django.db.models import Subquery, OuterRef
-from django.db.models import Sum, F, Case, When, Value, CharField, Count, Q
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
@@ -15,7 +15,8 @@ from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
-from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer
+from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer, \
+    UserLeaderboardSerializer
 
 
 class LcDashboardAPI(APIView):
@@ -578,3 +579,12 @@ class ListTopIgUsersAPI(APIView):
                 user_karma['igs'] = []
 
         return CustomResponse(response=user_karma_by_ig).get_success_response()
+
+
+class BekenAPI(APIView):
+    def get(self, request):
+        user_info = User.objects.exclude(
+            user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value]).order_by(
+            '-wallet_user__karma')[:100]
+        data = UserLeaderboardSerializer(user_info, many=True)
+        return CustomResponse(response=data.data).get_success_response()
