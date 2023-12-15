@@ -407,15 +407,13 @@ class LinkSocials(ModelSerializer):
                         appraiser_approved=True,
                     )
 
-                    dl = WebHookActions.SEPARATOR.value
-                    discord_id = User.objects.get(id=user_id).discord_id
-                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{karma_log.id}"
-
+                    value = karma_log.id
                     DiscordWebhooks.general_updates(
                         WebHookCategory.KARMA_INFO.value,
                         WebHookActions.UPDATE.value,
                         value
                     )
+                    
                 else:
                     KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id
