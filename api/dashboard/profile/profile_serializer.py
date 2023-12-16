@@ -177,11 +177,12 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        user_lvl = UserLvlLink.objects.filter(
-            user__id=user_id).first().level.level_order
         user_igs = UserIgLink.objects.filter(
             user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
+        
+        if obj.level_order > 4:
+            tasks = tasks.filter(ig__name__in=user_igs)
 
         data = []
         for task in tasks:
