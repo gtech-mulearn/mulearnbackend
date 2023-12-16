@@ -17,4 +17,6 @@ urlpatterns = [
     path('profile-pic/<str:muid>/', common_views.UserProfilePicAPI.as_view()),
     path('list-ig/', common_views.ListIGAPI.as_view()),
     path('list-ig-top100/', common_views.ListTopIgUsersAPI.as_view()),
+
+    path('leaderboard/top-100/', common_views.BekenAPI.as_view()),
 ]
