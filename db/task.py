@@ -151,7 +151,7 @@ class KarmaActivityLog(models.Model):
     task = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name="karma_activity_log_task")
     user = models.ForeignKey(User, on_delete=models.CASCADE, blank=True, null=True,
                              related_name="karma_activity_log_user")
-    task_message_id = models.CharField(max_length=36)
+    task_message_id = models.CharField(max_length=36, blank=True, null=True)
     lobby_message_id = models.CharField(max_length=36, blank=True, null=True)
     dm_message_id = models.CharField(max_length=36, blank=True, null=True)
     peer_approved = models.BooleanField(blank=True, null=True)
