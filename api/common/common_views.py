@@ -30,8 +30,7 @@ class LcDashboardAPI(APIView):
             total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                                  user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                                                                  created_at__gt=date).values(
-                first_name=F("user__first_name"),
-                last_name=F("user__last_name"),
+                full_name=F("user__full_name"),
                 email=F("user__email"),
                 muid=F("user__muid"),
                 circle_name=F("circle__name"),
@@ -88,8 +87,7 @@ class LcDashboardAPI(APIView):
             #                                                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).count()
             total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                                  user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
-                first_name=F("user__first_name"),
-                last_name=F("user__last_name"),
+                full_name=F("user__full_name"),
                 email=F("user__email"),
                 muid=F("user__muid"),
                 circle_name=F("circle__name"),
