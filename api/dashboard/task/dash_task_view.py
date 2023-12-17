@@ -554,7 +554,7 @@ class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook('./api/dashboard/task/assets/task_base_template.xlsx')
+        wb = load_workbook('./excel-templates/task_base_template.xlsx')
         ws = wb['Data Definitions']
         levels = Level.objects.all().values_list('name', flat=True)
         channels = Channel.objects.all().values_list('name', flat=True)

@@ -14,7 +14,7 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 
-BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
+BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
 
 class UserInfoAPI(APIView):
@@ -52,20 +52,13 @@ class UserGetPatchDeleteAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
-        user = User.objects.filter(id=user_id).first()
-
-        if user is None:
+        try:
+            user = User.objects.get(id=user_id).delete()
             return CustomResponse(
-                general_message="User Not Available"
-            ).get_failure_response()
-
-        user.deleted_by = User.objects.get(pk=JWTUtils.fetch_user_id(request))
-        user.deleted_at = DateTimeUtils.get_current_utc_time()
-        user.save()
-
-        return CustomResponse(
-            general_message="User deleted successfully"
-        ).get_success_response()
+                general_message="User deleted successfully"
+            ).get_success_response()
+        except User.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
@@ -236,9 +229,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(muid=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(muid=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

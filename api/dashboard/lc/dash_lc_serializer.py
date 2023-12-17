@@ -56,6 +56,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
     class Meta:
         model = LearningCircle
         fields = [
+            'id',
             'name',
             'ig_name',
             'member_count',
@@ -465,7 +466,7 @@ class LearningCircleDetailsSerializer(serializers.ModelSerializer):
         return previous_meetings
 
 
-class LearningCircleDataSerializer(serializers.ModelSerializer):
+class LearningCircleStatsSerializer(serializers.ModelSerializer):
     interest_group = serializers.SerializerMethodField()
     college = serializers.SerializerMethodField()
     learning_circle = serializers.SerializerMethodField()
@@ -484,7 +485,7 @@ class LearningCircleDataSerializer(serializers.ModelSerializer):
         return obj.values('ig_id').distinct().count()
 
     def get_total_no_of_users(self, obj):
-        return UserCircleLink.objects.all().count()
+        return UserCircleLink.objects.filter(accepted=True).count()
 
     def get_learning_circle(self, obj):
         return obj.count()
@@ -682,37 +683,29 @@ class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
 
 
 class IgTaskDetailsSerializer(serializers.ModelSerializer):
-    task = serializers.CharField(source='title')
-    task_status = serializers.SerializerMethodField()
-    task_id = serializers.CharField(source='id')
+    task_title = serializers.CharField(source='title')    
     task_level = serializers.CharField(source='level.level_order')
     task_level_karma = serializers.CharField(source='level.karma')
     task_karma = serializers.CharField(source='karma')
-    task_description = serializers.CharField(source='description')
-    interest_group = serializers.CharField(source='ig.name')
-
+    task_hashtag = serializers.CharField(source='hashtag')
+    completed_users= serializers.SerializerMethodField()
     class Meta:
         model = TaskList
         fields = [
-            "task_id",
-            "task",
+            
+            "task_title",
             "task_karma",
-            "task_description",
-            "interest_group",
-            "task_status",
             "task_level",
             "task_level_karma",
+            "task_hashtag",
+            "completed_users",         
         ]
-
-    def get_task_status(self, obj):
-        user_ig_links = UserIgLink.objects.filter(ig=obj.ig).select_related('user')
-        for user_ig_link in user_ig_links:
-            if obj.karma_activity_log_task.filter(
-                    user=user_ig_link.user,
-                    peer_approved=True).exists():
-                return True
-            else:
-                return False
+    def get_completed_users(self, obj):
+        karma_activity_log=KarmaActivityLog.objects.filter(task=obj,appraiser_approved=True).select_related('user')
+        completed_users=[]
+        for karma in karma_activity_log:
+            completed_users.append(karma.user.id)
+        return completed_users
 
 
 class AddMemberSerializer(serializers.ModelSerializer):

@@ -231,9 +231,11 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop("role", None)
 
+
         validated_data["muid"] = register_helper.generate_muid(
             validated_data["full_name"]
         )
+
         password = validated_data.pop("password")
         hashed_password = make_password(password)
         validated_data["password"] = hashed_password

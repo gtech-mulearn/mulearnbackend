@@ -529,7 +529,7 @@ class OrganisationBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook('./api/dashboard/organisation/assets/organisation_base_template.xlsx')
+        wb = load_workbook('./excel-templates/organisation_base_template.xlsx')
         ws = wb['Data Definitions']
         affiliations = OrgAffiliation.objects.all().values_list('title', flat=True)
         districts = District.objects.all().values_list('name', flat=True)

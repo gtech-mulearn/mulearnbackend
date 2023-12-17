@@ -1,7 +1,9 @@
 from django.db import models
 
-from db.organization import Organization, District
+from db.organization import District, Organization
 from db.user import User
+
+from django.conf import settings
 
 # fmt: off
 # noinspection PyPep8
@@ -25,9 +27,9 @@ class Hackathon(models.Model):
     event_start       = models.DateTimeField(blank=True, null=True)
     event_end         = models.DateTimeField(blank=True, null=True)
     status            = models.CharField(max_length=20, blank=True, null=True)
-    updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_updated_by')
+    updated_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='hackathon_updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
-    created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_created_by')
+    created_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='hackathon_created_by')
     created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -41,9 +43,9 @@ class HackathonForm(models.Model):
     field_name        = models.CharField(max_length=255)
     field_type        = models.CharField(max_length=50)
     is_required       = models.BooleanField(default=False)
-    updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_form_updated_by')
+    updated_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='hackathon_form_updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
-    created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_form_created_by')
+    created_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='hackathon_form_created_by')
     created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -55,9 +57,9 @@ class HackathonOrganiserLink(models.Model):
     id                = models.CharField(primary_key=True, max_length=36)
     organiser         = models.ForeignKey(User, on_delete=models.CASCADE)
     hackathon         = models.ForeignKey(Hackathon, on_delete=models.CASCADE)
-    updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_organiser_link_updated_by')
+    updated_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='hackathon_organiser_link_updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
-    created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_organiser_link_created_by')
+    created_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='hackathon_organiser_link_created_by')
     created_at        = models.DateTimeField(auto_now_add=True)
 
     class Meta:
@@ -69,9 +71,9 @@ class HackathonUserSubmission(models.Model):
     id                = models.CharField(primary_key=True, max_length=36)
     user              = models.ForeignKey(User, on_delete=models.CASCADE)
     hackathon         = models.ForeignKey(Hackathon, on_delete=models.CASCADE)
-    updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='hackathon_submission_updated_by')
+    updated_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='hackathon_submission_updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
-    created_by        = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='hackathon_submission_created_by')
+    created_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='hackathon_submission_created_by')
     created_at        = models.DateTimeField(auto_now_add=True)
     data              = models.JSONField(max_length=2000, blank=True, null=True)
 

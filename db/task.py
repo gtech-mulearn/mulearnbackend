@@ -3,8 +3,9 @@ import uuid
 from django.db import models
 
 from db.organization import Organization
-from .user import User
 
+from django.conf import settings
+from .user import User
 
 # fmt: off
 # noinspection PyPep8
@@ -15,14 +16,14 @@ class Channel(models.Model):
     discord_id = models.CharField(max_length=36)
     updated_by = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column="updated_by",
         related_name="channel_updated_by",
     )
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column="created_by",
         related_name="channel_created_by",
     )
@@ -38,10 +39,10 @@ class InterestGroup(models.Model):
     name = models.CharField(max_length=75, unique=True)
     code = models.CharField(max_length=10, unique=True)
     icon = models.CharField(max_length=10)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="interest_group_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="interest_group_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -55,10 +56,10 @@ class Level(models.Model):
     level_order = models.IntegerField()
     name = models.CharField(max_length=36)
     karma = models.IntegerField()
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="level_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="level_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -71,10 +72,10 @@ class UserLvlLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_lvl_link_user")
     level = models.ForeignKey(Level, on_delete=models.CASCADE, related_name="user_lvl_link_level")
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="user_lvl_link_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="user_lvl_link_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -86,10 +87,10 @@ class UserLvlLink(models.Model):
 class TaskType(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=75)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="task_type_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="task_type_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -132,10 +133,10 @@ class Wallet(models.Model):
     karma = models.IntegerField(default=0)
     karma_last_updated_at = models.DateTimeField(blank=True, null=True, auto_now=True)
     coin = models.FloatField(default=0)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="wallet_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="wallet_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -154,16 +155,16 @@ class KarmaActivityLog(models.Model):
     lobby_message_id = models.CharField(max_length=36, blank=True, null=True)
     dm_message_id = models.CharField(max_length=36, blank=True, null=True)
     peer_approved = models.BooleanField(blank=True, null=True)
-    peer_approved_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="peer_approved_by", blank=True,
+    peer_approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="peer_approved_by", blank=True,
                                          null=True, related_name="karma_activity_log_peer_approved_by")
     appraiser_approved = models.BooleanField(blank=True, null=True)
-    appraiser_approved_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="appraiser_approved_by",
+    appraiser_approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="appraiser_approved_by",
                                               blank=True, null=True,
                                               related_name="karma_activity_log_appraiser_approved_by")
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="karma_activity_log_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="karma_activity_log_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -178,10 +179,10 @@ class MucoinActivityLog(models.Model):
     coin = models.FloatField()
     status = models.CharField(max_length=36)
     task = models.ForeignKey(TaskList, on_delete=models.CASCADE, related_name="mucoin_activity_log_task_list")
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="mucoin_activity_log_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="mucoin_activity_log_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -195,7 +196,7 @@ class MucoinInviteLog(models.Model):
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="mucoin_invite_log_user")
     email = models.CharField(max_length=200)
     invite_code = models.CharField(max_length=36)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="mucoin_invite_log_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -208,7 +209,7 @@ class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_ig_link_user")
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name="user_ig_link_ig")
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="user_ig_link_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -228,10 +229,10 @@ class VoucherLog(models.Model):
     claimed = models.BooleanField()
     event = models.CharField(max_length=50, null=True)
     description = models.CharField(max_length=2000, null=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="voucher_log_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="voucher_log_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -241,15 +242,13 @@ class VoucherLog(models.Model):
 
 
 class Events(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    name = models.CharField(max_length=75)
+    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    name        = models.CharField(max_length=75)
     description = models.CharField(max_length=200, null=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by",
-                                   related_name="event_updated_by")
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by",
-                                   related_name="event_created_by")
-    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by", related_name="event_updated_by")
+    updated_at  = models.DateTimeField(auto_now=True)
+    created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="event_created_by")
+    created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False

@@ -4,6 +4,8 @@ from django.db import models
 
 from db.user import User
 
+from django.conf import settings
+
 # fmt: off
 # noinspection PyPep8
 
@@ -20,7 +22,7 @@ class Integration(models.Model):
         db_table = "integration"
 
 
-#
+
 class IntegrationAuthorization(models.Model):
     id                = models.CharField(max_length=36, primary_key=True, default=uuid.uuid4)
     integration       = models.ForeignKey(Integration, on_delete=models.CASCADE, null=False, related_name="integration_authorization_integration",)

@@ -171,9 +171,7 @@ class UserRoleLinkManagement(APIView):
         Lists all the users with a given role
         """
         users = (
-            User.objects.filter(user_role_link_user__role__pk=role_id)
-            .distinct()
-            .all()
+            User.objects.filter(user_role_link_user__role__pk=role_id).distinct().all()
         )
         serialized_users = dash_roles_serializer.UserRoleLinkManagementSerializer(
             users, many=True
@@ -197,23 +195,52 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
-    def patch(self, request):
+    def post(self, request, role_id):
         """
         Assigns a large bunch of users a certain role
         """
         request_data = request.data.copy()
-        request_data[
-            "created_by"
-        ] = JWTUtils.fetch_user_id(request)
+        request_data["role"] = role_id
+        request_data["created_by"] = JWTUtils.fetch_user_id(request)
         serialized_users = dash_roles_serializer.RoleAssignmentSerializer(
             data=request_data
         )
         if serialized_users.is_valid():
-            serialized_users.save()
+            users, role = serialized_users.save()
             return CustomResponse(
-                general_message="Successfully gave all users the requested role"
+                general_message=f"Successfully gave {len(users)} users '{role.title}' role"
             ).get_success_response()
         return CustomResponse(response=serialized_users.errors).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, role_id):
+        """
+        Removes a role from a large bunch of users
+        """
+        try:
+            role = Role.objects.get(pk=role_id)
+            user_role_links = UserRoleLink.objects.filter(
+                user__pk__in=request.data.get("users"),
+                role=role,
+            )
+            number = user_role_links.count()
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.BULK_ROLE.value,
+                WebHookActions.DELETE.value,
+                role.title,
+                ",".join(list(user_role_links.values_list("user_id", flat=True))),
+            )
+
+            user_role_links.delete()
+
+            return CustomResponse(
+                general_message=(
+                    f"Successfully removed the '{role.title}' role from {number} users"
+                )
+            ).get_success_response()
+        except Role.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class UserRole(APIView):
@@ -273,7 +300,7 @@ class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook("./api/dashboard/roles/assets/role_base_template.xlsx")
+        wb = load_workbook("./excel-templates/role_base_template.xlsx")
         ws = wb["Data Definitions"]
 
         roles = Role.objects.all().values_list("title", flat=True)
@@ -328,7 +355,6 @@ class UserRoleBulkAssignAPI(APIView):
         excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
-
         users_to_fetch = set()
         roles_to_fetch = set()
         user_role_link_to_check = set()
@@ -336,7 +362,6 @@ class UserRoleBulkAssignAPI(APIView):
         for row in excel_data[1:]:
             keys_to_keep = ["muid", "role"]
             row_keys = list(row.keys())
-
             # Remove columns other than "muid" and "role"
             for key in row_keys:
                 if key not in keys_to_keep:
@@ -377,7 +402,6 @@ class UserRoleBulkAssignAPI(APIView):
 
             user_id = users_dict.get(user)
             role_id = roles_dict.get(role)
-
             if not user_id:
                 row["muid"] = user
                 row["role"] = role
@@ -403,6 +427,9 @@ class UserRoleBulkAssignAPI(APIView):
                 row["created_by_id"] = request_user_id
                 valid_rows.append(row)
 
+        users_by_role = {
+            role_title: users for role_title, users in users_by_role.items() if users
+        }
         user_roles_serializer = dash_roles_serializer.UserRoleBulkAssignSerializer(
             data=valid_rows, many=True
         )
@@ -416,16 +443,15 @@ class UserRoleBulkAssignAPI(APIView):
                         "role": user_role_data.get("role_id", ""),
                     }
                 )
+            for role, user_set in users_by_role.items():
+                DiscordWebhooks.general_updates(
+                    WebHookCategory.BULK_ROLE.value,
+                    WebHookActions.UPDATE.value,
+                    role,
+                    ",".join(user_set),
+                )
         else:
             error_rows.append(user_roles_serializer.errors)
-
-        for role,user_set in users_by_role.items():
-            DiscordWebhooks.general_updates(
-                WebHookCategory.BULK_ROLE.value,
-                WebHookActions.UPDATE.value,
-                role,
-                ",".join(user_set)
-            )
 
         return CustomResponse(
             response={"Success": success_data, "Failed": error_rows}
