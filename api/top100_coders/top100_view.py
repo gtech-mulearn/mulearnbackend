@@ -9,8 +9,7 @@ class Leaderboard(APIView):
         query = """
         SELECT 
         u.id,
-        u.first_name, 
-        u.last_name,
+        u.full_name, 
         u.profile_pic,
         SUM(kal.karma) AS total_karma,
         COALESCE(org.title, comm.title) AS org,

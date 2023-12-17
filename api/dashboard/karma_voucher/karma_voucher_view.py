@@ -57,12 +57,12 @@ class ImportVoucherLogAPI(APIView):
             users_to_fetch.add(muid)
             tasks_to_fetch.add(task_hashtag)
         # Fetching users and tasks in bulk
-        users = User.objects.filter(muid__in=users_to_fetch).values('id', 'email', 'first_name', 'last_name', 'muid')
+        users = User.objects.filter(muid__in=users_to_fetch).values('id', 'email', 'full_name', 'muid')
         tasks = TaskList.objects.filter(hashtag__in=tasks_to_fetch).values('id', 'hashtag')
         user_dict = {
             user['muid']: (
                 user['id'], user['email'],
-                user['first_name'] if user['last_name'] is None else f"{user['first_name']} {user['last_name']}"
+                user['full_name']
             ) for user in users
         }
 
@@ -219,20 +219,20 @@ class VoucherLogAPI(APIView):
         voucher_queryset = VoucherLog.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             voucher_queryset, request,
-            search_fields=["user__first_name", "user__last_name",
+            search_fields=["user__full_name",
                            "task__title", "karma", "month", "week", "claimed",
-                           "updated_by__first_name", "updated_by__last_name",
-                           "created_by__first_name", "created_by__last_name",
+                           "updated_by__full_name",
+                           "created_by__full_name",
                            "description", "event", "code"],
 
-            sort_fields={'user': 'user__first_name',
+            sort_fields={'user': 'user__full_name',
                          'code': 'code',
                          'karma': 'karma',
                          'claimed': 'claimed',
                          'task': 'task__title',
                          'week': 'week',
                          'month': 'month',
-                         'updated_by': 'updated_by__first_name',
+                         'updated_by': 'updated_by__full_name',
                          'updated_at': 'updated_at',
                          'created_at': 'created_at',
                          'event': 'event',
@@ -251,8 +251,7 @@ class VoucherLogAPI(APIView):
                 id = serializer.save().id
                 voucher = VoucherLog.objects.filter(id=id).values(
                     'code',
-                    'user__first_name',
-                    'user__last_name',
+                    'user__full_name',
                     'user__email',
                     'task__hashtag',
                     'month',
@@ -268,8 +267,7 @@ class VoucherLogAPI(APIView):
             week = voucher['week']
             karma = voucher['karma']
             task_hashtag = voucher['task__hashtag']
-            full_name = voucher['user__first_name'] if voucher[
-                                                           'user__last_name'] is None else f"{voucher['user__first_name']} {voucher['user__last_name']}"
+            full_name = voucher['user__full_name']
             email = voucher['user__email']
 
             # Preparing email context and attachment
