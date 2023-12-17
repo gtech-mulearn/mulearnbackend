@@ -90,7 +90,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "muid",
             "email",
             "role",
-            "fullname",
+            "full_name",
         ]
 
 
@@ -232,7 +232,7 @@ class UserSerializer(serializers.ModelSerializer):
         role = validated_data.pop("role", None)
 
         validated_data["muid"] = register_helper.generate_muid(
-            validated_data["first_name"], validated_data.get('last_name', '')
+            validated_data["full_name"]
         )
         password = validated_data.pop("password")
         hashed_password = make_password(password)
@@ -263,10 +263,10 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "first_name",
-            "last_name",
+            "full_name",
+            # "last_name",
             "email",
-            "mobile",
+            # "mobile",
             "password",
             "dob",
             "gender",

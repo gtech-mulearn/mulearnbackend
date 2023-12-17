@@ -1,6 +1,9 @@
 import uuid
 
 from django.db import models
+
+# from db.task import UserIgLink
+
 from .managers import user_manager
 from django.core.files.storage import FileSystemStorage
 from decouple import config as decouple_config
@@ -11,11 +14,11 @@ class User(models.Model):
     id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     discord_id     = models.CharField(unique=True, max_length=36, blank=True, null=True)
     muid           = models.CharField(unique=True, max_length=100)
-    first_name     = models.CharField(max_length=75)
-    last_name      = models.CharField(max_length=75, blank=True, null=True)
+    full_name     = models.CharField(max_length=150)
+    # last_name      = models.CharField(max_length=75, blank=True, null=True)
     email          = models.EmailField(unique=True, max_length=200)
     password       = models.CharField(max_length=200, blank=True, null=True)
-    mobile         = models.CharField(unique=True, max_length=15)
+    mobile         = models.CharField(unique=True, max_length=15, blank=True, null=True)
     gender         = models.CharField(max_length=10, blank=True, null=True, choices=[("Male", "Male"), ("Female", "Female")])
     dob            = models.DateField(blank=True, null=True)
     admin          = models.BooleanField(default=False)
@@ -33,12 +36,12 @@ class User(models.Model):
         managed = False
         db_table = 'user'
 
-    @property
-    def fullname(self):
-        if self.last_name is None:
-            return self.first_name
+    # @property
+    # def fullname(self):
+    #     if self.last_name is None:
+    #         return self.first_name
 
-        return f"{self.first_name} {self.last_name}"
+    #     return f"{self.first_name} {self.last_name}"
 
     @property
     def profile_pic(self):
@@ -46,7 +49,22 @@ class User(models.Model):
         path = f'user/profile/{self.id}.png'
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+        
+# class UserMentor(models.Model):
+#     id = models.CharField(primary_key=True, max_length=36)
+#     user = models.ForeignKey(User, models.DO_NOTHING)
+#     about = models.CharField(max_length=1000, blank=True, null=True)
+#     reason = models.CharField(max_length=1000, blank=True, null=True)
+#     hours = models.IntegerField()
+#     interest_groups = models.ForeignKey(UserIgLink, models.DO_NOTHING, db_column='interest_groups', blank=True, null=True)
+#     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='usermentor_updated_by_set')
+#     updated_at = models.DateTimeField(blank=True, null=True)
+#     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='usermentor_created_by_set')
+#     created_at = models.DateTimeField(blank=True, null=True)
 
+#     class Meta:
+#         managed = False
+#         db_table = 'user_mentor'
 
 class UserReferralLink(models.Model):
     id             = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)

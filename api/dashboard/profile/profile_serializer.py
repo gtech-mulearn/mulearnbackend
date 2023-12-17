@@ -54,8 +54,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "joined",
-            "first_name",
-            "last_name",
+            "full_name",
             "gender",
             "muid",
             "roles",

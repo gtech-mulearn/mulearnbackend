@@ -6,12 +6,12 @@ from utils.exception import CustomException
 from utils.response import CustomResponse
 
 
-def get_full_name(first_name, last_name):
-    return f"{first_name}{last_name or ''}".replace(" ", "").lower()[:85]
+# def get_full_name(first_name, last_name):
+#     return f"{first_name}{last_name or ''}".replace(" ", "").lower()[:85]
 
 
-def generate_muid(first_name, last_name):
-    full_name = get_full_name(first_name, last_name)
+def generate_muid(full_name):
+    full_name = full_name.replace(" ", "").lower()[:85]
     muid = f"{full_name}@mulearn"
 
     counter = 0

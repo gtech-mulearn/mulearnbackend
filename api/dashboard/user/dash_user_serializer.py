@@ -42,8 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "muid",
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "gender",
