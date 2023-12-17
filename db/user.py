@@ -43,7 +43,7 @@ class User(models.Model):
 
     def save(self, *args, **kwargs):
         if self.muid is None:
-            full_name = f"{self.first_name}{self.last_name or ''}".replace(" ", "").lower()[:85]
+            full_name = self.full_name.replace(" ", "-").lower()
             self.muid = f"{full_name}@mulearn"
 
             counter = 0
