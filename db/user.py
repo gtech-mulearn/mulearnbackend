@@ -41,7 +41,7 @@ class User(models.Model):
         path = f'user/profile/{self.id}.png'
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
-        
+
 # class UserMentor(models.Model):
 #     id = models.CharField(primary_key=True, max_length=36)
 #     user = models.ForeignKey(User, models.DO_NOTHING)
