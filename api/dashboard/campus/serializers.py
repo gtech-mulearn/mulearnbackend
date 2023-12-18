@@ -45,7 +45,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
         ).first()
         if campus_lead:
-            campus_lead = campus_lead.fullname
+            campus_lead = campus_lead.full_name
 
         enabler = User.objects.filter(
             user_organization_link_user__org=obj.org,
