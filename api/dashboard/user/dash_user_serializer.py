@@ -22,8 +22,7 @@ class UserDashboardSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
-            "first_name",
-            "last_name",
+            "full_name",
             "muid",
             "discord_id",
             "email",
@@ -42,8 +41,7 @@ class UserSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "muid",
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "gender",
@@ -105,8 +103,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "user_id",
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "gender",
@@ -238,8 +235,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         model = User
         fields = [
             "id",
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "gender",

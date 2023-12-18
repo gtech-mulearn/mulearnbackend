@@ -221,9 +221,8 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 #             accepted=True
 #         ).values(
 #             full_name=Concat(
-#                 'user__first_name',
+#                 'user__full_name',
 #                 Value(' '),
-#                 'user__last_name',
 #                 output_field=CharField()
 #             ),
 #             discord_id=F('user__discord_id'),

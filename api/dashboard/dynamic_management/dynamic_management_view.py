@@ -79,9 +79,9 @@ class DynamicUserAPI(APIView):
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             data, request,
-            search_fields=["type", "user__first_name", "user__last_name"],
+            search_fields=["type", "user__full_name"],
             sort_fields={'type': 'type',
-                         'user': 'user__first_name'}
+                         'user': 'user__full_name'}
         )
         dynamic_user_serializer = DynamicUserListSerializer(paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=dynamic_user_serializer,
