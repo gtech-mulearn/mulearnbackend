@@ -28,18 +28,16 @@ class InterestGroupAPI(APIView):
             request,
             [
                 "name",
-                "created_by__first_name",
-                "created_by__last_name",
-                "updated_by__first_name",
-                "updated_by__last_name",
+                "created_by__full_name",
+                "updated_by__full_name",
             ],
             {
                 "name": "name",
                 "members": "members",
                 "updated_on": "updated_at",
-                "updated_by": "updated_by__first_name",
+                "updated_by": "updated_by__full_name",
                 "created_on": "created_at",
-                "created_by": "created_by__first_name",
+                "created_by": "created_by__full_name",
             },
         )
 

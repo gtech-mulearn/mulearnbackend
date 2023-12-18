@@ -61,8 +61,8 @@ class TaskListAPI(APIView):
                 "ig__name",
                 "event",
                 "updated_at",
-                "updated_by__first_name",
-                "created_by__first_name",
+                "updated_by__full_name",
+                "created_by__full_name",
                 "created_at",
             ],
             sort_fields={
@@ -80,8 +80,8 @@ class TaskListAPI(APIView):
                 "ig": "ig__name",
                 "event": "event",
                 "updated_at": "updated_at",
-                "updated_by": "updated_by__first_name",
-                "created_by": "created_by__first_name",
+                "updated_by": "updated_by__full_name",
+                "created_by": "created_by__full_name",
                 "created_at": "created_at",
             },
         )
