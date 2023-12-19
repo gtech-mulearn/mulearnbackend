@@ -133,7 +133,7 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
         user_data = [{
             'dynamic_user_id': dynamic_user.id,
             'user_id': dynamic_user.user.id,
-            'name': f"{dynamic_user.user.first_name} {dynamic_user.user.last_name if dynamic_user.user.last_name else ''}",
+            'name': dynamic_user.user.full_name,
             'muid': dynamic_user.user.muid,
             'email': dynamic_user.user.email} for dynamic_user in dynamic_users]
         return user_data

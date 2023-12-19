@@ -4,8 +4,7 @@ from db.user import User
 
 
 class StudentInfoSerializer(serializers.Serializer):
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    full_name = serializers.CharField()
     muid = serializers.CharField()
     circle_name = serializers.CharField()
     circle_ig = serializers.CharField()
@@ -21,8 +20,7 @@ class CollegeInfoSerializer(serializers.Serializer):
 
 
 class LearningCircleEnrollmentSerializer(serializers.Serializer):
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    full_name = serializers.CharField()
     muid = serializers.CharField()
     email = serializers.CharField()
     dwms_id = serializers.CharField(allow_null=True)

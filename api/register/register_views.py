@@ -76,9 +76,9 @@ class LearningCircleUserViewAPI(APIView):
             return CustomResponse(general_message="Invalid muid").get_failure_response()
 
         serializer = serializers.LearningCircleUserSerializer(user)
-        id, muid, first_name, last_name, email, phone = serializer.data.values()
+        id, muid,  full_name, email, phone = serializer.data.values()
 
-        name = f"{first_name}{last_name or ''}"
+        name = full_name
 
         return CustomResponse(
             response={

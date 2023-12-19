@@ -53,8 +53,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "joined",
-            "first_name",
-            "last_name",
+            "full_name",
             "gender",
             "muid",
             "roles",
@@ -202,8 +201,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
 
 class UserRankSerializer(ModelSerializer):
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    full_name = serializers.CharField()
     role = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
@@ -211,7 +209,7 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role",
+        fields = ("full_name", "role",
                   "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
@@ -323,8 +321,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "communities",

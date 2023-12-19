@@ -24,7 +24,7 @@ from . import register_helper
 class LearningCircleUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "muid", "first_name", "last_name", "email", "mobile"]
+        fields = ["id", "muid", "full_name", "email", "mobile"]
 
 
 class BaseSerializer(serializers.Serializer):
@@ -90,7 +90,7 @@ class UserDetailSerializer(serializers.ModelSerializer):
             "muid",
             "email",
             "role",
-            "fullname",
+            "full_name",
         ]
 
 
@@ -231,6 +231,11 @@ class UserSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         role = validated_data.pop("role", None)
 
+
+        validated_data["muid"] = register_helper.generate_muid(
+            validated_data["full_name"]
+        )
+
         password = validated_data.pop("password")
         hashed_password = make_password(password)
         validated_data["password"] = hashed_password
@@ -260,10 +265,9 @@ class UserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
-            "mobile",
+            # "mobile",
             "password",
             "dob",
             "gender",
