@@ -38,7 +38,8 @@ class ImportVoucherLogAPI(APIView):
         if not excel_data:
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
 
-        temp_headers = ['muid', 'karma', 'hashtag', 'month', 'week', 'description', 'event']
+        temp_headers = ['muid', 'karma', 'hashtag',
+                        'month', 'week', 'description', 'event']
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -57,8 +58,10 @@ class ImportVoucherLogAPI(APIView):
             users_to_fetch.add(muid)
             tasks_to_fetch.add(task_hashtag)
         # Fetching users and tasks in bulk
-        users = User.objects.filter(muid__in=users_to_fetch).values('id', 'email', 'full_name', 'muid')
-        tasks = TaskList.objects.filter(hashtag__in=tasks_to_fetch).values('id', 'hashtag')
+        users = User.objects.filter(muid__in=users_to_fetch).values(
+            'id', 'email', 'full_name', 'muid')
+        tasks = TaskList.objects.filter(
+            hashtag__in=tasks_to_fetch).values('id', 'hashtag')
         user_dict = {
             user['muid']: (
                 user['id'], user['email'],
@@ -94,7 +97,8 @@ class ImportVoucherLogAPI(APIView):
                     row['error'] = "Month cannot be empty"
                     error_rows.append(row)
                 else:
-                    existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
+                    existing_codes = set(
+                        VoucherLog.objects.values_list('code', flat=True))
                     while generate_ordered_id(count) in existing_codes:
                         count += 1
                     # Preparing valid row data
@@ -111,10 +115,11 @@ class ImportVoucherLogAPI(APIView):
                     valid_rows.append(row)
 
         # Serializing and saving valid voucher rows to the database
-        voucher_serializer = VoucherLogCSVSerializer(data=valid_rows, many=True)
+        voucher_serializer = VoucherLogCSVSerializer(
+            data=valid_rows, many=True)
         with transaction.atomic():
             if voucher_serializer.is_valid():
-                    voucher_serializer.save()
+                voucher_serializer.save()
             else:
                 code_error_dict = {}
                 for error in voucher_serializer.errors:
@@ -138,11 +143,11 @@ class ImportVoucherLogAPI(APIView):
                         error_row['event'] = row['event']
                         error_row['error'] = code_error_dict[code]
                         error_rows.append(error_row)
-                    
+
                 return CustomResponse(
                     general_message='Fix the errors and try again ',
                     response={"Success": [], "Failed": error_rows}
-                    ).get_failure_response()
+                ).get_failure_response()
             if len(voucher_serializer.data) != len(valid_rows):
                 transaction.set_rollback(True)
                 return CustomResponse(
@@ -155,7 +160,7 @@ class ImportVoucherLogAPI(APIView):
             week = voucher['week']
             karma = voucher['karma']
             task_hashtag = voucher['hashtag']
-            full_name = voucher['fullname']
+            full_name = voucher['full_name']
             email = voucher['email']
             description = voucher['description']
             time_or_event = f'{month}/{week}'
@@ -239,13 +244,15 @@ class VoucherLogAPI(APIView):
                          'description': 'description'
                          }
         )
-        voucher_serializer = VoucherLogSerializer(paginated_queryset.get('queryset'), many=True).data
+        voucher_serializer = VoucherLogSerializer(
+            paginated_queryset.get('queryset'), many=True).data
         return CustomResponse().paginated_response(data=voucher_serializer,
                                                    pagination=paginated_queryset.get('pagination'))
 
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def post(self, request):
-        serializer = VoucherLogCreateSerializer(data=request.data, context={'request': request})
+        serializer = VoucherLogCreateSerializer(
+            data=request.data, context={'request': request})
         if serializer.is_valid():
             with transaction.atomic():
                 id = serializer.save().id
@@ -310,10 +317,12 @@ class VoucherLogAPI(APIView):
     def patch(self, request, voucher_id):
         user_id = JWTUtils.fetch_user_id(request)
         context = {'user_id': user_id}
-        voucher = VoucherLog.objects.filter(id=voucher_id, claimed=False).first()
+        voucher = VoucherLog.objects.filter(
+            id=voucher_id, claimed=False).first()
         if not voucher:
             return CustomResponse(general_message="Voucher Not available").get_failure_response()
-        serializer = VoucherLogUpdateSerializer(voucher, data=request.data, context=context)
+        serializer = VoucherLogUpdateSerializer(
+            voucher, data=request.data, context=context)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message='Voucher updated successfully').get_success_response()
@@ -337,7 +346,8 @@ class ExportVoucherLogAPI(APIView):
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def get(self, request):
         voucher_serializer = VoucherLog.objects.all()
-        voucher_serializer_data = VoucherLogSerializer(voucher_serializer, many=True).data
+        voucher_serializer_data = VoucherLogSerializer(
+            voucher_serializer, many=True).data
 
         return CommonUtils.generate_csv(voucher_serializer_data, 'Voucher Log')
 

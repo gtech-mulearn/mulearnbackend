@@ -103,7 +103,7 @@ class RegisterDataAPI(APIView):
 
         if not create_user.is_valid():
             return CustomResponse(message=create_user.errors).get_failure_response()
-
+        
         user = create_user.save()
         password = request.data["user"]["password"]
 
