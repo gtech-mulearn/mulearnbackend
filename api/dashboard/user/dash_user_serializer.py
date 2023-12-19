@@ -16,7 +16,8 @@ BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
 class UserDashboardSerializer(serializers.ModelSerializer):
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
-    level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
+    level = serializers.CharField(
+        source="user_lvl_link_user.level.name", default=None)
 
     class Meta:
         model = User
@@ -62,8 +63,10 @@ class UserSerializer(serializers.ModelSerializer):
 class CollegeSerializer(serializers.ModelSerializer):
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.pk", allow_null=True)
-    country = serializers.CharField(source="org.district.zone.state.country.pk", allow_null=True)
-    state = serializers.CharField(source="org.district.zone.state.pk", allow_null=True)
+    country = serializers.CharField(
+        source="org.district.zone.state.country.pk", allow_null=True)
+    state = serializers.CharField(
+        source="org.district.zone.state.pk", allow_null=True)
     district = serializers.CharField(source="org.district.pk", allow_null=True)
 
     class Meta:
@@ -177,7 +180,8 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
     def get_organizations(self, user):
-        organization_links = user.user_organization_link_user.select_related("org")
+        organization_links = user.user_organization_link_user.select_related(
+            "org")
         if not organization_links.exists():
             return None
 
@@ -199,7 +203,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
 
 class UserVerificationSerializer(serializers.ModelSerializer):
-    full_name = serializers.ReadOnlyField(source="user.fullname")
+    full_name = serializers.ReadOnlyField(source="user.full_name")
     user_id = serializers.ReadOnlyField(source="user.id")
     discord_id = serializers.ReadOnlyField(source="user.discord_id")
     muid = serializers.ReadOnlyField(source="user.muid")
@@ -257,8 +261,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 college := instance.user_organization_link_user.filter(
                     org__org_type=OrganizationType.COLLEGE.value
                 )
-                        .select_related("org__district__zone__state__country", "department")
-                        .first()
+            .select_related("org__district__zone__state__country", "department")
+            .first()
         ):
             data.update(
                 {
@@ -317,8 +321,10 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                             created_by=admin,
                             created_at=current_time,
                             verified=True,
-                            department_id=validated_data.pop("department", None),
-                            graduation_year=validated_data.pop("graduation_year", None),
+                            department_id=validated_data.pop(
+                                "department", None),
+                            graduation_year=validated_data.pop(
+                                "graduation_year", None),
                         )
                         for org in organizations
                     ]

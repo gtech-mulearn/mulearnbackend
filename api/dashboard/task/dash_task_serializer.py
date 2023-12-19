@@ -8,15 +8,18 @@ from utils.utils import DateTimeUtils
 
 
 class TaskListSerializer(serializers.ModelSerializer):
-    channel = serializers.CharField(source="channel.name", required=False, default=None)
+    channel = serializers.CharField(
+        source="channel.name", required=False, default=None)
     type = serializers.CharField(source="type.title")
-    level = serializers.CharField(source="level.name", required=False, default=None)
+    level = serializers.CharField(
+        source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
-    org = serializers.CharField(source="org.title", required=False, default=None)
+    org = serializers.CharField(
+        source="org.title", required=False, default=None)
     total_karma_gainers = serializers.SerializerMethodField()
 
-    created_by = serializers.CharField(source="created_by.fullname")
-    updated_by = serializers.CharField(source="updated_by.fullname")
+    created_by = serializers.CharField(source="created_by.full_name")
+    updated_by = serializers.CharField(source="updated_by.full_name")
 
     class Meta:
         model = TaskList
@@ -133,12 +136,13 @@ class TaskImportSerializer(serializers.ModelSerializer):
 
 
 class TasktypeSerializer(serializers.ModelSerializer):
-    updated_by = serializers.CharField(source='updated_by.fullname')
-    created_by = serializers.CharField(source='created_by.fullname')
+    updated_by = serializers.CharField(source='updated_by.full_name')
+    created_by = serializers.CharField(source='created_by.full_name')
 
     class Meta:
         model = TaskType
-        fields = ["id", "title", "updated_by", "updated_at", "created_by", "created_at"]
+        fields = ["id", "title", "updated_by",
+                  "updated_at", "created_by", "created_at"]
 
 
 class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
