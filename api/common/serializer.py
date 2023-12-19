@@ -35,19 +35,19 @@ class UserLeaderboardSerializer(serializers.ModelSerializer):
     interest_groups = serializers.SerializerMethodField()
     organizations = serializers.SerializerMethodField()
     karma = serializers.IntegerField(source="wallet_user.karma")
-    fullname = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
         fields = (
-            'fullname',
+            'full_name',
             "karma",
             "interest_groups",
             "organizations",
         )
 
-    def get_fullname(self, obj):
-        return obj.fullname
+    def get_full_name(self, obj):
+        return obj.full_name
 
     def get_organizations(self, obj):
         return obj.user_organization_link_user.all().values_list("org__title", flat=True)

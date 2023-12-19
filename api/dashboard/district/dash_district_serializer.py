@@ -33,7 +33,8 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+            UserOrganizationLink.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value)
             .values("org__district")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
         ).order_by("-total_karma", "org__created_at")
@@ -60,7 +61,7 @@ class DistrictDetailsSerializer(serializers.ModelSerializer):
             org__district=obj.org.district,
             user__user_role_link_user__role__title=RoleType.DISTRICT_CAMPUS_LEAD.value,
         ).first()
-        return user_org_link.user.fullname if user_org_link else None
+        return user_org_link.user.full_name if user_org_link else None
 
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
@@ -128,7 +129,7 @@ class DistrictStudentLevelStatusSerializer(serializers.ModelSerializer):
 
 class DistrictStudentDetailsSerializer(serializers.Serializer):
     user_id = serializers.CharField()
-    fullname = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
@@ -137,7 +138,7 @@ class DistrictStudentDetailsSerializer(serializers.Serializer):
     class Meta:
         fields = (
             "user_id"
-            "fullname",
+            "full_name",
             "karma",
             "muid",
             "rank",
@@ -148,8 +149,8 @@ class DistrictStudentDetailsSerializer(serializers.Serializer):
         ranks = self.context.get("ranks")
         return ranks.get(obj.id, None)
 
-    def get_fullname(self, obj):
-        return obj.fullname
+    def get_full_name(self, obj):
+        return obj.full_name
 
 
 class DistrictCollegeDetailsSerializer(serializers.Serializer):
@@ -173,7 +174,7 @@ class DistrictCollegeDetailsSerializer(serializers.Serializer):
     def get_lead(self, obj):
         leads = self.context.get("leads")
         college_lead = [lead for lead in leads if lead.college == obj["id"]]
-        return college_lead[0].fullname if college_lead else None
+        return college_lead[0].full_name if college_lead else None
 
     def get_lead_number(self, obj):
         leads = self.context.get("leads")
