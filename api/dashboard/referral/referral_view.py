@@ -29,11 +29,12 @@ class Referral(APIView):
         user = User.objects.filter(id=user_id).first()
         if RefferalType.KARMA.value == invite_type:
             user_context = {
-                "full_name": user.fullname,
+                "full_name": user.full_name,
                 "email": receiver_email,
                 "muid": user.muid,
             }
-            send_template_mail(context=user_context, subject="AN INVITE TO INSPIRE✨", address=["user_referral.html"])
+            send_template_mail(context=user_context, subject="AN INVITE TO INSPIRE✨", address=[
+                               "user_referral.html"])
         elif RefferalType.MUCOIN.value == invite_type:
             wallet = Wallet.objects.filter(user=user).first()
 
@@ -43,13 +44,15 @@ class Referral(APIView):
                                                             created_by=user,
                                                             created_at=DateTimeUtils.get_current_utc_time())
                 user_context = {
-                    "full_name": user.fullname,
+                    "full_name": user.full_name,
                     "email": receiver_email,
                     "muid": user.muid,
                     'invite_code': invite_log.invite_code,
                 }
-                send_template_mail(context=user_context, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])
-                task = TaskList.objects.filter(title=TasksTypesHashtag.MUCOIN.value).first()
+                send_template_mail(
+                    context=user_context, subject="AN INVITE TO Mucoin✨", address=["mucoin.html"])
+                task = TaskList.objects.filter(
+                    title=TasksTypesHashtag.MUCOIN.value).first()
                 MucoinActivityLog.objects.create(id=uuid.uuid4(), user=user, coin=1, task=task, status='Debit',
                                                  updated_by=user, updated_at=DateTimeUtils.get_current_utc_time(),
                                                  created_by=user, created_at=DateTimeUtils.get_current_utc_time())
@@ -67,6 +70,7 @@ class ReferralListAPI(APIView):
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_referral_link = UserReferralLink.objects.filter(referral_id=user_id).all()
+        user_referral_link = UserReferralLink.objects.filter(
+            referral_id=user_id).all()
         serializer = ReferralListSerializer(user_referral_link, many=True)
         return CustomResponse(response=serializer.data).get_success_response()

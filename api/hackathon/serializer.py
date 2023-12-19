@@ -243,12 +243,14 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.title = validated_data.get("title", instance.title)
         instance.tagline = validated_data.get("tagline", instance.tagline)
-        instance.description = validated_data.get("description", instance.description)
+        instance.description = validated_data.get(
+            "description", instance.description)
         instance.participant_count = validated_data.get(
             "participant_count", instance.participant_count
         )
         instance.org = validated_data.get("org_id", instance.org)
-        instance.district = validated_data.get("district_id", instance.district)
+        instance.district = validated_data.get(
+            "district_id", instance.district)
         instance.place = validated_data.get("place", instance.place)
         instance.is_open_to_all = validated_data.get(
             "is_open_to_all", instance.is_open_to_all
@@ -259,12 +261,15 @@ class HackathonUpdateSerializer(serializers.ModelSerializer):
         instance.application_ends = validated_data.get(
             "application_ends", instance.application_ends
         )
-        instance.event_start = validated_data.get("event_start", instance.event_start)
-        instance.event_end = validated_data.get("event_end", instance.event_end)
+        instance.event_start = validated_data.get(
+            "event_start", instance.event_start)
+        instance.event_end = validated_data.get(
+            "event_end", instance.event_end)
         instance.status = validated_data.get("status", instance.status)
         instance.website = validated_data.get("website", instance.website)
         instance.type = validated_data.get("type", instance.type)
-        instance.event_logo = validated_data.get("event_logo", instance.event_logo)
+        instance.event_logo = validated_data.get(
+            "event_logo", instance.event_logo)
         instance.banner = validated_data.get("banner", instance.banner)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
@@ -321,7 +326,8 @@ class HackathonPublishingSerializer(serializers.ModelSerializer):
             return super().validate(attrs)
 
         null_field_names = ", ".join(null_instances)
-        raise serializers.ValidationError(f"The following fields are empty: {null_field_names}")
+        raise serializers.ValidationError(
+            f"The following fields are empty: {null_field_names}")
 
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
@@ -357,7 +363,8 @@ class HackathonUserSubmissionSerializer(serializers.ModelSerializer):
             validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
             validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
 
-            hackathon_submission = HackathonUserSubmission.objects.create(**validated_data)
+            hackathon_submission = HackathonUserSubmission.objects.create(
+                **validated_data)
         return hackathon_submission
 
 
@@ -376,8 +383,9 @@ class HackathonOrganiserSerializer(serializers.ModelSerializer):
         if (
                 user
                 and HackathonOrganiserLink.objects.filter(
-            organiser=user, hackathon__id=self.context.get("hackathon").id
-        ).exists()
+                    organiser=user, hackathon__id=self.context.get(
+                        "hackathon").id
+                ).exists()
         ):
             raise serializers.ValidationError(
                 "This User Already An Organizer in this hackathon"
@@ -424,9 +432,10 @@ class ListApplicantsSerializer(serializers.ModelSerializer):
                     elif field == 'mobile':
                         data[field] = user.mobile
                     elif field == 'name':
-                        data[field] = user.fullname
+                        data[field] = user.full_name
                     elif field == 'college':
-                        data[field] = UserOrganizationLink.objects.filter(user_id=user.id).first().org.title
+                        data[field] = UserOrganizationLink.objects.filter(
+                            user_id=user.id).first().org.title
             return data
         except json.JSONDecodeError:
             return {}
@@ -503,7 +512,7 @@ class HackathonFormSerializer(serializers.ModelSerializer):
 
 
 class HackathonOrganiserSerializerRetrieval(serializers.ModelSerializer):
-    full_name = serializers.CharField(source="organiser.fullname")
+    full_name = serializers.CharField(source="organiser.full_name")
     email = serializers.CharField(source="organiser.email")
     muid = serializers.CharField(source="organiser.muid")
     profile_pic = serializers.CharField(source="organiser.profile_pic")
