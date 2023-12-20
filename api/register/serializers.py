@@ -1,3 +1,4 @@
+import uuid
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
 from rest_framework import serializers
@@ -13,8 +14,8 @@ from db.organization import (
     UserOrganizationLink,
     Zone,
 )
-from db.task import InterestGroup, Level, MucoinInviteLog, UserLvlLink, Wallet
-from db.user import Role, Socials, User, UserReferralLink, UserRoleLink, UserSettings
+from db.task import InterestGroup, Level, MucoinInviteLog, UserIgLink, UserLvlLink, Wallet
+from db.user import Role, Socials, User, UserMentor, UserReferralLink, UserRoleLink, UserSettings
 from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -128,6 +129,39 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserOrganizationLink
         fields = ["user", "organizations", "department", "graduation_year"]
+
+
+class MentorSerializer(serializers.ModelSerializer):
+    user = serializers.CharField(required=False)
+    about = serializers.CharField(required=False)
+    reason = serializers.CharField(required=False)
+    hours = serializers.IntegerField(required=False)
+
+    def create(self, validated_data):
+        about = validated_data.get("about", None)
+        reason = validated_data.get("reason", None)
+        hours = validated_data.get("hours", None)
+
+        UserMentor.objects.create(
+            user=validated_data["user"],
+            about=about,
+            reason=reason,
+            hours=hours,
+            created_by=validated_data["user"],
+            created_at=DateTimeUtils.get_current_utc_time(),
+            updated_by=validated_data["user"],
+            updated_at=DateTimeUtils.get_current_utc_time(),
+        )
+
+    class Meta:
+        model = UserMentor
+        fields = [
+            "user",
+            "about",
+            "reason",
+            "hours",
+        ]
+
 
 
 class ReferralSerializer(serializers.ModelSerializer):
@@ -275,12 +309,12 @@ class UserSerializer(serializers.ModelSerializer):
             "district"
         ]
 
-
 class RegisterSerializer(serializers.Serializer):
     user = UserSerializer()
     organization = UserOrgLinkSerializer(required=False)
     referral = ReferralSerializer(required=False)
     integration = IntegrationSerializer(required=False)
+    mentor = MentorSerializer(required=False)
 
     def create(self, validated_data):
         with transaction.atomic():
@@ -298,6 +332,10 @@ class RegisterSerializer(serializers.Serializer):
                 integration.update({"user": user})
                 IntegrationSerializer().create(integration)
 
+            if mentor := validated_data.pop("mentor", None):
+                mentor["user"] = user
+                MentorSerializer().create(mentor)    
+
         return user
 
     class Meta:
@@ -307,6 +345,7 @@ class RegisterSerializer(serializers.Serializer):
             "organization",
             "referral",
             "param",
+            "mentor",
         ]
 
 

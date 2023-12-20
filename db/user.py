@@ -3,12 +3,12 @@ import uuid
 from django.core.files.storage import FileSystemStorage
 from django.db import models
 
-# from db.task import UserIgLink
 
 from django.conf import settings
-from .managers import user_manager
-from decouple import config as decouple_config
 
+from .managers import user_manager
+# from .task import UserIgLink
+from decouple import config as decouple_config
 
 # fmt: off
 # noinspection PyPep8
@@ -57,21 +57,20 @@ class User(models.Model):
         return super().save(*args, **kwargs)
 
 
-# class UserMentor(models.Model):
-#     id = models.CharField(primary_key=True, max_length=36)
-#     user = models.ForeignKey(User, models.DO_NOTHING)
-#     about = models.CharField(max_length=1000, blank=True, null=True)
-#     reason = models.CharField(max_length=1000, blank=True, null=True)
-#     hours = models.IntegerField()
-#     interest_groups = models.ForeignKey(UserIgLink, models.DO_NOTHING, db_column='interest_groups', blank=True, null=True)
-#     updated_by = models.ForeignKey(User, models.DO_NOTHING, db_column='updated_by', related_name='usermentor_updated_by_set')
-#     updated_at = models.DateTimeField(blank=True, null=True)
-#     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='usermentor_created_by_set')
-#     created_at = models.DateTimeField(blank=True, null=True)
+class UserMentor(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_mentor_user')
+    about = models.CharField(max_length=1000, blank=True, null=True)
+    reason = models.CharField(max_length=1000, blank=True, null=True)
+    hours = models.IntegerField()
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='user_mentor_updated_by_set')
+    updated_at = models.DateTimeField(blank=True, null=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='user_mentor_created_by_set')
+    created_at = models.DateTimeField(blank=True, null=True)
 
-#     class Meta:
-#         managed = False
-#         db_table = 'user_mentor'
+    class Meta:
+        managed = False
+        db_table = 'user_mentor'
 
 class UserReferralLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
