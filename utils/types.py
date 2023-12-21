@@ -41,8 +41,8 @@ class RoleType(Enum):
     SUSPEND = "Suspended"
     STUDENT = "Student"
     ENABLER = "Enabler"
-    IG_FACILITATOR = "IG Facilitator"
     TECH_TEAM = 'Tech Team'
+    IG_LEAD = 'IG Lead'
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
 
