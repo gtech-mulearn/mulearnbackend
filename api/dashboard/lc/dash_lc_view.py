@@ -7,7 +7,7 @@ from django.db.models import Q, F, Value, CharField
 from django.db.models.functions import Concat
 from django.shortcuts import redirect
 from rest_framework.views import APIView
-
+from rest_framework import authentication
 
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
@@ -15,7 +15,7 @@ from db.user import User
 from db.task import TaskList, KarmaActivityLog
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
-from utils.utils import send_template_mail, DateTimeUtils
+from utils.utils import send_template_mail, DateTimeUtils,DiscordWebhooks
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleDetailsSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleStatsSerializer, \
@@ -60,35 +60,64 @@ class UserLearningCircleListApi(APIView):
 class LearningCircleMainApi(APIView):
     def post(self, request):
         all_circles = LearningCircle.objects.all()
-        ig_id = request.data.get('ig_id')
-        org_id = request.data.get('org_id')
-        district_id = request.data.get('district_id')
+        if JWTUtils.is_logged_in(request):
+            ig_id = request.data.get('ig_id')
+            org_id = request.data.get('org_id')
+            district_id = request.data.get('district_id')
 
-        if district_id:
-            all_circles = all_circles.filter(org__district_id=district_id)
+            if district_id:
+                all_circles = all_circles.filter(org__district_id=district_id)
 
-        if org_id:
-            all_circles = all_circles.filter(org_id=org_id)
+            if org_id:
+                all_circles = all_circles.filter(org_id=org_id)
 
-        if ig_id:
-            all_circles = all_circles.filter(ig_id=ig_id)
+            if ig_id:
+                all_circles = all_circles.filter(ig_id=ig_id)
 
-        if ig_id or org_id or district_id:
-            serializer = LearningCircleMainSerializer(
-                all_circles,
-                many=True
-            )
+            if ig_id or org_id or district_id:
+                serializer = LearningCircleMainSerializer(
+                    all_circles,
+                    many=True
+                )
+            else:
+                
+
+                random_circles = all_circles.exclude(
+                    Q(meet_time__isnull=True) | Q(meet_time='') and
+                    Q(meet_place__isnull=True) | Q(meet_place='')
+                ).order_by('?')[:9]
+
+                # random_circles = all_circles.order_by('?')[:9]
+
+                serializer = LearningCircleMainSerializer(
+                    random_circles,
+                    many=True
+                )
+            sorted_data = sorted(serializer.data, key=lambda x: x.get('karma', 0), reverse=True)
+            return CustomResponse(
+                response=sorted_data
+            ).get_success_response()
         else:
-            random_circles = all_circles.order_by('?')[:9]
+                
+
+            random_circles = all_circles.exclude(
+                    Q(meet_time__isnull=True) | Q(meet_time='') &
+                    Q(meet_place__isnull=True) | Q(meet_place='')
+                ).order_by('?')[:9]
 
             serializer = LearningCircleMainSerializer(
                 random_circles,
                 many=True
             )
+            # for ordered_dict in serializer.data:
+            #     ordered_dict.pop('ismember', None)
+            sorted_data = sorted(serializer.data, key=lambda x: x.get('karma', 0), reverse=True)
+            return CustomResponse(
+                response=sorted_data
+            ).get_success_response()
+    
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+
 
 
 class LearningCircleStatsAPI(APIView):
@@ -426,7 +455,8 @@ class SingleReportDetailAPI(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         time = request.data.get('time')
-
+        
+        
         serializer = MeetRecordsCreateEditDeleteSerializer(
             data=request.data,
             context={

@@ -155,6 +155,14 @@ class JWTUtils:
                 }
             ) from e
 
+    @staticmethod
+    def is_logged_in(request):
+        try:
+            JWTUtils.is_jwt_authenticated(request)
+            return True
+        except UnauthorizedAccessException:
+            return False
+
 
 def role_required(roles):
     def decorator(view_func):
