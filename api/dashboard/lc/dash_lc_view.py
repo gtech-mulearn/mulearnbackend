@@ -93,7 +93,7 @@ class LearningCircleMainApi(APIView):
                     random_circles,
                     many=True
                 )
-            sorted_data = sorted(serializer.data, key=lambda x: x.get('karmacount', 0), reverse=True)
+            sorted_data = sorted(serializer.data, key=lambda x: x.get('karma', 0), reverse=True)
             return CustomResponse(
                 response=sorted_data
             ).get_success_response()
@@ -111,7 +111,7 @@ class LearningCircleMainApi(APIView):
             )
             # for ordered_dict in serializer.data:
             #     ordered_dict.pop('ismember', None)
-            sorted_data = sorted(serializer.data, key=lambda x: x.get('karmacount', 0), reverse=True)
+            sorted_data = sorted(serializer.data, key=lambda x: x.get('karma', 0), reverse=True)
             return CustomResponse(
                 response=sorted_data
             ).get_success_response()

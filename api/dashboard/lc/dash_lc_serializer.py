@@ -53,7 +53,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
     members = serializers.SerializerMethodField()
     lead_name = serializers.SerializerMethodField()
     ismember = serializers.SerializerMethodField()
-    karmacount = serializers.SerializerMethodField()
+    karma = serializers.SerializerMethodField()
     class Meta:
         model = LearningCircle
         fields = [
@@ -66,7 +66,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             'meet_time',
             'lead_name',
             'ismember',
-            'karmacount'
+            'karma'
         ]
 
     def get_lead_name(self, obj):
@@ -104,7 +104,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             }
             for member in user_circle_link
         ]
-    def get_karmacount(self, obj):
+    def get_karma(self, obj):
         
         karma_activity_log = KarmaActivityLog.objects.filter(
             user__user_circle_link_user__circle=obj,
