@@ -53,8 +53,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "joined",
-            "first_name",
-            "last_name",
+            "full_name",
             "gender",
             "muid",
             "roles",
@@ -201,8 +200,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
 
 class UserRankSerializer(ModelSerializer):
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    full_name = serializers.CharField()
     role = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
@@ -210,7 +208,7 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role",
+        fields = ("full_name", "role",
                   "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
@@ -322,8 +320,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "communities",
@@ -407,15 +404,13 @@ class LinkSocials(ModelSerializer):
                         appraiser_approved=True,
                     )
 
-                    dl = WebHookActions.SEPARATOR.value
-                    discord_id = User.objects.get(id=user_id).discord_id
-                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{karma_log.id}"
-
+                    value = karma_log.id
                     DiscordWebhooks.general_updates(
                         WebHookCategory.KARMA_INFO.value,
                         WebHookActions.UPDATE.value,
                         value
                     )
+                    
                 else:
                     KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id

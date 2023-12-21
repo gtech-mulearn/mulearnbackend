@@ -30,17 +30,15 @@ class RoleAPI(APIView):
                 "id",
                 "title",
                 "description",
-                "updated_by__first_name",
-                "updated_by__last_name",
-                "created_by__first_name",
-                "created_by__last_name",
+                "updated_by__full_name",
+                "created_by__full_name",
             ],
             {
                 "title": "title",
                 "description": "description",
                 "members": "userrolelink",
-                "updated_by": "updated_by__first_name",
-                "created_by": "created_by__first_name",
+                "updated_by": "updated_by__full_name",
+                "created_by": "created_by__full_name",
                 "updated_at": "updated_at",
                 "created_at": "created_at",
             },
@@ -142,8 +140,8 @@ class UserRoleSearchAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user,
             request,
-            ["muid", "first_name", "last_name"],
-            {"muid": "muid", "first_name": "first_name", "last_name": "last_name"},
+            ["muid", "full_name"],
+            {"muid": "muid", "full_name": "full_name"},
         )
 
         serializer = dash_roles_serializer.UserRoleSearchSerializer(

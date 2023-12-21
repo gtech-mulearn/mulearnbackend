@@ -30,8 +30,7 @@ class LcDashboardAPI(APIView):
             total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                                  user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                                                                  created_at__gt=date).values(
-                first_name=F("user__first_name"),
-                last_name=F("user__last_name"),
+                full_name=F("user__full_name"),
                 email=F("user__email"),
                 muid=F("user__muid"),
                 circle_name=F("circle__name"),
@@ -88,8 +87,7 @@ class LcDashboardAPI(APIView):
             #                                                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).count()
             total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                                  user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
-                first_name=F("user__first_name"),
-                last_name=F("user__last_name"),
+                full_name=F("user__full_name"),
                 email=F("user__email"),
                 muid=F("user__muid"),
                 circle_name=F("circle__name"),
@@ -158,8 +156,7 @@ class LcReportAPI(APIView):
             student_info = (UserCircleLink.objects.filter(accepted=True,
                                                           user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                                                           created_at__date=date).values(
-                first_name=F("user__first_name"),
-                last_name=F("user__last_name"),
+                full_name=F("user__full_name"),
                 muid=F("user__muid"),
                 circle_name=F("circle__name"),
                 circle_ig=F("circle__ig__name"),
@@ -190,8 +187,7 @@ class LcReportAPI(APIView):
                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 )
                 .values(
-                    first_name=F("user__first_name"),
-                    last_name=F("user__last_name"),
+                    full_name=F("user__full_name"),
                     muid=F("user__muid"),
                     circle_name=F("circle__name"),
                     circle_ig=F("circle__ig__name"),
@@ -220,9 +216,9 @@ class LcReportAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             student_info,
             request,
-            search_fields=["first_name", "last_name", "muid", "circle_name", 'circle_ig', "organisation",
+            search_fields=["full_name", "muid", "circle_name", 'circle_ig', "organisation",
                            "karma_earned"],
-            sort_fields={"first_name": "first_name", "last_name": "last_name", "muid": "muid",
+            sort_fields={"full_name": "full_name", "muid": "muid",
                          "circle_name": "circle_name",
                          "circle_ig": "circle_ig", "organisation": "organisation", "dwms_id": "dwms_id",
                          "karma_earned": "karma_earned"},
@@ -246,8 +242,7 @@ class LcReportDownloadAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .values(
-                first_name=F("user__first_name"),
-                last_name=F("user__last_name"),
+                full_name=F("user__full_name"),
                 muid=F("user__muid"),
                 circle_name=F("circle__name"),
                 circle_ig=F("circle__ig__name"),
@@ -366,8 +361,7 @@ class LearningCircleEnrollment(APIView):
     def get(self, request):
         total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                              user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
-            first_name=F("user__first_name"),
-            last_name=F("user__last_name"),
+            full_name=F("user__full_name"),
             email=F("user__email"),
             muid=F("user__muid"),
             circle_name=F("circle__name"),
@@ -397,9 +391,9 @@ class LearningCircleEnrollment(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             total_no_enrollment,
             request,
-            search_fields=["first_name", "last_name", "email", "muid", "circle_name", "district", "circle_ig",
+            search_fields=["full_name", "email", "muid", "circle_name", "district", "circle_ig",
                            "organisation", "karma_earned"],
-            sort_fields={"first_name": "first_name", "last_name": "last_name", "email": "email", "muid": "muid",
+            sort_fields={"full_name": "full_name", "email": "email", "muid": "muid",
                          "circle_name": "circle_name", "district": "district", "circle_ig": "circle_ig",
                          "organisation": "organisation", "dwms_id": "dwms_id", "karma_earned": "karma_earned"},
             is_pagination=True)
@@ -414,8 +408,7 @@ class LearningCircleEnrollmentCSV(APIView):
     def get(self, request):
         total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                              user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
-            first_name=F("user__first_name"),
-            last_name=F("user__last_name"),
+            full_name=F("user__full_name"),
             email=F("user__email"),
             muid=F("user__muid"),
             circle_name=F("circle__name"),
@@ -446,9 +439,9 @@ class LearningCircleEnrollmentCSV(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             total_no_enrollment,
             request,
-            search_fields=["first_name", "last_name", "email", "muid", "circle_name", "district", "circle_ig",
+            search_fields=["full_name", "email", "muid", "circle_name", "district", "circle_ig",
                            "organisation", "karma_earned"],
-            sort_fields={"first_name": "first_name", "last_name": "last_name", "email": "email", "muid": "muid",
+            sort_fields={"full_name": "full_name", "email": "email", "muid": "muid",
                          "circle_name": "circle_name", "district": "district", "circle_ig": "circle_ig",
                          "organisation": "organisation", "dwms_id": "dwms_id", "karma_earned": "karma_earned"},
             is_pagination=False)
@@ -546,8 +539,7 @@ class ListTopIgUsersAPI(APIView):
         ).values(
             userid=F('user__id'),
             muid=F('user__muid'),
-            first_name=F('user__first_name'),
-            last_name=F('user__last_name'),
+            full_name=F('user__full_name'),
         ).annotate(
             ig_karma=Sum('karma')
         ).order_by('-ig_karma')[:100]

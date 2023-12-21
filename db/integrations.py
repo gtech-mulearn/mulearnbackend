@@ -4,7 +4,7 @@ from django.db import models
 
 from db.user import User
 
-from .helper import get_system_admin_id
+from django.conf import settings
 
 # fmt: off
 # noinspection PyPep8
