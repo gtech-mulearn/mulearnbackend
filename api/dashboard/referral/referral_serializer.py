@@ -6,7 +6,7 @@ from db.user import UserReferralLink
 
 class ReferralListSerializer(serializers.ModelSerializer):
     id = serializers.CharField(source="user.id")
-    full_name = serializers.CharField(source="user.fullname")
+    full_name = serializers.CharField(source="user.full_name")
     muid = serializers.CharField(source="user.muid")
     karma = serializers.SerializerMethodField()
     level = serializers.SerializerMethodField()

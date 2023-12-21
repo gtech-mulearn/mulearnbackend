@@ -6,8 +6,8 @@ from db.task import InterestGroup
 
 class InterestGroupSerializer(serializers.ModelSerializer):
 
-    updated_by = serializers.CharField(source='updated_by.fullname')
-    created_by = serializers.CharField(source='created_by.fullname')
+    updated_by = serializers.CharField(source='updated_by.full_name')
+    created_by = serializers.CharField(source='created_by.full_name')
     members = serializers.SerializerMethodField()
 
     class Meta:

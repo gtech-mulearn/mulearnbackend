@@ -45,7 +45,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
         ).first()
         if campus_lead:
-            campus_lead = campus_lead.fullname
+            campus_lead = campus_lead.full_name
 
         enabler = User.objects.filter(
             user_organization_link_user__org=obj.org,
@@ -53,7 +53,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             user_role_link_user__role__title=RoleType.LEAD_ENABLER.value,
         ).first()
         if enabler:
-            enabler = enabler.fullname
+            enabler = enabler.full_name
 
         return {'campus_lead': campus_lead, 'enabler': enabler}
 
@@ -78,17 +78,18 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         return (
-                obj.org.user_organization_link_org.filter(
-                    org__org_type=OrganizationType.COLLEGE.value,
-                    verified=True,
-                    user__wallet_user__isnull=False,
-                ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-                or 0
+            obj.org.user_organization_link_org.filter(
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
+                user__wallet_user__isnull=False,
+            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
+            or 0
         )
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+            UserOrganizationLink.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value)
             .values("org")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
         ).order_by("-total_karma", "org__created_at")
@@ -110,7 +111,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
 class CampusStudentDetailsSerializer(serializers.Serializer):
     user_id = serializers.CharField()
-    fullname = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
@@ -125,15 +126,15 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     is_alumni = serializers.BooleanField()
 
     class Meta:
-        fields = ("user_id", "email", "mobile", "fullname", "karma", "muid", "rank", "level", "join_date", "is_alumni",
+        fields = ("user_id", "email", "mobile", "full_name", "karma", "muid", "rank", "level", "join_date", "is_alumni",
                   "last_karma_update_at")
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
         return ranks.get(obj.id, None)
 
-    def get_fullname(self, obj):
-        return obj.fullname
+    def get_full_name(self, obj):
+        return obj.full_name
 
 
 class WeeklyKarmaSerializer(serializers.ModelSerializer):
@@ -179,7 +180,7 @@ class ChangeStudentTypeSerializer(serializers.Serializer):
 
 class ListAluminiSerializer(serializers.Serializer):
     user_id = serializers.CharField()
-    fullname = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
@@ -187,4 +188,5 @@ class ListAluminiSerializer(serializers.Serializer):
     join_date = serializers.CharField()
 
     class Meta:
-        fields = ("user_id", "fullname", "karma", "muid", "rank", "level", "join_date")
+        fields = ("user_id", "full_name", "karma",
+                  "muid", "rank", "level", "join_date")

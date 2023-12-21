@@ -17,8 +17,8 @@ from .dash_ig_helper import get_today_start_end, get_week_start_end
 
 
 class LearningCircleSerializer(serializers.ModelSerializer):
-    created_by = serializers.CharField(source='created_by.fullname')
-    updated_by = serializers.CharField(source='updated_by.fullname')
+    created_by = serializers.CharField(source='created_by.full_name')
+    updated_by = serializers.CharField(source='updated_by.full_name')
     ig = serializers.CharField(source='ig.name')
     org = serializers.CharField(source='org.title', allow_null=True)
     member_count = serializers.SerializerMethodField()
@@ -123,7 +123,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
     })
     name = serializers.CharField(required=True, error_messages={
         'required': 'name field must not be left blank.'}
-                                 )
+    )
 
     class Meta:
         model = LearningCircle
@@ -175,13 +175,16 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 
         if org_link:
             if len(org_link.org.code) > 4:
-                code = validated_data.get('name')[:2] + ig.code + org_link.org.code[:4]
+                code = validated_data.get(
+                    'name')[:2] + ig.code + org_link.org.code[:4]
             else:
-                code = validated_data.get('name')[:2] + ig.code + org_link.org.code
+                code = validated_data.get(
+                    'name')[:2] + ig.code + org_link.org.code
         else:
             code = validated_data.get('name')[:2] + ig.code
 
-        existing_codes = set(LearningCircle.objects.values_list('circle_code', flat=True))
+        existing_codes = set(
+            LearningCircle.objects.values_list('circle_code', flat=True))
         i = 1
         while code.upper() in existing_codes:
             code = code + str(i)
@@ -254,7 +257,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 #         return user_circle_link
 
 class LearningCircleMemberListSerializer(serializers.ModelSerializer):
-    fullname = serializers.CharField(source='user.full_name')
+    full_name = serializers.CharField(source='user.full_name')
     discord_id = serializers.CharField(source='user.discord_id')
     level = serializers.CharField(source='user.user_lvl_link_user.level.name')
     lc_karma = serializers.SerializerMethodField()
@@ -262,7 +265,7 @@ class LearningCircleMemberListSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserCircleLink
         fields = [
-            'fullname',
+            'full_name',
             'discord_id',
             'level',
             'lc_karma'
@@ -382,15 +385,15 @@ class LearningCircleDetailsSerializer(serializers.ModelSerializer):
 
     def get_total_karma(self, obj):
         return (
-                KarmaActivityLog.objects.filter(
-                    user__user_circle_link_user__circle=obj,
-                    user__user_circle_link_user__accepted=True,
-                    task__ig=obj.ig,
-                    appraiser_approved=True,
-                ).aggregate(
-                    total_karma=Sum(
-                        'karma'
-                    ))['total_karma'] or 0
+            KarmaActivityLog.objects.filter(
+                user__user_circle_link_user__circle=obj,
+                user__user_circle_link_user__accepted=True,
+                task__ig=obj.ig,
+                appraiser_approved=True,
+            ).aggregate(
+                total_karma=Sum(
+                    'karma'
+                ))['total_karma'] or 0
         )
 
     def get_members(self, obj):
@@ -528,9 +531,11 @@ class LearningCircleUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         is_accepted = validated_data.get('is_accepted', instance.accepted)
-        entry = UserCircleLink.objects.filter(circle_id=instance.circle, accepted=True).count()
+        entry = UserCircleLink.objects.filter(
+            circle_id=instance.circle, accepted=True).count()
         if is_accepted and entry >= 5:
-            raise serializers.ValidationError("Cannot accept the link. Maximum members reached for this circle.")
+            raise serializers.ValidationError(
+                "Cannot accept the link. Maximum members reached for this circle.")
 
         instance.accepted = is_accepted
         instance.accepted_at = DateTimeUtils.get_current_utc_time()
@@ -572,8 +577,10 @@ class ScheduleMeetingSerializer(serializers.ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
-        instance.meet_time = validated_data.get('meet_time', instance.meet_time)
-        instance.meet_place = validated_data.get('meet_place', instance.meet_place)
+        instance.meet_time = validated_data.get(
+            'meet_time', instance.meet_time)
+        instance.meet_place = validated_data.get(
+            'meet_place', instance.meet_place)
         instance.day = validated_data.get('day', instance.day)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
@@ -582,8 +589,10 @@ class ScheduleMeetingSerializer(serializers.ModelSerializer):
 
 class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
     attendees_details = serializers.SerializerMethodField()
-    meet_created_by = serializers.CharField(source='created_by.fullname', required=False)
-    meet_created_at = serializers.CharField(source='created_at', required=False)
+    meet_created_by = serializers.CharField(
+        source='created_by.full_name', required=False)
+    meet_created_at = serializers.CharField(
+        source='created_at', required=False)
     meet_id = serializers.CharField(source='id', required=False)
     meet_time = serializers.CharField(required=False)
     images = serializers.ImageField(required=True)
@@ -606,6 +615,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
 
     def get_image(self, obj):
         return f"{config('BE_DOMAIN_NAME')}/{settings.MEDIA_URL}{media}" if (media := obj.images) else None
+
     def get_attendees_details(self, obj):
         attendees_list = obj.attendees.split(',')
 
@@ -613,7 +623,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         for user_id in attendees_list:
             user = User.objects.get(id=user_id)
             attendees_details_list.append({
-                'fullname': user.full_name,
+                'full_name': user.full_name,
                 'profile_pic': user.profile_pic,
             })
 
@@ -628,7 +638,8 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
 
         validated_data['id'] = uuid.uuid4()
         validated_data['meet_time'] = combined_meet_time
-        validated_data['day'] = DateTimeUtils.get_current_utc_time().strftime('%A')
+        validated_data['day'] = DateTimeUtils.get_current_utc_time().strftime(
+            '%A')
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
@@ -711,20 +722,22 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         if CircleMeetingLog.objects.filter(
                 circle_id=circle_id,
                 meet_time__range=(
-                        start_of_day,
-                        end_of_day
+                    start_of_day,
+                    end_of_day
                 )
         ).exists():
-            raise serializers.ValidationError(f'Another meet already scheduled on {today_date}')
+            raise serializers.ValidationError(
+                f'Another meet already scheduled on {today_date}')
 
         if CircleMeetingLog.objects.filter(
                 circle_id=circle_id,
                 meet_time__range=(
-                        start_of_week,
-                        end_of_week
+                    start_of_week,
+                    end_of_week
                 )
         ).count() >= 5:
-            raise serializers.ValidationError('you can create only 5 meeting in a week')
+            raise serializers.ValidationError(
+                'you can create only 5 meeting in a week')
 
         return data
 
@@ -740,26 +753,29 @@ class ListAllMeetRecordsSerializer(serializers.ModelSerializer):
 
 
 class IgTaskDetailsSerializer(serializers.ModelSerializer):
-    task_title = serializers.CharField(source='title')    
+    task_title = serializers.CharField(source='title')
     task_level = serializers.CharField(source='level.level_order')
     task_level_karma = serializers.CharField(source='level.karma')
     task_karma = serializers.CharField(source='karma')
     task_hashtag = serializers.CharField(source='hashtag')
-    completed_users= serializers.SerializerMethodField()
+    completed_users = serializers.SerializerMethodField()
+
     class Meta:
         model = TaskList
         fields = [
-            
+
             "task_title",
             "task_karma",
             "task_level",
             "task_level_karma",
             "task_hashtag",
-            "completed_users",         
+            "completed_users",
         ]
+
     def get_completed_users(self, obj):
-        karma_activity_log=KarmaActivityLog.objects.filter(task=obj,appraiser_approved=True).select_related('user')
-        completed_users=[]
+        karma_activity_log = KarmaActivityLog.objects.filter(
+            task=obj, appraiser_approved=True).select_related('user')
+        completed_users = []
         for karma in karma_activity_log:
             completed_users.append(karma.user.id)
         return completed_users
@@ -775,10 +791,12 @@ class AddMemberSerializer(serializers.ModelSerializer):
         circle_id = self.context.get('circle_id')
 
         if UserCircleLink.objects.filter(user=user).exists():
-            raise serializers.ValidationError('user already part of the learning circle')
+            raise serializers.ValidationError(
+                'user already part of the learning circle')
 
         if UserCircleLink.objects.filter(circle_id=circle_id).count() >= 5:
-            raise serializers.ValidationError('maximum members reached in learning circle')
+            raise serializers.ValidationError(
+                'maximum members reached in learning circle')
 
         return data
 
