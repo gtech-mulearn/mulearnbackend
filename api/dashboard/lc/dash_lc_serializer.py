@@ -52,7 +52,8 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
     member_count = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     lead_name = serializers.SerializerMethodField()
-
+    ismember = serializers.SerializerMethodField()
+    karmacount = serializers.SerializerMethodField()
     class Meta:
         model = LearningCircle
         fields = [
@@ -63,7 +64,9 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             'members',
             'meet_place',
             'meet_time',
-            'lead_name'
+            'lead_name',
+            'ismember',
+            'karmacount'
         ]
 
     def get_lead_name(self, obj):
@@ -73,7 +76,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             lead=True
         ).first()
 
-        return user_circle_link.user.fullname if user_circle_link else None
+        return user_circle_link.user.full_name if user_circle_link else None
 
     def get_member_count(self, obj):
         return obj.user_circle_link_circle.filter(
@@ -86,12 +89,32 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             circle=obj,
             accepted=1
         )
+
+    def get_ismember(self, obj):
+        user_id = self.context.get('user_id')
+        return obj.user_circle_link_circle.filter(
+            circle=obj,
+            user_id=user_id,
+            accepted=True
+        ).exists()
+    
         return [
             {
-                'username': f'{member.user.fullname}'
+                'username': f'{member.user.full_name}'
             }
             for member in user_circle_link
         ]
+    def get_karmacount(self, obj):
+        
+        karma_activity_log = KarmaActivityLog.objects.filter(
+            user__user_circle_link_user__circle=obj,
+        ).aggregate(
+            karma=Sum(
+                'karma'
+            )
+        )['karma']
+
+        return karma_activity_log if karma_activity_log else 0
 
 
 class LearningCircleCreateSerializer(serializers.ModelSerializer):
@@ -211,7 +234,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 #         # user_circle_link = obj.user_circle_link_circle.filter(circle=obj, accepted=True)
 #         # return [
 #         #     {
-#         #         'full_name': f'{member.user.fullname}',
+#         #         'full_name': f'{member.user.full_name}',
 #         #         'discord_id': member.user.discord_id,
 #         #     }
 #         #     for member in user_circle_link
@@ -231,7 +254,7 @@ class LearningCircleCreateSerializer(serializers.ModelSerializer):
 #         return user_circle_link
 
 class LearningCircleMemberListSerializer(serializers.ModelSerializer):
-    fullname = serializers.CharField(source='user.fullname')
+    fullname = serializers.CharField(source='user.full_name')
     discord_id = serializers.CharField(source='user.discord_id')
     level = serializers.CharField(source='user.user_lvl_link_user.level.name')
     lc_karma = serializers.SerializerMethodField()
@@ -397,7 +420,7 @@ class LearningCircleDetailsSerializer(serializers.ModelSerializer):
 
             member_info.append({
                 'id': member.user.id,
-                'username': f'{member.user.fullname}',
+                'username': f'{member.user.full_name}',
                 'profile_pic': f'{member.user.profile_pic}' or None,
                 'karma': total_ig_karma,
                 'is_lead': member.lead,
@@ -590,7 +613,7 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         for user_id in attendees_list:
             user = User.objects.get(id=user_id)
             attendees_details_list.append({
-                'fullname': user.fullname,
+                'fullname': user.full_name,
                 'profile_pic': user.profile_pic,
             })
 
@@ -609,6 +632,30 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
         validated_data['circle_id'] = self.context.get('circle_id')
         validated_data['created_by_id'] = self.context.get('user_id')
         validated_data['updated_by_id'] = self.context.get('user_id')
+        attendees_list = validated_data['attendees'].split(',')
+
+        user_id = self.context.get('user_id')
+        task = TaskList.objects.filter(hashtag=Lc.TASK_HASHTAG.value).first()
+
+        for attendee_id in attendees_list:
+            # Send karma points
+            KarmaActivityLog.objects.create(
+                id=uuid.uuid4(),
+                user_id=attendee_id,
+                karma=Lc.KARMA.value,
+                task=task,
+                updated_by_id=user_id,
+                created_by_id=user_id,
+            )
+
+            # Update the wallet with karma points
+            wallet = Wallet.objects.filter(user_id=attendee_id).first()
+            wallet.karma += Lc.KARMA.value
+            wallet.karma_last_updated_at = DateTimeUtils.get_current_utc_time()
+            wallet.updated_at = DateTimeUtils.get_current_utc_time()
+            wallet.save()
+
+
         return CircleMeetingLog.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
@@ -638,6 +685,16 @@ class MeetRecordsCreateEditDeleteSerializer(serializers.ModelSerializer):
             wallet.karma_last_updated_at = DateTimeUtils.get_current_utc_time()
             wallet.updated_at = DateTimeUtils.get_current_utc_time()
             wallet.save()
+            # DiscordWebhooks.general_updates(
+            #     WebHookCategory.KARMA_INFO.value,
+            #     WebHookCategory.UPDATE.value,
+            #     user,
+            #     Lc.KARMA.value,
+            #     task.title,
+            #     task.hashtag
+            # )
+
+
         return attendees
 
     def validate(self, data):
