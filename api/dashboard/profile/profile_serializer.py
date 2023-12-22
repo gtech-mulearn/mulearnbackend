@@ -71,13 +71,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_percentile(self, obj):
-        try:
-            user_count = Wallet.objects.filter(
-                karma__lt=obj.wallet_user.karma).count()
-            usr_count = User.objects.all().count()
-            return 0 if usr_count == 0 else (user_count * 100) / usr_count
-        except Exception as e:
-            return 0
+        users_count_lt_user_karma = Wallet.objects.filter(
+            karma__lt=obj.wallet_user.karma
+        ).count()
+        user_count = User.objects.all().count()
+        return 0 if user_count == 0 else 100 - ((users_count_lt_user_karma * 100) / user_count)
 
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
