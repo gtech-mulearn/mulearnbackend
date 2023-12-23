@@ -1,3 +1,4 @@
+import uuid
 from datetime import timedelta
 
 from django.db.models import Sum
@@ -5,7 +6,7 @@ from rest_framework import serializers
 
 from db.organization import UserOrganizationLink, College
 from db.task import KarmaActivityLog
-from db.user import User
+from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
@@ -190,3 +191,21 @@ class ListAluminiSerializer(serializers.Serializer):
     class Meta:
         fields = ("user_id", "full_name", "karma",
                   "muid", "rank", "level", "join_date")
+
+class UserRoleLinkSerializer(serializers.ModelSerializer):
+    
+    class Meta:
+        model = UserRoleLink
+        fields = [
+            "user",
+            "role",
+        ]
+    
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        validated_data["created_by_id"] = user_id
+        validated_data["id"] = uuid.uuid4()
+        validated_data["verified"] = True
+
+        user_role_link = UserRoleLink.objects.create(**validated_data)
+        return user_role_link
