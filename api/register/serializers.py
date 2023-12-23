@@ -261,10 +261,13 @@ class UserSerializer(serializers.ModelSerializer):
     role = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), required=False, write_only=True
     )
+    area_of_interest = serializers.PrimaryKeyRelatedField(
+        queryset=InterestGroup.objects.all(), many=True, required=False
+    )
 
     def create(self, validated_data):
         role = validated_data.pop("role", None)
-
+        area_of_interest = validated_data.pop("area_of_interest", None)
 
         validated_data["muid"] = register_helper.generate_muid(
             validated_data["full_name"]
@@ -294,6 +297,19 @@ class UserSerializer(serializers.ModelSerializer):
                 **additional_values,
             )
 
+        if area_of_interest:
+            UserIgLink.objects.bulk_create(
+                {
+                    UserIgLink(
+                        user=user,
+                        ig=ig,
+                        created_by=user,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                    )
+                    for ig in area_of_interest
+                }
+            )
+
         return user
 
     class Meta:
@@ -306,7 +322,8 @@ class UserSerializer(serializers.ModelSerializer):
             "dob",
             "gender",
             "role",
-            "district"
+            "district",
+            "area_of_interest",
         ]
 
 class RegisterSerializer(serializers.Serializer):
