@@ -13,7 +13,7 @@ from utils.utils import DateTimeUtils
 class ZonalDetailsSerializer(serializers.ModelSerializer):
     zone = serializers.CharField(source="org.district.zone.name")
     rank = serializers.SerializerMethodField()
-    zonal_lead = serializers.CharField(source="user.fullname")
+    zonal_lead = serializers.CharField(source="user.full_name")
     karma = serializers.SerializerMethodField()
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
@@ -31,7 +31,8 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
     def get_rank(self, obj):
         org_karma_dict = (
-            UserOrganizationLink.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
+            UserOrganizationLink.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value)
             .values("org__district__zone")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
         ).order_by("-total_karma", "org__created_at")
@@ -118,21 +119,21 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
 
 class ZonalStudentDetailsSerializer(serializers.Serializer):
     user_id = serializers.CharField()
-    fullname = serializers.SerializerMethodField()
+    full_name = serializers.SerializerMethodField()
     muid = serializers.CharField()
     karma = serializers.IntegerField()
     rank = serializers.SerializerMethodField()
     level = serializers.CharField()
 
     class Meta:
-        fields = ["user_id", "fullname", "karma", "muid", "level", "rank"]
+        fields = ["user_id", "full_name", "karma", "muid", "level", "rank"]
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
         return ranks.get(obj.id, None)
 
-    def get_fullname(self, obj):
-        return obj.fullname
+    def get_full_name(self, obj):
+        return obj.full_name
 
 
 class ZonalCollegeDetailsSerializer(serializers.Serializer):
@@ -146,7 +147,7 @@ class ZonalCollegeDetailsSerializer(serializers.Serializer):
     def get_lead(self, obj):
         leads = self.context.get("leads")
         college_lead = [lead for lead in leads if lead.college == obj["id"]]
-        return college_lead[0].fullname if college_lead else None
+        return college_lead[0].full_name if college_lead else None
 
     def get_lead_number(self, obj):
         leads = self.context.get("leads")

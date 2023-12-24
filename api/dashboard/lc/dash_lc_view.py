@@ -7,15 +7,15 @@ from django.db.models import Q, F, Value, CharField
 from django.db.models.functions import Concat
 from django.shortcuts import redirect
 from rest_framework.views import APIView
-
+from rest_framework import authentication
 
 from api.notification.notifications_utils import NotificationUtils
 from db.learning_circle import LearningCircle, UserCircleLink, CircleMeetingLog
 from db.user import User
-from db.task import TaskList,KarmaActivityLog
+from db.task import TaskList, KarmaActivityLog
 from utils.permission import JWTUtils
 from utils.response import CustomResponse
-from utils.utils import send_template_mail, DateTimeUtils
+from utils.utils import send_template_mail, DateTimeUtils,DiscordWebhooks
 from .dash_lc_serializer import LearningCircleSerializer, LearningCircleCreateSerializer, LearningCircleDetailsSerializer, \
     LearningCircleUpdateSerializer, LearningCircleJoinSerializer, \
     LearningCircleMainSerializer, LearningCircleNoteSerializer, LearningCircleStatsSerializer, \
@@ -60,35 +60,64 @@ class UserLearningCircleListApi(APIView):
 class LearningCircleMainApi(APIView):
     def post(self, request):
         all_circles = LearningCircle.objects.all()
-        ig_id = request.data.get('ig_id')
-        org_id = request.data.get('org_id')
-        district_id = request.data.get('district_id')
+        if JWTUtils.is_logged_in(request):
+            ig_id = request.data.get('ig_id')
+            org_id = request.data.get('org_id')
+            district_id = request.data.get('district_id')
 
-        if district_id:
-            all_circles = all_circles.filter(org__district_id=district_id)
+            if district_id:
+                all_circles = all_circles.filter(org__district_id=district_id)
 
-        if org_id:
-            all_circles = all_circles.filter(org_id=org_id)
+            if org_id:
+                all_circles = all_circles.filter(org_id=org_id)
 
-        if ig_id:
-            all_circles = all_circles.filter(ig_id=ig_id)
+            if ig_id:
+                all_circles = all_circles.filter(ig_id=ig_id)
 
-        if ig_id or org_id or district_id:
-            serializer = LearningCircleMainSerializer(
-                all_circles,
-                many=True
-            )
+            if ig_id or org_id or district_id:
+                serializer = LearningCircleMainSerializer(
+                    all_circles,
+                    many=True
+                )
+            else:
+                
+
+                random_circles = all_circles.exclude(
+                    Q(meet_time__isnull=True) | Q(meet_time='') and
+                    Q(meet_place__isnull=True) | Q(meet_place='')
+                ).order_by('?')[:9]
+
+                # random_circles = all_circles.order_by('?')[:9]
+
+                serializer = LearningCircleMainSerializer(
+                    random_circles,
+                    many=True
+                )
+            sorted_data = sorted(serializer.data, key=lambda x: x.get('karma', 0), reverse=True)
+            return CustomResponse(
+                response=sorted_data
+            ).get_success_response()
         else:
-            random_circles = all_circles.order_by('?')[:9]
+                
+
+            random_circles = all_circles.exclude(
+                    Q(meet_time__isnull=True) | Q(meet_time='') &
+                    Q(meet_place__isnull=True) | Q(meet_place='')
+                ).order_by('?')[:9]
 
             serializer = LearningCircleMainSerializer(
                 random_circles,
                 many=True
             )
+            # for ordered_dict in serializer.data:
+            #     ordered_dict.pop('ismember', None)
+            sorted_data = sorted(serializer.data, key=lambda x: x.get('karma', 0), reverse=True)
+            return CustomResponse(
+                response=sorted_data
+            ).get_success_response()
+    
 
-        return CustomResponse(
-            response=serializer.data
-        ).get_success_response()
+
 
 
 class LearningCircleStatsAPI(APIView):
@@ -196,8 +225,8 @@ class TotalLearningCircleListApi(APIView):
                 ).get_failure_response()
 
             filters &= (
-                    Q(circle_code=circle_code) |
-                    Q(name__icontains=circle_code)
+                Q(circle_code=circle_code) |
+                Q(name__icontains=circle_code)
             )
 
         learning_queryset = LearningCircle.objects.filter(
@@ -220,7 +249,7 @@ class LearningCircleJoinApi(APIView):
 
         user = User.objects.filter(id=user_id).first()
 
-        full_name = f'{user.fullname}'
+        full_name = f'{user.full_name}'
         serializer = LearningCircleJoinSerializer(
             data=request.data,
             context={
@@ -230,7 +259,8 @@ class LearningCircleJoinApi(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-            lead = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first()
+            lead = UserCircleLink.objects.filter(
+                circle_id=circle_id, lead=True).first()
             NotificationUtils.insert_notification(
                 user=lead.user,
                 title="Member Request",
@@ -361,7 +391,8 @@ class LearningCircleDetailsApi(APIView):
 
     def put(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
-        serializer = LearningCircleNoteSerializer(learning_circle, data=request.data)
+        serializer = LearningCircleNoteSerializer(
+            learning_circle, data=request.data)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
@@ -386,9 +417,9 @@ class LearningCircleDetailsApi(APIView):
                     next_lead := UserCircleLink.objects.filter(
                         circle__id=circle_id, accepted=1
                     )
-                            .exclude(user__id=user_id)
-                            .order_by('accepted_at')
-                            .first()
+                .exclude(user__id=user_id)
+                .order_by('accepted_at')
+                .first()
             ):
                 next_lead.lead = True
                 next_lead.save()
@@ -424,7 +455,8 @@ class SingleReportDetailAPI(APIView):
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         time = request.data.get('time')
-
+        
+        
         serializer = MeetRecordsCreateEditDeleteSerializer(
             data=request.data,
             context={
@@ -517,7 +549,8 @@ class LearningCircleInviteLeadAPI(APIView):
         circle_id = request.POST.get('lc')
         muid = request.POST.get('muid')
         user_id = JWTUtils.fetch_user_id(request)
-        usr_circle_link = UserCircleLink.objects.filter(circle__id=circle_id, user__id=user_id).first()
+        usr_circle_link = UserCircleLink.objects.filter(
+            circle__id=circle_id, user__id=user_id).first()
         if not usr_circle_link:
             return CustomResponse(general_message='User not part of circle').get_failure_response()
         if usr_circle_link.lead:
@@ -576,7 +609,8 @@ class LearningCircleInviteMemberAPI(APIView):
 
         receiver_email = user.email
         html_address = ["lc_invitation.html"]
-        inviter = User.objects.filter(id=JWTUtils.fetch_user_id(request)).first()
+        inviter = User.objects.filter(
+            id=JWTUtils.fetch_user_id(request)).first()
         inviter_name = inviter.full_name
         context = {
             "circle_name": LearningCircle.objects.filter(
@@ -680,7 +714,8 @@ class ScheduleMeetAPI(APIView):
 
 class IgTaskDetailsAPI(APIView):
     def get(self, request, circle_id):
-        task_list = TaskList.objects.filter(ig__learning_circle_ig__id=circle_id).order_by('level__level_order')
+        task_list = TaskList.objects.filter(
+            ig__learning_circle_ig__id=circle_id).order_by('level__level_order')
         serializer = IgTaskDetailsSerializer(
             task_list,
             many=True,

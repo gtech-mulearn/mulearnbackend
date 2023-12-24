@@ -31,6 +31,9 @@ DEBUG = decouple_config("DEBUG", default=False, cast=bool)
 
 ALLOWED_HOSTS = decouple_config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")])
 
+# System admin applied to rows when their parent user instance is deleted
+SYSTEM_ADMIN_ID = decouple_config("SYSTEM_ADMIN_ID")
+
 # Application definition
 
 INSTALLED_APPS = [

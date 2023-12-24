@@ -7,13 +7,14 @@ from utils.utils import DateTimeUtils
 
 
 class AffiliationListSerializer(serializers.ModelSerializer):
-    created_by = serializers.CharField(source="created_by.fullname")
-    updated_by = serializers.CharField(source="updated_by.fullname")
+    created_by = serializers.CharField(source="created_by.full_name")
+    updated_by = serializers.CharField(source="updated_by.full_name")
     organization_count = serializers.SerializerMethodField()
 
     class Meta:
         model = OrgAffiliation
-        fields = ['id', 'title', 'organization_count', 'created_by', 'updated_by', 'updated_at', 'created_at']
+        fields = ['id', 'title', 'organization_count',
+                  'created_by', 'updated_by', 'updated_at', 'created_at']
 
     def get_organization_count(self, obj):
         return obj.organization_affiliation.count()

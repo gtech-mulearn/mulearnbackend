@@ -50,7 +50,7 @@ class StudentsMonthlyLeaderboard(APIView):
                 exist_in_guild=True,
             )
             .annotate(
-                full_name=Concat(F("first_name"), Value(" "), F("last_name")),
+                full_name=F("full_name"),
                 institution=F("user_organization_link_user__org__title"),
                 total_karma=Coalesce(
                     Sum(

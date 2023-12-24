@@ -71,7 +71,7 @@ class KKEMAuthorization(serializers.Serializer):
     param = serializers.CharField(write_only=True)
 
     email = serializers.CharField(read_only=True)
-    fullname = serializers.CharField(read_only=True)
+    full_name = serializers.CharField(read_only=True)
     muid = serializers.CharField(read_only=True)
     link_id = serializers.CharField(read_only=True)
 
@@ -83,7 +83,7 @@ class KKEMAuthorization(serializers.Serializer):
             "param",
             "verified",
             "email",
-            "fullname",
+            "full_name",
             "muid",
             "link_id",
         )
@@ -91,7 +91,7 @@ class KKEMAuthorization(serializers.Serializer):
     def to_representation(self, instance):
         return {
             "email": instance.user.email,
-            "fullname": instance.user.fullname,
+            "full_name": instance.user.full_name,
             "muid": instance.user.muid,
             "link_id": instance.id,
             "verified": instance.verified,
@@ -157,7 +157,8 @@ class KKEMAuthorization(serializers.Serializer):
         if IntegrationAuthorization.objects.filter(
             integration_value=jsid, integration=integration
         ).exists():
-            raise CustomException("This KKEM account is already connected to another user")
+            raise CustomException(
+                "This KKEM account is already connected to another user")
 
         return None
 

@@ -14,7 +14,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="org.title")
     campus_code = serializers.ReadOnlyField(source="org.code")
     campus_zone = serializers.ReadOnlyField(source="org.district.zone.name")
-    campus_lead = serializers.ReadOnlyField(source="user.fullname")
+    campus_lead = serializers.ReadOnlyField(source="user.full_name")
     total_karma = serializers.SerializerMethodField()
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
@@ -78,8 +78,9 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
 class StudentLeaderboardSerializer(serializers.ModelSerializer):
     institution = serializers.SerializerMethodField()
-    total_karma = serializers.IntegerField(source="wallet_user.karma", default=0)
-    full_name = serializers.CharField(source="fullname")
+    total_karma = serializers.IntegerField(
+        source="wallet_user.karma", default=0)
+    full_name = serializers.CharField(source="full_name")
 
     def get_institution(self, user):
         return user.colleges[0].org.title if user.colleges else None

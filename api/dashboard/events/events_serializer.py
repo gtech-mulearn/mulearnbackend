@@ -5,8 +5,8 @@ from utils.utils import DateTimeUtils
 
 
 class EventsListSerializer(serializers.ModelSerializer):
-    created_by = serializers.CharField(source="created_by.fullname")
-    updated_by = serializers.CharField(source="updated_by.fullname")
+    created_by = serializers.CharField(source="created_by.full_name")
+    updated_by = serializers.CharField(source="updated_by.full_name")
 
     class Meta:
         model = Events
@@ -30,7 +30,8 @@ class EventsCUDSerializer(serializers.ModelSerializer):
         user_id = self.context.get("user_id")
 
         instance.name = validated_data.get("name", instance.name)
-        instance.description = validated_data.get("description", instance.description)
+        instance.description = validated_data.get(
+            "description", instance.description)
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
