@@ -1,9 +1,10 @@
 import uuid
 
-from decouple import config as decouple_config
 from django.db import models
 
 from db.user import User
+
+from django.conf import settings
 
 # fmt: off
 # noinspection PyPep8
@@ -16,7 +17,7 @@ class Notification(models.Model):
     button      = models.CharField(max_length=10, blank=True, null=True)
     url         = models.CharField(max_length=100, blank=True, null=True)
     created_at  = models.DateTimeField(auto_now_add=True)
-    created_by  = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column="created_by", related_name="created_notifications")
+    created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="created_notifications")
 
     class Meta:
         managed = False

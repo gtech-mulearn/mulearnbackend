@@ -3,8 +3,8 @@ from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
-from db.task import Level, Wallet
-from db.user import User
+from db.task import Level, Wallet, InterestGroup
+from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
@@ -164,10 +164,9 @@ class CampusStudentDetailsAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["first_name", "last_name", "level"],
+            ["full_name", "level"],
             {
-                "first_name": "first_name",
-                "last_name": "last_name",
+                "full_name": "full_name",
                 "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
@@ -277,10 +276,9 @@ class CampusStudentDetailsCSVAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["first_name", "last_name", "level"],
+            ["full_name", "level"],
             {
-                "first_name": "first_name",
-                "last_name": "last_name",
+                "full_name": "full_name",
                 "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
@@ -333,3 +331,180 @@ class ChangeStudentTypeAPI(APIView):
             serializer.save()
             return CustomResponse(general_message='Student Type updated successfully').get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+class TransferLeadRoleAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        new_lead_muid = request.data.get("new_lead_muid", None)
+        if new_lead_muid is None:
+            return CustomResponse(
+                general_message="Required data is missing"
+            ).get_failure_response()
+        
+        new_lead = User.objects.filter(muid=new_lead_muid).first()
+        if new_lead is None:
+            return CustomResponse(
+                general_message="Can't find the user"
+            ).get_failure_response()
+        
+        user_org_link = get_user_college_link(user_id)
+        validate_new_lead = UserOrganizationLink.objects.filter(
+                                    user__id=new_lead.id,
+                                    org=user_org_link.org,
+                                    org__org_type=OrganizationType.COLLEGE.value,
+                                    is_alumni=False
+                                ).first()
+        if validate_new_lead is None:
+            return CustomResponse(
+                general_message="Can't find the user in your college"
+            ).get_failure_response()
+
+        role_id = Role.objects.filter(title=RoleType.CAMPUS_LEAD.value).first()
+        if role_id is None:
+            return CustomResponse(
+                general_message="Can't find the role"
+            ).get_failure_response()
+        role_id = role_id.id
+
+        UserRoleLink.objects.filter(
+                user__id=user_id,
+                role__id=role_id,
+        ).delete()
+
+        serializer = serializers.UserRoleLinkSerializer(data={
+            "user": new_lead.id,
+            "role": role_id,
+        }, context={"user_id": user_id})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Assigned new Campus Lead successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+        
+class TransferEnablerRoleAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        new_enabler_muid = request.data.get("new_enabler_muid", None)
+        if new_enabler_muid is None:
+            return CustomResponse(
+                general_message="Required data is missing"
+            ).get_failure_response()
+        
+        new_enabler = User.objects.filter(muid=new_enabler_muid).first()
+        if new_enabler is None:
+            return CustomResponse(
+                general_message="Can't find the user"
+            ).get_failure_response()
+        
+        user_org_link = get_user_college_link(user_id)
+        validate_new_enabler = UserOrganizationLink.objects.filter(
+                                    user__id=new_enabler.id,
+                                    org=user_org_link.org,
+                                    org__org_type=OrganizationType.COLLEGE.value,
+                                    is_alumni=False
+                                ).first()
+        
+        if validate_new_enabler is None:
+            return CustomResponse(
+                general_message="Can't find the user in your college"
+            ).get_failure_response()
+        
+        role_id = Role.objects.filter(title=RoleType.LEAD_ENABLER.value).first()
+        if role_id is None:
+            return CustomResponse(
+                general_message="Can't find the role"
+            ).get_failure_response()
+        role_id = role_id.id
+
+        current_enabler = UserRoleLink.objects.filter(
+                            user__user_organization_link_user__org=user_org_link.org,
+                            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                            role__id=role_id
+                        ).first()
+        if current_enabler:
+            current_enabler.delete()
+        
+        serializer = serializers.UserRoleLinkSerializer(data={
+            "user": new_enabler.id,
+            "role": role_id,
+        }, context={"user_id": user_id})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Assigned new Enabler Lead successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+    
+class TransferIGRoleAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = get_user_college_link(user_id)
+        ig_list = User.objects.filter(
+                    user_organization_link_user__org=user_org_link.org,
+                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                  ).values_list('user_ig_link_user__ig__code', flat=True).distinct()
+
+        return CustomResponse(response={"ig_list":ig_list}).get_success_response()
+
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        new_ig_muid  = request.data.get("new_ig_muid", None)
+        ig_code = request.data.get("ig_code", None)
+
+        if new_ig_muid is None or ig_code is None:
+            return CustomResponse(
+                general_message="Required data is missing"
+            ).get_failure_response()
+        
+        new_ig = User.objects.filter(muid=new_ig_muid).first()
+        if new_ig is None:
+            return CustomResponse(
+                general_message="Can't find the user"
+            ).get_failure_response()
+
+        user_org_link = get_user_college_link(user_id)
+        validate_ig = UserOrganizationLink.objects.filter(
+                            user__id=new_ig.id,
+                            org=user_org_link.org,
+                            org__org_type=OrganizationType.COLLEGE.value,
+                            is_alumni=False
+                      ).first()
+        if validate_ig is None:
+            return CustomResponse(
+                general_message="Can't find the user in your college"
+            ).get_failure_response()
+        
+        #need to change title according to the ig role
+        #below code filter role for title=ig_code+CampusLead
+        role_id = Role.objects.filter(title=f"{ig_code}CampusLead").first()
+        if role_id is None:
+            return CustomResponse(
+                general_message="Can't find the role"
+            ).get_failure_response()
+        role_id = role_id.id
+
+        current_ig = UserRoleLink.objects.filter(
+                            user__user_organization_link_user__org=user_org_link.org,
+                            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                            role__id=role_id
+                        ).first()
+        if current_ig:
+            current_ig.delete()
+        
+        serializer = serializers.UserRoleLinkSerializer(data={
+            "user": new_ig.id,
+            "role": role_id,
+        }, context={"user_id": user_id})
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(general_message='Assigned new Ig lead successfully').get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+        

@@ -14,7 +14,7 @@ from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 
-BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
+BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
 
 class UserInfoAPI(APIView):
@@ -52,18 +52,13 @@ class UserGetPatchDeleteAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def delete(self, request, user_id):
-        user = User.objects.filter(id=user_id).first()
-
-        if user is None:
+        try:
+            user = User.objects.get(id=user_id).delete()
             return CustomResponse(
-                general_message="User Not Available"
-            ).get_failure_response()
-            
-        user.delete()
-
-        return CustomResponse(
-            general_message="User deleted successfully"
-        ).get_success_response()
+                general_message="User deleted successfully"
+            ).get_success_response()
+        except User.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, user_id):
@@ -101,15 +96,13 @@ class UserAPI(APIView):
             request,
             [
                 "muid",
-                "first_name",
-                "last_name",
+                "full_name",
                 "email",
                 "mobile",
                 "user_lvl_link_user__level__name",
             ],
             {
-                "first_name": "first_name",
-                "last_name": "last_name",
+                "full_name": "full_name",
                 "karma": "wallet_user__karma",
                 "created_at": "created_at",
             },
@@ -152,15 +145,14 @@ class UserVerificationAPI(APIView):
             user_queryset,
             request,
             search_fields=[
-                "user__first_name",
-                "user__last_name",
+                "user__full_name",
                 "user__mobile",
                 "user__email",
                 "user__muid",
                 "role__title",
             ],
             sort_fields={
-                "first_name": "user__first_name",
+                "full_name": "user__full_name",
                 "role_title": "role__title",
                 "muid": "user__muid",
                 "email": "user__email",
@@ -237,9 +229,9 @@ class ForgotPasswordAPI(APIView):
         email_muid = request.data.get("emailOrMuid")
 
         if not (
-                user := User.objects.filter(
-                    Q(muid=email_muid) | Q(email=email_muid)
-                ).first()
+            user := User.objects.filter(
+                Q(muid=email_muid) | Q(email=email_muid)
+            ).first()
         ):
             return CustomResponse(
                 general_message="User not exist"

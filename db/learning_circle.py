@@ -4,8 +4,8 @@ from django.db import models
 
 from db.task import InterestGroup, Organization
 from db.user import User
-from decouple import config as decouple_config
 
+from django.conf import settings
 
 # fmt: off
 # noinspection PyPep8
@@ -22,10 +22,10 @@ class LearningCircle(models.Model):
     meet_time = models.CharField(max_length=10, blank=True, null=True)
     day = models.CharField(max_length=20, blank=True, null=True)
     note = models.CharField(max_length=500, blank=True, null=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column="updated_by",
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="learning_circle_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column="created_by",
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="learning_circle_created_by")
     created_at = models.DateTimeField(auto_now=True)
 
@@ -59,10 +59,10 @@ class CircleMeetingLog(models.Model):
     attendees = models.CharField(max_length=216)
     agenda = models.CharField(max_length=2000)
     images = models.ImageField(max_length=200, upload_to='lc/meet-report')
-    created_by = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column='created_by',
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='circle_meeting_log_created_by')
     created_at = models.DateTimeField(auto_now=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(decouple_config("SYSTEM_ADMIN_ID")), db_column='updated_by',
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
                                    related_name='circle_meeting_log_updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 

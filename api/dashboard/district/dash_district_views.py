@@ -128,10 +128,9 @@ class DistrictStudentDetailsAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
-            ["first_name", "last_name", "level"],
+            ["full_name", "level"],
             {
-                "first_name": "first_name",
-                "last_name": "last_name",
+                "full_name": "full_name",
                 "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",

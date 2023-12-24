@@ -7,6 +7,7 @@ from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 from utils.karma_voucher import generate_ordered_id
 
+
 class VoucherLogCSVSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(required=True, allow_null=False)
     task_id = serializers.CharField(required=True, allow_null=False)
@@ -17,21 +18,21 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
     class Meta:
         model = VoucherLog
         fields = [
-            'id', 
-            'code', 
-            'user_id', 
-            'task_id', 
-            'karma', 
-            'month', 
-            'week', 
-            'claimed', 
+            'id',
+            'code',
+            'user_id',
+            'task_id',
+            'karma',
+            'month',
+            'week',
+            'claimed',
             'created_by_id',
-            'updated_by_id', 
-            'created_at', 
-            'updated_at', 
-            'event', 
+            'updated_by_id',
+            'created_at',
+            'updated_at',
+            'event',
             'description'
-            ]   
+        ]
 
     def validate(self, data):
         response_data = {}
@@ -41,14 +42,14 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
             response_data["error"] = "Week must not exceed 2 characters in length and should be of the format 'W1'"
             raise serializers.ValidationError(response_data)
         return data
-    
+
     def to_representation(self, instance):
         representation = super().to_representation(instance)
 
         representation['code'] = instance.code
-        representation['fullname'] = instance.user.fullname
+        representation['full_name'] = instance.user.full_name
         representation['email'] = instance.user.email
-        representation['muid'] = instance.user.muid 
+        representation['muid'] = instance.user.muid
         representation['hashtag'] = instance.task.hashtag
         representation['month'] = instance.month
         representation['karma'] = instance.karma
@@ -58,11 +59,12 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
 
         return representation
 
+
 class VoucherLogSerializer(serializers.ModelSerializer):
-    user = serializers.CharField(source='user.fullname')
+    user = serializers.CharField(source='user.full_name')
     task = serializers.CharField(source='task.title')
-    created_by = serializers.CharField(source='created_by.fullname')
-    updated_by = serializers.CharField(source='updated_by.fullname')
+    created_by = serializers.CharField(source='created_by.full_name')
+    updated_by = serializers.CharField(source='updated_by.full_name')
     muid = serializers.CharField(source="user.muid")
 
     class Meta:
@@ -85,22 +87,23 @@ class VoucherLogSerializer(serializers.ModelSerializer):
             "muid"
         ]
 
+
 class VoucherLogCreateSerializer(serializers.ModelSerializer):
     user = serializers.CharField(required=True, error_messages={
         'required': 'user field must not be left blank.'
-        })
+    })
     task = serializers.CharField(required=True, error_messages={
         'required': 'task field must not be left blank.'
-        })
+    })
     karma = serializers.IntegerField(required=True, error_messages={
         'required': 'karma field must not be left blank.'
-        })
+    })
     month = serializers.CharField(required=True, error_messages={
         'required': 'month field must not be left blank.'
-        })
+    })
     week = serializers.CharField(required=True, error_messages={
         'required': 'week field must not be left blank.'
-        })
+    })
 
     class Meta:
         model = VoucherLog
@@ -117,7 +120,7 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         validated_data['user_id'] = validated_data.pop('user')
         validated_data['task_id'] = validated_data.pop('task')
         validated_data['id'] = uuid.uuid4()
-        
+
         existing_codes = set(VoucherLog.objects.values_list('code', flat=True))
         count = 1
         while generate_ordered_id(count) in existing_codes:
@@ -136,22 +139,24 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         if not user:
             raise serializers.ValidationError("Enter a valid user")
         return user.id
-    
+
     def validate_task(self, value):
         if not TaskList.objects.filter(id=value).exists():
             raise serializers.ValidationError("Enter a valid task")
         return value
-    
+
     def validate_karma(self, value):
         if value <= 0:
             raise serializers.ValidationError("Enter a valid karma")
         return value
-    
+
     def validate_week(self, value):
         if len(value) != 2:
-            raise serializers.ValidationError("Week must have exactly two characters.")
+            raise serializers.ValidationError(
+                "Week must have exactly two characters.")
         return value
-    
+
+
 class VoucherLogUpdateSerializer(serializers.ModelSerializer):
     new_user = serializers.CharField(required=False)
     new_task = serializers.CharField(required=False)
@@ -175,17 +180,17 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
         instance.karma = validated_data.get('new_karma', instance.karma)
         instance.month = validated_data.get('new_month', instance.month)
         instance.week = validated_data.get('new_week', instance.week)
-        
+
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
-        return instance 
+        return instance
 
     def validate_new_user(self, value):
         user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
         if not user:
             raise serializers.ValidationError("Enter a valid user")
         return user.id
-    
+
     def destroy(self, obj):
         obj.delete()
