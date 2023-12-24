@@ -49,5 +49,5 @@ def create_ig_lead_roles():
 
 if __name__ == '__main__':
     create_ig_lead_roles()
-    execute("UPDATE system_setting SET value = '1.44', updated_at = now() WHERE `key` = 'db.version';")
+    execute("UPDATE system_setting SET value = '1.46', updated_at = now() WHERE `key` = 'db.version';")
 
