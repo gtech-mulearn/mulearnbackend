@@ -16,7 +16,7 @@ from utils.types import WebHookActions, WebHookCategory
 
 def is_role_exist(title) -> bool:
     query = f"""SELECT id FROM role WHERE title = '{title}'"""
-    return True if execute(query) else False
+    return execute(query)
 
 def get_intrest_groups():
     query = f"""SELECT name,code, created_by FROM interest_group"""
@@ -25,27 +25,24 @@ def get_intrest_groups():
 def create_ig_lead_roles():
     for name,code,created_by in get_intrest_groups():
         role_name = code+' CampusLead'
-        print(role_name)
-        role_exists = is_role_exist(role_name)
-        if role_exists:
-            continue
-        query = f"""INSERT INTO role (id, title, description ,created_by, updated_by,updated_at,created_at)
-                    VALUES (
-                        '{uuid.uuid4()}',
-                        '{role_name}',
-                        '{f'Campus Lead of {name} Interest Group'}',
-                        '{created_by}',
-                        '{created_by}',
-                        UTC_TIMESTAMP,
-                        UTC_TIMESTAMP
-                    )
-            """
-        execute(query)
-        DiscordWebhooks.general_updates(
-            WebHookCategory.ROLE.value,
-            WebHookActions.CREATE.value,
-            role_name
-        )
+        if is_role_exist(role_name) is not None:
+            query = f"""INSERT INTO role (id, title, description ,created_by, updated_by,updated_at,created_at)
+                        VALUES (
+                            '{uuid.uuid4()}',
+                            '{role_name}',
+                            '{f'Campus Lead of {name} Interest Group'}',
+                            '{created_by}',
+                            '{created_by}',
+                            UTC_TIMESTAMP,
+                            UTC_TIMESTAMP
+                        )
+                """
+            execute(query)
+            DiscordWebhooks.general_updates(
+                WebHookCategory.ROLE.value,
+                WebHookActions.CREATE.value,
+                role_name
+            )
 
 if __name__ == '__main__':
     create_ig_lead_roles()
