@@ -1,16 +1,15 @@
 import logging
 import os
 
-from decouple import config
+from django.conf import settings
 from django.http import FileResponse
 from rest_framework.views import APIView
 
-from .log_helper import ManageURLPatterns, logHandler
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 
-LOG_PATH = config("LOGGER_DIR_PATH")
+from .log_helper import ManageURLPatterns, logHandler
 
 
 class DownloadErrorLogAPI(APIView):
@@ -20,7 +19,7 @@ class DownloadErrorLogAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def get(self, request, log_name):
-        error_log = f"{LOG_PATH}/{log_name}.log"
+        error_log = f"{settings.LOG_PATH}/{log_name}.log"
         if os.path.exists(error_log):
             response = FileResponse(
                 open(error_log, "rb"), content_type="application/octet-stream"
@@ -39,7 +38,7 @@ class ViewErrorLogAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def get(self, request, log_name):
-        error_log = f"{LOG_PATH}/{log_name}.log"
+        error_log = f"{settings.LOG_PATH}/{log_name}.log"
         if os.path.exists(error_log):
             try:
                 with open(error_log, "r") as log_file:
@@ -62,7 +61,7 @@ class ClearErrorLogAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def post(self, request, log_name):
-        error_log = f"{LOG_PATH}/{log_name}.log"
+        error_log = f"{settings.LOG_PATH}/{log_name}.log"
         if os.path.exists(error_log):
             try:
                 with open(error_log, "w") as log_file:
@@ -82,13 +81,46 @@ class ClearErrorLogAPI(APIView):
 
 
 class LoggerAPI(APIView):
+    """
+    API view for logging errors.
+
+    Args:
+        request: The HTTP request object.
+
+    Returns:
+        CustomResponse: The response object containing formatted error logs.
+
+    Raises:
+        IOError: If there is an error reading the error log file.
+
+    Examples:
+        >>> logger_api = LoggerAPI()
+        >>> response = logger_api.get(request)
+    """
+
     authentication_classes = [CustomizePermission]
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def get(self, request):
-        error_log = f"{LOG_PATH}/error.log"
+        """
+        Get the error logs.
+
+        Args:
+            request: The HTTP request object.
+
+        Returns:
+            CustomResponse: The response object containing formatted error logs.
+
+        Raises:
+            IOError: If there is an error reading the error log file.
+
+        Examples:
+            >>> logger_api = LoggerAPI()
+            >>> response = logger_api.get(request)
+        """
+        error_log = f"{settings.LOG_PATH}/error.log"
         try:
             with open(error_log, "r") as file:
                 log_data = file.read()
@@ -97,14 +129,26 @@ class LoggerAPI(APIView):
 
         log_handler = logHandler(log_data)
         formatted_errors = log_handler.parse_logs()
-        return CustomResponse(
-            response=formatted_errors
-        ).get_success_response()
+        return CustomResponse(response=formatted_errors).get_success_response()
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
     def patch(self, request, error_id):
+        """
+        Patch the error log.
+
+        Args:
+            request: The HTTP request object.
+            error_id: The ID of the error to be marked as patched.
+
+        Returns:
+            CustomResponse: The response object indicating the success of the patch.
+
+        Examples:
+            >>> logger_api = LoggerAPI()
+            >>> response = logger_api.patch(request, error_id)
+        """
         logger = logging.getLogger("django")
         logger.error(f"PATCHED : {error_id}")
         return CustomResponse(response="Updated patch list").get_success_response()
@@ -138,7 +182,7 @@ class ErrorGraphAPI(APIView):
 
         """
         try:
-            error_log = f"{LOG_PATH}/error.log"
+            error_log = f"{settings.LOG_PATH}/error.log"
 
             with open(error_log, "r") as file:
                 log_data = file.read()
@@ -155,7 +199,6 @@ class ErrorGraphAPI(APIView):
 
         except IOError as e:
             return CustomResponse(response=str(e)).get_failure_response()
-
 
 
 class ErrorTabAPI(APIView):
@@ -186,10 +229,18 @@ class ErrorTabAPI(APIView):
 
         """
         try:
+            error_log = f"{settings.LOG_PATH}/error.log"
+
+            with open(error_log, "r") as file:
+                log_data = file.read()
+
+            log_handler = logHandler(log_data)
+            parsed_errors = log_handler.parse_logs()
+        
             urlpatterns = ManageURLPatterns().urlpatterns
             grouped_patterns = ManageURLPatterns.group_patterns(urlpatterns)
 
-            return CustomResponse(response=grouped_patterns).get_success_response()
+            return CustomResponse(response=parsed_errors).get_success_response()
 
         except IOError as e:
             return CustomResponse(response=str(e)).get_failure_response()

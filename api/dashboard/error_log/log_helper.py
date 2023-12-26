@@ -90,13 +90,16 @@ class ManageURLPatterns:
             parts = api.split("/")
             if len(parts) > 3:
                 primary_category = parts[2]  # e.g., 'register', 'dashboard'
+                api_dictionary = {"url": api, "error": []}
                 if primary_category in ["dashboard", "integrations"]:
                     # Subgroup for dashboard and integrations
                     secondary_category = parts[3]  # e.g., 'user', 'zonal'
-                    grouped_apis[primary_category][secondary_category].append(api)
+                    grouped_apis[primary_category][secondary_category].append(
+                        api_dictionary
+                    )
                 else:
                     # Single group for other categories
-                    grouped_apis[primary_category]["_general"].append(api)
+                    grouped_apis[primary_category]["_general"].append(api_dictionary)
         return grouped_apis
 
 
@@ -120,7 +123,7 @@ class logHandler:
             "traceback": {"regex": r"TRACEBACK: (.+)$", "type": str},
         }
 
-    def parse_logs(self, error_path) -> list[dict]:
+    def parse_logs(self) -> list[dict]:
         """parse a log value as str and convert it into
         appropriate types
 
