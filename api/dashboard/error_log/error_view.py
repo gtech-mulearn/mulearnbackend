@@ -5,7 +5,7 @@ from decouple import config
 from django.http import FileResponse
 from rest_framework.views import APIView
 
-from api.dashboard.error_log.log_helper import logHandler
+from .log_helper import ManageURLPatterns, logHandler
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -83,7 +83,7 @@ class ClearErrorLogAPI(APIView):
 
 class LoggerAPI(APIView):
     authentication_classes = [CustomizePermission]
-    
+
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
@@ -94,11 +94,13 @@ class LoggerAPI(APIView):
                 log_data = file.read()
         except IOError as e:
             return CustomResponse(response=str(e)).get_failure_response()
-        
-        log_handler = logHandler()
-        formatted_errors = log_handler.parse_logs(log_data)
-        return CustomResponse(response=formatted_errors).get_success_response()
-    
+
+        log_handler = logHandler(log_data)
+        formatted_errors = log_handler.parse_logs()
+        return CustomResponse(
+            response=formatted_errors
+        ).get_success_response()
+
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
@@ -106,3 +108,88 @@ class LoggerAPI(APIView):
         logger = logging.getLogger("django")
         logger.error(f"PATCHED : {error_id}")
         return CustomResponse(response="Updated patch list").get_success_response()
+
+
+class ErrorGraphAPI(APIView):
+    """
+    A class representing the ErrorGraphAPI view.
+
+    This view handles the GET request to retrieve formatted error data including a heatmap of URL hits,
+    incident information, and affected users. It requires authentication and specific roles to access.
+
+    Args:
+        self: The instance of the class itself.
+    """
+
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    def get(self, request):
+        """
+        Handle the GET request to retrieve formatted error data.
+
+        Returns:
+            CustomResponse: The success response containing the formatted error data.
+
+        Raises:
+            IOError: If an error occurs while reading the error log file.
+
+        """
+        try:
+            error_log = f"{LOG_PATH}/error.log"
+
+            with open(error_log, "r") as file:
+                log_data = file.read()
+
+            log_handler = logHandler(log_data)
+
+            formatted_errors = {
+                "heatmap": log_handler.get_urls_heatmap(),
+                "incident_info": log_handler.get_incident_info(),
+                "affected_users": log_handler.get_affected_users(),
+            }
+
+            return CustomResponse(response=formatted_errors).get_success_response()
+
+        except IOError as e:
+            return CustomResponse(response=str(e)).get_failure_response()
+
+
+
+class ErrorTabAPI(APIView):
+    """
+    A class representing the ErrorTabAPI view.
+
+    This view handles the GET request to retrieve grouped URL patterns based on user roles.
+    It requires authentication and specific roles to access.
+
+    Args:
+        self: The instance of the class itself.
+    """
+
+    authentication_classes = [CustomizePermission]
+
+    @role_required(
+        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    def get(self, request):
+        """
+        Handle the GET request to retrieve grouped URL patterns.
+
+        Returns:
+            CustomResponse: The success response containing the grouped URL patterns.
+
+        Raises:
+            IOError: If an error occurs while retrieving the URL patterns.
+
+        """
+        try:
+            urlpatterns = ManageURLPatterns().urlpatterns
+            grouped_patterns = ManageURLPatterns.group_patterns(urlpatterns)
+
+            return CustomResponse(response=grouped_patterns).get_success_response()
+
+        except IOError as e:
+            return CustomResponse(response=str(e)).get_failure_response()
