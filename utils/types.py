@@ -46,6 +46,14 @@ class RoleType(Enum):
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
 
+    @classmethod
+    def ig_campus_lead_role(ig_code:str):
+        return f"{ig_code} CampusLead"
+    
+    @classmethod
+    def get_ig_lead_role(ig_code:str):
+        return f"{ig_code} IGLead"
+
 
 class OrganizationType(Enum):
     COLLEGE = 'College'
