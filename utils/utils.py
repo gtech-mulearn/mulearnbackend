@@ -19,7 +19,7 @@ from django.template.loader import render_to_string
 
 class CommonUtils:
     @staticmethod
-    def get_paginated_queryset(
+    def     get_paginated_queryset(
         queryset: QuerySet,
         request,
         search_fields,
