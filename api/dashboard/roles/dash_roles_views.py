@@ -30,17 +30,15 @@ class RoleAPI(APIView):
                 "id",
                 "title",
                 "description",
-                "updated_by__first_name",
-                "updated_by__last_name",
-                "created_by__first_name",
-                "created_by__last_name",
+                "updated_by__full_name",
+                "created_by__full_name",
             ],
             {
                 "title": "title",
                 "description": "description",
                 "members": "userrolelink",
-                "updated_by": "updated_by__first_name",
-                "created_by": "created_by__first_name",
+                "updated_by": "updated_by__full_name",
+                "created_by": "created_by__full_name",
                 "updated_at": "updated_at",
                 "created_at": "created_at",
             },
@@ -142,17 +140,17 @@ class UserRoleSearchAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user,
             request,
-            ["muid", "first_name", "last_name"],
-            {"muid": "muid", "first_name": "first_name", "last_name": "last_name"},
+            ["muid", "full_name"],
+            {"muid": "muid", "full_name": "full_name"},
         )
 
-        serializer = dash_roles_serializer.UserRoleSearchSerializer(
+        serialized_data = dash_roles_serializer.UserRoleSearchSerializer(
             paginated_queryset.get("queryset"), many=True
         ).data
 
         return CustomResponse(
             response={
-                "data": serializer,
+                "data": serialized_data,
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
@@ -163,7 +161,7 @@ class UserRoleLinkManagement(APIView):
     """
     This API is creates an interface to help manage the user and role link
     by providing support for 
-    - Listing all users with the given role
+    - Listing all users with the given role (max 10 users)
     - Giving a lot of users a specific role
     """
 
@@ -172,9 +170,9 @@ class UserRoleLinkManagement(APIView):
         """
         Lists all the users with a given role
         """
-        users = (
-            User.objects.filter(user_role_link_user__role__pk=role_id).distinct().all()
-        )
+        users = User.objects.filter(user_role_link_user__role__pk=role_id).distinct()
+        users = self.filter_users(request, users)
+
         serialized_users = dash_roles_serializer.UserRoleLinkManagementSerializer(
             users, many=True
         )
@@ -186,11 +184,11 @@ class UserRoleLinkManagement(APIView):
         Lists all the users without a given role;
         used to assign roles
         """
-        users = (
-            User.objects.filter(~Q(user_role_link_user__role__pk=role_id))
-            .distinct()
-            .all()
-        )
+        users = User.objects.filter(
+            ~Q(user_role_link_user__role__pk=role_id)
+        ).distinct()
+        users = self.filter_users(request, users)   
+
         serialized_users = dash_roles_serializer.UserRoleLinkManagementSerializer(
             users, many=True
         )
@@ -243,6 +241,24 @@ class UserRoleLinkManagement(APIView):
             ).get_success_response()
         except Role.DoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
+
+    def filter_users(self, request, users):
+        """
+        Filter users based on search parameters.
+
+        Args:
+            request: The HTTP request object.
+            users: The queryset of users to be filtered.
+
+        Returns:
+            QuerySet: The filtered queryset of users.
+        """
+        if search_param := request.query_params.get("search", None):
+            users = users.filter(
+                Q(muid__icontains=search_param) | Q(full_name__icontains=search_param)
+            )
+        return users[:10]
+
 
 
 class UserRole(APIView):

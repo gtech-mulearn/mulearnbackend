@@ -9,6 +9,7 @@ from utils.types import WebHookActions, WebHookCategory
 from django.db.models import Q
 from django.db import transaction
 
+
 class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
     """
     Serializer used by UserRoleLinkManagement API to lists the
@@ -17,7 +18,7 @@ class UserRoleLinkManagementSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["id", "muid", "fullname"]
+        fields = ["id", "muid", "full_name"]
 
 
 class RoleAssignmentSerializer(serializers.Serializer):
@@ -38,7 +39,7 @@ class RoleAssignmentSerializer(serializers.Serializer):
         )
         if users.count() != len(attrs):
             raise serializers.ValidationError("One or more user IDs are invalid.")
-        
+
         data["users"] = users
         return data
 
@@ -61,8 +62,8 @@ class RoleAssignmentSerializer(serializers.Serializer):
 
 
 class RoleDashboardSerializer(serializers.ModelSerializer):
-    updated_by = serializers.CharField(source="updated_by.fullname")
-    created_by = serializers.CharField(source="created_by.fullname")
+    updated_by = serializers.CharField(source="updated_by.full_name")
+    created_by = serializers.CharField(source="created_by.full_name")
     members = serializers.SerializerMethodField()
 
     class Meta:
@@ -105,7 +106,7 @@ class RoleDashboardSerializer(serializers.ModelSerializer):
 class UserRoleSearchSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
-        fields = ["id", "fullname", "muid"]
+        fields = ["id", "full_name", "muid"]
 
 
 class UserRoleCreateSerializer(serializers.ModelSerializer):
@@ -152,6 +153,6 @@ class UserRoleBulkAssignSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
 
-        representation["user_id"] = instance.user.fullname if instance.user else None
+        representation["user_id"] = instance.user.full_name if instance.user else None
         representation["role_id"] = instance.role.title if instance.role else None
         return representation

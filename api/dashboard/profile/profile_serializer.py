@@ -53,8 +53,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         fields = (
             "id",
             "joined",
-            "first_name",
-            "last_name",
+            "full_name",
             "gender",
             "muid",
             "roles",
@@ -72,13 +71,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_percentile(self, obj):
-        try:
-            user_count = Wallet.objects.filter(
-                karma__lt=obj.wallet_user.karma).count()
-            usr_count = User.objects.all().count()
-            return 0 if usr_count == 0 else (user_count * 100) / usr_count
-        except Exception as e:
-            return 0
+        users_count_lt_user_karma = Wallet.objects.filter(
+            karma__lt=obj.wallet_user.karma
+        ).count()
+        user_count = User.objects.all().count()
+        return 0 if user_count == 0 else 100 - ((users_count_lt_user_karma * 100) / user_count)
 
     def get_roles(self, obj):
         return list({link.role.title for link in obj.user_role_link_user.filter(verified=True)})
@@ -177,11 +174,12 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        user_lvl = UserLvlLink.objects.filter(
-            user__id=user_id).first().level.level_order
         user_igs = UserIgLink.objects.filter(
             user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
+        
+        if obj.level_order > 4:
+            tasks = tasks.filter(ig__name__in=user_igs)
 
         data = []
         for task in tasks:
@@ -201,8 +199,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
 
 class UserRankSerializer(ModelSerializer):
-    first_name = serializers.CharField()
-    last_name = serializers.CharField()
+    full_name = serializers.CharField()
     role = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma = serializers.SerializerMethodField()
@@ -210,7 +207,7 @@ class UserRankSerializer(ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("first_name", "last_name", "role",
+        fields = ("full_name", "role",
                   "rank", "karma", "interest_groups")
 
     def get_role(self, obj):
@@ -322,8 +319,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = [
-            "first_name",
-            "last_name",
+            "full_name",
             "email",
             "mobile",
             "communities",
@@ -391,8 +387,8 @@ class LinkSocials(ModelSerializer):
     def update(self, instance, validated_data):
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
 
-        def create_karma_activity_log(task_title, karma_value):
-            task = TaskList.objects.filter(title=task_title).first()
+        def create_karma_activity_log(task_hashtag, karma_value):
+            task = TaskList.objects.filter(hashtag=task_hashtag).first()
             if task:
                 if karma_value > 0:
                     karma_log = KarmaActivityLog.objects.create(
@@ -407,15 +403,13 @@ class LinkSocials(ModelSerializer):
                         appraiser_approved=True,
                     )
 
-                    dl = WebHookActions.SEPARATOR.value
-                    discord_id = User.objects.get(id=user_id).discord_id
-                    value = f"{task.hashtag}{dl}{karma_value}{dl}{discord_id}{dl}{karma_log.id}"
-
+                    value = karma_log.id
                     DiscordWebhooks.general_updates(
                         WebHookCategory.KARMA_INFO.value,
                         WebHookActions.UPDATE.value,
                         value
                     )
+                    
                 else:
                     KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id
@@ -432,8 +426,8 @@ class LinkSocials(ModelSerializer):
                 if old_account_url in [None, ""] and account_url in [None, ""]:
                     pass
                 elif old_account_url is None or old_account_url == "":
-                    create_karma_activity_log(f"social_{account}", 20)
+                    create_karma_activity_log(f"#social_{account}", 20)
                 elif account_url is None or account_url == "":
-                    create_karma_activity_log(f"social_{account}", -20)
+                    create_karma_activity_log(f"#social_{account}", -20)
 
         return super().update(instance, validated_data)
