@@ -18,23 +18,21 @@ class CountryDataAPI(APIView):
         if country_id:
             countries = Country.objects.filter(id=country_id)
         else:
-            countries = Country.objects.all().select_related("created_by", "updated_by")
+            countries = Country.objects.select_related("created_by", "updated_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             countries,
             request,
             [
                 "name",
-                "created_at",
-                "created_by",
-                "updated_by",
-                "updated_at",
+                "created_by__full_name",
+                "updated_by__full_name",
             ],
             {
                 "label": "name",
-                "created_by": "created_by",
+                "created_by": "created_by__full_name",
                 "created_at": "created_at",
-                "updated_by": "updated_by",
+                "updated_by": "updated_by__full_name",
                 "updated_at": "updated_at",
             },
         )
