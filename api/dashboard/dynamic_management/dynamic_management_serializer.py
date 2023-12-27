@@ -41,7 +41,7 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         return value
     
     def validate_type(self, value):
-        if value not in [type for type in ManagementType.get_all_values()]:
+        if value not in list(ManagementType.get_all_values()):
             raise serializers.ValidationError("Enter a valid type")
         return value
 
@@ -51,8 +51,10 @@ class DynamicRoleListSerializer(serializers.ModelSerializer):
 
     def get_roles(self, obj):
         dynamic_roles = DynamicRole.objects.filter(type=obj['type']).values_list('id', 'role__title')
-        dynamic_roles_list = [{'id': dynamic_role[0], 'role': dynamic_role[1]} for dynamic_role in dynamic_roles]
-        return dynamic_roles_list
+        return [
+            {'id': dynamic_role[0], 'role': dynamic_role[1]}
+            for dynamic_role in dynamic_roles
+        ]
 
     class Meta:
         model = DynamicRole
@@ -74,7 +76,7 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Dynamic Role already exists")
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-        instance.role_id = new_role if new_role else instance.role_id
+        instance.role_id = new_role or instance.role_id
         instance.save()
         return instance 
 
@@ -120,7 +122,7 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         return user
     
     def validate_type(self, value):
-        if value not in [type for type in ManagementType.get_all_values()]:
+        if value not in list(ManagementType.get_all_values()):
             raise serializers.ValidationError("Enter a valid type")
         return value
 
@@ -130,13 +132,16 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
 
     def get_users(self, obj):
         dynamic_users = DynamicUser.objects.filter(type=obj['type'])
-        user_data = [{
-            'dynamic_user_id': dynamic_user.id,
-            'user_id': dynamic_user.user.id,
-            'name': f"{dynamic_user.user.first_name} {dynamic_user.user.last_name if dynamic_user.user.last_name else ''}",
-            'muid': dynamic_user.user.muid,
-            'email': dynamic_user.user.email} for dynamic_user in dynamic_users]
-        return user_data
+        return [
+            {
+                'dynamic_user_id': dynamic_user.id,
+                'user_id': dynamic_user.user.id,
+                'name': f"{dynamic_user.user.first_name} {dynamic_user.user.last_name if dynamic_user.user.last_name else ''}",
+                'muid': dynamic_user.user.muid,
+                'email': dynamic_user.user.email,
+            }
+            for dynamic_user in dynamic_users
+        ]
 
     class Meta:
         model = DynamicUser
@@ -158,7 +163,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Dynamic User already exists")
         instance.updated_by_id = self.context.get('user_id')
         instance.updated_at = DateTimeUtils.get_current_utc_time()
-        instance.user = new_user if new_user else instance.user
+        instance.user = new_user or instance.user
         instance.save()
         return instance 
 
