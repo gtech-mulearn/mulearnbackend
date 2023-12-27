@@ -21,7 +21,22 @@ class CountryDataAPI(APIView):
             countries = Country.objects.all().select_related("created_by", "updated_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            countries, request, ["name"], {"label": "name"}
+            countries,
+            request,
+            [
+                "name",
+                "created_at",
+                "created_by",
+                "updated_by",
+                "updated_at",
+            ],
+            {
+                "label": "name",
+                "created_by": "created_by",
+                "created_at": "created_at",
+                "updated_by": "updated_by",
+                "updated_at": "updated_at",
+            },
         )
 
         serializer = location_serializer.LocationSerializer(
