@@ -105,7 +105,7 @@ class StateDataAPI(APIView):
             request,
             ["name", "country__name", "created_by__full_name", "updated_by__full_name"],
             {
-                "name": "name",
+                "label": "name",
                 "country": "country__name",
                 "created_by": "created_by__full_name",
                 "created_at": "created_at",
@@ -189,7 +189,7 @@ class ZoneDataAPI(APIView):
                 "updated_by__full_name",
             ],
             {
-                "name": "name",
+                "label": "name",
                 "state": "state__name",
                 "country": "state__country__name",
                 "created_by": "created_by__full_name",
@@ -276,7 +276,7 @@ class DistrictDataAPI(APIView):
                 "updated_by__full_name",
             ],
             {
-                "name": "name",
+                "label": "name",
                 "zone": "zone__name",
                 "state": "zone__state__name",
                 "country": "zone__state__country__name",
