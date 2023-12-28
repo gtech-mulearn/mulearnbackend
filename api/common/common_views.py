@@ -586,7 +586,7 @@ class LcCollegeAPI(APIView):
     def get(self, request):
         org_queryset = Organization.objects.filter(
             Q(org_type=OrganizationType.COLLEGE.value),
-            Q(district_id=request.query_params.get("district")),
+            Q(district_id=request.query_params.get("district_id")),
         )
         department_queryset = Department.objects.all()
 
@@ -609,7 +609,7 @@ class LcCollegeAPI(APIView):
 
 class LcDistrictAPI(APIView):
     def get(self, request):
-        district = District.objects.filter(zone__state_id=request.query_params.get("state"))
+        district = District.objects.filter(zone__state_id=request.query_params.get("state_id"))
         
         serializer = DistrictSerializer(district, many=True)
 
@@ -622,7 +622,7 @@ class LcDistrictAPI(APIView):
 class LcStateAPI(APIView):
     def get(self, request):
         
-        state = State.objects.filter(country_id=request.query_params.get("country"))
+        state = State.objects.filter(country_id=request.query_params.get("country_id"))
         serializer = StateSerializer(state, many=True)
         
         return CustomResponse(
