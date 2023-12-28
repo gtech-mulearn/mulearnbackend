@@ -19,4 +19,10 @@ urlpatterns = [
     path('list-ig-top100/', common_views.ListTopIgUsersAPI.as_view()),
 
     path('leaderboard/top-100/', common_views.BekenAPI.as_view()),
+
+    
+    path("list/college/", common_views.LcCollegeAPI.as_view()),
+    path("list/district/", common_views.LcDistrictAPI.as_view()),
+    path("list/state/", common_views.LcStateAPI.as_view()),
+    path("list/country/", common_views.LcCountryAPI.as_view()),
 ]

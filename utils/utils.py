@@ -19,13 +19,26 @@ from django.template.loader import render_to_string
 
 class CommonUtils:
     @staticmethod
-    def     get_paginated_queryset(
+    def get_paginated_queryset(
         queryset: QuerySet,
         request,
         search_fields,
         sort_fields: dict = None,
         is_pagination: bool = True,
     ) -> QuerySet:
+        """
+        Returns a paginated queryset based on the provided parameters.
+
+        Args:
+            - queryset (QuerySet): The original queryset to be paginated.
+            - request: The request object containing query parameters.
+            - search_fields (list): The list of fields to search for.
+            - sort_fields (dict, optional): A dictionary mapping sort fields. Defaults to None.
+            - is_pagination (bool, optional): Flag indicating whether pagination should be applied. Defaults to True.
+
+        Returns:
+            - QuerySet or dict: The paginated queryset or a dictionary containing the paginated queryset and pagination information.
+        """
         if sort_fields is None:
             sort_fields = {}
 
@@ -197,7 +210,8 @@ def send_template_mail(
     status = None
 
     email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": settings.FR_DOMAIN_NAME}
+        f"mails/{'/'.join(map(str, address))}",
+        {"user": context, "base_url": settings.FR_DOMAIN_NAME},
     )
     if not (mail := getattr(context, "email", None)):
         mail = context["email"]
@@ -218,7 +232,7 @@ def send_template_mail(
         from_email=settings.FROM_MAIL,
         to=[context["email"]],
     )
-    
+
     email.attach(attachment)
     email.content_subtype = "html"
     return email.send()
