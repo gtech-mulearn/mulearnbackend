@@ -47,11 +47,11 @@ class RoleType(Enum):
     LEAD_ENABLER = "Lead Enabler"
 
     @classmethod
-    def ig_campus_lead_role(cls,ig_code:str):
+    def IG_CAMPUS_LEAD_ROLE(cls,ig_code:str):
         return f"{ig_code} CampusLead"
     
     @classmethod
-    def get_ig_lead_role(cls,ig_code:str):
+    def IG_LEAD_ROLE(cls,ig_code:str):
         return f"{ig_code} IGLead"
 
 
