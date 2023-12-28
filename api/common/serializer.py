@@ -1,7 +1,15 @@
 from rest_framework import serializers
 
 from db.user import User
-
+from db.organization import (
+    Country,
+    Department,
+    District,
+    Organization,
+    State,
+    UserOrganizationLink,
+    Zone,
+)
 
 class StudentInfoSerializer(serializers.Serializer):
     full_name = serializers.CharField()
@@ -54,3 +62,24 @@ class UserLeaderboardSerializer(serializers.ModelSerializer):
 
     def get_interest_groups(self, obj):
         return obj.user_ig_link_user.all().values_list("ig__name", flat=True)
+
+
+
+class OrgSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ["id", "title"]
+
+class DistrictSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = District
+        fields = ["id", "name"]
+
+class StateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = State
+        fields = ["id", "name"]
+class CountrySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Country
+        fields = ["id", "name"]
