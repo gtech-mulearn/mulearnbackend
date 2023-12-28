@@ -9,14 +9,14 @@ from rest_framework.views import APIView
 
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
-from db.organization import Organization
+from db.organization import Organization,Department,District,State,Country
 from db.task import InterestGroup, KarmaActivityLog, UserIgLink
 from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer, \
-    UserLeaderboardSerializer
+    UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer
 
 
 class LcDashboardAPI(APIView):
@@ -580,3 +580,68 @@ class BekenAPI(APIView):
             '-wallet_user__karma')[:100]
         data = UserLeaderboardSerializer(user_info, many=True)
         return CustomResponse(response=data.data).get_success_response()
+
+
+class LcCollegeAPI(APIView):
+    def get(self, request):
+        org_queryset = Organization.objects.filter(
+            Q(org_type=OrganizationType.COLLEGE.value),
+            Q(district_id=request.data.get("district")),
+        )
+        department_queryset = Department.objects.all()
+
+        college_serializer_data = OrgSerializer(
+            org_queryset, many=True
+        ).data
+
+        department_serializer_data = OrgSerializer(
+            department_queryset, many=True
+        ).data
+
+        return CustomResponse(
+            response={
+                "colleges": college_serializer_data,
+                "departments": department_serializer_data,
+            }
+        ).get_success_response()
+
+
+
+class LcDistrictAPI(APIView):
+    def get(self, request):
+        district = District.objects.filter(zone__state_id=request.data.get("state"))
+        
+        serializer = DistrictSerializer(district, many=True)
+
+        return CustomResponse(
+            response={
+                "districts": serializer.data,
+            }
+        ).get_success_response()
+
+class LcStateAPI(APIView):
+    def get(self, request):
+        state = State.objects.filter(country_id=request.data.get("country"))
+        serializer = StateSerializer(state, many=True)
+
+        return CustomResponse(
+            response={
+                "states": serializer.data,
+            }
+        ).get_success_response()
+
+
+class LcCountryAPI(APIView):
+    def get(self, request):
+        countries = Country.objects.all()
+
+        serializer = CountrySerializer(countries, many=True)
+
+        return CustomResponse(
+            response={
+                "countries": serializer.data,
+            }
+        ).get_success_response()
+
+
+
