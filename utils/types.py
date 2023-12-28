@@ -3,21 +3,20 @@ from enum import Enum
 
 class ManagementType(Enum):
     CAMPUS = 'Campus'
-    COLLEGE = 'College'
-    DISTRICT = 'District'
-    DYNAMIC_MANAGEMENT = 'Dynamic Management'
-    INTEREST_GROUP = 'Interest Group'
-    KARMA_VOUCHER = 'Karma Voucher'
-    LEARNING_CIRCLE = 'Learning Circle'
-    LOCATION = 'Location'
-    ORGANIZATION = 'Organization'
-    PROFILE = 'Profile'
-    REFERRAL = 'Referral'
-    ROLE = 'Role'
-    TASK = 'Task'
-    USER = 'User'
-    ZONAL = 'Zonal'
     HACKATHON = 'Hackathon'
+    USER_MANAGEMENT = 'User Management'
+    MANAGE_ORGANIZATION = 'Manage Organization'
+    TASK_MANAGEMENT = 'Task Management'
+    INTEREST_GROUP = 'Interest Group'
+    COLLEGE_LEVELS = 'College Levels'
+    KARMA_VOUCHER = 'Karma Voucher'
+    ERROR_LOG = 'Error Log'
+    DYNAMIC_TYPE = 'Dynamic Type'
+    MANAGE_ROLES = 'Manage Roles'
+    MANAGE_LOCATIONS = 'Manage Locations'
+    CHANNELS = 'Channels'
+    URL_SHORTENER = 'Url Shortener'
+    DISCORD_MODERATION = 'Discord Moderation'
 
     @classmethod
     def get_all_values(cls):
@@ -47,11 +46,11 @@ class RoleType(Enum):
     LEAD_ENABLER = "Lead Enabler"
 
     @classmethod
-    def ig_campus_lead_role(cls,ig_code:str):
+    def ig_campus_lead_role(cls, ig_code: str):
         return f"{ig_code} CampusLead"
-    
+
     @classmethod
-    def get_ig_lead_role(cls,ig_code:str):
+    def get_ig_lead_role(cls, ig_code: str):
         return f"{ig_code} IGLead"
 
 
