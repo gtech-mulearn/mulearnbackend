@@ -42,10 +42,10 @@ class DynamicRoleAPI(APIView):
         if dynamic_role := DynamicRole.objects.filter(id=type_id).first():
             DynamicRoleUpdateSerializer().destroy(dynamic_role)
             return CustomResponse(
-                general_message=f'Dynamic Role successfully deleted'
+                general_message='Dynamic Role successfully deleted'
             ).get_success_response()
         return CustomResponse(
-            general_message=f'Invalid Dynamic Role'
+            general_message='Invalid Dynamic Role'
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
@@ -64,7 +64,7 @@ class DynamicUserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
-    def post(self, request):  # create
+    def post(self, request):
         serializer = DynamicUserCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
             serializer.save()
@@ -73,7 +73,7 @@ class DynamicUserAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
-    def get(self, request):  # list
+    def get(self, request):
         dynamic_users = DynamicUser.objects.values('type').distinct()
         data = [{'type': user['type']} for user in dynamic_users]
 
@@ -88,14 +88,14 @@ class DynamicUserAPI(APIView):
                                                    pagination=paginated_queryset.get('pagination'))
 
     @role_required([RoleType.ADMIN.value])
-    def delete(self, request, type_id):  # delete
+    def delete(self, request, type_id):
         if dynamic_user := DynamicUser.objects.filter(id=type_id).first():
             DynamicUserUpdateSerializer().destroy(dynamic_user)
             return CustomResponse(
-                general_message=f'Dynamic User successfully deleted'
+                general_message='Dynamic User successfully deleted'
             ).get_success_response()
         return CustomResponse(
-            general_message=f'Invalid Dynamic User'
+            general_message='Invalid Dynamic User'
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
