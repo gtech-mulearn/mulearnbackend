@@ -136,7 +136,7 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
             {
                 'dynamic_user_id': dynamic_user.id,
                 'user_id': dynamic_user.user.id,
-                'name': dynamic_user.user.full_name,
+                'full_name': dynamic_user.user.full_name,
                 'muid': dynamic_user.user.muid,
                 'email': dynamic_user.user.email,
             }
