@@ -11,6 +11,7 @@ class DbConfig(AppConfig):
     name = "db"
 
     def ready(self) -> None:
+        # from db import organization
         _ready = super().ready()
         self.check_system_user_exists()
         return _ready
