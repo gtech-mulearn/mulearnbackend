@@ -155,6 +155,14 @@ class JWTUtils:
                 }
             ) from e
 
+    @staticmethod
+    def is_logged_in(request):
+        try:
+            JWTUtils.is_jwt_authenticated(request)
+            return True
+        except UnauthorizedAccessException:
+            return False
+
 
 def role_required(roles):
     def decorator(view_func):
@@ -172,6 +180,7 @@ def role_required(roles):
 
     return decorator
 
+
 def dynamic_role_required(type):
     def decorator(view_func):
         def wrapped_view_func(obj, request, *args, **kwargs):
@@ -186,11 +195,11 @@ def dynamic_role_required(type):
             if user in dynamic_users:
                 response = view_func(obj, request, *args, **kwargs)
                 return response
-            res = CustomResponse(
-                general_message="You do not have the required role to access this page."
-                ).get_failure_response()
+            res = CustomResponse().get_unauthorized_response()
             return res
+
         return wrapped_view_func
+
     return decorator
 
 # class RoleRequired:

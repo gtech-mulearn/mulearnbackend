@@ -11,7 +11,8 @@ from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
 )
-
+from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
+from db.user import Role
 
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -64,10 +65,47 @@ class InterestGroupAPI(APIView):
         if serializer.is_valid():
             serializer.save()
 
+            role_serializer = RoleDashboardSerializer(data={
+                'title': request_data.get("name"),
+                'description': request_data.get("name") + " Interest Group Member",
+                'created_by': request_data.get("created_by"),
+                'updated_by': request_data.get("updated_by"),
+            },context={'request': request})
+
+            if role_serializer.is_valid():
+                role_serializer.save()
+            else:
+                return CustomResponse(general_message=role_serializer.errors).get_failure_response()
+            
+            campus_role_serializer = RoleDashboardSerializer(data={
+                'title': RoleType.IG_CAMPUS_LEAD_ROLE(request_data.get("code")),
+                'description': request_data.get("name") + " Intrest Group Campus Lead",
+                'created_by': request_data.get("created_by"),
+                'updated_by': request_data.get("updated_by"),
+            },context={'request': request})
+
+            if campus_role_serializer.is_valid():
+                campus_role_serializer.save()
+            else:
+                return CustomResponse(general_message=campus_role_serializer.errors).get_failure_response()
+
+            ig_lead_role_serializer = RoleDashboardSerializer(data={
+                'title': RoleType.IG_LEAD_ROLE(request_data.get("code")),
+                'description': request_data.get("name") + " Interest Group Lead",
+                'created_by': request_data.get("created_by"),
+                'updated_by': request_data.get("updated_by"),
+            },context={'request': request})
+
+            if ig_lead_role_serializer.is_valid():
+                ig_lead_role_serializer.save()
+            else:
+                return CustomResponse(general_message=ig_lead_role_serializer.errors).get_failure_response()
+
             DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,
                 WebHookActions.CREATE.value,
                 request_data.get("name"),
+                request_data.get("code")
             )
 
             return CustomResponse(
@@ -82,6 +120,7 @@ class InterestGroupAPI(APIView):
         ig = InterestGroup.objects.get(id=pk)
 
         ig_old_name = ig.name
+        ig_old_code = ig.code
 
         request_data = request.data
         request_data["updated_by"] = user_id
@@ -93,12 +132,36 @@ class InterestGroupAPI(APIView):
         if serializer.is_valid():
             serializer.save()
             ig_new_name = ig.name
+            ig_new_code = ig.code
 
+            ig_role = Role.objects.filter(title=ig_old_name).first()
+            
+            if ig_role:
+                ig_role.title = ig_new_name
+                ig_role.description = ig_new_name + " Interest Group Member"
+                ig_role.save()
+            
+            ig_campus_lead_role = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_old_code)).first()
+            
+            if ig_campus_lead_role:
+                ig_campus_lead_role.title = ig_new_code+' CampusLead'
+                ig_campus_lead_role.description = ig_new_name + " Interest Group Campus Lead"
+                ig_campus_lead_role.save()
+
+            ig_lead_role = Role.objects.filter(title=RoleType.IG_LEAD_ROLE(ig_old_code)).first()
+
+            if ig_lead_role:
+                ig_lead_role.title = RoleType.IG_LEAD_ROLE(ig_new_code)
+                ig_lead_role.description = ig_new_name + " Interest Group Lead"
+                ig_lead_role.save()
+            
             DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,
                 WebHookActions.EDIT.value,
                 ig_new_name,
+                ig_new_code,
                 ig_old_name,
+                ig_old_code
             )
             return CustomResponse(
                 response={"interestGroup": serializer.data}
@@ -112,13 +175,19 @@ class InterestGroupAPI(APIView):
 
         if ig is None:
             return CustomResponse(general_message="invalid ig").get_success_response()
-
+        ig_role = Role.objects.filter(title=ig.name).first()
+        if ig_role:ig_role.delete()
+        ig_campus_role = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig.code)).first()
+        if ig_campus_role:ig_campus_role.delete()
+        ig_lead_role = Role.objects.filter(title=RoleType.IG_LEAD_ROLE(ig.code)).first()
+        if ig_lead_role:ig_lead_role.delete()
         ig.delete()
 
         DiscordWebhooks.general_updates(
             WebHookCategory.INTEREST_GROUP.value,
             WebHookActions.DELETE.value,
             ig.name,
+            ig.code
         )
         return CustomResponse(
             general_message="ig deleted successfully"

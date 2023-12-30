@@ -1,13 +1,13 @@
 from io import BytesIO
 
-import decouple
 import qrcode
 import requests
-from PIL import Image
+from django.conf import settings
 from django.contrib.auth.hashers import make_password
 from django.core.files.base import ContentFile
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch
+from PIL import Image
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
@@ -16,7 +16,8 @@ from db.user import Role, Socials, User, UserRoleLink, UserSettings
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import WebHookActions, WebHookCategory
-from utils.utils import DateTimeUtils, DiscordWebhooks
+from utils.utils import DiscordWebhooks
+
 from . import profile_serializer
 from .profile_serializer import LinkSocials
 
@@ -61,7 +62,7 @@ class UserProfileEditView(APIView):
     def delete(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id).delete()
-        
+
         return CustomResponse(
             general_message="User deleted successfully"
         ).get_success_response()
@@ -202,7 +203,6 @@ class ShareUserProfileAPI(APIView):
     # function for generating profile qr code
 
     def get(self, request, uuid=None):
-        base_url = decouple.config("FR_DOMAIN_NAME")
         fs = FileSystemStorage()
         if uuid is not None:
             user = User.objects.filter(id=uuid).first()
@@ -218,64 +218,63 @@ class ShareUserProfileAPI(APIView):
                 return CustomResponse(
                     general_message="Private Profile"
                 ).get_failure_response()
+            user_uuid = JWTUtils.fetch_user_id(request)
+            data = f"{settings.FR_DOMAIN_NAME}/profile/{user_uuid}"
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(data)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            logo_url = (
+                f"{settings.FR_DOMAIN_NAME}/favicon.ico/"  # Replace with your logo URL
+            )
+            logo_response = requests.get(logo_url)
+
+            if logo_response.status_code == 200:
+                logo_image = Image.open(BytesIO(logo_response.content))
             else:
-                user_uuid = JWTUtils.fetch_user_id(request)
-                data = f"{base_url}/profile/{user_uuid}"
-
-                qr = qrcode.QRCode(
-                    version=1,
-                    error_correction=qrcode.constants.ERROR_CORRECT_H,
-                    box_size=10,
-                    border=4,
-                )
-                qr.add_data(data)
-                qr.make(fit=True)
-
-                img = qr.make_image(fill_color="black", back_color="white")
-
-                logo_url = f"{base_url}/favicon.ico/"  # Replace with your logo URL
-                logo_response = requests.get(logo_url)
-
-                if logo_response.status_code == 200:
-                    logo_image = Image.open(BytesIO(logo_response.content))
-                else:
-                    return CustomResponse(
-                        general_message="Failed to download the logo from the URL"
-                    ).get_failure_response()
-
-                logo_width, logo_height = logo_image.size
-                basewidth = 100
-                wpercent = basewidth / float(logo_width)
-                hsize = int((float(logo_height) * float(wpercent)))
-                resized_logo = logo_image.resize((basewidth, hsize))
-
-                QRcode = qrcode.QRCode(
-                    error_correction=qrcode.constants.ERROR_CORRECT_H
-                )
-
-                QRcode.add_data(data)
-                QRcolor = "black"
-                QRimg = QRcode.make_image(
-                    fill_color=QRcolor, back_color="white"
-                ).convert("RGB")
-
-                pos = (
-                    (QRimg.size[0] - resized_logo.size[0]) // 2,
-                    (QRimg.size[1] - resized_logo.size[1]) // 2,
-                )
-                # image = Image.open(BytesIO("image_response.content"))
-                QRimg.paste(resized_logo, pos)
-                image_io = BytesIO()
-                QRimg.save(image_io, format="PNG")
-                image_io.seek(0)
-                image_data: bytes = image_io.getvalue()
-                file_path = f"user/qr/{user_uuid}.png"
-                fs.exists(file_path) and fs.delete(file_path)
-                file = fs.save(file_path, ContentFile(image_io.read()))
-
                 return CustomResponse(
-                    general_message="QR code image with logo saved locally"
-                ).get_success_response()
+                    general_message="Failed to download the logo from the URL"
+                ).get_failure_response()
+
+            logo_width, logo_height = logo_image.size
+            basewidth = 100
+            wpercent = basewidth / float(logo_width)
+            hsize = int((float(logo_height) * float(wpercent)))
+            resized_logo = logo_image.resize((basewidth, hsize))
+
+            QRcode = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H)
+
+            QRcode.add_data(data)
+            QRcolor = "black"
+            QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert(
+                "RGB"
+            )
+
+            pos = (
+                (QRimg.size[0] - resized_logo.size[0]) // 2,
+                (QRimg.size[1] - resized_logo.size[1]) // 2,
+            )
+            # image = Image.open(BytesIO("image_response.content"))
+            QRimg.paste(resized_logo, pos)
+            image_io = BytesIO()
+            QRimg.save(image_io, format="PNG")
+            image_io.seek(0)
+            image_data: bytes = image_io.getvalue()
+            file_path = f"user/qr/{user_uuid}.png"
+            fs.exists(file_path) and fs.delete(file_path)
+            file = fs.save(file_path, ContentFile(image_io.read()))
+
+            return CustomResponse(
+                general_message="QR code image with logo saved locally"
+            ).get_success_response()
 
 
 class UserLevelsAPI(APIView):

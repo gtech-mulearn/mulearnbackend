@@ -10,6 +10,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
+
 import os
 from pathlib import Path
 
@@ -29,7 +30,9 @@ SECRET_KEY = decouple_config("SECRET_KEY")
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = decouple_config("DEBUG", default=False, cast=bool)
 
-ALLOWED_HOSTS = decouple_config("ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")])
+ALLOWED_HOSTS = decouple_config(
+    "ALLOWED_HOSTS", cast=lambda v: [s.strip() for s in v.split(",")]
+)
 
 # System admin applied to rows when their parent user instance is deleted
 SYSTEM_ADMIN_ID = decouple_config("SYSTEM_ADMIN_ID")
@@ -37,7 +40,7 @@ SYSTEM_ADMIN_ID = decouple_config("SYSTEM_ADMIN_ID")
 # Application definition
 
 INSTALLED_APPS = [
-    'daphne',
+    "daphne",
     # 'django.contrib.admin',
     "django.contrib.auth",
     "django.contrib.contenttypes",
@@ -50,7 +53,7 @@ INSTALLED_APPS = [
     "utils.apps.UtilsConfig",
     "api.apps.ApiConfig",
     "corsheaders",
-    'db',
+    "db",
 ]
 
 MIDDLEWARE = [
@@ -66,7 +69,9 @@ MIDDLEWARE = [
 ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
 
-REST_FRAMEWORK = {"DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)}
+REST_FRAMEWORK = {
+    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)
+}
 # paginator settings
 PAGE_SIZE = 10
 TEMPLATES = [
@@ -93,7 +98,7 @@ CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(decouple_config('REDIS_HOST'), decouple_config('REDIS_PORT'))],
+            "hosts": [(decouple_config("REDIS_HOST"), decouple_config("REDIS_PORT"))],
         },
     },
 }
@@ -130,61 +135,63 @@ AUTH_PASSWORD_VALIDATORS = [
     },
 ]
 
+LOG_PATH = decouple_config("LOGGER_DIR_PATH")
+
 LOGGING = {
-    'version': 1,
-    'disable_existing_loggers': False,
-    'handlers': {
-        'request_log': {
-            'level': 'INFO',
-            'class': 'logging.FileHandler',
-            'filename': decouple_config("LOGGER_DIR_PATH") + '/request.log',
-            'formatter': 'verbose',
+    "version": 1,
+    "disable_existing_loggers": False,
+    "handlers": {
+        "request_log": {
+            "level": "INFO",
+            "class": "logging.FileHandler",
+            "filename": f"{LOG_PATH}/request.log",
+            "formatter": "verbose",
         },
-        'error_log': {
-            'level': 'ERROR',
-            'class': 'logging.FileHandler',
-            'filename': decouple_config("LOGGER_DIR_PATH") + '/error.log',
-            'formatter': 'verbose',
+        "error_log": {
+            "level": "ERROR",
+            "class": "logging.FileHandler",
+            "filename": f"{LOG_PATH}/error.log",
+            "formatter": "verbose",
         },
-        'sql_log': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': decouple_config("LOGGER_DIR_PATH") + '/sql.log',
-            'formatter': 'verbose',
+        "sql_log": {
+            "level": "DEBUG",
+            "class": "logging.FileHandler",
+            "filename": f"{LOG_PATH}/sql.log",
+            "formatter": "verbose",
         },
-        'root_log': {
-            'level': 'DEBUG',
-            'class': 'logging.FileHandler',
-            'filename': decouple_config("LOGGER_DIR_PATH") + '/root.log',
-            'formatter': 'verbose',
-        },
-    },
-    'loggers': {
-        'django.request': {
-            'handlers': ['request_log'],
-            'level': 'INFO',
-            'propagate': True,
-        },
-        'django': {
-            'handlers': ['error_log'],
-            'level': 'ERROR',
-            'propagate': True,
-        },
-        'django.db.backends': {
-            'handlers': ['sql_log'],
-            'level': 'DEBUG',
-            'propagate': True,
-        },
-        '': {
-            'handlers': ['root_log'],
-            'level': 'DEBUG',
-            'propagate': True,
+        "root_log": {
+            "level": "DEBUG",
+            "class": "logging.FileHandler",
+            "filename": f"{LOG_PATH}/root.log",
+            "formatter": "verbose",
         },
     },
-    'formatters': {
-        'verbose': {
-            'format': '{asctime} {levelname} {message}',
-            'style': '{',
+    "loggers": {
+        "django.request": {
+            "handlers": ["request_log"],
+            "level": "INFO",
+            "propagate": True,
+        },
+        "django": {
+            "handlers": ["error_log"],
+            "level": "ERROR",
+            "propagate": True,
+        },
+        "django.db.backends": {
+            "handlers": ["sql_log"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+        "": {
+            "handlers": ["root_log"],
+            "level": "DEBUG",
+            "propagate": True,
+        },
+    },
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} {levelname} {message}",
+            "style": "{",
         },
     },
 }
@@ -203,14 +210,12 @@ USE_TZ = True
 # Static files (CSS, JavaScript, Images)
 # https://docs.djangoproject.com/en/4.1/howto/static-files/
 
-STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static')
-]
-STATIC_ROOT = os.path.join(BASE_DIR, 'assets')
-STATIC_URL = '/muback-static/'
+STATICFILES_DIRS = [os.path.join(BASE_DIR, "static")]
+STATIC_ROOT = os.path.join(BASE_DIR, "assets")
+STATIC_URL = "/muback-static/"
 
-MEDIA_URL = '/muback-media/'
-MEDIA_ROOT = os.path.join(BASE_DIR, 'media')
+MEDIA_URL = "/muback-media/"
+MEDIA_ROOT = os.path.join(BASE_DIR, "media")
 
 # Default primary key field type
 # https://docs.djangoproject.com/en/4.1/ref/settings/#default-auto-field
@@ -224,11 +229,12 @@ EMAIL_HOST_USER = decouple_config("EMAIL_HOST_USER")
 EMAIL_HOST_PASSWORD = decouple_config("EMAIL_HOST_PASSWORD")
 EMAIL_PORT = decouple_config("EMAIL_PORT")
 EMAIL_USE_TLS = decouple_config("EMAIL_USE_TLS")
-from_mail = decouple_config('FROM_MAIL')
+FROM_MAIL = decouple_config("FROM_MAIL")
+FR_DOMAIN_NAME = decouple_config("FR_DOMAIN_NAME")
 
-DEFAULT_FILE_STORAGE = 'django.core.files.storage.FileSystemStorage'
+DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket
 
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
-INTERNAL_IPS = [f'{ip[:-1]}1' for ip in ips] + ['127.0.0.1', '10.0.2.2']
+INTERNAL_IPS = [f"{ip[:-1]}1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]

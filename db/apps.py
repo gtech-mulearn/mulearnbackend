@@ -18,6 +18,7 @@ class DbConfig(AppConfig):
 
     @classmethod
     def check_system_user_exists(cls):
+        from db.organization import District as _
         from db.user import User
         if not User.objects.filter(id=config("SYSTEM_ADMIN_ID")).exists():
             raise SystemUserNotFoundError(
