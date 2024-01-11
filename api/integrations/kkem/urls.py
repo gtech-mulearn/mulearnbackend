@@ -13,4 +13,6 @@ urlpatterns = [
     
     path('users/', kkem_views.KKEMBulkKarmaAPI.as_view(), name="list-user"),
     path('users/<str:muid>/', kkem_views.KKEMIndividualKarmaAPI.as_view(), name="get-user"),
+    
+    path('hackathon-stats/', kkem_views.HackathonStatsAPI.as_view(), name="hackathon-kkem"),
 ]

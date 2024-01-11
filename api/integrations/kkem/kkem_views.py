@@ -4,6 +4,7 @@ from datetime import datetime
 import requests
 from django.db.models import F, Prefetch
 from rest_framework.views import APIView
+from db.hackathon import Hackathon
 
 from db.integrations import Integration, IntegrationAuthorization
 from db.task import InterestGroup, KarmaActivityLog, TaskList, UserIgLink
@@ -16,8 +17,6 @@ from utils.utils import DateTimeUtils, send_template_mail
 from .. import integrations_helper
 from . import kkem_helper
 from .kkem_serializer import KKEMAuthorization, KKEMUserSerializer
-
-logger = logging.getLogger(__name__)
 
 
 class KKEMBulkKarmaAPI(APIView):
@@ -233,3 +232,33 @@ class KKEMUserStatusAPI(APIView):
 
         except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
+
+
+class HackathonStatsAPI(APIView):
+    @integrations_helper.token_required(IntegrationType.KKEM.value)
+    def get(self, request):
+        return CustomResponse(
+            response=[
+                {
+                    "registered_people": 451,
+                    "shortlisted_people": 202,
+                    "selection_criteria": "GitHub, Portfolio",
+                    "total_participants": 168,
+                    "winning_team_members": 30,
+                },
+                {
+                    "registered_people": 1765,
+                    "shortlisted_people": 150,
+                    "selection_criteria": "Phase 1 scrutiny by task submission",
+                    "total_participants": 110,
+                    "winning_team_members": 29,
+                },
+                {
+                    "registered_people": 374,
+                    "shortlisted_people": 203,
+                    "selection_criteria": "Mainly focused on final years or 2023 Graduates. Also checked GitHub Profile and Behance",
+                    "total_participants": 143,
+                    "winning_team_members": 19,
+                },
+            ]
+        ).get_success_response()
