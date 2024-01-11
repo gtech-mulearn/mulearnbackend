@@ -11,10 +11,10 @@ from utils.types import ManagementType
 class DynamicRoleCreateSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=True, error_messages={
         'required': 'type field must not be left blank.'
-        })
+    })
     role = serializers.CharField(required=True, error_messages={
         'required': 'role field must not be left blank.'
-        })
+    })
 
     class Meta:
         model = DynamicRole
@@ -29,17 +29,17 @@ class DynamicRoleCreateSerializer(serializers.ModelSerializer):
         validated_data['created_by_id'] = user_id
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
         return DynamicRole.objects.create(**validated_data)
-    
+
     def validate(self, data):
         if DynamicRole.objects.filter(type=data['type'], role=data['role']).exists():
             raise serializers.ValidationError("Dynamic Role already exists")
         return data
-    
+
     def validate_role(self, value):
         if not Role.objects.filter(id=value).exists():
             raise serializers.ValidationError("Enter a valid role")
         return value
-    
+
     def validate_type(self, value):
         if value not in list(ManagementType.get_all_values()):
             raise serializers.ValidationError("Enter a valid type")
@@ -58,7 +58,7 @@ class DynamicRoleListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = DynamicRole
-        fields = ["type", "roles"]    
+        fields = ["type", "roles"]
 
 
 class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
@@ -78,7 +78,7 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.role_id = new_role or instance.role_id
         instance.save()
-        return instance 
+        return instance
 
     def validate_new_role(self, value):
         if not Role.objects.filter(id=value).exists():
@@ -92,11 +92,11 @@ class DynamicRoleUpdateSerializer(serializers.ModelSerializer):
 class DynamicUserCreateSerializer(serializers.ModelSerializer):
     type = serializers.CharField(required=True, error_messages={
         'required': 'type field must not be left blank.'
-        })
+    })
     user = serializers.CharField(required=True, error_messages={
         'required': 'user field must not be left blank.'
-        })
-    
+    })
+
     class Meta:
         model = DynamicUser
         fields = ["type", "user"]
@@ -109,18 +109,18 @@ class DynamicUserCreateSerializer(serializers.ModelSerializer):
         validated_data['created_by_id'] = user_id
         validated_data['created_at'] = DateTimeUtils.get_current_utc_time()
         return DynamicUser.objects.create(**validated_data)
-    
+
     def validate(self, data):
         if DynamicUser.objects.filter(type=data['type'], user=data['user']).exists():
             raise serializers.ValidationError("Dynamic User already exists")
         return data
-    
+
     def validate_user(self, value):
         user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
         if user is None:
             raise serializers.ValidationError("Enter a valid user")
         return user
-    
+
     def validate_type(self, value):
         if value not in list(ManagementType.get_all_values()):
             raise serializers.ValidationError("Enter a valid type")
@@ -136,7 +136,7 @@ class DynamicUserListSerializer(serializers.ModelSerializer):
             {
                 'dynamic_user_id': dynamic_user.id,
                 'user_id': dynamic_user.user.id,
-                'name': f"{dynamic_user.user.first_name} {dynamic_user.user.last_name if dynamic_user.user.last_name else ''}",
+                'full_name': dynamic_user.user.full_name,
                 'muid': dynamic_user.user.muid,
                 'email': dynamic_user.user.email,
             }
@@ -165,7 +165,7 @@ class DynamicUserUpdateSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.user = new_user or instance.user
         instance.save()
-        return instance 
+        return instance
 
     def validate_new_user(self, value):
         new_user = User.objects.filter(Q(muid=value) | Q(email=value)).first()
