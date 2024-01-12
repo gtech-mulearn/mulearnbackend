@@ -240,6 +240,7 @@ class HackathonStatsAPI(APIView):
         return CustomResponse(
             response=[
                 {
+                    "hackathon" : "GTA CodeStorm",
                     "registered_people": 451,
                     "shortlisted_people": 202,
                     "selection_criteria": "GitHub, Portfolio",
@@ -247,6 +248,7 @@ class HackathonStatsAPI(APIView):
                     "winning_team_members": 30,
                 },
                 {
+                    "hackathon" : "GTA Sandshore",
                     "registered_people": 1765,
                     "shortlisted_people": 150,
                     "selection_criteria": "Phase 1 scrutiny by task submission",
@@ -254,6 +256,7 @@ class HackathonStatsAPI(APIView):
                     "winning_team_members": 29,
                 },
                 {
+                    "hackathon" : "Beyond Us",
                     "registered_people": 374,
                     "shortlisted_people": 203,
                     "selection_criteria": "Mainly focused on final years or 2023 Graduates. Also checked GitHub Profile and Behance",
