@@ -1,4 +1,3 @@
-from urllib import response
 from rest_framework.views import APIView
 
 from api.url_shortener.serializers import (
@@ -7,18 +6,16 @@ from api.url_shortener.serializers import (
 )
 from db.url_shortener import UrlShortener, UrlShortenerTracker
 from utils.permission import CustomizePermission
-from utils.permission import role_required
+from utils.permission import dynamic_role_required
+from utils.types import ManagementType
 from utils.response import CustomResponse
-from utils.types import RoleType
 from utils.utils import CommonUtils
 
 
 class UrlShortenerAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required(
-        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
-    )
+    @dynamic_role_required(ManagementType.URL_SHORTENER.value)
     def post(self, request):
 
         serializer = ShortenUrlsCreateUpdateSerializer(
@@ -39,9 +36,7 @@ class UrlShortenerAPI(APIView):
             message=serializer.errors
         ).get_failure_response()
 
-    @role_required(
-        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
-    )
+    @dynamic_role_required(ManagementType.URL_SHORTENER.value)
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all().order_by('-created_at')
 
@@ -76,9 +71,7 @@ class UrlShortenerAPI(APIView):
             pagination=paginated_queryset.get("pagination")
         )
 
-    @role_required(
-        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
-    )
+    @dynamic_role_required(ManagementType.URL_SHORTENER.value)
     def put(self, request, url_id):
         url_shortener = UrlShortener.objects.filter(
             id=url_id
@@ -107,9 +100,7 @@ class UrlShortenerAPI(APIView):
             message=serializer.errors
         ).get_failure_response()
 
-    @role_required(
-        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
-    )
+    @dynamic_role_required(ManagementType.URL_SHORTENER.value)
     def delete(self, request, url_id):
         url_shortener_object = UrlShortener.objects.filter(
             id=url_id
@@ -129,9 +120,7 @@ class UrlShortenerAPI(APIView):
 class UrlAnalyticsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required(
-        [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
-    )
+    @dynamic_role_required(ManagementType.URL_SHORTENER.value)
     def get(self, request, url_id):
         queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)
         # long and short url

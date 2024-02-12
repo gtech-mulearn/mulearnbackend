@@ -97,7 +97,6 @@ class UniversalErrorHandlerMiddleware:
         _ = request.body
         return self.get_response(request)
 
-
     def log_exception(self, request, exception):
         """
         Log the exception and prints the information in CLI.
@@ -117,9 +116,9 @@ class UniversalErrorHandlerMiddleware:
 
         with suppress(json.JSONDecodeError):
             auth = json.dumps(auth, indent=4)
-        
-        exception_id = self.generate_error_id(exception)
-            
+
+        exception_id = self.generate_error_id(exception, request)
+
         request_info = (
             f"EXCEPTION INFO:\n"
             f"ID: {exception_id}\n"
@@ -134,9 +133,9 @@ class UniversalErrorHandlerMiddleware:
         logger.error(request_info)
 
         print(request_info)
-        
-    def generate_error_id(self, exception):
-        error_info = f"{type(exception).__name__}: {str(exception)}"
+
+    def generate_error_id(self, exception, request):
+        error_info = f"{type(exception).__name__}: {str(exception)}: {request.method}: {request.path}"
 
         hash_object = hashlib.sha256(error_info.encode())
         return hash_object.hexdigest()
