@@ -203,3 +203,16 @@ class DynamicUser(models.Model):
     class Meta:
         managed = False
         db_table = 'dynamic_user'
+
+class UserCouponLink(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='usercouponlink_user')
+    coupon = models.CharField(max_length=15)
+    type = models.CharField(max_length=36)
+    created_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
+                                   related_name='usercouponlink_created_by_set')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'user_coupon_link'
