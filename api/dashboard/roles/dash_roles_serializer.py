@@ -29,8 +29,7 @@ class RoleAssignmentSerializer(serializers.Serializer):
 
     role = serializers.PrimaryKeyRelatedField(queryset=Role.objects.all())
     users = serializers.ListField(child=serializers.UUIDField())
-    created_by = serializers.PrimaryKeyRelatedField(
-        queryset=User.objects.all())
+    created_by = serializers.PrimaryKeyRelatedField(queryset=User.objects.all())
 
     def validate(self, attrs):
         data = super().validate(attrs)
@@ -39,8 +38,7 @@ class RoleAssignmentSerializer(serializers.Serializer):
             ~Q(user_role_link_user__role=data["role"]), pk__in=attrs
         )
         if users.count() != len(attrs):
-            raise serializers.ValidationError(
-                "One or more user IDs are invalid.")
+            raise serializers.ValidationError("One or more user IDs are invalid.")
 
         data["users"] = users
         return data

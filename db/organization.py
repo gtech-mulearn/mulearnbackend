@@ -121,15 +121,13 @@ class Department(models.Model):
 
 
 class College(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
-    level = models.IntegerField(default=0)
-    org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='college_org', unique=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
-                                   related_name='college_updated_by')
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
-                                   related_name='college_created_by')
-    created_at = models.DateTimeField(auto_now_add=True)
+    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    level       = models.IntegerField(default=0)
+    org         = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='college_org')
+    updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='college_updated_by')
+    updated_at  = models.DateTimeField(auto_now=True)
+    created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='college_created_by')
+    created_at  = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False

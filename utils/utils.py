@@ -4,14 +4,13 @@ import gzip
 import io
 from datetime import timedelta
 
-import decouple
 import openpyxl
 import pytz
 import requests
 from decouple import config
-from django.core.mail import EmailMessage
-from django.core.mail import send_mail
-from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
+from django.conf import settings
+from django.core.mail import EmailMessage, send_mail
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
@@ -27,6 +26,19 @@ class CommonUtils:
         sort_fields: dict = None,
         is_pagination: bool = True,
     ) -> QuerySet:
+        """
+        Returns a paginated queryset based on the provided parameters.
+
+        Args:
+            - queryset (QuerySet): The original queryset to be paginated.
+            - request: The request object containing query parameters.
+            - search_fields (list): The list of fields to search for.
+            - sort_fields (dict, optional): A dictionary mapping sort fields. Defaults to None.
+            - is_pagination (bool, optional): Flag indicating whether pagination should be applied. Defaults to True.
+
+        Returns:
+            - QuerySet or dict: The paginated queryset or a dictionary containing the paginated queryset and pagination information.
+        """
         if sort_fields is None:
             sort_fields = {}
 
@@ -195,37 +207,32 @@ def send_template_mail(
     and used as the content of the email
     attachment: The Attachment That send to the user
     """
-
-    from_mail = decouple.config("FROM_MAIL")
-
-    base_url = decouple.config("FR_DOMAIN_NAME")
     status = None
 
     email_content = render_to_string(
-        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
+        f"mails/{'/'.join(map(str, address))}",
+        {"user": context, "base_url": settings.FR_DOMAIN_NAME},
     )
     if not (mail := getattr(context, "email", None)):
         mail = context["email"]
 
     if attachment is None:
-        status = send_mail(
+        return send_mail(
             subject=subject,
             message=email_content,
-            from_email=from_mail,
+            from_email=settings.FROM_MAIL,
             recipient_list=[mail],
             html_message=email_content,
             fail_silently=False,
         )
 
-    else:
-        email = EmailMessage(
-            subject=subject,
-            body=email_content,
-            from_email=from_mail,
-            to=[context["email"]],
-        )
-        email.attach(attachment)
-        email.content_subtype = "html"
-        status = email.send()
+    email = EmailMessage(
+        subject=subject,
+        body=email_content,
+        from_email=settings.FROM_MAIL,
+        to=[context["email"]],
+    )
 
-    return status
+    email.attach(attachment)
+    email.content_subtype = "html"
+    return email.send()

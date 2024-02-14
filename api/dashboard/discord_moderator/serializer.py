@@ -22,3 +22,13 @@ class KarmaActivityLogSerializer(serializers.ModelSerializer):
             return "Appraiser Approved"
         else:
             return "Pending"
+
+
+class LeaderboardSerializer(serializers.ModelSerializer):
+    name = serializers.CharField(max_length=100)
+    count = serializers.IntegerField()
+    muid = serializers.CharField(max_length=100)
+
+    class Meta:
+        model = KarmaActivityLog
+        fields = ['name', 'count', 'muid']

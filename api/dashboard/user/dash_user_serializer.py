@@ -10,6 +10,7 @@ from db.user import User, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
+from db.user import DynamicRole, DynamicUser
 
 BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
 
@@ -37,6 +38,7 @@ class UserDashboardSerializer(serializers.ModelSerializer):
 class UserSerializer(serializers.ModelSerializer):
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
+    dynamic_type = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -51,6 +53,7 @@ class UserSerializer(serializers.ModelSerializer):
             "joined",
             "roles",
             "profile_pic",
+            "dynamic_type",
         ]
 
     def get_roles(self, obj):
@@ -58,6 +61,11 @@ class UserSerializer(serializers.ModelSerializer):
             user_role_link.role.title
             for user_role_link in obj.user_role_link_user.all()
         ]
+
+    def get_dynamic_type(self, obj):
+        return {dynamic_role.type for dynamic_role in
+                DynamicRole.objects.filter(role__title__in=self.get_roles(obj))}.union(
+            {dynamic_user.type for dynamic_user in DynamicUser.objects.filter(user=obj)})
 
 
 class CollegeSerializer(serializers.ModelSerializer):
@@ -261,8 +269,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 college := instance.user_organization_link_user.filter(
                     org__org_type=OrganizationType.COLLEGE.value
                 )
-            .select_related("org__district__zone__state__country", "department")
-            .first()
+                        .select_related("org__district__zone__state__country", "department")
+                        .first()
         ):
             data.update(
                 {

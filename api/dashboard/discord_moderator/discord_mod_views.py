@@ -4,9 +4,10 @@ from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.task import KarmaActivityLog
+from utils.utils import CommonUtils
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
-from .serializer import KarmaActivityLogSerializer
+from .serializer import KarmaActivityLogSerializer,LeaderboardSerializer
 
 
 class TaskList(APIView):
@@ -14,9 +15,23 @@ class TaskList(APIView):
 
     def get(self, request):
         tasks = KarmaActivityLog.objects.all()
-        serializer = KarmaActivityLogSerializer(tasks, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            tasks,
+            request,
+            ['id', 'full_name', 'task_name', 'status', 'discordlink']
+        )
 
+        serializer = KarmaActivityLogSerializer(
+            paginated_queryset.get("queryset"), 
+            many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data,      
+            pagination=paginated_queryset.get(
+                "pagination"
+            )
+        )
 
 class PendingTasks(APIView):
     authentication_classes = [CustomizePermission]
@@ -65,4 +80,19 @@ class LeaderBoard(APIView):
             for name, info in data.items()
         ]
 
-        return CustomResponse(response=response_data).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            response_data,
+            request,
+            []
+        )
+        serializer = LeaderboardSerializer(
+            paginated_queryset.get("queryset"),
+            many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated_queryset.get(
+                "pagination"
+            )
+        )
+

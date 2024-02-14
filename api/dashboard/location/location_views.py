@@ -18,10 +18,23 @@ class CountryDataAPI(APIView):
         if country_id:
             countries = Country.objects.filter(id=country_id)
         else:
-            countries = Country.objects.all().select_related("created_by", "updated_by")
+            countries = Country.objects.select_related("created_by", "updated_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            countries, request, ["name"], {"label": "name"}
+            countries,
+            request,
+            [
+                "name",
+                "created_by__full_name",
+                "updated_by__full_name",
+            ],
+            {
+                "label": "name",
+                "created_by": "created_by__full_name",
+                "created_at": "created_at",
+                "updated_by": "updated_by__full_name",
+                "updated_at": "updated_at",
+            },
         )
 
         serializer = location_serializer.LocationSerializer(
@@ -88,7 +101,17 @@ class StateDataAPI(APIView):
             )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            states, request, ["name"], {"name": "name"}
+            states,
+            request,
+            ["name", "country__name", "created_by__full_name", "updated_by__full_name"],
+            {
+                "label": "name",
+                "country": "country__name",
+                "created_by": "created_by__full_name",
+                "created_at": "created_at",
+                "updated_by": "updated_by__full_name",
+                "updated_at": "updated_at",
+            },
         )
 
         serializer = location_serializer.StateRetrievalSerializer(
@@ -156,7 +179,24 @@ class ZoneDataAPI(APIView):
             )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            zones, request, ["name"], {"name": "name"}
+            zones,
+            request,
+            [
+                "name",
+                "state__name",
+                "state__country__name",
+                "created_by__full_name",
+                "updated_by__full_name",
+            ],
+            {
+                "label": "name",
+                "state": "state__name",
+                "country": "state__country__name",
+                "created_by": "created_by__full_name",
+                "created_at" : "created_at",
+                "updated_by": "updated_by__full_name",
+                "updated_at" : "updated_at",
+            },
         )
 
         serializer = location_serializer.ZoneRetrievalSerializer(
@@ -228,7 +268,25 @@ class DistrictDataAPI(APIView):
             )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            districts, request, ["name"], {"name": "name"}
+            districts,
+            request,
+            [
+                "name",
+                "zone__name",
+                "zone__state__name",
+                "created_by__full_name",
+                "updated_by__full_name",
+            ],
+            {
+                "label": "name",
+                "zone": "zone__name",
+                "state": "zone__state__name",
+                "country": "zone__state__country__name",
+                "created_by": "created_by__full_name",
+                "created_at" : "created_at",
+                "updated_by": "updated_by__full_name",
+                "updated_at" : "updated_at",
+            },
         )
 
         serializer = location_serializer.DistrictRetrievalSerializer(

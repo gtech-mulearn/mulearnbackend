@@ -6,6 +6,7 @@ from rest_framework.response import Response
 from django.core.files.storage import FileSystemStorage
 from django.http import HttpResponse
 
+
 class CustomResponse:
     """A custom response class for API views.
 
@@ -15,10 +16,10 @@ class CustomResponse:
     """
 
     def __init__(
-        self,
-        message: Dict[str, Any] = None,
-        general_message: List[str] = None,
-        response: Dict[str, Any] = None,
+            self,
+            message: Dict[str, Any] = None,
+            general_message: List[str] = None,
+            response: Dict[str, Any] = None,
     ) -> None:
         """Initializes the CustomResponse object.
 
@@ -56,9 +57,9 @@ class CustomResponse:
         )
 
     def get_failure_response(
-        self,
-        status_code: int = 400,
-        http_status_code: int = status.HTTP_400_BAD_REQUEST,
+            self,
+            status_code: int = 400,
+            http_status_code: int = status.HTTP_400_BAD_REQUEST,
     ) -> Response:
         """Returns a failure response.
 
@@ -79,6 +80,23 @@ class CustomResponse:
                 "response": self.response,
             },
             status=http_status_code,
+        )
+
+    def get_unauthorized_response(
+            self
+    ) -> Response:
+        """
+        Returns:
+            Response: A failure response object.
+        """
+        return Response(
+            data={
+                "hasError": True,
+                "statusCode": 403,
+                "message": self.message,
+                "response": self.response,
+            },
+            status=status.HTTP_403_FORBIDDEN,
         )
 
     def paginated_response(self, data: dict, pagination: dict) -> Response:
@@ -107,16 +125,18 @@ class CustomResponse:
 
 
 class ImageResponse:
-    def __init__(self,path:str):
+    def __init__(self, path: str):
         fs = FileSystemStorage()
-        if fs.exists(path):self.file = fs.open(path)
-        else: self.file = None
-    
+        if fs.exists(path):
+            self.file = fs.open(path)
+        else:
+            self.file = None
+
     def exists(self) -> bool:
         return False if self.file is None else True
-    
+
     def get_success_response(self) -> Response:
-        return HttpResponse(self.file,status=status.HTTP_200_OK,content_type='image/png')
-    
-    def get_failure_response(self,http_status_code : int = status.HTTP_400_BAD_REQUEST) -> Response:
-        return HttpResponse(self.file,status=http_status_code,content_type='image/png')
+        return HttpResponse(self.file, status=status.HTTP_200_OK, content_type='image/png')
+
+    def get_failure_response(self, http_status_code: int = status.HTTP_400_BAD_REQUEST) -> Response:
+        return HttpResponse(self.file, status=http_status_code, content_type='image/png')
