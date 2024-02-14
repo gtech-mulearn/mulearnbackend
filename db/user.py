@@ -3,12 +3,12 @@ import uuid
 from django.core.files.storage import FileSystemStorage
 from django.db import models
 
-
 from django.conf import settings
 
 from .managers import user_manager
 # from .task import UserIgLink
 from decouple import config as decouple_config
+
 
 # fmt: off
 # noinspection PyPep8
@@ -63,14 +63,17 @@ class UserMentor(models.Model):
     about = models.CharField(max_length=1000, blank=True, null=True)
     reason = models.CharField(max_length=1000, blank=True, null=True)
     hours = models.IntegerField()
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by', related_name='user_mentor_updated_by_set')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
+                                   related_name='user_mentor_updated_by_set')
     updated_at = models.DateTimeField(blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by', related_name='user_mentor_created_by_set')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
+                                   related_name='user_mentor_created_by_set')
     created_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         managed = False
         db_table = 'user_mentor'
+
 
 class UserReferralLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
@@ -203,3 +206,17 @@ class DynamicUser(models.Model):
     class Meta:
         managed = False
         db_table = 'dynamic_user'
+
+
+class UserCouponLink(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='usercouponlink_user')
+    coupon = models.CharField(max_length=15)
+    type = models.CharField(max_length=36)
+    created_by = models.ForeignKey('User', on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
+                                   related_name='usercouponlink_created_by_set')
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'user_coupon_link'
