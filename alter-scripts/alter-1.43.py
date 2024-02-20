@@ -90,8 +90,6 @@ def automate_socials_karma():
         for idx, data in enumerate(result[1:]):
             social = f"#social_{socials[idx]}"
             if data and data != "":
-                if result[0] == '3a77f992-a8c9-4ca3-8e00-8f1eaaf91d0c':
-                    print(socials[idx])
                 task_id = get_task_list(social)      
                 give_karma(result[0], task_id)
 
