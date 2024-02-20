@@ -61,6 +61,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'ig_name',
+            'org_name',
             'member_count',
             'members',
             'meet_place',
