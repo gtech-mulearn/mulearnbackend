@@ -16,7 +16,8 @@ from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer, \
-    UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer, LcDetailsSerializer
+    UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer, LcDetailsSerializer, \
+    LcListSerializer
 
 class LcDetailsAPI(APIView):
     def get(self, request, circle_id):
@@ -29,6 +30,41 @@ class LcDetailsAPI(APIView):
         )
 
         return CustomResponse(response=serializer.data).get_success_response()
+
+class LcListAPI(APIView):
+    def get(self, request):
+        all_circles = LearningCircle.objects.all()
+        ig = request.query_params.get("ig")
+        org = request.query_params.get("org")
+        district = request.query_params.get("district")
+
+        if district:
+            all_circles = all_circles.filter(org__district__name=district)
+
+        if org:
+            all_circles = all_circles.filter(org__title=org)
+
+        if ig:
+            all_circles = all_circles.filter(ig__name=ig)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            all_circles,
+            request,
+            search_fields=[],
+        )
+
+        serializer = LcListSerializer(
+            paginated_queryset.get("queryset"),
+            many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated_queryset.get(
+                "pagination"
+            )
+        )
+
     
 class LcDashboardAPI(APIView):
     def get(self, request):

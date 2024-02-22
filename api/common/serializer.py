@@ -12,6 +12,61 @@ from db.learning_circle import LearningCircle
 from db.task import KarmaActivityLog
 from db.user import User
 
+class LcListSerializer(serializers.ModelSerializer):
+    ig_name = serializers.CharField(source='ig.name')
+    org_name = serializers.CharField(source='org.title', allow_null=True)
+    member_count = serializers.SerializerMethodField()
+    members = serializers.SerializerMethodField()
+    lead_name = serializers.SerializerMethodField()
+    karma = serializers.SerializerMethodField()
+    class Meta:
+        model = LearningCircle
+        fields = [
+            'id',
+            'name',
+            'ig_name',
+            'org_name',
+            'member_count',
+            'members',
+            'meet_place',
+            'meet_time',
+            'lead_name',
+            'karma'
+        ]
+
+    def get_lead_name(self, obj):
+        user_circle_link = obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=1,
+            lead=True
+        ).first()
+
+        return user_circle_link.user.full_name if user_circle_link else None
+
+    def get_member_count(self, obj):
+        return obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=1
+        ).count()
+
+    def get_members(self, obj):
+        user_circle_link = obj.user_circle_link_circle.filter(
+            circle=obj,
+            accepted=1
+        )
+
+    def get_karma(self, obj):
+        
+        karma_activity_log = KarmaActivityLog.objects.filter(
+            user__user_circle_link_user__circle=obj,
+        ).aggregate(
+            karma=Sum(
+                'karma'
+            )
+        )['karma']
+
+        return karma_activity_log if karma_activity_log else 0
+    
 class LcDetailsSerializer(serializers.ModelSerializer):
     college = serializers.CharField(source='org.title', allow_null=True)
     total_karma = serializers.SerializerMethodField()

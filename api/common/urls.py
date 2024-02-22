@@ -3,6 +3,7 @@ from django.urls import path
 from . import common_views
 
 urlpatterns = [
+    path('lc-list', common_views.LcListAPI.as_view()),
     path('<str:circle_id>/lc-details/', common_views.LcDetailsAPI.as_view()),
     path('lc-dashboard/', common_views.LcDashboardAPI.as_view()),
     path('lc-report/', common_views.LcReportAPI.as_view()),
