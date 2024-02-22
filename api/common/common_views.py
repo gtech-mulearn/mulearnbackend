@@ -16,9 +16,20 @@ from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer, \
-    UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer
+    UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer, LcDetailsSerializer
 
+class LcDetailsAPI(APIView):
+    def get(self, request, circle_id):
+        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
 
+        serializer = LcDetailsSerializer(
+            learning_circle,
+            many=False,
+            context={"circle_id": circle_id},
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
+    
 class LcDashboardAPI(APIView):
     def get(self, request):
         date = request.query_params.get("date")
