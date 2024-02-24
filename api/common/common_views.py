@@ -32,17 +32,11 @@ class LcDetailsAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class LcListAPI(APIView):
-    def get(self, request):
+    def get(self, request, ig, district):
         all_circles = LearningCircle.objects.all()
-        ig = request.query_params.get("ig")
-        org = request.query_params.get("org")
-        district = request.query_params.get("district")
 
         if district:
             all_circles = all_circles.filter(org__district__name=district)
-
-        if org:
-            all_circles = all_circles.filter(org__title=org)
 
         if ig:
             all_circles = all_circles.filter(ig__name=ig)
