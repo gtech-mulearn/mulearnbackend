@@ -9,16 +9,63 @@ from rest_framework.views import APIView
 
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
-from db.organization import Organization
+from db.organization import Organization,Department,District,State,Country
 from db.task import InterestGroup, KarmaActivityLog, UserIgLink
 from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
 from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer, \
-    UserLeaderboardSerializer
+    UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer, LcDetailsSerializer, \
+    LcListSerializer
 
+class LcDetailsAPI(APIView):
+    def get(self, request, circle_id):
+        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
 
+        serializer = LcDetailsSerializer(
+            learning_circle,
+            many=False,
+            context={"circle_id": circle_id},
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+class LcListAPI(APIView):
+    def get(self, request):
+        all_circles = LearningCircle.objects.all()
+        ig = request.query_params.get("ig")
+        org = request.query_params.get("org")
+        district = request.query_params.get("district")
+
+        if district:
+            all_circles = all_circles.filter(org__district__name=district)
+
+        if org:
+            all_circles = all_circles.filter(org__title=org)
+
+        if ig:
+            all_circles = all_circles.filter(ig__name=ig)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            all_circles,
+            request,
+            search_fields=[],
+        )
+
+        serializer = LcListSerializer(
+            paginated_queryset.get("queryset"),
+            many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated_queryset.get(
+                "pagination"
+            )
+        )
+
+    
 class LcDashboardAPI(APIView):
     def get(self, request):
         date = request.query_params.get("date")
@@ -580,3 +627,69 @@ class BekenAPI(APIView):
             '-wallet_user__karma')[:100]
         data = UserLeaderboardSerializer(user_info, many=True)
         return CustomResponse(response=data.data).get_success_response()
+
+
+class LcCollegeAPI(APIView):
+    def get(self, request):
+        org_queryset = Organization.objects.filter(
+            Q(org_type=OrganizationType.COLLEGE.value),
+            Q(district_id=request.query_params.get("district_id")),
+        )
+        department_queryset = Department.objects.all()
+
+        college_serializer_data = OrgSerializer(
+            org_queryset, many=True
+        ).data
+
+        department_serializer_data = OrgSerializer(
+            department_queryset, many=True
+        ).data
+
+        return CustomResponse(
+            response={
+                "colleges": college_serializer_data,
+                "departments": department_serializer_data,
+            }
+        ).get_success_response()
+
+
+
+class LcDistrictAPI(APIView):
+    def get(self, request):
+        district = District.objects.filter(zone__state_id=request.query_params.get("state_id"))
+        
+        serializer = DistrictSerializer(district, many=True)
+
+        return CustomResponse(
+            response={
+                "districts": serializer.data,
+            }
+        ).get_success_response()
+
+class LcStateAPI(APIView):
+    def get(self, request):
+        
+        state = State.objects.filter(country_id=request.query_params.get("country_id"))
+        serializer = StateSerializer(state, many=True)
+        
+        return CustomResponse(
+            response={
+                "states": serializer.data,
+            }
+        ).get_success_response()
+
+
+class LcCountryAPI(APIView):
+    def get(self, request):
+        countries = Country.objects.all()
+
+        serializer = CountrySerializer(countries, many=True)
+
+        return CustomResponse(
+            response={
+                "countries": serializer.data,
+            }
+        ).get_success_response()
+
+
+

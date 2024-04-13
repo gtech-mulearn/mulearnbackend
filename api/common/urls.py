@@ -3,6 +3,8 @@ from django.urls import path
 from . import common_views
 
 urlpatterns = [
+    path('lc-list', common_views.LcListAPI.as_view()),
+    path('<str:circle_id>/lc-details/', common_views.LcDetailsAPI.as_view()),
     path('lc-dashboard/', common_views.LcDashboardAPI.as_view()),
     path('lc-report/', common_views.LcReportAPI.as_view()),
     path('college-wise-lc-report/', common_views.CollegeWiseLcReport.as_view()),
@@ -19,4 +21,10 @@ urlpatterns = [
     path('list-ig-top100/', common_views.ListTopIgUsersAPI.as_view()),
 
     path('leaderboard/top-100/', common_views.BekenAPI.as_view()),
+
+    
+    path("list/college/", common_views.LcCollegeAPI.as_view()),
+    path("list/district/", common_views.LcDistrictAPI.as_view()),
+    path("list/state/", common_views.LcStateAPI.as_view()),
+    path("list/country/", common_views.LcCountryAPI.as_view()),
 ]

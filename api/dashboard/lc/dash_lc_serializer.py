@@ -37,7 +37,7 @@ class LearningCircleSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
             "created_at",
-            "member_count",
+            "member_count"
         ]
 
     def get_member_count(self, obj):
@@ -49,6 +49,7 @@ class LearningCircleSerializer(serializers.ModelSerializer):
 
 class LearningCircleMainSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source='ig.name')
+    org_name = serializers.CharField(source='org.title', allow_null=True)
     member_count = serializers.SerializerMethodField()
     members = serializers.SerializerMethodField()
     lead_name = serializers.SerializerMethodField()
@@ -60,6 +61,7 @@ class LearningCircleMainSerializer(serializers.ModelSerializer):
             'id',
             'name',
             'ig_name',
+            'org_name',
             'member_count',
             'members',
             'meet_place',

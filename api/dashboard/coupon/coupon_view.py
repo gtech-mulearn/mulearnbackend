@@ -4,10 +4,15 @@ from db.user import UserCouponLink
 from rest_framework.response import Response
 
 
+
+
+
 class CouponApi(APIView):
     def post(self, request):
         if coupon_code := request.data.get('data'):
             if UserCouponLink.objects.filter(coupon=coupon_code).exists():
-                return Response(data={"discount_type": "Percentage", "discount_value": 100})
-            return Response(data={"discount_type": "Percentage", "discount_value": 0})
-        return Response(data={"discount_type": "Percentage", "discount_value": 0})
+
+                return CustomResponse(general_message="Coupon is valid").get_success_response()
+            return CustomResponse(general_message="Coupon is invalid").get_failure_response()
+        return CustomResponse(general_message="Coupon code is required").get_failure_response()
+
