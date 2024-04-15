@@ -48,8 +48,7 @@ class Leaderboard(APIView):
             tl.event = "launchpad" AND
             kal.appraiser_approved = TRUE
         GROUP BY u.id, u.full_name, org.title, comm.title, COALESCE(org.dis, d.name), COALESCE(org.state, s.name)
-        ORDER BY karma DESC, time_
-        LIMIT 30;
+        ORDER BY karma DESC, time_;
         """
         with connection.cursor() as cursor:
             cursor.execute(query)
@@ -58,6 +57,8 @@ class Leaderboard(APIView):
             user_ids = set()
             list_of_dicts = []
             for row in results:
+                if len(list_of_dicts) == 30:
+                    break
                 if row[0] not in user_ids:
                     user_ids.add(row[0])
                     list_of_dicts.append(dict(zip(column_names, row)))
