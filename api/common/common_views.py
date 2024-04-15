@@ -32,8 +32,9 @@ class LcDetailsAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class LcListAPI(APIView):
-    def get(self, request):
+    def get(self, request, ig, district):
         all_circles = LearningCircle.objects.all()
+        
         ig = request.query_params.get("ig")
         org = request.query_params.get("org")
         district = request.query_params.get("district")
