@@ -55,5 +55,10 @@ class Leaderboard(APIView):
             cursor.execute(query)
             results = cursor.fetchall()
             column_names = [desc[0] for desc in cursor.description]
-            list_of_dicts = [dict(zip(column_names, row)) for row in results]
+            user_ids = set()
+            list_of_dicts = []
+            for row in results:
+                if row[0] not in user_ids:
+                    user_ids.add(row[0])
+                    list_of_dicts.append(dict(zip(column_names, row)))
             return CustomResponse(response=list_of_dicts).get_success_response()
