@@ -208,6 +208,9 @@ class DynamicUser(models.Model):
         db_table = 'dynamic_user'
 
 
+
+
+
 class UserCouponLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     user = models.ForeignKey('User', on_delete=models.CASCADE, related_name='usercouponlink_user')
@@ -219,4 +222,8 @@ class UserCouponLink(models.Model):
 
     class Meta:
         managed = False
+
         db_table = 'user_coupon_link'
+
+   
+
