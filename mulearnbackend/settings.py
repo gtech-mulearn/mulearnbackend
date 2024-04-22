@@ -232,8 +232,9 @@ EMAIL_USE_TLS = decouple_config("EMAIL_USE_TLS")
 FROM_MAIL = decouple_config("FROM_MAIL")
 FR_DOMAIN_NAME = decouple_config("FR_DOMAIN_NAME")
 
-WADHWANI_CLIENT_AUTH_URL = decouple_config("WADHWANI_CLIENT_AUTH_URL")
-WADHWANI_CLIENT_SECRET = decouple_config("WADHWANI_CLIENT_SECRET")
+# WADHWANI_CLIENT_AUTH_URL = decouple_config("WADHWANI_CLIENT_AUTH_URL")
+# WADHWANI_CLIENT_SECRET = decouple_config("WADHWANI_CLIENT_SECRET")
+# WADHWANI_BASE_URL = decouple_config("WADHWANI_BASE_URL")
 
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
