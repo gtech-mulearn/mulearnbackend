@@ -54,6 +54,8 @@ class WadhwaniCourseEnrollStatus(APIView):
         headers = {'Authorization': token}
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
+        if response.json()["status"] == "ERROR":
+            return CustomResponse(general_message="User doesn't have any enrolled courses").get_failure_response()
         response = requests.get(url, params={"username": user.email}, headers=headers)
         return CustomResponse(response=response.json()).get_success_response()
 
