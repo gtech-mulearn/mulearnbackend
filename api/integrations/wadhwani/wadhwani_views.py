@@ -22,7 +22,7 @@ class WadhwaniAuthToken(APIView):
     
 class WadhwaniUserLogin(APIView):
     def post(self, request):
-        url = settings.WADHWANI_BASE_URL + "api/v1/iamservice/oauth/login"
+        url = settings.WADHWANI_BASE_URL + "/api/v1/iamservice/oauth/login"
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
         token = request.headers.get('Client-Auth-Token')
@@ -41,7 +41,7 @@ class WadhwaniUserLogin(APIView):
     
 class WadhwaniCourseDetails(APIView):
     def get(self, request):
-        url = settings.WADHWANI_BASE_URL + "api/v1/courseservice/oauth/client/courses"
+        url = settings.WADHWANI_BASE_URL + "/api/v1/courseservice/oauth/client/courses"
         token = request.headers.get('Client-Auth-Token')
         headers = {'Authorization': token}
         response = requests.get(url, headers=headers)
@@ -49,7 +49,7 @@ class WadhwaniCourseDetails(APIView):
 
 class WadhwaniCourseEnrollStatus(APIView):
     def get(self, request):
-        url = settings.WADHWANI_BASE_URL + "api/v1/courseservice/oauth/client/courses"
+        url = settings.WADHWANI_BASE_URL + "/api/v1/courseservice/oauth/client/courses"
         token = request.headers.get('Client-Auth-Token')
         headers = {'Authorization': token}
         user_id = JWTUtils.fetch_user_id(request)
@@ -59,7 +59,7 @@ class WadhwaniCourseEnrollStatus(APIView):
 
 class WadhwaniCourseQuizData(APIView):
     def get(self, request):
-        url = settings.WADHWANI_BASE_URL + f"api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
+        url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         token = request.headers.get('Client-Auth-Token')
         headers = {'Authorization': token}
         course_id = request.query_params.get('course_id')
