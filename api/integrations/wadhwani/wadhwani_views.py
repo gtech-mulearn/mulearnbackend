@@ -61,11 +61,11 @@ class WadhwaniCourseEnrollStatus(APIView):
 
 class WadhwaniCourseQuizData(APIView):
     def get(self, request):
-        url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         token = request.headers.get('Client-Auth-Token')
         headers = {'Authorization': token}
         course_id = request.query_params.get('course_id')
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
+        url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         response = requests.get(url, headers=headers)
         return CustomResponse(response=response.json()).get_success_response()
