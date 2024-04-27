@@ -24,6 +24,7 @@ class WadhwaniUserLogin(APIView):
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/iamservice/oauth/login"
         user_id = JWTUtils.fetch_user_id(request)
+        course_root_id = request.data.get("course_root_id", None)
         user = User.objects.get(id=user_id)
         token = request.headers.get('Client-Auth-Token')
         data = {
@@ -34,7 +35,8 @@ class WadhwaniUserLogin(APIView):
             "mobile": f"+91-{user.mobile}",
             "countryCode": "IN",
             "userLanguageCode": "en",
-            "token": token
+            "token": token,
+            "courseRootId": course_root_id
         }
         response = requests.post(url, data=data)
         return CustomResponse(response=response.json()).get_success_response()
@@ -61,11 +63,11 @@ class WadhwaniCourseEnrollStatus(APIView):
 
 class WadhwaniCourseQuizData(APIView):
     def get(self, request):
-        url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         token = request.headers.get('Client-Auth-Token')
         headers = {'Authorization': token}
         course_id = request.query_params.get('course_id')
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
+        url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         response = requests.get(url, headers=headers)
         return CustomResponse(response=response.json()).get_success_response()
