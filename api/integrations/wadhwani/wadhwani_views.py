@@ -62,10 +62,10 @@ class WadhwaniCourseEnrollStatus(APIView):
         return CustomResponse(response=response.json()).get_success_response()
 
 class WadhwaniCourseQuizData(APIView):
-    def get(self, request):
-        token = request.headers.get('Client-Auth-Token', None)
+    def post(self, request):
+        token = request.data.get('Client-Auth-Token', None)
+        course_id = request.data.get('course_id', None)
         headers = {'Authorization': token}
-        course_id = request.query_params.get('course_id')
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
         url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
