@@ -126,6 +126,14 @@ class Lc(Enum):
     KARMA = 20
     TASK_HASHTAG = '#lcmeetreport'
 
+class CouponResponseKey(Enum):
+    DISCOUNT_TYPE = 'discount_type'
+    DISCOUNT_VALUE = 'discount_value'
+    TICKET = 'ticket'
+
+class DiscountTypes(Enum):
+    PERCENTAGE = 'percentage'
+    AMOUNT = 'amount'
 
 DEFAULT_HACKATHON_FORM_FIELDS = {
     'name': 'system',
