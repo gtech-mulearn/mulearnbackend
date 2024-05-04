@@ -236,6 +236,9 @@ WADHWANI_CLIENT_AUTH_URL = decouple_config("WADHWANI_CLIENT_AUTH_URL")
 WADHWANI_CLIENT_SECRET = decouple_config("WADHWANI_CLIENT_SECRET")
 WADHWANI_BASE_URL = decouple_config("WADHWANI_BASE_URL")
 
+RAZORPAY_ID = decouple_config("RAZORPAY_ID")
+RAZORPAY_SECRET = decouple_config("RAZORPAY_SECRET")
+
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket
