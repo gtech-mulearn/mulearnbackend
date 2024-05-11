@@ -55,34 +55,32 @@ class CampusDetailsAPI(APIView):
 
 
 class CampusStudentInEachLevelAPI(APIView):
-    # authentication_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
-    # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
-    def get():
-        pass
-    #     user_id = JWTUtils.fetch_user_id(request)
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
 
-    #     if not (user_org_link := get_user_college_link(user_id)):
-    #         return CustomResponse(
-    #             general_message="User have no organization"
-    #         ).get_failure_response()
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
 
-    #     if user_org_link.org is None:
-    #         return CustomResponse(
-    #             general_message="Campus lead has no college"
-    #         ).get_failure_response()
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
 
-    #     level_with_student_count = Level.objects.annotate(
-    #         students=Count(
-    #             "user_lvl_link_level__user",
-    #             filter=Q(
-    #                 user_lvl_link_level__user__user_organization_link_user__org=user_org_link.org
-    #             ),
-    #         )
-    #     ).values(level=F("level_order"), students=F("students"))
+        level_with_student_count = Level.objects.annotate(
+            students=Count(
+                "user_lvl_link_level__user",
+                filter=Q(
+                    user_lvl_link_level__user__user_organization_link_user__org=user_org_link.org
+                ),
+            )
+        ).values(level=F("level_order"), students=F("students"))
 
-    #     return CustomResponse(response=level_with_student_count).get_success_response()
-
+        return CustomResponse(response=level_with_student_count).get_success_response()
 
 
 class CampusStudentDetailsAPI(APIView):
