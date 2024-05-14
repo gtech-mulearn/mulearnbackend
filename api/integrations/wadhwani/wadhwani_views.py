@@ -1,3 +1,4 @@
+import json
 import requests
 
 from utils.response import CustomResponse
@@ -33,8 +34,9 @@ class WadhwaniUserLogin(APIView):
         
         if not (course_root_id := request.data.get("course_root_id", None)):
             return CustomResponse(general_message="Course Root ID is required").get_failure_response()
-        
-        data = {
+
+        headers = {'Content-Type': 'application/json'}
+        data = json.dumps({
             "name": user.full_name,
             "candidateId": user.id,
             "userName": user.email,
@@ -44,10 +46,12 @@ class WadhwaniUserLogin(APIView):
             "userLanguageCode": "en",
             "token": token,
             "courseRootId": course_root_id
-        }
-        response = requests.post(url, data=data)
+        })
+        response = requests.post(url, headers=headers, data=data)
 
         if response.json().get("status", None) == "ERROR":
+            return CustomResponse(general_message="Something went wrong").get_failure_response()
+        if response.json().get("status", None) == "FAILURE":
             return CustomResponse(general_message="Invalid Input").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
     
