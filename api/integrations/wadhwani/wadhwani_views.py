@@ -19,7 +19,7 @@ class WadhwaniAuthToken(APIView):
         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         response = requests.post(url, data=data, headers=headers)
 
-        if response.json()["status"] == "ERROR":
+        if response.json().get("error", None):
             return CustomResponse(general_message="Invalid credentials").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
     
@@ -47,7 +47,7 @@ class WadhwaniUserLogin(APIView):
         }
         response = requests.post(url, data=data)
 
-        if response.json()["status"] == "ERROR":
+        if response.json().get("status", None) == "ERROR":
             return CustomResponse(general_message="Invalid Input").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
     
@@ -61,7 +61,7 @@ class WadhwaniCourseDetails(APIView):
         headers = {'Authorization': token}
         response = requests.get(url, headers=headers)
 
-        if response.json()["status"] == "ERROR":
+        if response.json().get("status", None) == "ERROR":
             return CustomResponse(general_message="No courses available").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
 
@@ -77,7 +77,7 @@ class WadhwaniCourseEnrollStatus(APIView):
         headers = {'Authorization': token}
         response = requests.get(url, params={"username": user.email}, headers=headers)
 
-        if response.json()["status"] == "ERROR":
+        if response.json().get("status", None) == "ERROR":
             return CustomResponse(general_message="User doesn't have any enrolled courses").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
 
@@ -95,6 +95,6 @@ class WadhwaniCourseQuizData(APIView):
         url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         response = requests.get(url, headers=headers)
 
-        if response.json()["status"] == "ERROR":
+        if response.json().get("status", None) == "ERROR":
             return CustomResponse(general_message="No quiz data available").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
