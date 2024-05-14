@@ -18,6 +18,9 @@ class WadhwaniAuthToken(APIView):
         }
         headers = {'Content-Type': 'application/x-www-form-urlencoded'}
         response = requests.post(url, data=data, headers=headers)
+
+        if response.json()["status"] == "ERROR":
+            return CustomResponse(general_message="Invalid credentials").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
     
 class WadhwaniUserLogin(APIView):
@@ -43,6 +46,9 @@ class WadhwaniUserLogin(APIView):
             "courseRootId": course_root_id
         }
         response = requests.post(url, data=data)
+
+        if response.json()["status"] == "ERROR":
+            return CustomResponse(general_message="Invalid Input").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
     
 class WadhwaniCourseDetails(APIView):
@@ -54,6 +60,9 @@ class WadhwaniCourseDetails(APIView):
         
         headers = {'Authorization': token}
         response = requests.get(url, headers=headers)
+
+        if response.json()["status"] == "ERROR":
+            return CustomResponse(general_message="No courses available").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
 
 class WadhwaniCourseEnrollStatus(APIView):
@@ -66,9 +75,10 @@ class WadhwaniCourseEnrollStatus(APIView):
             return CustomResponse(general_message="Token is required").get_failure_response()
         
         headers = {'Authorization': token}
+        response = requests.get(url, params={"username": user.email}, headers=headers)
+
         if response.json()["status"] == "ERROR":
             return CustomResponse(general_message="User doesn't have any enrolled courses").get_failure_response()
-        response = requests.get(url, params={"username": user.email}, headers=headers)
         return CustomResponse(response=response.json()).get_success_response()
 
 class WadhwaniCourseQuizData(APIView):
@@ -84,4 +94,7 @@ class WadhwaniCourseQuizData(APIView):
         user = User.objects.get(id=user_id)
         url = settings.WADHWANI_BASE_URL + f"/api/v1/courseservice/oauth/course/{course_id}/reports/quiz/student/{user.email}"
         response = requests.get(url, headers=headers)
+
+        if response.json()["status"] == "ERROR":
+            return CustomResponse(general_message="No quiz data available").get_failure_response()
         return CustomResponse(response=response.json()).get_success_response()
