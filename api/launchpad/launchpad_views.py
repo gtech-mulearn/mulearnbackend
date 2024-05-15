@@ -57,8 +57,6 @@ class Leaderboard(APIView):
             user_ids = set()
             list_of_dicts = []
             for row in results:
-                if len(list_of_dicts) == 30:
-                    break
                 if row[0] not in user_ids:
                     user_ids.add(row[0])
                     list_of_dicts.append(dict(zip(column_names, row)))
