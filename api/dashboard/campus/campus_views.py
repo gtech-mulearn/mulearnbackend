@@ -35,7 +35,10 @@ class CampusDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         # Get the user's organization link using the user ID
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
 
         # Check if the user's organization link is None
         if user_org_link.org is None:
@@ -58,7 +61,10 @@ class CampusStudentInEachLevelAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
 
         if user_org_link.org is None:
             return CustomResponse(
@@ -83,7 +89,10 @@ class CampusStudentDetailsAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         is_alumni = request.query_params.get("is_alumni")
 
         if user_org_link.org is None:
@@ -194,7 +203,10 @@ class CampusStudentDetailsCSVAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         is_alumni = request.query_params.get("is_alumni")
 
         if user_org_link.org is None:
@@ -303,7 +315,10 @@ class WeeklyKarmaAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
 
         if user_org_link.org is None:
             return CustomResponse(
@@ -321,7 +336,10 @@ class ChangeStudentTypeAPI(APIView):
     def patch(self, request, member_id):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         user_org_link_obj = UserOrganizationLink.objects.filter(user__id=member_id,
                                                                 org=user_org_link.org,
                                                                 org__org_type=OrganizationType.COLLEGE.value).first()
@@ -350,7 +368,10 @@ class TransferLeadRoleAPI(APIView):
                 general_message="Can't find the user"
             ).get_failure_response()
         
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         validate_new_lead = UserOrganizationLink.objects.filter(
                                     user__id=new_lead.id,
                                     org=user_org_link.org,
@@ -401,7 +422,10 @@ class TransferEnablerRoleAPI(APIView):
                 general_message="Can't find the user"
             ).get_failure_response()
         
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         validate_new_enabler = UserOrganizationLink.objects.filter(
                                     user__id=new_enabler.id,
                                     org=user_org_link.org,
@@ -444,7 +468,10 @@ class TransferIGRoleAPI(APIView):
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         ig_list = User.objects.filter(
                     user_organization_link_user__org=user_org_link.org,
                     user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
@@ -470,7 +497,10 @@ class TransferIGRoleAPI(APIView):
                 general_message="Can't find the user"
             ).get_failure_response()
 
-        user_org_link = get_user_college_link(user_id)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
         validate_ig = UserOrganizationLink.objects.filter(
                             user__id=new_ig.id,
                             org=user_org_link.org,
