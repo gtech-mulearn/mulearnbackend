@@ -21,7 +21,7 @@ class Projects(models.Model):
 class ProjectsCommandLink(models.Model):
     id                = models.CharField(max_length=36, primary_key=True)
     command           = models.TextField()
-    project           = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project           = models.ForeignKey(Projects, on_delete=models.CASCADE)
     user              = models.ForeignKey(User, on_delete=models.CASCADE)
     updated_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='command_updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
@@ -40,7 +40,7 @@ class ProjectsUpvoteLink(models.Model):
 
     id                = models.CharField(max_length=36, primary_key=True)
     vote              = models.CharField(max_length=7, choices=VOTE_CHOICES)
-    project           = models.ForeignKey(Project, on_delete=models.CASCADE)
+    project           = models.ForeignKey(Projects, on_delete=models.CASCADE)
     user              = models.ForeignKey(User, on_delete=models.CASCADE)
     created_at        = models.DateTimeField(auto_now_add=True)
     created_by        = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='upvotes_created_by')
