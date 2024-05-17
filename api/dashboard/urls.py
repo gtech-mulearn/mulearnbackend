@@ -26,4 +26,6 @@ urlpatterns = [
 
     path('coupon/', include('api.dashboard.coupon.urls')),
 
+    path('projects/',include('api.dashboard.projects.urls'))
+
 ]
