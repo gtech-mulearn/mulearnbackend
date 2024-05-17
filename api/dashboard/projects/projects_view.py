@@ -34,6 +34,8 @@ class ProjectsCRUDAPI(APIView):
 
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        request.data['created_by'] = user_id
+        request.data['updated_by'] = user_id
 
         serializer = ProjectsListSerializer(
             data = request.data,
