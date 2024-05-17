@@ -4,6 +4,7 @@ from django.conf import settings
 
 class Projects(models.Model):
     id                = models.CharField(max_length=36, primary_key=True)
+    project_name      = models.CharField(max_length=36)
     logo              = models.CharField(max_length=255, null=True, blank=True)
     description       = models.TextField()
     project_image     = models.CharField(max_length=255, null=True, blank=True)
@@ -30,7 +31,7 @@ class ProjectsCommandLink(models.Model):
 
     class Meta:
         managed       = False
-        db_table      = 'ProjectsCommandLink'
+        db_table      = 'projects_command_link'
 
 class ProjectsUpvoteLink(models.Model):
     VOTE_CHOICES = [
@@ -47,4 +48,4 @@ class ProjectsUpvoteLink(models.Model):
 
     class Meta:
         managed       = False
-        db_table      = 'ProjectsUpvoteLink'
+        db_table      = 'projects_upvote_link'

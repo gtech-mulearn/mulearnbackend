@@ -7,7 +7,7 @@ from db.user import User
 class ProjectsListSerializer(serializers.ModelSerializer):
     class Meta:
         model = Projects
-        fields = ['id', 'logo', 'description', 'project_image', 'link', 'contributors', 'updated_by', 'updated_at', 'created_by', 'created_at']
+        fields = ['id','project_name', 'logo', 'description', 'project_image', 'link', 'contributors', 'updated_by', 'updated_at', 'created_by', 'created_at']
 
     updated_by = serializers.SlugRelatedField(slug_field='id', queryset=User.objects.all())
     created_by = serializers.SlugRelatedField(slug_field='id', queryset=User.objects.all())
