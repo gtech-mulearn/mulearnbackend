@@ -1,5 +1,5 @@
 from rest_framework.views import APIView
-
+from utils.utils import CommonUtils
 from utils.response import CustomResponse
 from utils.permission import CustomizePermission, JWTUtils
 from db.projects import (
@@ -74,10 +74,18 @@ class ProjectsAPIView(APIView):
     authentication_classes = [CustomizePermission]
     def get(self, request):
         projects = Project.objects.all()
-        serializer = ProjectSerializer(projects, many=True)
-        return CustomResponse(
-            response={"Projects": serializer.data}
-        ).get_success_response()
+        paginated_projects = CommonUtils.get_paginated_queryset(
+            queryset=projects,
+            request=request,
+            search_fields=[],  
+            sort_fields={'created_at': 'created_at'},  
+            is_pagination=True,
+        )
+        serializer = ProjectSerializer(paginated_projects['queryset'], many=True)
+        return CustomResponse().paginated_response(
+            data={"Projects": serializer.data},
+            pagination=paginated_projects['pagination']
+        )
         
     def post(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
