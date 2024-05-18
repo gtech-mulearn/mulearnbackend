@@ -10,6 +10,7 @@ urlpatterns = [
     path('ig/', include('api.dashboard.ig.urls')),
     path('task/', include('api.dashboard.task.urls')),
     path('profile/', include('api.dashboard.profile.urls')),
+    path('projects/', include('api.dashboard.projects.urls')),
     path('lc/', include('api.dashboard.lc.urls')),
     path('referral/', include('api.dashboard.referral.urls')),
     path('college/', include('api.dashboard.college.urls')),
