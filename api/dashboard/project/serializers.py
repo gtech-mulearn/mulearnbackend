@@ -2,18 +2,27 @@ import uuid
 from rest_framework import serializers
 from utils.utils import DateTimeUtils
 from django.utils import timezone
-from db.projects import Project, ProjectCommandLink, ProjectVote
+from db.projects import Project, ProjectCommandLink, ProjectVote,ProjectImage
 from db.user import User
 
 class MemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ['id', 'muid', 'full_name']
+        
+class ProjectImageSerializer(serializers.ModelSerializer):
+    image = serializers.ImageField()
+    
+    class Meta:
+        model = ProjectImage
+        fields = ['image','created_at']
+        read_only_fields = ['created_at'] 
 
 class ProjectRetrieveSerializer(serializers.ModelSerializer):
     created_by = serializers.SlugRelatedField(slug_field='full_name', read_only=True)
     updated_by = serializers.SlugRelatedField(slug_field='full_name', read_only=True)
     members = MemberSerializer(many=True, read_only=True)
+    images = ProjectImageSerializer(many=True,read_only=True)
     
     class Meta:
         model = Project
@@ -21,35 +30,40 @@ class ProjectRetrieveSerializer(serializers.ModelSerializer):
 
 class ProjectCUDSerializer(serializers.ModelSerializer):
     logo = serializers.ImageField()
-    project_image = serializers.ImageField()
     members = serializers.ListField(
         child=serializers.PrimaryKeyRelatedField(queryset=User.objects.all()),
         write_only=True
     )
-
+    images = serializers.ListField(
+        child=serializers.ImageField(),write_only=True
+    )
+    
     class Meta:
         model = Project
-        fields = ['logo', 'description', 'project_image', 'link', 'members']
+        fields = ['logo', 'description', 'link', 'members','images']
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
-        members_data = validated_data.pop('members')
+        members_data = validated_data.pop('members', None)
+        project_image_list = validated_data.pop('images', None)
         project = Project.objects.create(
             created_by=User.objects.get(id=user_id),
             updated_by=User.objects.get(id=user_id),
-            created_at=timezone.now(),
-            updated_at=timezone.now(),
             **validated_data
         )
-        project.members.set(members_data)
+        if members_data:
+            project.members.set(members_data) 
+        if project_image_list:
+            for project_image in project_image_list:
+                ProjectImage.objects.create(project=project, image=project_image)
         return project
 
     def update(self, instance, validated_data):
         user_id = self.context.get('user_id')
-        members_data = validated_data.pop('members', None) 
+        members_data = validated_data.pop('members', None)
+        project_image_list = validated_data.pop('images', None)
         
         instance.updated_by = User.objects.get(id=user_id)
-        instance.updated_at = timezone.now()
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -58,7 +72,11 @@ class ProjectCUDSerializer(serializers.ModelSerializer):
 
         if members_data:
             instance.members.set(members_data)
-
+        
+        if project_image_list:
+            instance.images.all().delete()  # Delete existing images
+            for project_image in project_image_list:
+                ProjectImage.objects.create(project=instance, image=project_image)
         return instance
 
 

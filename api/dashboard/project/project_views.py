@@ -35,9 +35,8 @@ class ProjectCRUDAPI(APIView):
             
             return CustomResponse(
                 general_message=f"Project created successfully",
-                response=serializer.data
             ).get_success_response()
-
+            
         return CustomResponse(general_message=serializer.errors).get_failure_response()
     
     def put(self,request,project_id):
