@@ -5,12 +5,16 @@ from django.utils import timezone
 from db.projects import Project, ProjectCommandLink, ProjectVote
 from db.user import User
 
-# Project Serializers
+class MemberSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'muid', 'full_name']
 
 class ProjectRetrieveSerializer(serializers.ModelSerializer):
     created_by = serializers.SlugRelatedField(slug_field='full_name', read_only=True)
     updated_by = serializers.SlugRelatedField(slug_field='full_name', read_only=True)
-
+    members = MemberSerializer(many=True, read_only=True)
+    
     class Meta:
         model = Project
         fields = '__all__'
@@ -18,25 +22,46 @@ class ProjectRetrieveSerializer(serializers.ModelSerializer):
 class ProjectCUDSerializer(serializers.ModelSerializer):
     logo = serializers.ImageField()
     project_image = serializers.ImageField()
+    members = serializers.ListField(
+        child=serializers.PrimaryKeyRelatedField(queryset=User.objects.all()),
+        write_only=True
+    )
 
     class Meta:
         model = Project
-        fields = ['logo', 'description', 'project_image', 'link', 'contributors']
+        fields = ['logo', 'description', 'project_image', 'link', 'members']
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
-        validated_data['created_by'] = User.objects.get(id=user_id)
-        validated_data['updated_by'] = User.objects.get(id=user_id)
-        validated_data['created_at'] = timezone.now()
-        validated_data['updated_at'] = timezone.now()
-        return super().create(validated_data)
+        members_data = validated_data.pop('members')
+        project = Project.objects.create(
+            created_by=User.objects.get(id=user_id),
+            updated_by=User.objects.get(id=user_id),
+            created_at=timezone.now(),
+            updated_at=timezone.now(),
+            **validated_data
+        )
+        project.members.set(members_data)
+        return project
 
     def update(self, instance, validated_data):
         user_id = self.context.get('user_id')
-        validated_data['updated_by'] = User.objects.get(id=user_id)
-        return super().update(instance, validated_data)
+        members_data = validated_data.pop('members', None) 
+        
+        instance.updated_by = User.objects.get(id=user_id)
+        instance.updated_at = timezone.now()
 
-# ProjectCommandLink Serializers
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.save()
+
+        if members_data:
+            instance.members.set(members_data)
+
+        return instance
+
+
 
 class ProjectCommandLinkRetrieveSerializer(serializers.ModelSerializer):
     created_by = serializers.SlugRelatedField(slug_field='full_name', read_only=True)
@@ -54,7 +79,6 @@ class ProjectCommandLinkCUDSerializer(serializers.ModelSerializer):
         model = ProjectCommandLink
         fields = ['id', 'command', 'project_id', 'user_id', 'created_at', 'created_by', 'updated_at', 'updated_by']
 
-# ProjectVote Serializers
 
 class ProjectVoteRetrieveSerializer(serializers.ModelSerializer):
     created_by = serializers.SlugRelatedField(slug_field='full_name', read_only=True)
@@ -64,7 +88,7 @@ class ProjectVoteRetrieveSerializer(serializers.ModelSerializer):
         model = ProjectVote
         fields = '__all__'
 
-class ProjectVoteCreateUpdateDeleteSerializer(serializers.ModelSerializer):
+class ProjectVoteCUDSerializer(serializers.ModelSerializer):
     created_by = serializers.SlugRelatedField(slug_field='id', queryset=User.objects.all())
     user_id = serializers.SlugRelatedField(slug_field='id', queryset=User.objects.all())
 
