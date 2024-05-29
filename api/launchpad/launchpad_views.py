@@ -19,9 +19,8 @@ class Leaderboard(APIView):
             )
             .prefetch_related(
                 Prefetch(
-                    "user_organization_link_user__title",
+                    "user_organization_link_user__org__title",
                     queryset=UserOrganizationLink.objects.all(),
-                    to_attr="org",
                 ),
             ).select_related("district", "district__zone__state")
             .annotate(
@@ -38,7 +37,7 @@ class Leaderboard(APIView):
                 ),
                 time_=Max("karma_activity_log_user__created_at"),
                 district_name=F("district__name"),
-                state=F("district__zone__state__name"),
+                state=F("district__zone__state__name")
             )
             .order_by("-karma", "time_")
         )
