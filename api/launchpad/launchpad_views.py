@@ -2,7 +2,7 @@ from django.db.models import Sum, Max, F
 
 from rest_framework.views import APIView
 
-from launchpad.serializers import LaunchpadLeaderBoardSerializer
+from .serializers import LaunchpadLeaderBoardSerializer
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from db.user import User
