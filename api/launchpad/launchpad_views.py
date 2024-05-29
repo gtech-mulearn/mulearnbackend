@@ -6,7 +6,7 @@ from .serializers import LaunchpadLeaderBoardSerializer
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from db.user import User
-from db.organization import UserOrganizationLink
+from db.organization import Organization
 
 
 class Leaderboard(APIView):
@@ -19,8 +19,8 @@ class Leaderboard(APIView):
             )
             .prefetch_related(
                 Prefetch(
-                    "user_organization_link_user__org__title",
-                    queryset=UserOrganizationLink.objects.all(),
+                    "user_organization_link_user__org",
+                    queryset=Organization.objects.all()
                 ),
             ).select_related("district", "district__zone__state")
             .annotate(
@@ -36,11 +36,13 @@ class Leaderboard(APIView):
                     )
                 ),
                 time_=Max("karma_activity_log_user__created_at"),
+                org=F("user_organization_link_user__org__title"),
                 district_name=F("district__name"),
-                state=F("district__zone__state__name")
+                state=F("district__zone__state__name"),
             )
             .order_by("-karma", "time_")
         )
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
