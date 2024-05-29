@@ -18,7 +18,7 @@ class Leaderboard(APIView):
             )
             .annotate(
                 karma=Sum("karma_activity_log_user__karma"),
-                org=F("userorganizationlink_user__title"),
+                org=F("user_organization_link_user__title"),
                 district=F("district__name"),
                 state=F("district__zone__state__name"),
                 time_=Max("karma_activity_log_user__created_at"),
