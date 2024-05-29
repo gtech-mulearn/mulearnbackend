@@ -12,16 +12,16 @@ class Leaderboard(APIView):
     def get(self, request):
         users = (
             User.objects.filter(
-                karma_activity_log__task__event="launchpad",
-                karma_activity_log__appraiser_approved=True,
-                karma_activity_log__task__hashtag="#lp24-introduction",
+                karma_activity_log_user__task__event="launchpad",
+                karma_activity_log_user__appraiser_approved=True,
+                karma_activity_log_user__task__hashtag="#lp24-introduction",
             )
             .annotate(
-                karma=Sum("karma_activity_log__karma"),
-                org=F("userorganizationlink__title"),
+                karma=Sum("karma_activity_log_user__karma"),
+                org=F("userorganizationlink_user__title"),
                 district=F("district__name"),
                 state=F("district__zone__state__name"),
-                time_=Max("karma_activity_log__created_at"),
+                time_=Max("karma_activity_log_user__created_at"),
             )
             .order_by("-karma", "time_")
         )
