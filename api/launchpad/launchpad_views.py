@@ -5,6 +5,7 @@ from django.db.models import (
     When,
     Case,
     IntegerField,
+    CharField,
     F,
     OuterRef,
     Subquery,
@@ -28,7 +29,6 @@ class Leaderboard(APIView):
                 user=OuterRef("id"),
                 task__event="launchpad",
                 appraiser_approved=True,
-                task__hashtag="#lp24-introduction",
             )
             .annotate(total_karma=Sum("karma"))
             .values("total_karma")
@@ -39,35 +39,21 @@ class Leaderboard(APIView):
                 karma_activity_log_user__appraiser_approved=True,
                 karma_activity_log_user__task__hashtag="#lp24-introduction",
             )
-            .prefetch_related(
-                Prefetch(
-                    "user_organization_link_user__org",
-                    queryset=Organization.objects.filter(
-                        org_type__in=["College", "School", "Company"]
-                    )
-                    .select_related("district", "district_zone_state_name")
-                    .all(),
-                )
-            )
             .annotate(
                 karma=Subquery(karma_subquery, output_field=IntegerField()),
                 time_=Max("karma_activity_log_user__created_at"),
-                org=F("user_organization_link_user__org__title"),
-                district_name=F("district__name"),
-                state=F("district__zone__state__name"),
             )
-            .values("full_name", "karma", "org", "district_name", "state", "time_")
             .order_by("-karma", "time_")
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["karma", "org", "district_name", "state", "time_"],
+            ["karma", "org", "district", "state", "time_"],
             sort_fields={
                 "karma": "karma",
                 "org": "org",
-                "district_name": "district_name",
+                "district": "district",
                 "state": "state",
                 "time_": "time_",
             },
