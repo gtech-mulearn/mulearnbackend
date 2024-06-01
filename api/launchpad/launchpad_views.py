@@ -1,5 +1,4 @@
 from django.db.models import Q, Sum, Max, Prefetch, F
-from django.db.models.functions import Coalesce
 
 from rest_framework.views import APIView
 
@@ -48,7 +47,7 @@ class Leaderboard(APIView):
             sort_fields={
                 "karma": "karma",
                 "org": "org",
-                "district": "district",
+                "district_name": "district_name",
                 "state": "state",
                 "time_": "time_",
             },
