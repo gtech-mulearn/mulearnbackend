@@ -1,4 +1,4 @@
-from django.db.models import Q, Sum, Max
+from django.db.models import Q, Sum, Max, Prefetch
 
 from rest_framework.views import APIView
 
@@ -6,6 +6,7 @@ from .serializers import LaunchpadLeaderBoardSerializer
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from db.user import User
+from db.organization import UserOrganizationLink
 
 
 class Leaderboard(APIView):
@@ -15,6 +16,13 @@ class Leaderboard(APIView):
                 karma_activity_log_user__task__event="launchpad",
                 karma_activity_log_user__appraiser_approved=True,
                 karma_activity_log_user__task__hashtag="#lp24-introduction",
+            ).prefetch_related(
+                Prefetch(
+                    "user_organization_link_user",
+                    queryset=UserOrganizationLink.objects.filter(
+                        org__org_type__in=["College", "School", "Company", "Community"]
+                    ),
+                )
             )
             .annotate(
                 karma=Sum(
@@ -32,7 +40,7 @@ class Leaderboard(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["karma", "org", "district", "state", "time_"],
+            ["karma", "org", "district_name", "state", "time_"],
             sort_fields={
                 "karma": "karma",
                 "org": "org",
