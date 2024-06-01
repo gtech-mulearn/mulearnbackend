@@ -1,4 +1,5 @@
-from django.db.models import Q, Sum, Max, Prefetch
+from django.db.models import Q, Sum, Max, Prefetch, F
+from django.db.models.functions import Coalesce
 
 from rest_framework.views import APIView
 
@@ -32,6 +33,9 @@ class Leaderboard(APIView):
                         karma_activity_log_user__appraiser_approved=True,
                     ),
                 ),
+                org=F("user_organization_link_user__org__title"),
+                district_name=F("user_organization_link_user__org__district__name"),
+                state=F("user_organization_link_user__org__district__zone__state__name"),
                 time_=Max("karma_activity_log_user__created_at"),
             )
             .order_by("-karma", "time_")
