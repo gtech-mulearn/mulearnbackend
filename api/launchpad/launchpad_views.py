@@ -25,17 +25,15 @@ class Leaderboard(APIView):
             task__hashtag='#lp24-introduction',
         ).values('user')
 
+        allowed_org_types = UserOrganizationLink.objects.filter(
+                        org__org_type__in=["College", "School", "Company"])
+                    
+
         users = User.objects.filter(
                 karma_activity_log_user__task__event="launchpad",
                 karma_activity_log_user__appraiser_approved=True,
                 id__in=intro_task_completed_users,
-            ).prefetch_related(
-                Prefetch(
-                    "user_organization_link_user",
-                    queryset=UserOrganizationLink.objects.filter(
-                        org__org_type__in=["College", "School", "Company"]
-                    ),
-                )
+                user_organization_link_org__in=allowed_org_types,
             ).annotate(
                 karma=Subquery(total_karma_subquery, output_field=IntegerField()),
                 org=F("user_organization_link_user__org__title"),
