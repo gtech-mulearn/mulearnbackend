@@ -33,7 +33,7 @@ class Leaderboard(APIView):
                 Prefetch(
                     "user_organization_link_user",
                     queryset=UserOrganizationLink.objects.filter(
-                        org__org_type__in=["College", "School", "Company", "Community"]
+                        org__org_type__in=["College", "School", "Company"]
                     ),
                 )
             ).annotate(
