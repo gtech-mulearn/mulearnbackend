@@ -42,7 +42,7 @@ class Leaderboard(APIView):
                 district_name=F("user_organization_link_user__org__district__name"),
                 state=F("user_organization_link_user__org__district__zone__state__name"),
                 time_=Max("karma_activity_log_user__created_at"),
-            )
+            ).order_by("-karma")
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
