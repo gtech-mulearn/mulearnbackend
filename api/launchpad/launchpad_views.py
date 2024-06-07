@@ -51,7 +51,7 @@ class Leaderboard(APIView):
         ).annotate(
             rank=Window(
                 expression=RowNumber(),
-                order_by=F('karma').desc(), F('time_').asc()
+                order_by=[F('karma').desc(), F('time_').asc()]
             )
         ).order_by("-karma", "time_")
 
