@@ -9,6 +9,56 @@ from db.user import User
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
 
+
+
+class Leaderboard(APIView):
+    def get(self, request):
+        total_karma_subquery = KarmaActivityLog.objects.filter(
+            user=OuterRef('id'),
+            task__event='launchpad',
+            appraiser_approved=True,
+        ).values('user').annotate(
+            total_karma=Sum('karma')
+        ).values('total_karma')
+        allowed_org_types = ["College", "School", "Company"]
+
+        users = User.objects.filter(
+            karma_activity_log_user__task__event="launchpad",
+            karma_activity_log_user__appraiser_approved=True,
+            id__in=intro_task_completed_users
+        ).prefetch_related(
+            Prefetch(
+                "user_organization_link_user",
+                queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
+            )
+        ).filter(
+            user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
+                org__org_type__in=allowed_org_types
+            ).values("id")
+        ).annotate(
+            karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+            org=F("user_organization_link_user__org__title"),
+            district_name=F("user_organization_link_user__org__district__name"),
+            state=F("user_organization_link_user__org__district__zone__state__name"),
+            time_=Max("karma_activity_log_user__created_at"),
+        ).order_by("-karma")
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            users,
+            request,
+            ["full_name", "karma", "org", "district_name", "state"],
+            sort_fields={
+                "karma": "karma",
+                "time_": "time_",
+            },
+        )
+
+        serializer = LaunchpadLeaderBoardSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 # class Leaderboard(APIView):
 #     def get(self, request):
 #         total_karma_subquery = KarmaActivityLog.objects.filter(
@@ -18,6 +68,7 @@ from db.task import KarmaActivityLog
 #         ).values('user').annotate(
 #             total_karma=Sum('karma')
 #         ).values('total_karma')
+
 
 #         users = (
 #             User.objects.filter(
@@ -42,7 +93,7 @@ from db.task import KarmaActivityLog
 #         )
 
 #         paginated_queryset = CommonUtils.get_paginated_queryset(
-#             users,
+#            users,
 #             request,
 #             ["karma", "org", "district_name", "state", "time_"],
 #             sort_fields={
@@ -121,3 +172,4 @@ class Leaderboard(APIView):
                     user_ids.add(row[0])
                     list_of_dicts.append(dict(zip(column_names, row)))
             return CustomResponse(response=list_of_dicts).get_success_response()
+
