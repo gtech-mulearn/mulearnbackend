@@ -22,6 +22,12 @@ class Leaderboard(APIView):
         ).values('total_karma')
         allowed_org_types = ["College", "School", "Company"]
 
+        intro_task_completed_users = KarmaActivityLog.objects.filter(
+            task__event='launchpad',
+            appraiser_approved=True,
+            task__hashtag='#lp24-introduction',
+        ).values('user')
+        
         users = User.objects.filter(
             karma_activity_log_user__task__event="launchpad",
             karma_activity_log_user__appraiser_approved=True,
