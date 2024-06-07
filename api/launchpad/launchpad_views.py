@@ -47,16 +47,12 @@ class Leaderboard(APIView):
             district_name=F("user_organization_link_user__org__district__name"),
             state=F("user_organization_link_user__org__district__zone__state__name"),
             time_=Max("karma_activity_log_user__created_at"),
-        ).order_by("-karma")
+        ).order_by("-karma", "time_")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "karma", "org", "district_name", "state"],
-            sort_fields={
-                "karma": "karma",
-                "time_": "time_",
-            },
+            ["full_name", "karma", "org", "district_name", "state"]
         )
 
         serializer = LaunchpadLeaderBoardSerializer(
