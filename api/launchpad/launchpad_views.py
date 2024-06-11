@@ -1,6 +1,5 @@
-from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, Window, IntegerField
-from django.db.models.functions import RowNumber
-from django.db import connection
+from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField
+
 from rest_framework.views import APIView
 
 from .serializers import LaunchpadLeaderBoardSerializer
@@ -48,11 +47,6 @@ class Leaderboard(APIView):
             district_name=F("user_organization_link_user__org__district__name"),
             state=F("user_organization_link_user__org__district__zone__state__name"),
             time_=Max("karma_activity_log_user__created_at"),
-        ).annotate(
-            rank=Window(
-                expression=RowNumber(),
-                order_by=[F('karma').desc(), F('time_').asc()]
-            )
         ).order_by("-karma", "time_")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
