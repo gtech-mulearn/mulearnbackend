@@ -55,8 +55,8 @@ class Leaderboard(APIView):
                 expression=RowNumber(),
                 order_by=F("karma").desc(),
             )
-        ).order_by("rank")
-        
+        )
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
