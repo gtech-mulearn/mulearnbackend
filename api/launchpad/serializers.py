@@ -6,6 +6,7 @@ from rest_framework import serializers
 from db.user import User
 from db.organization import UserOrganizationLink
 from db.task import KarmaActivityLog
+import json
 
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
@@ -50,12 +51,14 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
             time_=Max("karma_activity_log_user__created_at"),
-        ).order_by("-karma", "time_").annotate(
-            rank=Window(
-                expression=Rank(),
-                order_by=[F("karma").desc(), F("time_").asc()]
-            )
-        )
-
-        return users.get(id=obj.id).rank
+        ).order_by("-karma", "time_")
+        
+        # high complexity
+        rank = 0
+        for data in users:
+            rank += 1
+            if data.id == obj.id:
+                break    
+        
+        return rank
 
