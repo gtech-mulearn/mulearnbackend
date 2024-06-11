@@ -1,5 +1,5 @@
 from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, Window, IntegerField
-from django.db.models.functions import RowNumber
+from django.db.models.functions import Rank
 from django.db import connection
 from rest_framework.views import APIView
 
@@ -52,7 +52,7 @@ class Leaderboard(APIView):
 
         users = users.annotate(
             rank=Window(
-                expression=RowNumber(),
+                expression=Rank(),
                 order_by=F("karma").desc(),
             )
         )
