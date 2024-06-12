@@ -14,7 +14,5 @@ class Donor(models.Model):
     company = models.CharField(max_length=100)
     phone_number = models.CharField(max_length=20)
     pan_number = models.CharField(max_length=10)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='donor_updated_by')
-    updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='donor_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
