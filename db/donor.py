@@ -16,3 +16,7 @@ class Donor(models.Model):
     pan_number = models.CharField(max_length=10)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='donor_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'donor'
