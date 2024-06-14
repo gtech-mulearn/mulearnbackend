@@ -7,6 +7,7 @@ from django.conf import settings
 # fmt: off
 # noinspection PyPep8
 
+
 class UrlShortener(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     title = models.CharField(max_length=100)
@@ -40,6 +41,7 @@ class UrlShortenerTracker(models.Model):
     location = models.CharField(max_length=36, blank=True, null=True)
     referrer = models.CharField(max_length=36, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
     class Meta:
         managed = False
         db_table = 'url_shortener_tracker'
