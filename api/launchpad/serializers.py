@@ -24,22 +24,3 @@ class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("full_name", "level", "org", "district_name", "state")
-
-
-class LaunchpadDetailsCountSerializer(serializers.ModelSerializer):
-    total_participants = serializers.SerializerMethodField()
-    level_1 = serializers.SerializerMethodField()
-    class Meta:
-        model = User
-        fields = [
-            'total_participants',
-            'level_1'
-        ]
-
-    # def get_total_participants(self, obj):
-    #     return len(obj)
-    #
-    # def get_level_1(self,obj):
-    #     for data in obj:
-    #
-    #     return 1
