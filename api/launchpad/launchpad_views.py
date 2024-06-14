@@ -3,7 +3,6 @@ from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerF
 from rest_framework.views import APIView
 
 from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, \
-    LaunchpadDetailsCountSerializer
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from db.user import User, UserRoleLink
