@@ -1,6 +1,8 @@
 from rest_framework import serializers
 
 from db.user import User
+from db.organization import UserOrganizationLink
+from db.task import KarmaActivityLog
 
 
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
