@@ -13,7 +13,7 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("rank", "full_name", "karma", "org", "district_name", "state")
+        fields = ("rank", "full_name", "actual_karma", "karma", "org", "district_name", "state")
 
     def get_rank(self, obj):
         total_karma_subquery = KarmaActivityLog.objects.filter(
