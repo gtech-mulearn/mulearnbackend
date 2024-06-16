@@ -3,7 +3,7 @@ from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerF
 from rest_framework import serializers
 
 from db.user import User
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
 
 
@@ -72,3 +72,26 @@ class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("full_name", "level", "org", "district_name", "state")
+
+
+class CollegeDataSerializer(serializers.ModelSerializer):
+    district_name = serializers.CharField()
+    state = serializers.CharField()
+    total_users = serializers.IntegerField()
+    level1 = serializers.IntegerField()
+    level2 = serializers.IntegerField()
+    level3 = serializers.IntegerField()
+    level4 = serializers.IntegerField()
+    
+    class Meta:
+        model = Organization
+        fields = (
+            "title", 
+            "district_name", 
+            "state", 
+            "total_users", 
+            "level1", 
+            "level2",
+            "level3", 
+            "level4"
+        )
