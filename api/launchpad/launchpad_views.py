@@ -233,11 +233,7 @@ class LaunchPadUser(APIView):
         errors = {}
         error = False
         not_found_colleges = []
-        user = LaunchPadUsers.objects.create(
-            email=data.get('email'),
-            full_name=data.get('full_name'),
-            role=data.get('role')
-        )
+        user = LaunchPadUsers.objects.create(**serializer.validated_data)
         if data.get('college') is None:
             return CustomResponse(general_message="Successfully added user").get_error_response()
         for college in data.get('college'):
@@ -361,11 +357,7 @@ class BulkLaunchpadUser(APIView):
             serializer = LaunchpadUserSerializer(data=data)
             if not serializer.is_valid():
                 return CustomResponse(message=serializer.errors).get_error_response()
-            user = LaunchPadUsers.objects.create(
-                email=data.get('email'),
-                full_name=data.get('full_name'),
-                role=data.get('role')
-            )
+            user = LaunchPadUsers.objects.create(**serializer.validated_data)
             if data.get('college') is None:
                 continue
             for college in data.get('college'):

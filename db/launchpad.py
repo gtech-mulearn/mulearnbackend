@@ -13,6 +13,11 @@ class LaunchPadUsers(models.Model):
     role = models.CharField(max_length=20)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'launchpad_user'
+
     
 class LaunchPadUserCollegeLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
@@ -23,3 +28,6 @@ class LaunchPadUserCollegeLink(models.Model):
     created_by = models.ForeignKey(LaunchPadUsers, on_delete=models.CASCADE, related_name='launchpad_user_college_link_created_by')
     updated_by = models.ForeignKey(LaunchPadUsers, on_delete=models.CASCADE, related_name='launchpad_user_college_link_updated_by')
 
+    class Meta:
+        managed = False
+        db_table = 'launchpad_user_college_link'
