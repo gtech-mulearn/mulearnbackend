@@ -1,4 +1,4 @@
-from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField
+from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q
 
 from rest_framework.views import APIView
 
@@ -6,7 +6,7 @@ from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSe
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from db.user import User, UserRoleLink
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
 
 
@@ -174,3 +174,58 @@ class LaunchpadDetailsCount(APIView):
         }
 
         return CustomResponse(response=level_counts).get_success_response()
+
+class CollegeData(APIView):
+    def get(self, request):
+        allowed_levels = [
+            "IEEE Launchpad Level 1",
+            "IEEE Launchpad Level 2",
+            "IEEE Launchpad Level 3",
+            "IEEE Launchpad Level 4"
+        ]
+        
+        org = Organization.objects.filter(
+            org_type="College",
+        ).prefetch_related(
+            Prefetch(
+                "user_organization_link_org",
+                queryset=UserOrganizationLink.objects.filter(
+                    user__user_role_link_user__role__title__in=allowed_levels
+                )
+            )
+        ).filter(
+            user_organization_link_org__user__user_role_link_user__role__title__in=allowed_levels
+        ).annotate(
+            district_name=F("district__name"),
+            state=F("district__zone__state__name"),
+            total_users=Count("user_organization_link_org__user"),
+            level1 = Count(
+                "user_organization_link_org__user", 
+                filter=Q(user_organization_link_org__user__user_role_link_user__role__title="IEEE Launchpad Level 1")
+            ),
+            level2 = Count(
+                "user_organization_link_org__user", 
+                filter=Q(user_organization_link_org__user__user_role_link_user__role__title="IEEE Launchpad Level 2")
+            ),
+            level3 = Count(
+                "user_organization_link_org__user", 
+                filter=Q(user_organization_link_org__user__user_role_link_user__role__title="IEEE Launchpad Level 3")
+            ),
+            level4 = Count(
+                "user_organization_link_org__user", 
+                filter=Q(user_organization_link_org__user__user_role_link_user__role__title="IEEE Launchpad Level 4")
+            )
+        ).order_by("-total_users")
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            org,
+            request,
+            ["title", "district_name", "state"]
+        )
+
+        serializer = CollegeDataSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
