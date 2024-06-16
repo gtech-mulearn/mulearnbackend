@@ -1,11 +1,11 @@
 import razorpay
 from io import BytesIO
-from reportlab.pdfgen import canvas
 
 from django.http import HttpResponse
 from rest_framework.views import APIView
 
 from utils.response import CustomResponse
+from .donate_serializer import DonorSerializer
 from mulearnbackend.settings import RAZORPAY_ID, RAZORPAY_SECRET
 
 from reportlab.lib.pagesizes import letter
@@ -65,14 +65,22 @@ def create_receipt(transaction_details):
 class RazorPayOrderAPI(APIView):
     def post(self, request):
         try:
+            serializer = DonorSerializer(data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(general_message=serializer.errors).get_failure_response()
+            validated_data = serializer.validated_data
+
             data = {
-                "amount": int(float(request.data.get("amount")) * 100),
-                "currency": request.data.get("currency", "INR"),
+                "amount": int(float(validated_data.get("amount")) * 100),
+                "currency": validated_data.get("currency"),
                 "payment_capture": 1,
                 "notes": {
-                    "email": request.data.get("email"),
-                    "name": request.data.get("name"),
-                    "company": request.data.get("company", None),
+                    "email": validated_data.get("email"),
+                    "name": validated_data.get("name"),
+                    "phone_number": validated_data.get("phone_number", None),
+                    "company": validated_data.get("company", None),
+                    "pan_number": validated_data.get("pan_number", None),
+                    "validated_data": validated_data
                 },
             }
             order = razorpay_client.order.create(data)
@@ -101,8 +109,18 @@ class RazorPayVerification(APIView):
                 "Currency": data['currency'],
                 "Name": data['notes']['name'],
                 "Email": data['notes']['email'],
-                "Company": data['notes']['company']
             }
+            if extra_data := data['notes'].get('company', None):
+                transaction_details["Company"] = extra_data
+            if extra_data := data['notes'].get('phone_number', None):
+                transaction_details["Phone Number"] = extra_data
+            if extra_data := data['notes'].get('pan_number', None):
+                transaction_details["PAN number"] = extra_data 
+
+            serializer = DonorSerializer(data=data['notes']['validated_data'])
+            # if serializer.is_valid():
+            #     serializer.save()
+
             return create_receipt(transaction_details)
         except razorpay.errors.SignatureVerificationError as e:
             return CustomResponse(message=str(e)).get_error_response()
