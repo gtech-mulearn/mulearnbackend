@@ -118,8 +118,8 @@ class RazorPayVerification(APIView):
                 transaction_details["PAN number"] = extra_data 
 
             serializer = DonorSerializer(data=data['notes']['validated_data'])
-            if serializer.is_valid():
-                serializer.save()
+            # if serializer.is_valid():
+            #     serializer.save()
 
             return create_receipt(transaction_details)
         except razorpay.errors.SignatureVerificationError as e:
