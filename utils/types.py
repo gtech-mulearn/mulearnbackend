@@ -135,6 +135,24 @@ class DiscountTypes(Enum):
     PERCENTAGE = 'percentage'
     AMOUNT = 'amount'
 
+class LaunchPadLevels(Enum):
+    LEVEL_1 = 'IEEE Launchpad Level 1'
+    LEVEL_2 = 'IEEE Launchpad Level 2'
+    LEVEL_3 = 'IEEE Launchpad Level 3'
+    LEVEL_4 = 'IEEE Launchpad Level 4'
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+class LaunchPadRoles(Enum):
+    ADMIN = 'IEEEAdmin'
+    DC = 'IEEEDC'
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+    
 DEFAULT_HACKATHON_FORM_FIELDS = {
     'name': 'system',
     'gender': 'system',

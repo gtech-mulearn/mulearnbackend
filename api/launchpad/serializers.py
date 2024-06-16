@@ -5,6 +5,7 @@ from rest_framework import serializers
 from db.user import User
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
+from utils.types import LaunchPadRoles
 
 
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
@@ -95,3 +96,12 @@ class CollegeDataSerializer(serializers.ModelSerializer):
             "level3", 
             "level4"
         )
+
+class LaunchpadUserSerializer(serializers.ModelSerializerSerializer):
+    role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
+    college = serializers.ListField(child=serializers.CharField(max_length=36), allow_empty=True)
+
+    class Meta:
+        model = User
+        fields = ("full_name", "email", "phone_number", "role", "college", "district", "zone")
+        
