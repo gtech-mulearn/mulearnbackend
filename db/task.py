@@ -10,6 +10,7 @@ from .user import User
 # fmt: off
 # noinspection PyPep8
 
+
 class Channel(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     name = models.CharField(max_length=75, unique=True)
