@@ -97,7 +97,7 @@ class CollegeDataSerializer(serializers.ModelSerializer):
             "level4"
         )
 
-class LaunchpadUserSerializer(serializers.ModelSerializerSerializer):
+class LaunchpadUserSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
     college = serializers.ListField(child=serializers.CharField(max_length=36), allow_empty=True)
 
