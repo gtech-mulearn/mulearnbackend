@@ -86,7 +86,7 @@ class RazorPayOrderAPI(APIView):
             order = razorpay_client.order.create(data)
             return CustomResponse(response=order).get_success_response()
         except razorpay.errors.BadRequestError as e:
-            return CustomResponse(message=str(e)).get_error_response()
+            return CustomResponse(message=str(e)).get_failure_response()
 
 
 class RazorPayVerification(APIView):
@@ -123,4 +123,4 @@ class RazorPayVerification(APIView):
 
             return create_receipt(transaction_details)
         except razorpay.errors.SignatureVerificationError as e:
-            return CustomResponse(message=str(e)).get_error_response()
+            return CustomResponse(message=str(e)).get_failure_response()
