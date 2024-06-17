@@ -236,7 +236,6 @@ class LaunchPadUser(APIView):
         errors = {}
         error = False
         not_found_colleges = []
-        already_linked = []
         user = serializer.save()
         if colleges is None:
             return CustomResponse(general_message="Successfully added user").get_failure_response()
@@ -256,7 +255,6 @@ class LaunchPadUser(APIView):
                 )
         errors[data.get('email')] = {}
         errors[data.get('email')]["not_found_colleges"] = not_found_colleges
-        errors[data.get('email')]["already_linked"] = already_linked
         if error:
             return CustomResponse(message=errors).get_failure_response()
         return CustomResponse(general_message="Successfully added user").get_success_response()
@@ -401,7 +399,6 @@ class BulkLaunchpadUser(APIView):
         
         for data in excel_data:
             not_found_colleges = []
-            already_linked = []
             serializer = LaunchpadUserSerializer(data=data)
             if not serializer.is_valid():
                 return CustomResponse(message=serializer.errors).get_failure_response()
@@ -422,8 +419,8 @@ class BulkLaunchpadUser(APIView):
                         created_by=auth_user,
                         updated_by=auth_user
                     )
+            errors[data.get('email')] = {}
             errors[data.get('email')]["not_found_colleges"] = not_found_colleges
-            errors[data.get('email')]["already_linked"]
         if error:
             return CustomResponse(message=errors).get_failure_response()
         return CustomResponse(general_message="Successfully added users").get_success_response()
