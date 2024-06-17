@@ -399,7 +399,6 @@ class BulkLaunchpadUser(APIView):
         error = False
         
         for data in excel_data[1:]:
-            print(data)
             not_found_colleges = []
             data['college'] = data['college'].split(",") if data.get('college') else []
             serializer = LaunchpadUserSerializer(data=data)
