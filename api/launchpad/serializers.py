@@ -102,12 +102,14 @@ class CollegeDataSerializer(serializers.ModelSerializer):
         )
 
 class LaunchpadUserSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(max_length=36, read_only=True)
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
     college = serializers.ListField(child=serializers.CharField(max_length=36), allow_empty=True, write_only=True)
+    colleges = serializers.SerializerMethodField()
 
     class Meta:
         model = LaunchPadUsers
-        fields = ("full_name", "email", "phone_number", "role", "college", "district", "zone")
+        fields = ("id", "full_name", "email", "phone_number", "role", "college", "district", "zone", "colleges")
 
     def create(self, validated_data):
         validated_data.pop("college")
@@ -119,6 +121,9 @@ class LaunchpadUserSerializer(serializers.ModelSerializer):
         
         return user
 
+    def get_colleges(self, obj):
+        return LaunchPadUserCollegeLink.objects.filter(user=obj).values_list("college_id", "college__title")
+
 
 class LaunchpadUpdateUserSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
@@ -127,7 +132,7 @@ class LaunchpadUpdateUserSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = LaunchPadUsers
-        fields = ("full_name", "email", "phone_number", "role", "college", "district", "zone", "remove_colleges", "add_colleges")
+        fields = ("full_name", "email", "phone_number", "role", "district", "zone", "remove_colleges", "add_colleges")
     
     def update(self, instance, validated_data):
         auth_user = self.context.get("auth_user")
@@ -165,10 +170,12 @@ class LaunchpadUpdateUserSerializer(serializers.ModelSerializer):
         
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
-    
+    id = serializers.CharField(max_length=36, read_only=True)
+    colleges = serializers.SerializerMethodField()
+
     class Meta:
         model = LaunchPadUsers
-        fields = ("full_name", "phone_number", "district", "zone", "email")
+        fields = ("id", "full_name", "phone_number", "district", "zone", "email")
 
     def update(self, instance, validated_data):
         instance.full_name = validated_data.get("full_name", instance.full_name)
@@ -179,3 +186,6 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
+    def get_colleges(self, obj):
+        return LaunchPadUserCollegeLink.objects.filter(user=obj).values_list("college_id", "college__title")

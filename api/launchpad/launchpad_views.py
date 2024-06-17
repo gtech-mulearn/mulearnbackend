@@ -246,9 +246,6 @@ class LaunchPadUser(APIView):
                 not_found_colleges.append(college)
             elif link := LaunchPadUserCollegeLink.objects.filter(college_id=college).first():
                     link.delete()
-            elif LaunchPadUserCollegeLink.objects.filter(user=user, college_id=college).exists():
-                error = True
-                already_linked.append(college)
             else:
                 LaunchPadUserCollegeLink.objects.create(
                     id=uuid.uuid4(),
@@ -417,9 +414,6 @@ class BulkLaunchpadUser(APIView):
                     not_found_colleges.append(college)
                 elif link := LaunchPadUserCollegeLink.objects.filter(college_id=college).first():
                     link.delete()
-                elif LaunchPadUserCollegeLink.objects.filter(user=user, college_id=college).exists():
-                    error = True
-                    already_linked.append(college)
                 else:
                     LaunchPadUserCollegeLink.objects.create(
                         id=uuid.uuid4(),
