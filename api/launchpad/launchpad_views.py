@@ -381,9 +381,10 @@ class UserBasedCollegeData(APIView):
 
 class BulkLaunchpadUser(APIView):
 
-    def create(self, request):
+    def post(self, request):
         data = request.data
         auth_mail = data.pop('current_user', None)
+        auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         try:
@@ -397,16 +398,18 @@ class BulkLaunchpadUser(APIView):
         errors = {}
         error = False
         
-        for data in excel_data:
+        for data in excel_data[1:]:
+            print(data)
             not_found_colleges = []
+            data['college'] = data['college'].split(",") if data.get('college') else []
             serializer = LaunchpadUserSerializer(data=data)
             if not serializer.is_valid():
-                return CustomResponse(message=serializer.errors).get_failure_response()
+                continue
             user = serializer.save()
             if data.get('college') is None:
                 continue
             for college in data.get('college'):
-                if not Organization.objects.filter(title=college, org_type="College").exists():
+                if not (org := Organization.objects.filter(title=college, org_type="College").first()):
                     error = True
                     not_found_colleges.append(college)
                 elif link := LaunchPadUserCollegeLink.objects.filter(college_id=college).first():
@@ -415,7 +418,7 @@ class BulkLaunchpadUser(APIView):
                     LaunchPadUserCollegeLink.objects.create(
                         id=uuid.uuid4(),
                         user=user,
-                        college_id=college,
+                        college=org,
                         created_by=auth_user,
                         updated_by=auth_user
                     )

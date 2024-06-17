@@ -104,7 +104,7 @@ class CollegeDataSerializer(serializers.ModelSerializer):
 class LaunchpadUserSerializer(serializers.ModelSerializer):
     id = serializers.CharField(max_length=36, read_only=True)
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
-    college = serializers.ListField(child=serializers.CharField(max_length=36), allow_empty=True, write_only=True)
+    college = serializers.ListField(child=serializers.CharField(), allow_empty=True, write_only=True)
     colleges = serializers.SerializerMethodField()
 
     class Meta:
@@ -127,8 +127,8 @@ class LaunchpadUserSerializer(serializers.ModelSerializer):
 
 class LaunchpadUpdateUserSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
-    remove_colleges = serializers.ListField(child=serializers.CharField(max_length=36), allow_empty=True)
-    add_colleges = serializers.ListField(child=serializers.CharField(max_length=36), allow_empty=True)
+    remove_colleges = serializers.ListField(child=serializers.CharField(), allow_empty=True)
+    add_colleges = serializers.ListField(child=serializers.CharField(), allow_empty=True)
     
     class Meta:
         model = LaunchPadUsers
