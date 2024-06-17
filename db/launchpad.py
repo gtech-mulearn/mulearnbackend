@@ -21,8 +21,8 @@ class LaunchPadUsers(models.Model):
     
 class LaunchPadUserCollegeLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
-    user = models.ForeignKey(LaunchPadUsers, on_delete=models.CASCADE)
-    college = models.ForeignKey(Organization, on_delete=models.CASCADE)
+    user = models.ForeignKey(LaunchPadUsers, on_delete=models.CASCADE, related_name="launchpaduserlink_user")
+    college = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="launchpaduserlink_college")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(LaunchPadUsers, on_delete=models.CASCADE, related_name='launchpad_user_college_link_created_by')
