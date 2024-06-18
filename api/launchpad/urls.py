@@ -9,6 +9,7 @@ urlpatterns = [
     path('college-data/', launchpad_views.CollegeData.as_view()),
     path('user-college-link/', launchpad_views.LaunchPadUser.as_view()),
     path('user-college-link/<str:user_id>', launchpad_views.LaunchPadUser.as_view()),
+    path('user-college-link-public/<str:user_id>', launchpad_views.LaunchPadUserPublic.as_view()),
     path('user-profile/', launchpad_views.UserProfile.as_view()),
     path('user-college-data/', launchpad_views.UserBasedCollegeData.as_view()),
     path('bulk-user-college-link/', launchpad_views.BulkLaunchpadUser.as_view()),

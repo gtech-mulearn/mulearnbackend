@@ -155,8 +155,6 @@ class LaunchpadDetailsCount(APIView):
             state=F("user_organization_link_user__org__district__zone__state__name"),
             level=F("user_role_link_user__role__title"),
             time_=Max("karma_activity_log_user__created_at"),
-        ).filter(
-            level__in=allowed_levels
         ).distinct()
 
         # Count participants at each level
@@ -166,6 +164,7 @@ class LaunchpadDetailsCount(APIView):
             "Level_2": users.filter(level=LaunchPadLevels.LEVEL_2.value).count(),
             "Level_3": users.filter(level=LaunchPadLevels.LEVEL_3.value).count(),
             "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count(),
+            "NoLevel": users.exclude(level__in=allowed_levels).count()
         }
 
         return CustomResponse(response=level_counts).get_success_response()
@@ -260,8 +259,7 @@ class LaunchPadUser(APIView):
         return CustomResponse(general_message="Successfully added user").get_success_response()
     
     def get(self, request):
-        data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = request.query_params.get('current_user', None)
         if not LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         users = LaunchPadUsers.objects.all()
@@ -293,12 +291,21 @@ class LaunchPadUser(APIView):
             return CustomResponse(general_message="Successfully updated user").get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+class LaunchPadUserPublic(APIView):
 
+    def get(self, request, user_id):
+        try:
+            user = LaunchPadUsers.objects.get(id=user_id)
+        except LaunchPadUsers.DoesNotExist:
+            return CustomResponse(general_message="User not found").get_failure_response()
+        serializer = LaunchpadUserSerializer(user)
+        return CustomResponse(response=serializer.data).get_success_response()
+    
+    
 class UserProfile(APIView):
 
     def get(self, request):
-        data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = request.query_params('current_user', None)
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         user = LaunchPadUsers.objects.get(email=auth_mail)
@@ -321,8 +328,7 @@ class UserProfile(APIView):
 class UserBasedCollegeData(APIView):
 
     def get(self, request):
-        data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = request.query_params.get('current_user', None)
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         user = LaunchPadUsers.objects.get(email=auth_mail)
