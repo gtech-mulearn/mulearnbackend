@@ -225,6 +225,7 @@ class LaunchPadUser(APIView):
     def post(self, request):
         data = request.data
         auth_mail = data.pop('current_user', None)
+        auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         serializer = LaunchpadUserSerializer(data=data)
@@ -276,13 +277,14 @@ class LaunchPadUser(APIView):
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
     
-    def put(self, request, user_id):
+    def put(self, request, email):
         data = request.data
         auth_mail = data.pop('current_user', None)
+        auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         try:
-            user = LaunchPadUsers.objects.get(id=user_id)
+            user = LaunchPadUsers.objects.get(email=email)
         except LaunchPadUsers.DoesNotExist:
             return CustomResponse(general_message="User not found").get_failure_response()
         serializer = LaunchpadUpdateUserSerializer(user, data=data, context={"auth_user": auth_user})
@@ -293,9 +295,9 @@ class LaunchPadUser(APIView):
 
 class LaunchPadUserPublic(APIView):
 
-    def get(self, request, user_id):
+    def get(self, request, email):
         try:
-            user = LaunchPadUsers.objects.get(id=user_id)
+            user = LaunchPadUsers.objects.get(email=email)
         except LaunchPadUsers.DoesNotExist:
             return CustomResponse(general_message="User not found").get_failure_response()
         serializer = LaunchpadUserSerializer(user)
@@ -315,6 +317,7 @@ class UserProfile(APIView):
     def put(self, request):
         data = request.data
         auth_mail = data.pop('current_user', None)
+        auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (user := LaunchPadUsers.objects.filter(email=auth_mail).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         
