@@ -159,12 +159,11 @@ class LaunchpadDetailsCount(APIView):
 
         # Count participants at each level
         level_counts = {
-            "total_participants": users.count(),
+            "total_participants": users.values('id').count(),
             "Level_1": users.filter(level=LaunchPadLevels.LEVEL_1.value).count(),
             "Level_2": users.filter(level=LaunchPadLevels.LEVEL_2.value).count(),
             "Level_3": users.filter(level=LaunchPadLevels.LEVEL_3.value).count(),
-            "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count(),
-            "NoLevel": users.exclude(level__in=allowed_levels).count()
+            "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count()
         }
 
         return CustomResponse(response=level_counts).get_success_response()
@@ -226,8 +225,8 @@ class LaunchPadUser(APIView):
         data = request.data
         auth_mail = data.pop('current_user', None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
-        # if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
-        #     return CustomResponse(general_message="Unauthorized").get_failure_response()
+        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+            return CustomResponse(general_message="Unauthorized").get_failure_response()
         serializer = LaunchpadUserSerializer(data=data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
@@ -237,8 +236,6 @@ class LaunchPadUser(APIView):
         error = False
         not_found_colleges = []
         user = serializer.save()
-        if colleges is None:
-            return CustomResponse(general_message="Successfully added user").get_failure_response()
         for college in colleges:
             if not Organization.objects.filter(id=college, org_type="College").exists():
                 error = True
