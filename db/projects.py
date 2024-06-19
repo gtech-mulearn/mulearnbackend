@@ -13,8 +13,8 @@ class Project(models.Model):
     contributors = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='created_projects', db_column='created_by')
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='updated_projects', db_column='updated_by')
+    # created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='created_projects', db_column='created_by')
+    # updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='updated_projects', db_column='updated_by')
 
     class Meta:
         managed = False
@@ -34,11 +34,11 @@ class Comment(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     comment = models.TextField()
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='comments')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
+    # user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='comments')
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='created_comments', db_column='created_by')
+    # created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='created_comments', db_column='created_by')
     updated_at = models.DateTimeField(auto_now=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='updated_comments', db_column='updated_by')
+    # updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='updated_comments', db_column='updated_by')
 
     class Meta:
         managed = False
@@ -50,11 +50,11 @@ class Vote(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     vote = models.CharField(max_length=10, choices=VOTE_CHOICES)
     project = models.ForeignKey(Project, on_delete=models.CASCADE, related_name='votes')
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='votes')
+    # user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='votes')
     created_at = models.DateTimeField(auto_now_add=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='created_votes', db_column='created_by')
+    # created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='created_votes', db_column='created_by')
     updated_at = models.DateTimeField(auto_now=True)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='updated_votes', db_column='updated_by')
+    # updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name='updated_votes', db_column='updated_by')
 
     class Meta:
         managed = False
