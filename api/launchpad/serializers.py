@@ -69,9 +69,9 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
 
 
 class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
-    org = serializers.CharField()
-    district_name = serializers.CharField()
-    state = serializers.CharField()
+    org = serializers.CharField(allow_null=True, allow_blank=True)
+    district_name = serializers.CharField(allow_null=True, allow_blank=True)
+    state = serializers.CharField(allow_null=True, allow_blank=True)
     level = serializers.CharField()
 
     class Meta:
