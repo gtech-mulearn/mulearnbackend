@@ -32,7 +32,7 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
         ).values('user').annotate(
             total_karma=Sum('karma')
         ).values('total_karma')
-        allowed_org_types = ["College", "School", "Company", "Community"]
+        allowed_org_types = ["College", "School", "Company"]
 
         intro_task_completed_users = KarmaActivityLog.objects.filter(
             task__event='launchpad',
@@ -50,9 +50,9 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
                 queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
             )
         ).filter(
-            Q(user_organization_link_user__user_id__in=UserOrganizationLink.objects.filter(
+            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
                 org__org_type__in=allowed_org_types
-            ).values("user_id")) | Q(user_organization_link_user__id__isnull=True)
+            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
             time_=Max("karma_activity_log_user__created_at"),
