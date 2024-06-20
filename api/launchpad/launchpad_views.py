@@ -93,9 +93,9 @@ class ListParticipantsAPI(APIView):
                 queryset=UserRoleLink.objects.filter(verified=True, role__title__in=allowed_levels).select_related('role')
             )
         ).filter(
-            user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
+            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
                 org__org_type__in=allowed_org_types
-            ).values("id")
+            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             org=F("user_organization_link_user__org__title"),
             district_name=F("user_organization_link_user__org__district__name"),
