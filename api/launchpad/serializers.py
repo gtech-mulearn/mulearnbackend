@@ -1,6 +1,6 @@
 import uuid
 
-from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField
+from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Q
 
 from rest_framework import serializers
 
@@ -16,9 +16,9 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     karma = serializers.IntegerField()
     actual_karma = serializers.IntegerField(source="wallet_user.karma", default=None)
-    org = serializers.CharField()
-    district_name = serializers.CharField()
-    state = serializers.CharField()
+    org = serializers.CharField(allow_null=True, allow_blank=True)
+    district_name = serializers.CharField(allow_null=True, allow_blank=True)
+    state = serializers.CharField(allow_null=True, allow_blank=True)
 
     class Meta:
         model = User
@@ -50,9 +50,9 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
                 queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
             )
         ).filter(
-            user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
+            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
                 org__org_type__in=allowed_org_types
-            ).values("id")
+            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
             time_=Max("karma_activity_log_user__created_at"),
