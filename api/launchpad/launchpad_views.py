@@ -101,7 +101,9 @@ class ListParticipantsAPI(APIView):
             district_name=F("user_organization_link_user__org__district__name"),
             state=F("user_organization_link_user__org__district__zone__state__name"),
             level=F("user_role_link_user__role__title"),
-            time_=Max("karma_activity_log_user__created_at")
+            time_=Max("karma_activity_log_user__created_at"),
+        ).filter(
+            Q(level__in=allowed_levels) | Q(level__isnull=True)
         ).distinct()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
