@@ -43,9 +43,9 @@ class Leaderboard(APIView):
                 queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
             )
         ).filter(
-            user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
+            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
                 org__org_type__in=allowed_org_types
-            ).values("id")
+            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
             org=F("user_organization_link_user__org__title"),
@@ -171,7 +171,7 @@ class LaunchpadDetailsCount(APIView):
 class CollegeData(APIView):
     def get(self, request):
         allowed_levels = LaunchPadLevels.get_all_values()
-        
+
         org = Organization.objects.filter(
             org_type="College",
         ).prefetch_related(
@@ -204,7 +204,7 @@ class CollegeData(APIView):
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value)
             )
         ).order_by("-total_users")
-
+        
         paginated_queryset = CommonUtils.get_paginated_queryset(
             org,
             request,
