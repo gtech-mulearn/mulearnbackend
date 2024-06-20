@@ -25,7 +25,7 @@ class Leaderboard(APIView):
         ).values('user').annotate(
             total_karma=Sum('karma')
         ).values('total_karma')
-        allowed_org_types = ["College", "School", "Company"]
+        allowed_org_types = ["College", "School", "Company", "Community"]
 
         intro_task_completed_users = KarmaActivityLog.objects.filter(
             task__event='launchpad',
