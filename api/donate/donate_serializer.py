@@ -8,10 +8,11 @@ from utils.utils import DateTimeUtils
 
 
 class DonorSerializer(serializers.ModelSerializer):
+    currency = serializers.CharField(allow_null=True, allow_blank=True, default='INR')
 
     class Meta:
         model = Donor
-        exclude = ['created_by', 'created_at', 'id']
+        exclude = ['created_by', 'created_at', 'id', 'payment_id', 'payment_method']
 
     def create(self, validated_data):
         validated_data["created_by_id"] = settings.SYSTEM_ADMIN_ID
