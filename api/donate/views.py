@@ -103,10 +103,8 @@ class RazorPayVerification(APIView):
                 request.data.get("razorpay_payment_id")
             )
             transaction_details = {
-                "Payment ID": data['id'],
-                "Payment Method": data['method'],
                 "Amount": float(data['amount']) / 100,
-                "Currency": data['currency'],
+                "Currency": data['currency', None],
                 "Name": data['notes']['name'],
                 "Email": data['notes']['email'],
             }
@@ -115,12 +113,12 @@ class RazorPayVerification(APIView):
             if extra_data := data['notes'].get('phone_number', None):
                 transaction_details["Phone Number"] = extra_data
             if extra_data := data['notes'].get('pan_number', None):
-                transaction_details["PAN number"] = extra_data 
+                transaction_details["PAN number"] = extra_data
 
             serializer = DonorSerializer(data=data['notes']['validated_data'])
-            # if serializer.is_valid():
-            #     serializer.save()
+            if serializer.is_valid():
+                 serializer.save()
 
             return create_receipt(transaction_details)
         except razorpay.errors.SignatureVerificationError as e:
-            return CustomResponse(message=str(e)).get_failure_response()
+            return CustomResponse(general_message = "Payment Verification Failed").get_failure_response()
