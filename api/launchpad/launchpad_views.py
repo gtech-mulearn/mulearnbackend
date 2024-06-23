@@ -4,7 +4,7 @@ from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerF
 
 from rest_framework.views import APIView
 
-from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, \
+from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,\
       CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer
 from utils.response import CustomResponse
 from utils.utils import CommonUtils, ImportCSV
@@ -101,7 +101,7 @@ class ListParticipantsAPI(APIView):
             district_name=F("user_organization_link_user__org__district__name"),
             state=F("user_organization_link_user__org__district__zone__state__name"),
             level=F("user_role_link_user__role__title"),
-            time_=Max("karma_activity_log_user__created_at")
+            time_=Max("karma_activity_log_user__created_at"),
         ).filter(
             Q(level__in=allowed_levels) | Q(level__isnull=True)
         ).distinct()
@@ -231,7 +231,7 @@ class LaunchPadUser(APIView):
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
         
-        colleges = data.get('college')
+        colleges = data.get('colleges')
         errors = {}
         error = False
         not_found_colleges = []
@@ -267,7 +267,7 @@ class LaunchPadUser(APIView):
             ["full_name", "phone_number", "email", "role", "district", "zone"]
         )
 
-        serializer = LaunchpadUserSerializer(
+        serializer = LaunchpadUserListSerializer(
             paginated_queryset.get("queryset"), many=True
         )
         return CustomResponse().paginated_response(
@@ -297,7 +297,7 @@ class LaunchPadUserPublic(APIView):
             user = LaunchPadUsers.objects.get(email=email)
         except LaunchPadUsers.DoesNotExist:
             return CustomResponse(general_message="User not found").get_failure_response()
-        serializer = LaunchpadUserSerializer(user)
+        serializer = LaunchpadUserListSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
     
     
@@ -308,7 +308,7 @@ class UserProfile(APIView):
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         user = LaunchPadUsers.objects.get(email=auth_mail)
-        serializer = LaunchpadUserSerializer(user)
+        serializer = LaunchpadUserListSerializer(user)
         return CustomResponse(data=serializer.data).get_success_response()
     
     def put(self, request):
@@ -406,14 +406,14 @@ class BulkLaunchpadUser(APIView):
         
         for data in excel_data[1:]:
             not_found_colleges = []
-            data['college'] = data['college'].split(",") if data.get('college') else []
+            data['colleges'] = data['colleges'].split(",") if data.get('colleges') else []
             serializer = LaunchpadUserSerializer(data=data)
             if not serializer.is_valid():
                 continue
             user = serializer.save()
-            if data.get('college') is None:
+            if data.get('colleges') is None:
                 continue
-            for college in data.get('college'):
+            for college in data.get('colleges'):
                 if not (org := Organization.objects.filter(title=college, org_type="College").first()):
                     error = True
                     not_found_colleges.append(college)

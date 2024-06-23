@@ -91,6 +91,7 @@ class CollegeDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = (
+            "id",
             "title", 
             "district_name", 
             "state", 
@@ -104,15 +105,15 @@ class CollegeDataSerializer(serializers.ModelSerializer):
 class LaunchpadUserSerializer(serializers.ModelSerializer):
     id = serializers.CharField(max_length=36, read_only=True)
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
-    college = serializers.ListField(child=serializers.CharField(), allow_empty=True, write_only=True)
-    colleges = serializers.SerializerMethodField()
+    colleges = serializers.ListField(child=serializers.CharField(), allow_empty=True, write_only=True)
+    
 
     class Meta:
         model = LaunchPadUsers
-        fields = ("id", "full_name", "email", "phone_number", "role", "college", "district", "zone", "colleges")
+        fields = ("id", "full_name", "email", "phone_number", "role", "district", "zone", "colleges")
 
     def create(self, validated_data):
-        validated_data.pop("college")
+        validated_data.pop("colleges")
         
         validated_data["id"] = uuid.uuid4()
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
@@ -121,6 +122,14 @@ class LaunchpadUserSerializer(serializers.ModelSerializer):
         
         return user
 
+
+class LaunchpadUserListSerializer(serializers.ModelSerializer):
+    colleges = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LaunchPadUsers
+        fields = ("id", "full_name", "email", "phone_number", "role", "district", "zone", "colleges")
+    
     def get_colleges(self, obj):
         return LaunchPadUserCollegeLink.objects.filter(user=obj).values_list("college_id", "college__title")
 
