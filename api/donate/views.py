@@ -104,7 +104,7 @@ class RazorPayVerification(APIView):
             )
             transaction_details = {
                 "Amount": float(data['amount']) / 100,
-                "Currency": data['currency', None],
+                "Currency": data.get('currency', None),
                 "Name": data['notes']['name'],
                 "Email": data['notes']['email'],
             }
