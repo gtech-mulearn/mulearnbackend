@@ -119,6 +119,6 @@ class RazorPayVerification(APIView):
             if serializer.is_valid():
                  serializer.save()
 
-            return create_receipt(transaction_details)
+            return CustomResponse(response = transaction_details).get_success_response()
         except razorpay.errors.SignatureVerificationError as e:
             return CustomResponse(general_message = "Payment Verification Failed").get_failure_response()
