@@ -106,10 +106,20 @@ class ListParticipantsAPI(APIView):
             Q(level__in=allowed_levels) | Q(level__isnull=True)
         ).distinct()
 
+        if district := request.query_params.get("district"):
+            users = users.filter(district_name=district)
+        if org := request.query_params.get("org"):
+            users = users.filter(org=org)
+        if level := request.query_params.get("level"):
+            users = users.filter(level=level)
+        if state := request.query_params.get("state"):
+            users = users.filter(state=state)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "level", "org", "district_name", "state"]
+            ["full_name", "level", "org", "district_name", "state"],
+            sort_fields={"full_name": "full_name", "org": "org", "district_name": "district_name", "state": "state", "level": "level"}
         )
 
         serializer = LaunchpadParticipantsSerializer(
@@ -205,10 +215,18 @@ class CollegeData(APIView):
             )
         ).order_by("-total_users")
         
+        if district := request.query_params.get("district"):
+            org = org.filter(district_name=district)
+        if title := request.query_params.get("title"):
+            org = org.filter(title=title)
+        if state := request.query_params.get("state"):
+            org = org.filter(state=state)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             org,
             request,
-            ["title", "district_name", "state"]
+            ["title", "district_name", "state"],
+            sort_fields={"title": "title", "district_name": "district_name", "state": "state"}
         )
 
         serializer = CollegeDataSerializer(
