@@ -180,12 +180,22 @@ class LaunchpadUpdateUserSerializer(serializers.ModelSerializer):
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     id = serializers.CharField(max_length=36, read_only=True)
+    full_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    district = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    zone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    email = serializers.EmailField(required=False)
     colleges = serializers.SerializerMethodField()
 
     class Meta:
         model = LaunchPadUsers
-        fields = ("id", "full_name", "phone_number", "district", "zone", "email")
+        fields = ("id", "full_name", "phone_number", "district", "zone", "email", "colleges")
 
+    def validate(self, attrs):
+        if LaunchPadUsers.objects.filter(email=attrs.get("email")).exclude(id=self.instance.id).exists():
+            raise serializers.ValidationError("Email already exists")
+        return super().validate(attrs)
+    
     def update(self, instance, validated_data):
         instance.full_name = validated_data.get("full_name", instance.full_name)
         instance.phone_number = validated_data.get("phone_number", instance.phone_number)
