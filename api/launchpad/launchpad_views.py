@@ -44,7 +44,7 @@ class Leaderboard(APIView):
             )
         ).filter(
             Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
-                org__org_type__in=allowed_org_types
+                org__org_type__in=["College", "School", "Company", "Community"]
             ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
