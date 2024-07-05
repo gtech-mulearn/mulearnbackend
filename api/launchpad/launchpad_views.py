@@ -32,7 +32,7 @@ class Leaderboard(APIView):
             appraiser_approved=True,
             task__hashtag='#lp24-introduction',
         ).values('user')
-        
+
         users = User.objects.filter(
             karma_activity_log_user__task__event="launchpad",
             karma_activity_log_user__appraiser_approved=True,
@@ -44,7 +44,7 @@ class Leaderboard(APIView):
             )
         ).filter(
             Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
-                org__org_type__in=allowed_org_types
+                org__org_type__in=["College", "School", "Company", "Community"]
             ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
@@ -106,10 +106,20 @@ class ListParticipantsAPI(APIView):
             Q(level__in=allowed_levels) | Q(level__isnull=True)
         ).distinct()
 
+        if district := request.query_params.get("district"):
+            users = users.filter(district_name=district)
+        if org := request.query_params.get("org"):
+            users = users.filter(org=org)
+        if level := request.query_params.get("level"):
+            users = users.filter(level=level)
+        if state := request.query_params.get("state"):
+            users = users.filter(state=state)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "level", "org", "district_name", "state"]
+            ["full_name", "level", "org", "district_name", "state"],
+            sort_fields={"full_name": "full_name", "org": "org", "district_name": "district_name", "state": "state", "level": "level"}
         )
 
         serializer = LaunchpadParticipantsSerializer(
@@ -188,27 +198,35 @@ class CollegeData(APIView):
             state=F("district__zone__state__name"),
             total_users=Count("user_organization_link_org__user"),
             level1 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_1.value)
             ),
             level2 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_2.value)
             ),
             level3 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_3.value)
             ),
             level4 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value)
             )
         ).order_by("-total_users")
-        
+
+        if district := request.query_params.get("district"):
+            org = org.filter(district_name=district)
+        if title := request.query_params.get("title"):
+            org = org.filter(title=title)
+        if state := request.query_params.get("state"):
+            org = org.filter(state=state)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             org,
             request,
-            ["title", "district_name", "state"]
+            ["title", "district_name", "state"],
+            sort_fields={"title": "title", "district_name": "district_name", "state": "state"}
         )
 
         serializer = CollegeDataSerializer(
@@ -230,7 +248,7 @@ class LaunchPadUser(APIView):
         serializer = LaunchpadUserSerializer(data=data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
-        
+
         colleges = data.get('colleges')
         errors = {}
         error = False
@@ -255,7 +273,7 @@ class LaunchPadUser(APIView):
         if error:
             return CustomResponse(message=errors).get_failure_response()
         return CustomResponse(general_message="Successfully added user").get_success_response()
-    
+
     def get(self, request):
         auth_mail = request.query_params.get('current_user', None)
         if not LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).exists():
@@ -273,7 +291,7 @@ class LaunchPadUser(APIView):
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
-    
+
     def put(self, request, email):
         data = request.data
         auth_mail = data.pop('current_user', None)
@@ -299,32 +317,32 @@ class LaunchPadUserPublic(APIView):
             return CustomResponse(general_message="User not found").get_failure_response()
         serializer = LaunchpadUserListSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
-    
-    
+
+
 class UserProfile(APIView):
 
     def get(self, request):
-        auth_mail = request.query_params('current_user', None)
+        auth_mail = request.query_params.get("current_user", None)
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         user = LaunchPadUsers.objects.get(email=auth_mail)
         serializer = LaunchpadUserListSerializer(user)
-        return CustomResponse(data=serializer.data).get_success_response()
-    
+        return CustomResponse(response=serializer.data).get_success_response()
+
     def put(self, request):
         data = request.data
         auth_mail = data.pop('current_user', None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (user := LaunchPadUsers.objects.filter(email=auth_mail).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
-        
+
         serializer = UserProfileUpdateSerializer(user, data=data)
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(general_message="Successfully updated user").get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
-    
-    
+
+
 class UserBasedCollegeData(APIView):
 
     def get(self, request):
@@ -336,7 +354,7 @@ class UserBasedCollegeData(APIView):
         college_ids = [college.college_id for college in colleges]
 
         allowed_levels = LaunchPadLevels.get_all_values()
-        
+
         org = Organization.objects.filter(
             org_type="College",
             id__in=college_ids
@@ -354,19 +372,19 @@ class UserBasedCollegeData(APIView):
             state=F("district__zone__state__name"),
             total_users=Count("user_organization_link_org__user"),
             level1 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_1.value)
             ),
             level2 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_2.value)
             ),
             level3 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_3.value)
             ),
             level4 = Count(
-                "user_organization_link_org__user", 
+                "user_organization_link_org__user",
                 filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value)
             )
         ).order_by("-total_users")
@@ -403,7 +421,7 @@ class BulkLaunchpadUser(APIView):
             return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
         errors = {}
         error = False
-        
+
         for data in excel_data[1:]:
             not_found_colleges = []
             data['colleges'] = data['colleges'].split(",") if data.get('colleges') else []
