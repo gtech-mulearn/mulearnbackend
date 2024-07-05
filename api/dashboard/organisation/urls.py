@@ -26,4 +26,5 @@ urlpatterns = [
     path('karma-log/create/', organisation_views.OrganizationKarmaLogGetPostPatchDeleteAPI.as_view()),
     path('base-template/', organisation_views.OrganisationBaseTemplateAPI.as_view()),
     path('import/', organisation_views.OrganisationImportAPI.as_view()),
+    path('transfer/', organisation_views.TransferAPI.as_view()),
 ]
