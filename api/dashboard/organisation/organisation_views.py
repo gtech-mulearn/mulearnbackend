@@ -703,26 +703,19 @@ class OrganisationImportAPI(APIView):
 
 class TransferAPI(APIView):
     def post(self, request):
-        fromcode = request.data.get("fromid")
-        tocode = request.data.get("toid")
-        if not (from_org := Organization.objects.filter(code=fromcode).first()):
+        from_code = request.data.get("from_id")
+        to_code = request.data.get("to_id")
+        if not (from_org := Organization.objects.filter(code=from_code).first()):
             return CustomResponse(
-                response={"No organisations present"}
+                response={"From Organisations not present"}
             ).get_failure_response()
-        user_org_links = UserOrganizationLink.objects.filter(org=from_org).update(
-            org=Organization.objects.filter(code=tocode)
-        )
-        if user_org_links.none:
-            # if user_org_links.exists():
-            #     users_effected = []
-            #     for user_org_link in user_org_links:
-            #         main_user = user_org_link.user
-            #         main_user.org = get_object_or_404(Organization, code=tocode)
-            #         main_user.save()
-            #         users_effected.append(main_user)
-            return CustomResponse(response={"No Users present"}).get_failure_response()
-        else:
-
+        if not (to_org := Organization.objects.filter(code=to_code).first()):
             return CustomResponse(
+                response={"To Organisations not present"}
+            ).get_failure_response()
+        
+        UserOrganizationLink.objects.filter(org=from_org).update(org=to_org)
+        from_org.delete()
+        return CustomResponse(
                 response={"Organisations transferred successfully"}
             ).get_success_response()
