@@ -6,7 +6,6 @@ from django.db.models import F, Prefetch, Sum
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
-
 from db.organization import (
     Department,
     OrgAffiliation,
@@ -14,6 +13,8 @@ from db.organization import (
     UserOrganizationLink,
     District,
 )
+from db.user import User
+
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
@@ -25,9 +26,10 @@ from .serializers import (
     InstitutionCreateUpdateSerializer,
     InstitutionSerializer,
     InstitutionPrefillSerializer,
-    OrganizationMergerSerializer, OrganizationKarmaTypeGetPostPatchDeleteSerializer,
+    OrganizationMergerSerializer,
+    OrganizationKarmaTypeGetPostPatchDeleteSerializer,
     OrganizationKarmaLogGetPostPatchDeleteSerializer,
-    OrganizationImportSerializer
+    OrganizationImportSerializer,
 )
 
 
@@ -80,8 +82,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
             serializer.save()
 
             if (
-                    request.data.get("title") != old_title
-                    and old_type == OrganizationType.COMMUNITY.value
+                request.data.get("title") != old_title
+                and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -91,8 +93,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                    request.data.get("orgType") != OrganizationType.COMMUNITY.value
-                    and old_type == OrganizationType.COMMUNITY.value
+                request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
                     WebHookCategory.COMMUNITY.value,
@@ -101,8 +103,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                    old_type != OrganizationType.COMMUNITY.value
-                    and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+                old_type != OrganizationType.COMMUNITY.value
+                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
             ):
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
@@ -485,10 +487,7 @@ class OrganizationKarmaTypeGetPostPatchDeleteAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = OrganizationKarmaTypeGetPostPatchDeleteSerializer(
-            data=request.data,
-            context={
-                'user_id': user_id
-            }
+            data=request.data, context={"user_id": user_id}
         )
         if serializer.is_valid():
             serializer.save()
@@ -497,9 +496,7 @@ class OrganizationKarmaTypeGetPostPatchDeleteAPI(APIView):
                 "Organization karma type created successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            serializer.errors
-        ).get_failure_response()
+        return CustomResponse(serializer.errors).get_failure_response()
 
 
 class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
@@ -507,10 +504,7 @@ class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         serializer = OrganizationKarmaLogGetPostPatchDeleteSerializer(
-            data=request.data,
-            context={
-                'user_id': user_id
-            }
+            data=request.data, context={"user_id": user_id}
         )
 
         if serializer.is_valid():
@@ -520,25 +514,23 @@ class OrganizationKarmaLogGetPostPatchDeleteAPI(APIView):
                 "Organization karma Log created successfully"
             ).get_success_response()
 
-        return CustomResponse(
-            serializer.errors
-        ).get_failure_response()
+        return CustomResponse(serializer.errors).get_failure_response()
 
 
 class OrganisationBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook('./excel-templates/organisation_base_template.xlsx')
-        ws = wb['Data Definitions']
-        affiliations = OrgAffiliation.objects.all().values_list('title', flat=True)
-        districts = District.objects.all().values_list('name', flat=True)
+        wb = load_workbook("./excel-templates/organisation_base_template.xlsx")
+        ws = wb["Data Definitions"]
+        affiliations = OrgAffiliation.objects.all().values_list("title", flat=True)
+        districts = District.objects.all().values_list("name", flat=True)
         org_types = OrganizationType.get_all_values()
 
         data = {
-            'org_type': org_types,
-            'affiliation': affiliations,
-            'district': districts,
+            "org_type": org_types,
+            "affiliation": affiliations,
+            "district": districts,
         }
         # Write data column-wise
         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
@@ -548,10 +540,14 @@ class OrganisationBaseTemplateAPI(APIView):
         with NamedTemporaryFile() as tmp:
             tmp.close()  # with statement opened tmp, close it so wb.save can open it
             wb.save(tmp.name)
-            with open(tmp.name, 'rb') as f:
+            with open(tmp.name, "rb") as f:
                 f.seek(0)
                 new_file_object = f.read()
-        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='organisation_base_template.xlsx')
+        return FileResponse(
+            BytesIO(new_file_object),
+            as_attachment=True,
+            filename="organisation_base_template.xlsx",
+        )
 
 
 class OrganisationImportAPI(APIView):
@@ -574,13 +570,7 @@ class OrganisationImportAPI(APIView):
                 general_message="Empty csv file."
             ).get_failure_response()
 
-        temp_headers = [
-            "title",
-            "code",
-            "org_type",
-            "affiliation",
-            "district"
-        ]
+        temp_headers = ["title", "code", "org_type", "affiliation", "district"]
         first_entry = excel_data[0]
         for key in temp_headers:
             if key not in first_entry:
@@ -647,19 +637,15 @@ class OrganisationImportAPI(APIView):
 
         affiliations = OrgAffiliation.objects.filter(
             title__in=affiliations_to_fetch
-        ).values(
-            "id",
-            "title"
+        ).values("id", "title")
+
+        districts = District.objects.filter(name__in=districts_to_fetch).values(
+            "id", "name"
         )
 
-        districts = District.objects.filter(
-            name__in=districts_to_fetch
-        ).values(
-            "id",
-            "name"
-        )
-
-        affiliations_dict = {affiliation["title"]: affiliation["id"] for affiliation in affiliations}
+        affiliations_dict = {
+            affiliation["title"]: affiliation["id"] for affiliation in affiliations
+        }
         districts_dict = {district["name"]: district["id"] for district in districts}
         org_types = OrganizationType.get_all_values()
 
@@ -667,7 +653,9 @@ class OrganisationImportAPI(APIView):
             affiliation = row.pop("affiliation")
             district = row.pop("district")
 
-            affiliation_id = affiliations_dict.get(affiliation) if affiliation is not None else None
+            affiliation_id = (
+                affiliations_dict.get(affiliation) if affiliation is not None else None
+            )
             district_id = districts_dict.get(district)
             org_type = row.get("org_type")
 
@@ -689,21 +677,52 @@ class OrganisationImportAPI(APIView):
                 row["district_id"] = district_id
                 valid_rows.append(row)
 
-        organization_list_serializer = OrganizationImportSerializer(data=valid_rows, many=True)
+        organization_list_serializer = OrganizationImportSerializer(
+            data=valid_rows, many=True
+        )
         success_data = []
         if organization_list_serializer.is_valid():
             organization_list_serializer.save()
             for organization_data in organization_list_serializer.data:
-                success_data.append({
-                    'title': organization_data.get('title', ''),
-                    'code': organization_data.get('code', ''),
-                    'org_type': organization_data.get('org_type', ''),
-                    'affiliation': organization_data.get('affiliation_id', ''),
-                    'district': organization_data.get('district_id', ''),
-                })
+                success_data.append(
+                    {
+                        "title": organization_data.get("title", ""),
+                        "code": organization_data.get("code", ""),
+                        "org_type": organization_data.get("org_type", ""),
+                        "affiliation": organization_data.get("affiliation_id", ""),
+                        "district": organization_data.get("district_id", ""),
+                    }
+                )
         else:
             error_rows.append(organization_list_serializer.errors)
 
         return CustomResponse(
             response={"Success": success_data, "Failed": error_rows}
         ).get_success_response()
+
+
+class TransferAPI(APIView):
+    def post(self, request):
+        fromcode = request.data.get("fromid")
+        tocode = request.data.get("toid")
+        if not (from_org := Organization.objects.filter(code=fromcode).first()):
+            return CustomResponse(
+                response={"No organisations present"}
+            ).get_failure_response()
+        user_org_links = UserOrganizationLink.objects.filter(org=from_org).update(
+            org=Organization.objects.filter(code=tocode)
+        )
+        if user_org_links.none:
+            # if user_org_links.exists():
+            #     users_effected = []
+            #     for user_org_link in user_org_links:
+            #         main_user = user_org_link.user
+            #         main_user.org = get_object_or_404(Organization, code=tocode)
+            #         main_user.save()
+            #         users_effected.append(main_user)
+            return CustomResponse(response={"No Users present"}).get_failure_response()
+        else:
+
+            return CustomResponse(
+                response={"Organisations transferred successfully"}
+            ).get_success_response()
