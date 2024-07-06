@@ -85,27 +85,34 @@ class ListParticipantsAPI(APIView):
             task__hashtag='#lp24-introduction',
         ).values('user')
 
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+
         users = User.objects.filter(
             karma_activity_log_user__task__event="launchpad",
             karma_activity_log_user__appraiser_approved=True,
             id__in=intro_task_completed_users
         ).prefetch_related(
             Prefetch(
-                "user_organization_link_user",
-                queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
-            ),
-            Prefetch(
                 "user_role_link_user",
                 queryset=UserRoleLink.objects.filter(verified=True, role__title__in=allowed_levels).select_related('role')
             )
-        ).filter(
-            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
-                org__org_type__in=allowed_org_types
-            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
-            org=F("user_organization_link_user__org__title"),
-            district_name=F("user_organization_link_user__org__district__name"),
-            state=F("user_organization_link_user__org__district__zone__state__name"),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
             level=F("user_role_link_user__role__title"),
             time_=Max("karma_activity_log_user__created_at"),
         ).filter(
@@ -147,28 +154,35 @@ class LaunchpadDetailsCount(APIView):
             task__hashtag='#lp24-introduction',
         ).values('user')
 
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+
         users = User.objects.filter(
             karma_activity_log_user__task__event="launchpad",
             karma_activity_log_user__appraiser_approved=True,
             id__in=intro_task_completed_users
         ).prefetch_related(
             Prefetch(
-                "user_organization_link_user",
-                queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
-            ),
-            Prefetch(
                 "user_role_link_user",
                 queryset=UserRoleLink.objects.filter(verified=True,
                                                      role__title__in=allowed_levels).select_related('role')
             )
-        ).filter(
-            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
-                org__org_type__in=allowed_org_types
-            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
-            org=F("user_organization_link_user__org__title"),
-            district_name=F("user_organization_link_user__org__district__name"),
-            state=F("user_organization_link_user__org__district__zone__state__name"),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
             level=F("user_role_link_user__role__title"),
             time_=Max("karma_activity_log_user__created_at"),
         ).distinct()
