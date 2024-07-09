@@ -470,3 +470,67 @@ class BulkLaunchpadUser(APIView):
         if error:
             return CustomResponse(message=errors).get_failure_response()
         return CustomResponse(general_message="Successfully added users").get_success_response()
+
+
+class LaunchPadListAdmin(APIView):
+
+    def get(self, request):
+        data = request.data
+        auth_mail = data.pop('current_user', None)
+        auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
+        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+            return CustomResponse(general_message="Unauthorized").get_failure_response()
+        total_karma_subquery = KarmaActivityLog.objects.filter(
+            user=OuterRef('id'),
+            task__event='launchpad',
+            appraiser_approved=True,
+        ).values('user').annotate(
+            total_karma=Sum('karma')
+        ).values('total_karma')
+        allowed_org_types = ["College", "School", "Company"]
+
+        intro_task_completed_users = KarmaActivityLog.objects.filter(
+            task__event='launchpad',
+            appraiser_approved=True,
+            task__hashtag='#lp24-introduction',
+        ).values('user')
+
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+
+        users = User.objects.filter(
+            karma_activity_log_user__task__event="launchpad",
+            karma_activity_log_user__appraiser_approved=True,
+            id__in=intro_task_completed_users
+        ).annotate(
+            karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
+            time_=Max("karma_activity_log_user__created_at"),
+        ).order_by("-karma", "time_")
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            users,
+            request,
+            ["full_name", "karma", "org", "district_name", "state"]
+        )
+
+        serializer = LaunchpadLeaderBoardSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )        
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )

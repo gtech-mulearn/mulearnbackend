@@ -13,4 +13,5 @@ urlpatterns = [
     path('user-profile/', launchpad_views.UserProfile.as_view()),
     path('user-college-data/', launchpad_views.UserBasedCollegeData.as_view()),
     path('bulk-user-college-link/', launchpad_views.BulkLaunchpadUser.as_view()),
+    path('list-participants-admin/', launchpad_views.LaunchPadListAdmin.as_view()),
 ]

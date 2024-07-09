@@ -1,5 +1,6 @@
 from django.db import models
-
+from django.conf import settings
+from db.user import User
 from db.organization import Organization
 
 
@@ -31,3 +32,16 @@ class LaunchPadUserCollegeLink(models.Model):
     class Meta:
         managed = False
         db_table = 'launchpad_user_college_link'
+
+class LaunchPad(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    user = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_user")
+    launchpad_id = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User,on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_created_by")
+    updated_by = models.ForeignKey(User,on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_updated_by")
+
+    class Meta:
+        managed = False
+        db_table = 'launchpad'
