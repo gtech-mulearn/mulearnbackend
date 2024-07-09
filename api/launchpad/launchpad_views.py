@@ -6,13 +6,16 @@ from rest_framework.views import APIView
 
 from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,\
       CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer
+from api.dashboard.profile.profile_serializer import UserProfileSerializer , LinkSocials ,UserLevelSerializer ,UserLogSerializer
+
 from utils.response import CustomResponse
 from utils.utils import CommonUtils, ImportCSV
 from utils.types import LaunchPadLevels, LaunchPadRoles
-from db.user import User, UserRoleLink
+from utils.permission import JWTUtils
+from db.user import User, UserRoleLink , Role , Socials
 from db.organization import UserOrganizationLink, Organization
-from db.task import KarmaActivityLog
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink
+from db.task import KarmaActivityLog , Level
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink , LaunchPad
 
 
 
@@ -534,3 +537,56 @@ class LaunchPadListAdmin(APIView):
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
+        
+        
+class BaseAPI(APIView):
+    def get_authenticated_user(self, request, launchpad_id):
+        data = request.data
+        auth_mail = data.pop('current_user', None)
+        auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
+        if launchpad_id is None:
+            return None, CustomResponse(general_message="No launchpad id provided").get_failure_response()
+        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+            return None, CustomResponse(general_message="Unauthorized").get_failure_response()
+        try:
+            user = LaunchPad.objects.get(launchpad_id=launchpad_id).user
+        except LaunchPad.DoesNotExist:
+            return None, CustomResponse(general_message="Invalid Launchpad ID").get_failure_response()
+        return user, None
+
+class UserProfileAPI(BaseAPI):
+    def get(self, request, launchpad_id=None):
+        user, response = self.get_authenticated_user(request, launchpad_id)
+        if response:
+            return response
+        serializer = UserProfileSerializer(user, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+class GetSocialsAPI(BaseAPI):
+    def get(self, request, launchpad_id=None):
+        user, response = self.get_authenticated_user(request, launchpad_id)
+        if response:
+            return response
+        social_instance = Socials.objects.filter(user_id=user.id).first()
+        serializer = LinkSocials(instance=social_instance)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+class UserLevelsAPI(BaseAPI):
+    def get(self, request, launchpad_id=None):
+        user, response = self.get_authenticated_user(request, launchpad_id)
+        if response:
+            return response
+        user_levels_link_query = Level.objects.all().order_by("level_order")
+        serializer = UserLevelSerializer(user_levels_link_query, many=True, context={"user_id": user.id})
+        return CustomResponse(response=serializer.data).get_success_response()
+
+class UserLogAPI(BaseAPI):
+    def get(self, request, launchpad_id=None):
+        user, response = self.get_authenticated_user(request, launchpad_id)
+        if response:
+            return response
+        karma_activity_log = KarmaActivityLog.objects.filter(user=user.id, appraiser_approved=True).order_by("-created_at")
+        if not karma_activity_log:
+            return CustomResponse(general_message="No karma details available for user").get_success_response()
+        serializer = UserLogSerializer(karma_activity_log, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()

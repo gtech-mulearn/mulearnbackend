@@ -14,4 +14,8 @@ urlpatterns = [
     path('user-college-data/', launchpad_views.UserBasedCollegeData.as_view()),
     path('bulk-user-college-link/', launchpad_views.BulkLaunchpadUser.as_view()),
     path('list-participants-admin/', launchpad_views.LaunchPadListAdmin.as_view()),
+    path('user-profile/<str:launch_id>/', launchpad_views.UserProfileAPI.as_view()),
+    path('socials/<str:launch_id>/', launchpad_views.GetSocialsAPI.as_view()),
+    path('user-log/<str:launch_id>/', launchpad_views.UserLogAPI.as_view()),
+    path('get-user-levels/<str:launch_id>/', launchpad_views.UserLevelsAPI.as_view()),
 ]
