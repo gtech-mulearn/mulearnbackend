@@ -541,8 +541,7 @@ class LaunchPadListAdmin(APIView):
         
 class BaseAPI(APIView):
     def get_authenticated_user(self, request, launchpad_id):
-        data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = request.query_params.get('current_user', None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if launchpad_id is None:
             return None, CustomResponse(general_message="No launchpad id provided").get_failure_response()
@@ -553,7 +552,7 @@ class BaseAPI(APIView):
         except LaunchPad.DoesNotExist:
             return None, CustomResponse(general_message="Invalid Launchpad ID").get_failure_response()
         return user, None
-
+ 
 class UserProfileAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
         user, response = self.get_authenticated_user(request, launchpad_id)
