@@ -7,10 +7,15 @@ from rest_framework import serializers
 from db.user import User
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
 
+class LaunchPadIDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchPad
+        fields = ('launchpad_id')
+   
 
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
@@ -19,10 +24,11 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
     district_name = serializers.CharField(allow_null=True, allow_blank=True)
     state = serializers.CharField(allow_null=True, allow_blank=True)
+    launchpad_id = LaunchPadIDSerializer(read_only=True)
 
     class Meta:
         model = User
-        fields = ("rank", "full_name", "actual_karma", "karma", "org", "district_name", "state")
+        fields = ("rank", "full_name", "actual_karma", "karma", "org", "district_name", "state","launchpad_id")
 
     def get_rank(self, obj):
         total_karma_subquery = KarmaActivityLog.objects.filter(
