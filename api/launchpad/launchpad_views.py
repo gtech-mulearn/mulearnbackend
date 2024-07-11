@@ -478,8 +478,7 @@ class BulkLaunchpadUser(APIView):
 class LaunchPadListAdmin(APIView):
 
     def get(self, request):
-        data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = request.query_params.get('current_user', None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
