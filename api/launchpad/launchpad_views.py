@@ -5,7 +5,7 @@ from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerF
 from rest_framework.views import APIView
 
 from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,\
-      CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer
+      CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer,LaunchPadRankSerializer
 from api.dashboard.profile.profile_serializer import UserProfileSerializer , LinkSocials ,UserLevelSerializer ,UserLogSerializer
 
 from utils.response import CustomResponse
@@ -558,7 +558,18 @@ class UserProfileAPI(BaseAPI):
         if response:
             return response
         serializer = UserProfileSerializer(user, many=False)
-        return CustomResponse(response=serializer.data).get_success_response()
+        launchpad_karma = KarmaActivityLog.objects.filter(
+            user=user,
+            task__event='launchpad',
+            appraiser_approved=True,
+        ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
+        rank_serializer = LaunchPadRankSerializer(user)
+        launchpad_rank = rank_serializer.data['launchpad_rank']
+        
+        data = serializer.data
+        data['launchpad_karma'] = launchpad_karma
+        data['launchpad_rank'] = launchpad_rank
+        return CustomResponse(response=data).get_success_response()
 
 class GetSocialsAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
