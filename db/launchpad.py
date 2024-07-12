@@ -39,8 +39,8 @@ class LaunchPad(models.Model):
     launchpad_id = models.CharField(max_length=100, unique=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User,on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_created_by")
-    updated_by = models.ForeignKey(User,on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_updated_by")
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_created_by", db_column='created_by')
+    updated_by = models.ForeignKey(User,on_delete=models.SET(settings.SYSTEM_ADMIN_ID), related_name="launchpad_updated_by", db_column='updated_by')
 
     class Meta:
         managed = False
