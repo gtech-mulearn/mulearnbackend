@@ -420,3 +420,19 @@ class QrcodeRetrieveAPI(APIView):
             return CustomResponse(
                 response="The given UUID seems to be invalid"
             ).get_failure_response()
+
+
+class BadgesAPI(APIView):
+    def get(self, request, muid):
+        try:
+            user = User.objects.get(muid=muid)
+            hastags = ["#tfp2.0-scratch"]
+            response_data = {"full_name": user.full_name, "completed_tasks":[]}
+            for tag in hastags:
+                if KarmaActivityLog.objects.filter(user=user, task__hashtag=tag).exists():
+                    response_data["completed_tasks"] = tag
+            return CustomResponse(response=response_data).get_success_response()
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given muid seems to be invalid"
+            ).get_failure_response()
