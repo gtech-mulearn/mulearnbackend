@@ -7,11 +7,75 @@ from rest_framework import serializers
 from db.user import User
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
 
+class LaunchPadIDSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchPad
+        fields = ['launchpad_id']
+    def to_representation(self, instance):
+        return instance.launchpad_id   
 
+class LaunchPadRankSerializer(serializers.ModelSerializer):
+    launchpad_rank = serializers.SerializerMethodField('get_rank')
+    class Meta:
+        model = User
+        fields = ['launchpad_rank']
+        
+    def get_rank(self, obj):
+        total_karma_subquery = KarmaActivityLog.objects.filter(
+            user=OuterRef('id'),
+            task__event='launchpad',
+            appraiser_approved=True,
+        ).values('user').annotate(
+            total_karma=Sum('karma')
+        ).values('total_karma')
+        allowed_org_types = ["College", "School", "Company"]
+
+        intro_task_completed_users = KarmaActivityLog.objects.filter(
+            task__event='launchpad',
+            appraiser_approved=True,
+            task__hashtag='#lp24-introduction',
+        ).values('user')
+
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+
+        users = User.objects.filter(
+            karma_activity_log_user__task__event="launchpad",
+            karma_activity_log_user__appraiser_approved=True,
+            id__in=intro_task_completed_users
+        ).annotate(
+            karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
+            time_=Max("karma_activity_log_user__created_at"),
+        ).order_by("-karma", "time_")
+        
+        # high complexity
+        rank = 0
+        for data in users:
+            rank += 1
+            if data.id == obj.id:
+                break    
+        
+        return rank
+    
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     karma = serializers.IntegerField()
@@ -19,10 +83,11 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
     district_name = serializers.CharField(allow_null=True, allow_blank=True)
     state = serializers.CharField(allow_null=True, allow_blank=True)
+    launchpad_id = LaunchPadIDSerializer(source='launchpad_user.first', read_only=True)
 
     class Meta:
         model = User
-        fields = ("rank", "full_name", "actual_karma", "karma", "org", "district_name", "state")
+        fields = ("rank", "full_name", "actual_karma", "karma", "org", "district_name", "state","launchpad_id")
 
     def get_rank(self, obj):
         total_karma_subquery = KarmaActivityLog.objects.filter(
@@ -39,22 +104,31 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
             appraiser_approved=True,
             task__hashtag='#lp24-introduction',
         ).values('user')
-        
+
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+
         users = User.objects.filter(
             karma_activity_log_user__task__event="launchpad",
             karma_activity_log_user__appraiser_approved=True,
             id__in=intro_task_completed_users
-        ).prefetch_related(
-            Prefetch(
-                "user_organization_link_user",
-                queryset=UserOrganizationLink.objects.filter(org__org_type__in=allowed_org_types),
-            )
-        ).filter(
-            Q(user_organization_link_user__id__in=UserOrganizationLink.objects.filter(
-                org__org_type__in=allowed_org_types
-            ).values("id")) | Q(user_organization_link_user__id__isnull=True)
         ).annotate(
             karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
             time_=Max("karma_activity_log_user__created_at"),
         ).order_by("-karma", "time_")
         
@@ -91,6 +165,7 @@ class CollegeDataSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = (
+            "id",
             "title", 
             "district_name", 
             "state", 
@@ -104,15 +179,15 @@ class CollegeDataSerializer(serializers.ModelSerializer):
 class LaunchpadUserSerializer(serializers.ModelSerializer):
     id = serializers.CharField(max_length=36, read_only=True)
     role = serializers.ChoiceField(choices=LaunchPadRoles.get_all_values())
-    college = serializers.ListField(child=serializers.CharField(), allow_empty=True, write_only=True)
-    colleges = serializers.SerializerMethodField()
+    colleges = serializers.ListField(child=serializers.CharField(), allow_empty=True, write_only=True)
+    
 
     class Meta:
         model = LaunchPadUsers
-        fields = ("id", "full_name", "email", "phone_number", "role", "college", "district", "zone", "colleges")
+        fields = ("id", "full_name", "email", "phone_number", "role", "district", "zone", "colleges")
 
     def create(self, validated_data):
-        validated_data.pop("college")
+        validated_data.pop("colleges")
         
         validated_data["id"] = uuid.uuid4()
         validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
@@ -121,6 +196,14 @@ class LaunchpadUserSerializer(serializers.ModelSerializer):
         
         return user
 
+
+class LaunchpadUserListSerializer(serializers.ModelSerializer):
+    colleges = serializers.SerializerMethodField()
+
+    class Meta:
+        model = LaunchPadUsers
+        fields = ("id", "full_name", "email", "phone_number", "role", "district", "zone", "colleges")
+    
     def get_colleges(self, obj):
         return LaunchPadUserCollegeLink.objects.filter(user=obj).values_list("college_id", "college__title")
 
@@ -171,12 +254,22 @@ class LaunchpadUpdateUserSerializer(serializers.ModelSerializer):
 
 class UserProfileUpdateSerializer(serializers.ModelSerializer):
     id = serializers.CharField(max_length=36, read_only=True)
+    full_name = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    phone_number = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    district = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    zone = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    email = serializers.EmailField(required=False)
     colleges = serializers.SerializerMethodField()
 
     class Meta:
         model = LaunchPadUsers
-        fields = ("id", "full_name", "phone_number", "district", "zone", "email")
+        fields = ("id", "full_name", "phone_number", "district", "zone", "email", "colleges")
 
+    def validate(self, attrs):
+        if LaunchPadUsers.objects.filter(email=attrs.get("email")).exclude(id=self.instance.id).exists():
+            raise serializers.ValidationError("Email already exists")
+        return super().validate(attrs)
+    
     def update(self, instance, validated_data):
         instance.full_name = validated_data.get("full_name", instance.full_name)
         instance.phone_number = validated_data.get("phone_number", instance.phone_number)
