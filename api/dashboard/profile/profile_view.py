@@ -430,7 +430,7 @@ class BadgesAPI(APIView):
             response_data = {"full_name": user.full_name, "completed_tasks":[]}
             for tag in hastags:
                 if log := KarmaActivityLog.objects.filter(user=user, task__hashtag=tag).first():
-                    response_data["completed_tasks"] = log.task__title
+                    response_data["completed_tasks"].append(log.task.title)
             return CustomResponse(response=response_data).get_success_response()
         except User.DoesNotExist:
             return CustomResponse(
