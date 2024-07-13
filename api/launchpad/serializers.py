@@ -14,9 +14,68 @@ from utils.utils import DateTimeUtils
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:
         model = LaunchPad
-        fields = ('launchpad_id')
-   
+        fields = ['launchpad_id']
+    def to_representation(self, instance):
+        return instance.launchpad_id   
 
+class LaunchPadRankSerializer(serializers.ModelSerializer):
+    launchpad_rank = serializers.SerializerMethodField('get_rank')
+    class Meta:
+        model = User
+        fields = ['launchpad_rank']
+        
+    def get_rank(self, obj):
+        total_karma_subquery = KarmaActivityLog.objects.filter(
+            user=OuterRef('id'),
+            task__event='launchpad',
+            appraiser_approved=True,
+        ).values('user').annotate(
+            total_karma=Sum('karma')
+        ).values('total_karma')
+        allowed_org_types = ["College", "School", "Company"]
+
+        intro_task_completed_users = KarmaActivityLog.objects.filter(
+            task__event='launchpad',
+            appraiser_approved=True,
+            task__hashtag='#lp24-introduction',
+        ).values('user')
+
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+
+        users = User.objects.filter(
+            karma_activity_log_user__task__event="launchpad",
+            karma_activity_log_user__appraiser_approved=True,
+            id__in=intro_task_completed_users
+        ).annotate(
+            karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
+            time_=Max("karma_activity_log_user__created_at"),
+        ).order_by("-karma", "time_")
+        
+        # high complexity
+        rank = 0
+        for data in users:
+            rank += 1
+            if data.id == obj.id:
+                break    
+        
+        return rank
+    
 class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     karma = serializers.IntegerField()
@@ -24,7 +83,7 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
     district_name = serializers.CharField(allow_null=True, allow_blank=True)
     state = serializers.CharField(allow_null=True, allow_blank=True)
-    launchpad_id = LaunchPadIDSerializer(read_only=True)
+    launchpad_id = LaunchPadIDSerializer(source='launchpad_user.first', read_only=True)
 
     class Meta:
         model = User
