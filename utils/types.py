@@ -152,6 +152,13 @@ class LaunchPadRoles(Enum):
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
+class TFPTasksHashtags(Enum):
+    SCRATCH = '#tfp2.0-scratch'
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
     
 DEFAULT_HACKATHON_FORM_FIELDS = {
     'name': 'system',
