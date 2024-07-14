@@ -527,7 +527,7 @@ class LaunchPadListAdmin(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "karma", "org", "district_name", "state"]
+            ["full_name", "karma", "org", "district_name", "state","launchpad_user__launchpad_id"]
         )
 
         serializer = LaunchpadLeaderBoardSerializer(
