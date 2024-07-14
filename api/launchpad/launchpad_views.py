@@ -573,6 +573,7 @@ class UserProfileAPI(BaseAPI):
         data = serializer.data
         data['launchpad_karma'] = launchpad_karma
         data['launchpad_rank'] = launchpad_rank
+        data['launchpad_id'] = launchpad_id
         return CustomResponse(response=data).get_success_response()
 
 class GetSocialsAPI(BaseAPI):
