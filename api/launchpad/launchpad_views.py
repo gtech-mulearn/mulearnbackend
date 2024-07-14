@@ -591,11 +591,17 @@ class UserLevelsAPI(BaseAPI):
 
 class UserLogAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
+        launchpad_log = request.query_params.get('launchpad_log', False)
         user, response = self.get_authenticated_user(request, launchpad_id)
         if response:
             return response
-        karma_activity_log = KarmaActivityLog.objects.filter(user=user.id, appraiser_approved=True).order_by("-created_at")
-        if not karma_activity_log:
+
+        query = Q(user=user.id, appraiser_approved=True)
+        if launchpad_log:
+            query &= Q(task__event='launchpad')
+        karma_activity_log = KarmaActivityLog.objects.filter(query).order_by("-created_at")
+        if not karma_activity_log.exists():
             return CustomResponse(general_message="No karma details available for user").get_success_response()
+
         serializer = UserLogSerializer(karma_activity_log, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
