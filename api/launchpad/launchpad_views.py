@@ -512,6 +512,8 @@ class LaunchPadListAdmin(APIView):
             org__org_type__in=allowed_org_types
         ).order_by('-created_at').values('org__district__zone__state__name')[:1]
 
+        launchpad_id_query = LaunchPad.objects.filter(user=OuterRef('id')).values('launchpad_id')
+        
         users = User.objects.filter(
             karma_activity_log_user__task__event="launchpad",
             karma_activity_log_user__appraiser_approved=True,
@@ -521,15 +523,17 @@ class LaunchPadListAdmin(APIView):
             org=Subquery(latest_org_link),
             district_name=Subquery(latest_district),
             state=Subquery(latest_state),
+            launchpad_id=Subquery(launchpad_id_query),
             time_=Max("karma_activity_log_user__created_at"),
         ).order_by("-karma", "time_")
 
+        
+        
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "karma", "org", "district_name", "state","launchpad_user__launchpad_id"]
+            ["full_name", "karma", "org", "district_name", "state","launchpad_id"]
         )
-
         serializer = LaunchpadLeaderBoardSerializer(
             paginated_queryset.get("queryset"), many=True
         )        

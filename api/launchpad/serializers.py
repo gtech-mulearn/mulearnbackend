@@ -11,13 +11,6 @@ from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
 
-class LaunchPadIDSerializer(serializers.ModelSerializer):
-    class Meta:
-        model = LaunchPad
-        fields = ['launchpad_id']
-    def to_representation(self, instance):
-        return instance.launchpad_id   
-
 class LaunchPadRankSerializer(serializers.ModelSerializer):
     launchpad_rank = serializers.SerializerMethodField('get_rank')
     class Meta:
@@ -83,7 +76,7 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
     district_name = serializers.CharField(allow_null=True, allow_blank=True)
     state = serializers.CharField(allow_null=True, allow_blank=True)
-    launchpad_id = LaunchPadIDSerializer(source='launchpad_user.first', read_only=True)
+    launchpad_id = serializers.CharField(allow_null=True, allow_blank=True)
 
     class Meta:
         model = User
