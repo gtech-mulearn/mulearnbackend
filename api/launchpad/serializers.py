@@ -141,6 +141,18 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
         
         return rank
 
+class TaskCompletedLeaderBoardSerializer(serializers.ModelSerializer):
+    org = serializers.CharField(allow_null=True, allow_blank=True)
+    district_name = serializers.CharField(allow_null=True, allow_blank=True)
+    state = serializers.CharField(allow_null=True, allow_blank=True)
+    launchpad_id = LaunchPadIDSerializer(source='launchpad_user.first', read_only=True)
+    rank = serializers.IntegerField()
+    karma = serializers.IntegerField()
+
+    class Meta:
+        model = User
+        fields = ("muid", "rank", "full_name", "karma", "org", "district_name", "state","launchpad_id")
+        
 
 class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
