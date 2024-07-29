@@ -155,6 +155,7 @@ class LaunchPadRoles(Enum):
 
 class TFPTasksHashtags(Enum):
     SCRATCH = '#tfp2.0-scratch'
+    COMMAND_LINE = '#tfp-2.0-command-line'
 
     @classmethod
     def get_all_values(cls):
