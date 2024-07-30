@@ -144,10 +144,11 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
 class TaskCompletedLeaderBoardSerializer(serializers.ModelSerializer):
     rank = serializers.IntegerField()
     karma = serializers.IntegerField()
+    is_public = serializers.BooleanField(source='user_settings_user.is_public',default=False)
 
     class Meta:
         model = User
-        fields = ("muid", "rank", "full_name", "karma")
+        fields = ("muid", "is_public", "rank", "full_name", "karma")
         
 
 class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
