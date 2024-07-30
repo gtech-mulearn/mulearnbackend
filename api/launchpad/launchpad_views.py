@@ -64,6 +64,10 @@ class Leaderboard(APIView):
             time_=Max("karma_activity_log_user__created_at"),
         ).order_by("-karma", "time_")
 
+        rank_list = list(users) 
+        for index, user in enumerate(rank_list):
+            user.rank = index + 1
+        
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
