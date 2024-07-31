@@ -79,8 +79,8 @@ class TaskCompletedLeaderBoardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ("muid", "is_public", "rank", "full_name", "karma")
-        
+        fields = ("muid", "is_public", "rank", "full_name", "karma", "profile_pic")
+             
 
 class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
     org = serializers.CharField(allow_null=True, allow_blank=True)
