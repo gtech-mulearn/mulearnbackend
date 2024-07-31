@@ -93,7 +93,24 @@ class TaskCompletedLeaderboard(APIView):
             completed_tasks=Count('task', distinct=True)
         ).filter(completed_tasks=launchpad_tasks.count())
         
+        allowed_org_types = ["College", "School", "Company"]
+        
         completed_users = completed_tasks_counts.values('user')
+        
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
         
         wallet_subquery = Wallet.objects.filter(
             user=OuterRef('id')  
@@ -105,6 +122,9 @@ class TaskCompletedLeaderboard(APIView):
             id__in=completed_users
         ).annotate(
             karma=Subquery(wallet_subquery,output_field=IntegerField()),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
             time_=Max("karma_activity_log_user__created_at"),
         ).order_by("-karma", "time_")
 
