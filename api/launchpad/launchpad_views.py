@@ -74,9 +74,17 @@ class Leaderboard(APIView):
             ["full_name", "karma", "org", "district_name", "state"]
         )
 
+        final_users = paginated_queryset.get("queryset")
+        if request.query_params.get("search"):
+            final_users = list(final_users)
+            for user in final_users:
+                user.rank = next(rank_user.rank for rank_user in rank_list if rank_user.muid == user.muid)
+
         serializer = LaunchpadLeaderBoardSerializer(
-            paginated_queryset.get("queryset"), many=True
+            final_users,
+            many=True
         )
+        
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
@@ -132,14 +140,21 @@ class TaskCompletedLeaderboard(APIView):
         for index, user in enumerate(rank_list):
             user.rank = index + 1 
         
+        
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
             ["full_name", "karma", "org", "district_name", "state"]
         )
         
+        final_users = paginated_queryset.get("queryset")
+        if request.query_params.get("search"):
+            final_users = list(final_users)
+            for user in final_users:
+                user.rank = next(rank_user.rank for rank_user in rank_list if rank_user.muid == user.muid)
+
         serializer = TaskCompletedLeaderBoardSerializer(
-            paginated_queryset.get("queryset"),
+            final_users,
             many=True
         )
         return CustomResponse().paginated_response(
