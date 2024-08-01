@@ -25,6 +25,7 @@ class User(models.Model):
     dob = models.DateField(blank=True, null=True)
     admin = models.BooleanField(default=False)
     exist_in_guild = models.BooleanField(default=False)
+    is_userterms_approved = models.BooleanField(default=False)
     district = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     suspended_at = models.DateTimeField(blank=True, null=True)
@@ -221,6 +222,3 @@ class UserCouponLink(models.Model):
         managed = False
 
         db_table = 'user_coupon_link'
-
-   
-
