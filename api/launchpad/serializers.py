@@ -73,6 +73,7 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
 
 
 class TaskCompletedLeaderBoardSerializer(serializers.ModelSerializer):
+    # rank = serializers.SerializerMethodField('get_rank')
     rank = serializers.IntegerField()
     karma = serializers.IntegerField()
     is_public = serializers.BooleanField(source='user_settings_user.is_public',default=False)
@@ -83,6 +84,9 @@ class TaskCompletedLeaderBoardSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = ("muid", "is_public", "rank", "full_name", "karma", "org", "district_name", "state", "profile_pic")
+        
+    def get_rank(self, obj):
+        return getattr(obj, 'rank', None)
              
 
 class LaunchpadParticipantsSerializer(serializers.ModelSerializer):
