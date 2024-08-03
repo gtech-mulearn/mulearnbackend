@@ -144,7 +144,7 @@ class TaskCompletedLeaderboard(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "karma", "org", "district_name", "state"]
+            ["muid","full_name","org"]
         )
         
         final_users = paginated_queryset.get("queryset")
