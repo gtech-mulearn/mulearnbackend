@@ -21,4 +21,5 @@ urlpatterns = [
     path('socials/<str:muid>/', profile_view.GetSocialsAPI.as_view()),
     path('qrcode-get/<str:uuid>/', profile_view.QrcodeRetrieveAPI.as_view()),
     path('change-password/', profile_view.ResetPasswordAPI.as_view()),
+    path('userterm-approved/,<str:muid>/',profile_view.UsertermAPI.as_view())
 ]
