@@ -47,7 +47,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
     percentile = serializers.SerializerMethodField()
-    is_userterms_approved = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -69,13 +68,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
             "percentile",
-            "is_userterms_approved",
         )
 
-    def get_userterm(self, instance, validated_data):
-        instance.is_userterms_approved = validated_data.get('is_userterms_approved', instance.is_userterms_approved)
-        instance.save()
-        return instance
 
     def get_percentile(self, obj):
         users_count_lt_user_karma = Wallet.objects.filter(
@@ -438,3 +432,18 @@ class LinkSocials(ModelSerializer):
                     create_karma_activity_log(f"#social_{account}", -20)
 
         return super().update(instance, validated_data)
+
+class UserTermSerializer(serializers.ModelSerializer):
+    is_userterms_approved = serializers.SerializerMethodField()
+
+
+    class Meta:
+        model = user_settings
+        fields =[
+            "is_userterms_approved",
+            "user",
+        ]
+    def get_userterm(self, instance, validated_data):
+        instance.is_userterms_approved = validated_data.get('is_userterms_approved', instance.is_userterms_approved)
+        instance.save()
+        return instance
