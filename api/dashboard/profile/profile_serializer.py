@@ -70,6 +70,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "percentile",
         )
 
+
     def get_percentile(self, obj):
         users_count_lt_user_karma = Wallet.objects.filter(
             karma__lt=obj.wallet_user.karma
@@ -177,7 +178,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
         user_igs = UserIgLink.objects.filter(
             user__id=user_id).values_list("ig__name", flat=True)
         tasks = TaskList.objects.filter(level=obj)
-        
+
         if obj.level_order > 4:
             tasks = tasks.filter(ig__name__in=user_igs)
 
@@ -271,8 +272,8 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
 class UserProfileEditSerializer(serializers.ModelSerializer):
     communities = serializers.ListField(write_only=True)
-    
-    
+
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
         communities = instance.user_organization_link_user.filter(
@@ -312,7 +313,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
                 UserOrganizationLink.objects.bulk_create(
                     user_organization_links)
 
-            
+
 
             return super().update(instance, validated_data)
 
@@ -326,9 +327,9 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "gender",
             "dob",
             "district",
-            
+
         ]
-   
+
 
 
 class UserIgListSerializer(serializers.ModelSerializer):
@@ -409,7 +410,7 @@ class LinkSocials(ModelSerializer):
                         WebHookActions.UPDATE.value,
                         value
                     )
-                    
+
                 else:
                     KarmaActivityLog.objects.filter(
                         task_id=task.id, user_id=user_id
@@ -431,3 +432,18 @@ class LinkSocials(ModelSerializer):
                     create_karma_activity_log(f"#social_{account}", -20)
 
         return super().update(instance, validated_data)
+
+class UserTermSerializer(serializers.ModelSerializer):
+    is_userterms_approved = serializers.SerializerMethodField()
+
+
+    class Meta:
+        model = user_settings
+        fields =[
+            "is_userterms_approved",
+            "user",
+        ]
+    def get_userterm(self, instance, validated_data):
+        instance.is_userterms_approved = validated_data.get('is_userterms_approved', instance.is_userterms_approved)
+        instance.save()
+        return instance
