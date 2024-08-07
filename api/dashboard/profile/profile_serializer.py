@@ -438,7 +438,7 @@ class UserTermSerializer(serializers.ModelSerializer):
 
 
     class Meta:
-        model = user_settings
+        model = UserSettings
         fields =[
             "is_userterms_approved",
             "user",

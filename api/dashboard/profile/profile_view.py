@@ -454,13 +454,13 @@ class UsertermAPI(APIView):
                 return CustomResponse(response="The given muid seems to be invalid").get_failure_response()
         return CustomResponse(response=response_data).get_failure_response()
 
-    def get(self,request,muid):
-        user = User.objects.get(muid=muid)
-        try:
-            settings = UserSettings.objects.get(user=user)
-        except UserSettings.DoesNotExist:
-            return CustomResponse(response="The user settings doesn't exists").get_failure_response()
-        if settings.is_userterms_approved:
-            return CustomResponse(response=response_data).get_success_response()
-        else:
-            return CustomResponse(response=response_data).get_failure_response()
+     def get(self,request,muid):
+         user = User.objects.get(muid=muid)
+         try:
+             settings = UserSettings.objects.get(user=user)
+         except UserSettings.DoesNotExist:
+             return CustomResponse(response="The user settings doesn't exists").get_failure_response()
+         if settings.is_userterms_approved:
+             return CustomResponse(response=response_data).get_success_response()
+         else:
+             return CustomResponse(response=response_data).get_failure_response()
