@@ -156,7 +156,8 @@ class LaunchPadRoles(Enum):
 class TFPTasksHashtags(Enum):
     SCRATCH = '#tfp2.0-scratch'
     COMMAND_LINE = '#tfp2.0-command-line'
-
+    GIT_GITHUB = '#tfp2.0-git-github'
+    
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
