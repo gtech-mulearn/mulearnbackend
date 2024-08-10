@@ -436,3 +436,31 @@ class BadgesAPI(APIView):
             return CustomResponse(
                 response="The given muid seems to be invalid"
             ).get_failure_response()
+
+class UsertermAPI(APIView):
+     def post(self, request,muid):
+        user = User.objects.get(muid=muid)
+        try:
+            settings = UserSettings.objects.get(user=user)
+        except UserSettings.DoesNotExist:
+            return CustomResponse(response="The user setting doesn't exists").get_failure_response()
+
+        serializer = UserTermSerializer(settings, data={"is_userterms_approved": True}, partial=True)
+        if serializer.is_valid():
+            settings = serializer.save()
+            if settings.is_userterms_approved:
+                return CustomResponse(response=response_data).get_success_response()
+            else:
+                return CustomResponse(response="The given muid seems to be invalid").get_failure_response()
+        return CustomResponse(response=response_data).get_failure_response()
+
+     def get(self,request,muid):
+         user = User.objects.get(muid=muid)
+         try:
+             settings = UserSettings.objects.get(user=user)
+         except UserSettings.DoesNotExist:
+             return CustomResponse(response="The user settings doesn't exists").get_failure_response()
+         if settings.is_userterms_approved:
+             return CustomResponse(response=response_data).get_success_response()
+         else:
+             return CustomResponse(response=response_data).get_failure_response()

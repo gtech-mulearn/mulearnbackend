@@ -5,7 +5,8 @@ from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerF
 from rest_framework.views import APIView
 
 from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,\
-      CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer,LaunchPadRankSerializer
+      CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer,LaunchPadRankSerializer,\
+          TaskCompletedLeaderBoardSerializer
 from api.dashboard.profile.profile_serializer import UserProfileSerializer , LinkSocials ,UserLevelSerializer ,UserLogSerializer
 
 from utils.response import CustomResponse
@@ -14,7 +15,7 @@ from utils.types import LaunchPadLevels, LaunchPadRoles
 from utils.permission import JWTUtils
 from db.user import User, UserRoleLink , Role , Socials
 from db.organization import UserOrganizationLink, Organization
-from db.task import KarmaActivityLog , Level
+from db.task import KarmaActivityLog, Level, TaskList, Wallet
 from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink , LaunchPad
 
 
@@ -63,19 +64,102 @@ class Leaderboard(APIView):
             time_=Max("karma_activity_log_user__created_at"),
         ).order_by("-karma", "time_")
 
+        rank_list = list(users) 
+        for index, user in enumerate(rank_list):
+            user.rank = index + 1
+        
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
             ["full_name", "karma", "org", "district_name", "state"]
         )
 
+        final_users = paginated_queryset.get("queryset")
+        if request.query_params.get("search"):
+            final_users = list(final_users)
+            for user in final_users:
+                user.rank = next(rank_user.rank for rank_user in rank_list if rank_user.muid == user.muid)
+
         serializer = LaunchpadLeaderBoardSerializer(
-            paginated_queryset.get("queryset"), many=True
+            final_users,
+            many=True
         )
+        
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
+class TaskCompletedLeaderboard(APIView):
+    def get(self, request):
+
+        launchpad_tasks = TaskList.objects.filter(event='launchpad').values('id')
+
+        completed_tasks_counts = KarmaActivityLog.objects.filter(
+            task__event='launchpad',
+            appraiser_approved=True,
+        ).values('user').annotate(
+            completed_tasks=Count('task', distinct=True)
+        ).filter(completed_tasks=launchpad_tasks.count())
+        
+        allowed_org_types = ["College", "School", "Company"]
+        
+        completed_users = completed_tasks_counts.values('user')
+        
+        latest_org_link = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__title')[:1]
+
+        latest_district = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__name')[:1]
+
+        latest_state = UserOrganizationLink.objects.filter(
+            user=OuterRef('id'),
+            org__org_type__in=allowed_org_types
+        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+        
+        wallet_subquery = Wallet.objects.filter(
+            user=OuterRef('id')  
+        ).values('karma')[:1] 
+
+        users = User.objects.filter(
+            karma_activity_log_user__task__event="launchpad",
+            karma_activity_log_user__appraiser_approved=True,
+            id__in=completed_users
+        ).annotate(
+            karma=Subquery(wallet_subquery,output_field=IntegerField()),
+            org=Subquery(latest_org_link),
+            district_name=Subquery(latest_district),
+            state=Subquery(latest_state),
+            time_=Max("karma_activity_log_user__created_at"),
+        ).order_by("-karma", "time_")
+
+        rank_list = list(users) 
+        for index, user in enumerate(rank_list):
+            user.rank = index + 1 
+        
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            users,
+            request,
+            ["muid","full_name","org"]
+        )
+        
+        final_users = paginated_queryset.get("queryset")
+        if request.query_params.get("search"):
+            final_users = list(final_users)
+            for user in final_users:
+                user.rank = next(rank_user.rank for rank_user in rank_list if rank_user.muid == user.muid)
+
+        serializer = TaskCompletedLeaderBoardSerializer(
+            final_users,
+            many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 class ListParticipantsAPI(APIView):
     def get(self, request):
@@ -591,11 +675,17 @@ class UserLevelsAPI(BaseAPI):
 
 class UserLogAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
+        launchpad_log = request.query_params.get('launchpad_log', False)
         user, response = self.get_authenticated_user(request, launchpad_id)
         if response:
             return response
-        karma_activity_log = KarmaActivityLog.objects.filter(user=user.id, appraiser_approved=True).order_by("-created_at")
-        if not karma_activity_log:
+
+        query = Q(user=user.id, appraiser_approved=True)
+        if launchpad_log:
+            query &= Q(task__event='launchpad')
+        karma_activity_log = KarmaActivityLog.objects.filter(query).order_by("-created_at")
+        if not karma_activity_log.exists():
             return CustomResponse(general_message="No karma details available for user").get_success_response()
+
         serializer = UserLogSerializer(karma_activity_log, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
