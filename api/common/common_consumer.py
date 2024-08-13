@@ -50,7 +50,7 @@ class LandingStats:
         return learning_circles_count
     
     def karma_pow_count(self):
-        karma_pow_count = KarmaActivityLog.objects.aaggregate(karma_count=Sum('karma'), pow_count=Count('id'))
+        karma_pow_count = KarmaActivityLog.objects.aggregate(karma_count=Coalesce(Sum('karma'), 0), pow_count=Count('id'))
         return karma_pow_count
 
     def get_data(self, sender):
