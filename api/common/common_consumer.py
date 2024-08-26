@@ -2,7 +2,7 @@ import json
 
 from django.db.models.signals import post_save, post_delete
 from django.dispatch import receiver
-from django.db.models import Count
+from django.db.models import Count, Sum
 from django.db.models.functions import Coalesce
 
 from channels.generic.websocket import WebsocketConsumer
@@ -12,7 +12,7 @@ from asgiref.sync import async_to_sync
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog
 from db.user import User, UserRoleLink
 
 from utils.types import IntegrationType, OrganizationType
@@ -48,6 +48,10 @@ class LandingStats:
     def learning_circles_count(self):
         learning_circles_count = LearningCircle.objects.all().count()
         return learning_circles_count
+    
+    def karma_pow_count(self):
+        karma_pow_count = KarmaActivityLog.objects.aggregate(karma_count=Coalesce(Sum('karma'), 0), pow_count=Count('id'))
+        return karma_pow_count
 
     def get_data(self, sender):
         if sender == None:
@@ -56,7 +60,8 @@ class LandingStats:
                 'org_type_counts': self.org_type_counts(),
                 'enablers_mentors_count': self.enablers_mentors_count(),
                 'ig_count': self.interest_groups_count(),
-                'learning_circle_count': self.learning_circles_count()
+                'learning_circle_count': self.learning_circles_count(),
+                'karma_pow_count': self.karma_pow_count()
             }
         elif sender == User:
             self.data['members'] = self.members_count()
