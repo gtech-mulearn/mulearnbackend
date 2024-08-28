@@ -449,10 +449,11 @@ class UsertermAPI(APIView):
         if serializer.is_valid():
             settings = serializer.save()
             if settings.is_userterms_approved:
+                response_data = {"message": "User terms have been successfully approved."}
                 return CustomResponse(response=response_data).get_success_response()
             else:
                 return CustomResponse(response="The given muid seems to be invalid").get_failure_response()
-        return CustomResponse(response=response_data).get_failure_response()
+        return CustomResponse(response="Invalid data provided.").get_failure_response()
 
      def get(self,request,muid):
          user = User.objects.get(muid=muid)
@@ -461,6 +462,8 @@ class UsertermAPI(APIView):
          except UserSettings.DoesNotExist:
              return CustomResponse(response="The user settings doesn't exists").get_failure_response()
          if settings.is_userterms_approved:
+             response_data = {"message": "User terms are approved."}
              return CustomResponse(response=response_data).get_success_response()
          else:
+             response_data = {"message": "User terms are not approved."}
              return CustomResponse(response=response_data).get_failure_response()
