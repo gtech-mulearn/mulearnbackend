@@ -20,6 +20,7 @@ from utils.utils import DiscordWebhooks
 
 from . import profile_serializer
 from .profile_serializer import LinkSocials
+from .profile_serializer import UserTermSerializer
 
 
 class UserProfileEditView(APIView):
