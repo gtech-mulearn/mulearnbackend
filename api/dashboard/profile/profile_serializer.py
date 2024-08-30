@@ -434,8 +434,6 @@ class LinkSocials(ModelSerializer):
         return super().update(instance, validated_data)
 
 class UserTermSerializer(serializers.ModelSerializer):
-    is_userterms_approved = serializers.SerializerMethodField()
-
 
     class Meta:
         model = UserSettings
