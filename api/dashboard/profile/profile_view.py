@@ -461,7 +461,7 @@ class UsertermAPI(APIView):
                 return CustomResponse(response=response_data).get_failure_response()
         return CustomResponse(response="Invalid data provided").get_failure_response()
 
-    def get(self, request, muid):
+     def get(self, request, muid):
         try:
             user = User.objects.get(muid=muid)
         except User.DoesNotExist:
