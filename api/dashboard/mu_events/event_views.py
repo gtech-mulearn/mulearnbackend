@@ -5,6 +5,7 @@ from .event_serializer import (
     MuEventsSerializer,
     MuEventsKarmaRequestSerializer,
     MuEventVerificationSerializer,
+    MuEventKarmaRequestVerificationSerializer,
 )
 from utils.permission import CustomizePermission, role_required
 from utils.response import CustomResponse
@@ -172,7 +173,7 @@ class MuEventKarmaRequestAPI(APIView):
                 general_message="Event not found."
             ).get_failure_response()
         karma_request = MuEventsKarmaRequest.objects.filter(
-            id=karma_request_id, event_id=event, user_id=user_id
+            id=karma_request_id, event_id=event, created_by=user_id
         ).first()
         if not karma_request:
             return CustomResponse(
@@ -194,53 +195,33 @@ class MuEventKarmaRequestVerificationAPI(APIView):
     permission_classes = [CustomizePermission]
 
     def post(self, request, event_id, karma_request_id):
-        user_id = JWTUtils.fetch_user_id(request)
         event = MuEvents.objects.filter(id=event_id).first()
-        is_appraiser = request.data.get("is_appraiser")
-        verified = request.data.get("verified")
-        suggestions = request.data.get("suggestions")
         if not event:
             return CustomResponse(
                 general_message="Event not found."
             ).get_failure_response()
-        karma_request = MuEventsKarmaRequest.objects.filter(
-            id=karma_request_id, event_id=event, user_id=user_id
-        ).first()
-        if not karma_request:
+        karma_request = MuEventKarmaRequestVerificationSerializer(
+            data={
+                "is_approved": request.data.get("is_approved"),
+                "suggestions": request.data.get("suggestions", None),
+                "verified_by": JWTUtils.fetch_user_id(request),
+                "karma_request_id": karma_request_id,
+                "is_appraiser": request.data.get("is_appraiser"),
+            },
+            context={
+                "APPROVAL_ROLES": APPROVAL_ROLES,
+                "APPRAISER_VERIFY_ROLES": APPRAISER_VERIFY_ROLES,
+                "roles": JWTUtils.fetch_role(request),
+            },
+        )
+        if not karma_request.is_valid():
             return CustomResponse(
-                general_message="Karma request not found."
+                general_message=karma_request.errors
             ).get_failure_response()
-        if is_appraiser and not any(
-            role.value in JWTUtils.fetch_role(request)
-            for role in APPRAISER_VERIFY_ROLES
-        ):
-            return CustomResponse(
-                general_message="You do not have the required role to access this page."
-            ).get_failure_response()
-        if not is_appraiser and not any(
-            role.value in JWTUtils.fetch_role(request)
-            for role in APPROVAL_ROLES + APPRAISER_VERIFY_ROLES
-        ):
-            return CustomResponse(
-                general_message="You do not have the required role to access this page."
-            ).get_failure_response()
-
-        if is_appraiser:
-            karma_request.suggestions += f"\nAppraiser:\n{suggestions}"
-            karma_request.is_approved = verified
-            karma_request.appraised_by = user_id
-            karma_request.appraised_at = datetime.now()
-            karma_request.save()
-            return CustomResponse(
-                general_message=f"Karma request verified successfully",
-                response=MuEventsKarmaRequestSerializer(karma_request).data,
-            ).get_success_response()
-        karma_request.suggestions = suggestions
-        karma_request.is_approved = verified
-        karma_request.approved_by = user_id
-        karma_request.approved_at = datetime.now()
-        karma_request.save()
+        karma_request.update(
+            karma_request.validated_data["karma_request_id"],
+            karma_request.validated_data,
+        )
         return CustomResponse(
-            general_message=f"Karma request approved successfully",
-            response=MuEventsKarmaRequestSerializer(karma_request).data,
+            general_message=f"Status updated",
         ).get_success_response()

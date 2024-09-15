@@ -84,6 +84,7 @@ class MuEventsKarmaRequest(models.Model):
     role = models.CharField(max_length=20, choices=ROLE_CHOICES, default="participant")
     karma = models.IntegerField(blank=False, null=False, default=0)
     is_approved = models.BooleanField(null=True, blank=False)
+    is_appraiser_approved = models.BooleanField(null=True, blank=False)
     voucher_id = models.ForeignKey(
         VoucherLog,
         on_delete=models.CASCADE,

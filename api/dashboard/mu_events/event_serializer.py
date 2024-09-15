@@ -140,16 +140,15 @@ class MuEventsKarmaRequestSerializer(serializers.ModelSerializer):
     role = serializers.ChoiceField(choices=MuEventsKarmaRequest.ROLE_CHOICES)
     karma = serializers.IntegerField(read_only=True)
     is_approved = serializers.BooleanField(read_only=True)
+    is_appraiser_approved = serializers.BooleanField(read_only=True)
     voucher_id = serializers.CharField(
         source="voucher_id.voucher_code", read_only=True, default=None
     )
     suggestions = serializers.CharField(read_only=True)
-    approved_by_id = serializers.CharField(write_only=True, required=False)
     approved_by = serializers.CharField(
         source="approved_by.full_name", read_only=True, default=None
     )
     approved_at = serializers.DateTimeField(read_only=True)
-    appraised_by_id = serializers.CharField(write_only=True, required=False)
     appraised_by = serializers.CharField(
         source="appraised_by.full_name",
         read_only=True,
@@ -159,6 +158,12 @@ class MuEventsKarmaRequestSerializer(serializers.ModelSerializer):
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     created_at = serializers.DateTimeField(read_only=True)
     updated_at = serializers.DateTimeField(read_only=True)
+
+    def update(self, instance, validated_data):
+        instance.pow = validated_data.get("pow", instance.pow)
+        instance.role = validated_data.get("role", instance.role)
+        instance.save()
+        return instance
 
     def create(self, validated_data):
         user = User.objects.get(id=self.context.get("user_id"))
@@ -178,18 +183,6 @@ class MuEventsKarmaRequestSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("Event not found")
         return event
 
-    def validate_approved_by_id(self, value):
-        user = User.objects.filter(id=value).first()
-        if not user:
-            raise serializers.ValidationError("User not found")
-        return user
-
-    def validate_appraised_by_id(self, value):
-        user = User.objects.filter(id=value).first()
-        if not user:
-            raise serializers.ValidationError("User not found")
-        return user
-
     class Meta:
         model = MuEventsKarmaRequest
         fields = [
@@ -200,12 +193,11 @@ class MuEventsKarmaRequestSerializer(serializers.ModelSerializer):
             "role",
             "karma",
             "is_approved",
+            "is_appraiser_approved",
             "voucher_id",
             "suggestions",
-            "approved_by_id",
             "approved_by",
             "approved_at",
-            "appraised_by_id",
             "appraised_by",
             "appraised_at",
             "created_by",
@@ -247,4 +239,63 @@ class MuEventVerificationSerializer(serializers.Serializer):
             "is_approved",
             "suggestions",
             "user_id",
+        ]
+
+
+class MuEventKarmaRequestVerificationSerializer(serializers.Serializer):
+    is_approved = serializers.BooleanField(initial=False, required=True)
+    suggestions = serializers.CharField(
+        required=False, default=None, max_length=500, allow_null=True
+    )
+    verified_by = serializers.CharField(required=True)
+    karma_request_id = serializers.CharField(required=True)
+    is_appraiser = serializers.BooleanField(required=True)
+
+    def update(self, instance, validated_data):
+        APPROVAL_ROLES = self.context.get("APPROVAL_ROLES", [])
+        APPRAISER_VERIFY_ROLES = self.context.get("APPRAISER_VERIFY_ROLES", [])
+        roles = self.context.get("roles", [])
+        if validated_data.get("is_appraiser") and any(
+            role in roles for role in APPRAISER_VERIFY_ROLES
+        ):
+            raise serializers.ValidationError("Not authorized to appraise")
+        if not validated_data.get("is_appraiser") and any(
+            role in roles for role in APPROVAL_ROLES + APPRAISER_VERIFY_ROLES
+        ):
+            raise serializers.ValidationError("Not authorized to approve")
+        if validated_data.get("is_appraiser"):
+            if not instance.is_approved:
+                raise serializers.ValidationError("Karma request is not yet approved.")
+            instance.is_appraiser_approved = validated_data.get("is_approved")
+            instance.suggestions = validated_data.get("suggestions")
+            instance.appraised_by = validated_data.get("verified_by")
+            instance.appraised_at = datetime.now()
+            instance.save()
+            return instance
+        instance.is_approved = validated_data.get("is_approved")
+        instance.suggestions = validated_data.get("suggestions")
+        instance.approved_by = validated_data.get("verified_by")
+        instance.approved_at = datetime.now()
+        instance.save()
+        return instance
+
+    def validate_karma_request_id(self, value):
+        karma_request = MuEventsKarmaRequest.objects.filter(id=value).first()
+        if not karma_request:
+            raise serializers.ValidationError("Karma request not found")
+        return karma_request
+
+    def validate_verified_by(self, value):
+        user = User.objects.filter(id=value).first()
+        if not user:
+            raise serializers.ValidationError("Invalid user")
+        return user
+
+    class Meta:
+        fields = [
+            "is_approved",
+            "suggestions",
+            "verified_by",
+            "karma_request_id",
+            "is_appraiser",
         ]
