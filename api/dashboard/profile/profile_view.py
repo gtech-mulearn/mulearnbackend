@@ -20,6 +20,7 @@ from utils.utils import DiscordWebhooks
 
 from . import profile_serializer
 from .profile_serializer import LinkSocials
+from .profile_serializer import UserTermSerializer
 
 
 class UserProfileEditView(APIView):
@@ -438,29 +439,42 @@ class BadgesAPI(APIView):
             ).get_failure_response()
 
 class UsertermAPI(APIView):
-     def post(self, request,muid):
-        user = User.objects.get(muid=muid)
+     def post(self, request, muid):
+        try:
+            user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(response="The user does not exist").get_failure_response()
+
         try:
             settings = UserSettings.objects.get(user=user)
         except UserSettings.DoesNotExist:
-            return CustomResponse(response="The user setting doesn't exists").get_failure_response()
+            return CustomResponse(response="The user settings don't exist").get_failure_response()
 
         serializer = UserTermSerializer(settings, data={"is_userterms_approved": True}, partial=True)
         if serializer.is_valid():
             settings = serializer.save()
             if settings.is_userterms_approved:
+                response_data = {"message": "User terms have been successfully approved."}
                 return CustomResponse(response=response_data).get_success_response()
             else:
-                return CustomResponse(response="The given muid seems to be invalid").get_failure_response()
-        return CustomResponse(response=response_data).get_failure_response()
+                response_data = {"message": "The user terms have not been successfully approved."}
+                return CustomResponse(response=response_data).get_failure_response()
+        return CustomResponse(response="Invalid data provided").get_failure_response()
 
-     def get(self,request,muid):
-         user = User.objects.get(muid=muid)
-         try:
-             settings = UserSettings.objects.get(user=user)
-         except UserSettings.DoesNotExist:
-             return CustomResponse(response="The user settings doesn't exists").get_failure_response()
-         if settings.is_userterms_approved:
-             return CustomResponse(response=response_data).get_success_response()
-         else:
-             return CustomResponse(response=response_data).get_failure_response()
+     def get(self, request, muid):
+        try:
+            user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(response="The user does not exist").get_failure_response()
+
+        try:
+            settings = UserSettings.objects.get(user=user)
+        except UserSettings.DoesNotExist:
+            return CustomResponse(response="The user settings don't exist").get_failure_response()
+
+        if settings.is_userterms_approved:
+            response_data = {"message": "User terms are approved."}
+            return CustomResponse(response=response_data).get_success_response()
+        else:
+            response_data = {"message": "User terms are not approved."}
+            return CustomResponse(response=response_data).get_failure_response()
