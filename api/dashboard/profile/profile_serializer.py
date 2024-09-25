@@ -215,22 +215,20 @@ class UserLevelSerializer(serializers.ModelSerializer):
         if obj.level_order > 4:
             tasks = tasks.filter(ig__name__in=user_igs)
 
-        data = []
-        for task in tasks:
-            completed = KarmaActivityLog.objects.filter(
-                user=user_id, task=task, appraiser_approved=True
-            ).exists()
-            if task.active or completed:
-                data.append(
-                    {
-                        "task_name": task.title,
-                        "discord_link": task.discord_link,
-                        "hashtag": task.hashtag,
-                        "completed": completed,
-                        "karma": task.karma,
-                    }
-                )
-        return data
+        completed_tasks = KarmaActivityLog.objects.filter(
+            user=user_id, appraiser_approved=True
+        ).values_list("task__id")
+        return [
+            {
+                "task_name": task.title,
+                "discord_link": task.discord_link,
+                "hashtag": task.hashtag,
+                "completed": is_completed,
+                "karma": task.karma,
+            }
+            for task in tasks
+            if (is_completed := task.id in completed_tasks) or task.active
+        ]
 
 
 class UserRankSerializer(ModelSerializer):
