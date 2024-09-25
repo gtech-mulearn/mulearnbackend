@@ -116,6 +116,7 @@ DATABASES = {
         "PASSWORD": decouple_config("DATABASE_PASSWORD"),
         "HOST": decouple_config("DATABASE_HOST"),
         "PORT": decouple_config("DATABASE_PORT"),
+        "CONN_MAX_AGE": 600,
     }
 }
 
