@@ -12,6 +12,7 @@ from . import serializers
 from .register_helper import get_auth_token
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
+from mu_celery.task import send_email
 
 
 class UserRegisterValidateAPI(APIView):
@@ -119,10 +120,10 @@ class RegisterDataAPI(APIView):
 
         response_data = serializers.UserDetailSerializer(user, many=False).data
 
-        send_template_mail(
-            context=response_data,
-            subject="YOUR TICKET TO µFAM IS HERE!",
-            address=["user_registration.html"],
+        send_email.delay(
+            response_data,
+            "YOUR TICKET TO µFAM IS HERE!",
+            ["user_registration.html"],
         )
 
         res_data["data"] = response_data

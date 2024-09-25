@@ -134,6 +134,9 @@ CACHES = {
     },
 }
 
+CELERY_BROKER_URL = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
+CELERY_RESULT_BACKEND = f"redis://{REDIS_HOST}:{REDIS_PORT}/2"
+
 # Use the Redis cache as the default cache
 CACHES["default"] = CACHES["redis"]
 
