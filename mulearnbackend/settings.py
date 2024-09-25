@@ -10,7 +10,6 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/4.1/ref/settings/
 """
 
-
 import os
 from pathlib import Path
 
@@ -94,11 +93,14 @@ ASGI_APPLICATION = "mulearnbackend.asgi.application"
 
 WSGI_APPLICATION = "mulearnbackend.wsgi.application"
 
+REDIS_HOST = decouple_config("REDIS_HOST")
+REDIS_PORT = decouple_config("REDIS_PORT")
+
 CHANNEL_LAYERS = {
     "default": {
         "BACKEND": "channels_redis.core.RedisChannelLayer",
         "CONFIG": {
-            "hosts": [(decouple_config("REDIS_HOST"), decouple_config("REDIS_PORT"))],
+            "hosts": [(REDIS_HOST, REDIS_PORT)],
         },
     },
 }
@@ -116,6 +118,23 @@ DATABASES = {
         "PORT": decouple_config("DATABASE_PORT"),
     }
 }
+
+CACHES = {
+    "default": {
+        "BACKEND": "django.core.cache.backends.db.DatabaseCache",
+        "LOCATION": "my_cache_table",
+    },
+    "redis": {
+        "BACKEND": "django_redis.cache.RedisCache",
+        "LOCATION": f"redis://{REDIS_HOST}:{REDIS_PORT}/1",
+        "OPTIONS": {
+            "CLIENT_CLASS": "django_redis.client.DefaultClient",
+        },
+    },
+}
+
+# Use the Redis cache as the default cache
+CACHES["default"] = CACHES["redis"]
 
 # Password validation
 # https://docs.djangoproject.com/en/4.1/ref/settings/#auth-password-validators

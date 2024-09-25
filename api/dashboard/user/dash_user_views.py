@@ -13,6 +13,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
+from django.core.cache import cache
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
@@ -22,8 +23,10 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        user = User.objects.filter(muid=user_muid).first()
-
+        user = cache.get(f"db_user_{user_muid}")
+        if not user:
+            user = User.objects.filter(muid=user_muid).first()
+            cache.set(f"db_user_{user_muid}", user, timeout=10)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
