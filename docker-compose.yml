@@ -1,4 +1,4 @@
-version: '3'
+version: "3"
 services:
   mulearnbackend:
     build:
@@ -15,3 +15,18 @@ services:
       - /var/www/mulearnbackend/media:/app/media
     env_file:
       - .env
+    entrypoint: sh entrypoint.sh
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery
+    image: mulearnbackend-celery
+    restart: always
+    volumes:
+      - /var/log/mulearnbackend:/var/log/mulearnbackend
+      - /var/www/mulearnbackend/assets:/app/assets
+      - /var/www/mulearnbackend/media:/app/media
+    env_file:
+      - .env
+    command: celery -A mulearnbackend.celery worker -l info
