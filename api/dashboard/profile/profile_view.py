@@ -11,7 +11,7 @@ from PIL import Image
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level
+from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
 from db.user import Role, Socials, User, UserRoleLink, UserSettings
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -105,18 +105,29 @@ class UserIgEditView(APIView):
 
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
-        user = User.objects.prefetch_related(
-            Prefetch(
-                "user_organization_link_user",
-                queryset=UserOrganizationLink.objects.all().select_related(
-                    "org", "department"
+        user = (
+            User.objects.prefetch_related(
+                Prefetch(
+                    "user_organization_link_user",
+                    queryset=UserOrganizationLink.objects.select_related(
+                        "org", "department"
+                    ),
                 ),
-            ),
-            Prefetch(
-                "user_role_link_user__role",
-                queryset=Role.objects.all(),
-            ),
-        ).get(muid=muid or JWTUtils.fetch_muid(request))
+                Prefetch(
+                    "user_role_link_user",
+                    queryset=UserRoleLink.objects.select_related("role").filter(
+                        verified=True
+                    ),
+                    to_attr="verified_roles",
+                ),
+                Prefetch(
+                    "user_ig_link_user",
+                    queryset=UserIgLink.objects.select_related("ig"),
+                ),
+            )
+            .select_related("wallet_user")
+            .get(muid=muid or JWTUtils.fetch_muid(request))
+        )
 
         if muid:
             user_settings = UserSettings.objects.filter(user_id=user).first()
@@ -428,9 +439,11 @@ class BadgesAPI(APIView):
         try:
             user = User.objects.get(muid=muid)
             hastags = TFPTasksHashtags.get_all_values()
-            response_data = {"full_name": user.full_name, "completed_tasks":[]}
+            response_data = {"full_name": user.full_name, "completed_tasks": []}
             for tag in hastags:
-                if log := KarmaActivityLog.objects.filter(user=user, task__hashtag=tag).first():
+                if log := KarmaActivityLog.objects.filter(
+                    user=user, task__hashtag=tag
+                ).first():
                     response_data["completed_tasks"].append(log.task.title)
             return CustomResponse(response=response_data).get_success_response()
         except User.DoesNotExist:
@@ -438,39 +451,54 @@ class BadgesAPI(APIView):
                 response="The given muid seems to be invalid"
             ).get_failure_response()
 
+
 class UsertermAPI(APIView):
-     def post(self, request, muid):
+    def post(self, request, muid):
         try:
             user = User.objects.get(muid=muid)
         except User.DoesNotExist:
-            return CustomResponse(response="The user does not exist").get_failure_response()
+            return CustomResponse(
+                response="The user does not exist"
+            ).get_failure_response()
 
         try:
             settings = UserSettings.objects.get(user=user)
         except UserSettings.DoesNotExist:
-            return CustomResponse(response="The user settings don't exist").get_failure_response()
+            return CustomResponse(
+                response="The user settings don't exist"
+            ).get_failure_response()
 
-        serializer = UserTermSerializer(settings, data={"is_userterms_approved": True}, partial=True)
+        serializer = UserTermSerializer(
+            settings, data={"is_userterms_approved": True}, partial=True
+        )
         if serializer.is_valid():
             settings = serializer.save()
             if settings.is_userterms_approved:
-                response_data = {"message": "User terms have been successfully approved."}
+                response_data = {
+                    "message": "User terms have been successfully approved."
+                }
                 return CustomResponse(response=response_data).get_success_response()
             else:
-                response_data = {"message": "The user terms have not been successfully approved."}
+                response_data = {
+                    "message": "The user terms have not been successfully approved."
+                }
                 return CustomResponse(response=response_data).get_failure_response()
         return CustomResponse(response="Invalid data provided").get_failure_response()
 
-     def get(self, request, muid):
+    def get(self, request, muid):
         try:
             user = User.objects.get(muid=muid)
         except User.DoesNotExist:
-            return CustomResponse(response="The user does not exist").get_failure_response()
+            return CustomResponse(
+                response="The user does not exist"
+            ).get_failure_response()
 
         try:
             settings = UserSettings.objects.get(user=user)
         except UserSettings.DoesNotExist:
-            return CustomResponse(response="The user settings don't exist").get_failure_response()
+            return CustomResponse(
+                response="The user settings don't exist"
+            ).get_failure_response()
 
         if settings.is_userterms_approved:
             response_data = {"message": "User terms are approved."}
