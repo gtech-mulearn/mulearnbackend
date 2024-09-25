@@ -11,6 +11,7 @@ from utils.utils import send_template_mail
 from . import serializers
 from .register_helper import get_auth_token
 from django.views.decorators.cache import cache_page
+from django.core.cache import cache
 
 
 class UserRegisterValidateAPI(APIView):
@@ -111,6 +112,7 @@ class RegisterDataAPI(APIView):
             return CustomResponse(message=create_user.errors).get_failure_response()
 
         user = create_user.save()
+        cache.set(f"db_user_{user.muid}", user, timeout=20)
         password = request.data["user"]["password"]
 
         res_data = get_auth_token(user.muid, password)
