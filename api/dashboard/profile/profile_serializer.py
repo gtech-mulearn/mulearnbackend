@@ -221,7 +221,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
         completed_tasks = KarmaActivityLog.objects.filter(
             user=user_id, appraiser_approved=True
-        ).values_list("task__id")
+        ).values_list("task__id", flat=True)
         return [
             {
                 "task_name": task.title,
@@ -231,7 +231,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
                 "karma": task.karma,
             }
             for task in tasks
-            if (is_completed := task.id in completed_tasks) or task.active
+            if (is_completed := (task.id in completed_tasks)) or task.active
         ]
 
 
