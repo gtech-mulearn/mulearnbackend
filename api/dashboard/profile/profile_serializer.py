@@ -205,6 +205,16 @@ class UserLevelSerializer(serializers.ModelSerializer):
         model = Level
         fields = ("name", "tasks", "karma")
 
+    def _get_completed_tasks(self, user_id):
+        if getattr(self, "completed_tasks", None):
+            return self.completed_tasks
+        self.completed_tasks = list(
+            KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True)
+            .select_related("task__id")
+            .values_list("task__id", flat=True)
+        )
+        return self.completed_tasks
+
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
         user_igs = UserIgLink.objects.filter(user__id=user_id).values_list(
@@ -215,9 +225,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
         if obj.level_order > 4:
             tasks = tasks.filter(ig__name__in=user_igs)
 
-        completed_tasks = KarmaActivityLog.objects.filter(
-            user=user_id, appraiser_approved=True
-        ).values_list("task__id")
+        completed_tasks = self._get_completed_tasks(user_id)
         return [
             {
                 "task_name": task.title,
@@ -227,7 +235,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
                 "karma": task.karma,
             }
             for task in tasks
-            if (is_completed := task.id in completed_tasks) or task.active
+            if (is_completed := (task.id in completed_tasks)) or task.active
         ]
 
 
