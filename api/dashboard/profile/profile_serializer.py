@@ -168,7 +168,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 )
                 .order_by("-karma")
             )
-        ranks = ranks.values_list("user_id", flat=True)
+        ranks = list(ranks.values_list("user_id", flat=True))
         return ranks.index(obj.id) + 1
 
     def get_karma_distribution(self, obj):
@@ -251,7 +251,7 @@ class UserRankSerializer(ModelSerializer):
         return ["Learner"] if len(roles) == 0 else roles
 
     def get_rank(self, obj):
-        roles = self.get_roles(obj)
+        roles = self.get_role(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
@@ -279,9 +279,8 @@ class UserRankSerializer(ModelSerializer):
                 .order_by("-karma")
             )
 
-        for count, _rank in enumerate(ranks, start=1):
-            if obj.id == _rank.user_id:
-                return count
+        ranks = list(ranks.values_list("user_id", flat=True))
+        return ranks.index(obj.id) + 1
 
     def get_karma(self, obj):
         return total_karma.karma if (total_karma := obj.wallet_user) else None
