@@ -451,7 +451,7 @@ class UserInterestSerializer(serializers.ModelSerializer):
 
     def validate_choosen_interests(self, interests):
         if not all(
-            interest in ("maker", "software", "creative", "manager", "others")
+            interest in ("maker", "software", "creative", "management", "others")
             for interest in interests
         ):
             raise serializers.ValidationError("Invalid interests selected.")

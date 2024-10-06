@@ -44,7 +44,11 @@ class ConnectDiscordAPI(APIView):
             "redirect_uri": redirect_uri,
         }
         headers = {"Content-Type": "application/x-www-form-urlencoded"}
-        token_response = requests.post(token_url, data=data, headers=headers)
+        token_response = requests.post(
+            token_url,
+            data=data,
+            headers=headers,
+        )
         access_token = token_response.json().get("access_token")
         if token_response.status_code != 200:
             return CustomResponse(

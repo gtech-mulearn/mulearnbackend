@@ -24,12 +24,19 @@ def onboard_user(access_token: str, user_id: int):
         return {"status": "error", "message": "Failed to get user data"}
     user_data = user_response.json()
     discord_user_id = user_data.get("id")
-    guild_url = f"https://discord.com/api/guilds/{DISCORD_GUILD_ID}/members/{user_id}"
+    guild_url = (
+        f"https://discord.com/api/guilds/{DISCORD_GUILD_ID}/members/{discord_user_id}"
+    )
     member_data = {"access_token": access_token}
     bot_headers = {
         "Authorization": f"Bot {DISCORD_BOT_TOKEN}",
         "Content-Type": "application/json",
     }
+    already_linked_account = User.objects.filter(discord_id=discord_user_id).first()
+    if already_linked_account:
+        already_linked_account.exist_in_guild = False
+        already_linked_account.discord_id = None
+        already_linked_account.save()
     user.discord_id = discord_user_id
     user.exist_in_guild = True
     user.save()
