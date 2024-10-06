@@ -15,6 +15,49 @@ from mu_celery.task import send_email
 from utils.permission import CustomizePermission, JWTUtils
 from decouple import config
 import requests
+from mu_celery.task import onboard_user
+
+DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
+DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
+FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
+
+
+class ConnectDiscordAPI(APIView):
+    def get(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        token = request.GET.get("code")
+        if not token:
+            return CustomResponse(
+                general_message="Invalid or no token given"
+            ).get_failure_response()
+        token_url = "https://discord.com/api/oauth2/token"
+        redirect_uri = f"{FR_DOMAIN_NAME}/dashboard/connect-discord/"
+        data = {
+            "client_id": DISCORD_CLIENT_ID,
+            "client_secret": DISCORD_CLIENT_SECRET,
+            "grant_type": "authorization_code",
+            "code": token,
+            "redirect_uri": redirect_uri,
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        token_response = requests.post(
+            token_url,
+            data=data,
+            headers=headers,
+        )
+        access_token = token_response.json().get("access_token")
+        if token_response.status_code != 200:
+            return CustomResponse(
+                general_message="Failed to get access token"
+            ).get_failure_response()
+        onboard_user.delay(access_token, user_id)
+        return CustomResponse(
+            general_message="You will be added to the discord server soon"
+        ).get_success_response()
 
 
 class UserInterestAPI(APIView):
