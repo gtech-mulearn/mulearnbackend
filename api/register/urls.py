@@ -8,9 +8,7 @@ urlpatterns = [
     path("role/list/", register_views.RoleAPI.as_view()),
     path("colleges/", register_views.CollegesAPI.as_view()),
     path("department/list/", register_views.DepartmentAPI.as_view()),
-    
     path("location/", register_views.LocationSearchView.as_view()),
-    
     path("country/list/", register_views.CountryAPI.as_view()),
     path("state/list/", register_views.StateAPI.as_view()),
     path("district/list/", register_views.DistrictAPI.as_view()),
@@ -20,9 +18,10 @@ urlpatterns = [
     path("schools/list/", register_views.SchoolAPI.as_view()),
     path("area-of-interest/list/", register_views.AreaOfInterestAPI.as_view()),
     path("lc/user-validation/", register_views.LearningCircleUserViewAPI.as_view()),
-    path('email-verification/', register_views.UserEmailVerificationAPI.as_view()),
-    path('user-country/', register_views.UserCountryAPI.as_view()),
-    path('user-state/', register_views.UserStateAPI.as_view()),
-    path('user-zone/', register_views.UserZoneAPI.as_view()),
-
+    path("email-verification/", register_views.UserEmailVerificationAPI.as_view()),
+    path("user-country/", register_views.UserCountryAPI.as_view()),
+    path("user-state/", register_views.UserStateAPI.as_view()),
+    path("user-zone/", register_views.UserZoneAPI.as_view()),
+    path("interests/", register_views.UserInterestAPI.as_view()),
+    path("connect-discord/", register_views.ConnectDiscordAPI.as_view()),
 ]

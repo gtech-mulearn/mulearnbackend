@@ -4,15 +4,110 @@ from rest_framework.views import APIView
 from db.organization import Country, Department, District, Organization, State, Zone
 from django.utils.decorators import method_decorator
 from db.task import InterestGroup
-from db.user import Role, User
+from db.user import Role, User, UserInterests
 from utils.response import CustomResponse
 from utils.types import OrganizationType
-from utils.utils import send_template_mail
 from . import serializers
 from .register_helper import get_auth_token
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from mu_celery.task import send_email
+from utils.permission import CustomizePermission, JWTUtils
+from decouple import config
+import requests
+from mu_celery.task import onboard_user
+
+DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
+DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
+FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
+
+
+class ConnectDiscordAPI(APIView):
+    def get(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        token = request.GET.get("code")
+        if not token:
+            return CustomResponse(
+                general_message="Invalid or no token given"
+            ).get_failure_response()
+        token_url = "https://discord.com/api/oauth2/token"
+        redirect_uri = f"{FR_DOMAIN_NAME}/dashboard/connect-discord/"
+        data = {
+            "client_id": DISCORD_CLIENT_ID,
+            "client_secret": DISCORD_CLIENT_SECRET,
+            "grant_type": "authorization_code",
+            "code": token,
+            "redirect_uri": redirect_uri,
+        }
+        headers = {"Content-Type": "application/x-www-form-urlencoded"}
+        token_response = requests.post(
+            token_url,
+            data=data,
+            headers=headers,
+        )
+        access_token = token_response.json().get("access_token")
+        if token_response.status_code != 200:
+            return CustomResponse(
+                general_message="Failed to get access token"
+            ).get_failure_response()
+        onboard_user.delay(access_token, user_id)
+        return CustomResponse(
+            general_message="You will be added to the discord server soon"
+        ).get_success_response()
+
+
+class UserInterestAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def put(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user := cache.get(f"db_user_{user_id}")):
+            user = User.objects.filter(id=user_id).first()
+        user_interest = UserInterests.objects.filter(user=user).first()
+        if not user_interest:
+            return CustomResponse(
+                general_message="User interests not found"
+            ).get_failure_response()
+        serializer = serializers.UserInterestSerializer(
+            instance=user_interest, data=request.data, context={"user": user}
+        )
+        if serializer.is_valid():
+            serializer.update(user_interest, serializer.validated_data)
+            return CustomResponse(
+                general_message="Updated interests"
+            ).get_success_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+    def post(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user := cache.get(f"db_user_{user_id}")):
+            user = User.objects.filter(id=user_id).first()
+        user_interest = UserInterests.objects.filter(user=user).first()
+        if user_interest:
+            return CustomResponse(
+                general_message="User interests already exist"
+            ).get_failure_response()
+        serializer = serializers.UserInterestSerializer(
+            data=request.data, context={"user": user}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Added interests"
+            ).get_success_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
 
 class UserRegisterValidateAPI(APIView):
