@@ -22,6 +22,6 @@ urlpatterns = [
     path("user-country/", register_views.UserCountryAPI.as_view()),
     path("user-state/", register_views.UserStateAPI.as_view()),
     path("user-zone/", register_views.UserZoneAPI.as_view()),
-    path("interests /", register_views.UserInterestAPI.as_view()),
-    # path("connect-discord/", register_views.ConnectDiscordAPI.as_view()),
+    path("interests/", register_views.UserInterestAPI.as_view()),
+    path("connect-discord/", register_views.ConnectDiscordAPI.as_view()),
 ]
