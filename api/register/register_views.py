@@ -4,15 +4,67 @@ from rest_framework.views import APIView
 from db.organization import Country, Department, District, Organization, State, Zone
 from django.utils.decorators import method_decorator
 from db.task import InterestGroup
-from db.user import Role, User
+from db.user import Role, User, UserInterests
 from utils.response import CustomResponse
 from utils.types import OrganizationType
-from utils.utils import send_template_mail
 from . import serializers
 from .register_helper import get_auth_token
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from mu_celery.task import send_email
+from utils.permission import CustomizePermission, JWTUtils
+from decouple import config
+import requests
+
+
+class UserInterestAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def put(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user := cache.get(f"db_user_{user_id}")):
+            user = User.objects.filter(id=user_id).first()
+        user_interest = UserInterests.objects.filter(user=user).first()
+        if not user_interest:
+            return CustomResponse(
+                general_message="User interests not found"
+            ).get_failure_response()
+        serializer = serializers.UserInterestSerializer(
+            instance=user_interest, data=request.data, context={"user": user}
+        )
+        if serializer.is_valid():
+            serializer.update(user_interest, serializer.validated_data)
+            return CustomResponse(
+                general_message="Updated interests"
+            ).get_success_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+    def post(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user := cache.get(f"db_user_{user_id}")):
+            user = User.objects.filter(id=user_id).first()
+        user_interest = UserInterests.objects.filter(user=user).first()
+        if user_interest:
+            return CustomResponse(
+                general_message="User interests already exist"
+            ).get_failure_response()
+        serializer = serializers.UserInterestSerializer(
+            data=request.data, context={"user": user}
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Added interests"
+            ).get_success_response()
+        return CustomResponse(general_message=serializer.errors).get_failure_response()
 
 
 class UserRegisterValidateAPI(APIView):
