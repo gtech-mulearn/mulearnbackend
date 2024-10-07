@@ -14,8 +14,24 @@ from db.organization import (
     UserOrganizationLink,
     Zone,
 )
-from db.task import InterestGroup, Level, MucoinInviteLog, UserIgLink, UserLvlLink, Wallet
-from db.user import Role, Socials, User, UserMentor, UserReferralLink, UserRoleLink, UserSettings
+from db.task import (
+    InterestGroup,
+    Level,
+    MucoinInviteLog,
+    UserIgLink,
+    UserLvlLink,
+    Wallet,
+)
+from db.user import (
+    Role,
+    Socials,
+    User,
+    UserMentor,
+    UserReferralLink,
+    UserRoleLink,
+    UserSettings,
+    UserInterests,
+)
 from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -161,7 +177,6 @@ class MentorSerializer(serializers.ModelSerializer):
             "reason",
             "hours",
         ]
-
 
 
 class ReferralSerializer(serializers.ModelSerializer):
@@ -326,6 +341,7 @@ class UserSerializer(serializers.ModelSerializer):
             "area_of_interest",
         ]
 
+
 class RegisterSerializer(serializers.Serializer):
     user = UserSerializer()
     organization = UserOrgLinkSerializer(required=False)
@@ -351,7 +367,7 @@ class RegisterSerializer(serializers.Serializer):
 
             if mentor := validated_data.pop("mentor", None):
                 mentor["user"] = user
-                MentorSerializer().create(mentor)    
+                MentorSerializer().create(mentor)
 
         return user
 
@@ -399,3 +415,72 @@ class LocationSerializer(serializers.ModelSerializer):
 
     def get_location(self, obj):
         return f"{obj.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"
+
+
+class UserInterestSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
+    user = serializers.CharField(read_only=True)
+    choosen_interests = serializers.JSONField()
+    other_interests = serializers.JSONField(required=False)
+    choosen_endgoals = serializers.JSONField()
+    other_endgoals = serializers.JSONField(required=False)
+    created_at = serializers.DateTimeField(read_only=True)
+    updated_at = serializers.DateTimeField(read_only=True)
+
+    def create(self, validated_data):
+        validated_data["created_at"] = validated_data["updated_at"] = (
+            DateTimeUtils.get_current_utc_time()
+        )
+        if user := self.context.get("user"):
+            validated_data["user"] = user
+        else:
+            return serializers.ValidationError("User not found")
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        if validated_data.get("choosen_interests", None):
+            instance.choosen_interests = validated_data.get("choosen_interests", [])
+        if validated_data.get("other_interests", None):
+            instance.other_interests = validated_data.get("other_interests", [])
+        if validated_data.get("choosen_endgoals", None):
+            instance.choosen_endgoals = validated_data.get("choosen_endgoals", [])
+        if validated_data.get("other_endgoals", None):
+            instance.other_endgoals = validated_data.get("other_endgoals", [])
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        return instance.save()
+
+    def validate_choosen_interests(self, interests):
+        if not all(
+            interest in ("maker", "software", "creative", "management", "others")
+            for interest in interests
+        ):
+            raise serializers.ValidationError("Invalid interests selected.")
+        return list(set(interests))
+
+    def validate_choosen_endgoals(self, end_goals):
+        if not all(
+            goal
+            in (
+                "job",
+                "higher_education",
+                "gig_work",
+                "entrepreneurship",
+                "others",
+            )
+            for goal in end_goals
+        ):
+            raise serializers.ValidationError("Invalid end goals selected.")
+        return list(set(end_goals))
+
+    class Meta:
+        model = UserInterests
+        fields = [
+            "id",
+            "user",
+            "choosen_interests",
+            "other_interests",
+            "choosen_endgoals",
+            "other_endgoals",
+            "created_at",
+            "updated_at",
+        ]
