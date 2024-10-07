@@ -9,7 +9,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source='updated_by.full_name')
     created_by = serializers.CharField(source='created_by.full_name')
     members = serializers.SerializerMethodField()
-
+    category = serializers.ChoiceField(choices=["maker", "software", "creative", "management", "others"])
     class Meta:
         model = InterestGroup
         fields = [
@@ -17,6 +17,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "name",
             "icon",
             "code",
+            "category",
             "members",
             "updated_by",
             "updated_at",
@@ -35,6 +36,7 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
         fields = [
             "name",
             "code",
+            "category",
             "icon",
             "created_by",
             "updated_by"
