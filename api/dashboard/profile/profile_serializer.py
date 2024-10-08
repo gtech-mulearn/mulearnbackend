@@ -166,7 +166,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
                         ]
                     )
                 )
-                .order_by("-karma")
+                .order_by("-karma", "-updated_at", "created_at")
             )
         ranks = list(ranks.values_list("user_id", flat=True))
         return ranks.index(obj.id) + 1
@@ -284,7 +284,7 @@ class UserRankSerializer(ModelSerializer):
                         ]
                     )
                 )
-                .order_by("-karma")
+                .order_by("-karma", "-updated_at", "created_at")
             )
 
         ranks = list(ranks.values_list("user_id", flat=True))
