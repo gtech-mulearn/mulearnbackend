@@ -84,6 +84,21 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "percentile",
         )
 
+    def _get_user_org_link(self, obj, org_type):
+        if not getattr(self, "user_org_link", None):
+            self.user_org_link = obj.user_organization_link_user.filter(
+                org__org_type=org_type
+            ).first()
+        return self.user_org_link
+
+    def _get_org_type(self, obj):
+        roles = self.get_roles(obj)
+        return (
+            OrganizationType.COMPANY.value
+            if MainRoles.MENTOR.value in roles
+            else OrganizationType.COLLEGE.value
+        )
+
     def get_percentile(self, obj):
         users_count_lt_user_karma = Wallet.objects.filter(
             karma__lt=obj.wallet_user.karma
@@ -96,30 +111,22 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_roles(self, obj):
-        return list(
+        if "role_values" in self.context:
+            return self.context["role_values"]
+        role_values = list(
             {link.role.title for link in obj.user_role_link_user.filter(verified=True)}
         )
+        self.context["role_values"] = role_values
+        return role_values
 
     def get_college_id(self, obj):
-        org_type = (
-            OrganizationType.COMPANY.value
-            if MainRoles.MENTOR.value in self.get_roles(obj)
-            else OrganizationType.COLLEGE.value
-        )
-        user_org_link = obj.user_organization_link_user.filter(
-            org__org_type=org_type
-        ).first()
+        org_type = self._get_org_type(obj)
+        user_org_link = self._get_user_org_link(obj, org_type)
         return user_org_link.org.id if user_org_link else None
 
     def get_org_district_id(self, obj):
-        org_type = (
-            OrganizationType.COMPANY.value
-            if MainRoles.MENTOR.value in self.get_roles(obj)
-            else OrganizationType.COLLEGE.value
-        )
-        user_org_link = obj.user_organization_link_user.filter(
-            org__org_type=org_type
-        ).first()
+        org_type = self._get_org_type(obj)
+        user_org_link = self._get_user_org_link(obj, org_type)
         return (
             user_org_link.org.district.id
             if user_org_link and hasattr(user_org_link.org, "district")
@@ -127,14 +134,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_college_code(self, obj):
-        if user_org_link := obj.user_organization_link_user.filter(
-            org__org_type=OrganizationType.COLLEGE.value
-        ).first():
-            return user_org_link.org.code
+        org_type = self._get_org_type(obj)
+        if org_type == OrganizationType.COLLEGE.value:
+            user_org_link = self._get_user_org_link(obj, org_type)
+            return user_org_link.org.code if user_org_link else None
         return None
 
     def get_rank(self, obj):
-
         roles = self.get_roles(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
@@ -162,10 +168,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 )
                 .order_by("-karma")
             )
-
-        for count, _rank in enumerate(ranks, start=1):
-            if obj.id == _rank.user_id:
-                return count
+        ranks = list(ranks.values_list("user_id", flat=True))
+        return ranks.index(obj.id) + 1
 
     def get_karma_distribution(self, obj):
         return (
@@ -255,7 +259,7 @@ class UserRankSerializer(ModelSerializer):
         return ["Learner"] if len(roles) == 0 else roles
 
     def get_rank(self, obj):
-        roles = self.get_roles(obj)
+        roles = self.get_role(obj)
         user_karma = obj.wallet_user.karma
         if RoleType.MENTOR.value in roles:
             ranks = Wallet.objects.filter(
@@ -283,9 +287,8 @@ class UserRankSerializer(ModelSerializer):
                 .order_by("-karma")
             )
 
-        for count, _rank in enumerate(ranks, start=1):
-            if obj.id == _rank.user_id:
-                return count
+        ranks = list(ranks.values_list("user_id", flat=True))
+        return ranks.index(obj.id) + 1
 
     def get_karma(self, obj):
         return total_karma.karma if (total_karma := obj.wallet_user) else None
