@@ -23,10 +23,10 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        user = cache.get(f"db_user_{user_muid}")
-        if not user:
-            user = User.objects.filter(muid=user_muid).first()
-            cache.set(f"db_user_{user_muid}", user, timeout=10)
+        # user = cache.get(f"db_user_{user_muid}")
+        # if not user:
+        user = User.objects.filter(muid=user_muid).first()
+        cache.set(f"db_user_{user_muid}", user, timeout=10)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
