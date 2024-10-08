@@ -199,6 +199,9 @@ class RegisterDataAPI(APIView):
     def post(self, request):
         data = request.data
         data = {key: value for key, value in data.items() if value}
+        # create_user = serializers.UserSerializer(
+        #     data=data.get("user"), context={"request": request}
+        # )
 
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
@@ -210,7 +213,7 @@ class RegisterDataAPI(APIView):
         user = create_user.save()
         cache.set(f"db_user_{user.muid}", user, timeout=20)
         password = request.data["user"]["password"]
-
+        cache.set(f"flag_register_{user.muid}", True, timeout=5)
         res_data = get_auth_token(user.muid, password)
 
         response_data = serializers.UserDetailSerializer(user, many=False).data
