@@ -8,6 +8,8 @@ urlpatterns = [
     path('verification/csv/', dash_user_views.UserVerificationCSV.as_view(), name='csv-verification'),
     path('verification/<str:link_id>/', dash_user_views.UserVerificationAPI.as_view(), name='edit-verification'),
     path('verification/<str:link_id>/', dash_user_views.UserVerificationAPI.as_view(), name='delete-verification'),
+    path('organization/',dash_user_views.UserAddOrgAPI.as_view(),name="user-org-link"),
+    path('organization/list',dash_user_views.UserAddOrgAPI.as_view(),name="get-user-org-link"),
 
     path('info/', dash_user_views.UserInfoAPI.as_view()),
     path('forgot-password/', dash_user_views.ForgotPasswordAPI.as_view(), name="forgot-password"),

@@ -158,11 +158,10 @@ class UserOrganizationLink(models.Model):
                                    related_name='user_organization_link_department')
     graduation_year = models.CharField(max_length=10, blank=True, null=True)
     verified = models.BooleanField()
-    is_alumni = models.IntegerField(blank=True, null=True, default=False)
+    is_alumni = models.BooleanField(blank=True, null=True, default=False)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='user_organization_link_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-
     class Meta:
         managed = False
         db_table = 'user_organization_link'
