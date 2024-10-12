@@ -4,7 +4,7 @@ from django.db import models
 
 from db.task import InterestGroup, Organization
 from db.user import User
-
+from utils.utils import generate_code
 from django.conf import settings
 
 # fmt: off
@@ -51,13 +51,21 @@ class UserCircleLink(models.Model):
 
 class CircleMeetingLog(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4(), unique=True)
+    meet_code = models.CharField(max_length=6, default=generate_code,null=False,blank=False)
     circle = models.ForeignKey(LearningCircle, on_delete=models.CASCADE,
                                related_name='circle_meeting_log_learning_circle')
-    meet_time = models.DateTimeField()
+    title = models.CharField(max_length=100, null=False, blank=False)
+    meet_time = models.DateTimeField(null=True, blank=False)
     meet_place = models.CharField(max_length=255, blank=True, null=True)
-    day = models.CharField(max_length=20)
-    attendees = models.CharField(max_length=216)
+    location = models.CharField(max_length=200, blank=False, null=False)
+    day = models.CharField(max_length=20, null=True, blank=False)
     agenda = models.CharField(max_length=2000)
+    pre_requirements = models.CharField(max_length=1000,null=True,blank=True)
+    is_public = models.BooleanField(default=True, null=False)
+    max_attendees = models.IntegerField(default=-1, null=False, blank=False)
+    report_text = models.CharField(max_length=1000, null=True, blank=True)
+    is_started = models.BooleanField(default=False, null=False)
+    is_report_submitted = models.BooleanField(default=False, null=False)
     images = models.ImageField(max_length=200, upload_to='lc/meet-report')
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='circle_meeting_log_created_by')
@@ -69,3 +77,18 @@ class CircleMeetingLog(models.Model):
     class Meta:
         managed = False
         db_table = 'circle_meeting_log'
+
+class CircleMeetAttendees(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4(), unique=True)
+    meet = models.ForeignKey(CircleMeetingLog, on_delete=models.CASCADE, related_name='circle_meet_attendees_meet')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='circle_meet_attendees_user')
+    note = models.CharField(max_length=1000, blank=True, null=True)
+    joined_at = models.DateTimeField(null=True, blank=False)
+    approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='approved_by',
+                                   related_name='circle_meet_attendees_approved_by')
+    created_at = models.DateTimeField(auto_now=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'circle_meet_attendees'
