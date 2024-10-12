@@ -167,9 +167,11 @@ class UserLogAPI(APIView):
             JWTUtils.is_jwt_authenticated(request)
             user_id = JWTUtils.fetch_user_id(request)
 
-        karma_activity_log = KarmaActivityLog.objects.filter(
-            user=user_id, appraiser_approved=True
-        ).order_by("-created_at")
+        karma_activity_log = (
+            KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True)
+            .select_related("task")
+            .order_by("-created_at")
+        )
 
         if karma_activity_log is None:
             return CustomResponse(

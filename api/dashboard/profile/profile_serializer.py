@@ -113,9 +113,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         if "role_values" in self.context:
             return self.context["role_values"]
-        role_values = list(
-            {link.role.title for link in obj.user_role_link_user.filter(verified=True)}
-        )
+        role_values = list({link.role.title for link in obj.user_role_link_user.all()})
         self.context["role_values"] = role_values
         return role_values
 
@@ -221,10 +219,12 @@ class UserLevelSerializer(serializers.ModelSerializer):
 
     def get_tasks(self, obj):
         user_id = self.context.get("user_id")
-        user_igs = UserIgLink.objects.filter(user__id=user_id).values_list(
-            "ig__name", flat=True
+        user_igs = (
+            UserIgLink.objects.filter(user__id=user_id)
+            .select_related("ig")
+            .values_list("ig__name", flat=True)
         )
-        tasks = TaskList.objects.filter(level=obj)
+        tasks = TaskList.objects.filter(level=obj).select_related("ig")
 
         if obj.level_order > 4:
             tasks = tasks.filter(ig__name__in=user_igs)
