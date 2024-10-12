@@ -7,10 +7,11 @@ from django.core.files.storage import FileSystemStorage
 from django.db.models import Q
 from rest_framework.views import APIView
 
+from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, WebHookActions, WebHookCategory
+from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.cache import cache
@@ -372,3 +373,28 @@ class UserProfilePictureView(APIView):
         return CustomResponse(
             response={"user_id": user.id, "profile_pic": uploaded_file_url}
         ).get_success_response()
+    
+    
+class UserAddOrgAPI(APIView):
+    def post(self,request):
+        user = User.objects.filter(id=JWTUtils.fetch_user_id(request)).first()
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+        serializer=dash_user_serializer.UserOrgLinkSerializer(data=request.data,context={'user':user})
+        if(serializer.is_valid()):
+            serializer.save()
+            return CustomResponse(general_message="organisation linked successfully").get_success_response()
+        return CustomResponse(response=serializer.errors).get_failure_response()
+    def get(self,request):
+        user = User.objects.filter(id=JWTUtils.fetch_user_id(request)).first()
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+        
+        links = UserOrganizationLink.objects.filter(user=user,org__org_type=OrganizationType.COLLEGE.value).select_related('org','department')
+        serializer=dash_user_serializer.GetUserLinkSerializer(instance=links,many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+        

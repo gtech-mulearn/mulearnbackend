@@ -203,8 +203,8 @@ class RegisterDataAPI(APIView):
         #     data=data.get("user"), context={"request": request}
         # )
 
-        create_user = serializers.RegisterSerializer(
-            data=data, context={"request": request}
+        create_user = serializers.UserSerializer(
+            data=data.pop("user"), context={"request": request}
         )
 
         if not create_user.is_valid():
