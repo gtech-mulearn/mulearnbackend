@@ -2,21 +2,21 @@ from enum import Enum
 
 
 class ManagementType(Enum):
-    CAMPUS = 'Campus'
-    HACKATHON = 'Hackathon'
-    USER_MANAGEMENT = 'User Management'
-    MANAGE_ORGANIZATION = 'Manage Organization'
-    TASK_MANAGEMENT = 'Task Management'
-    INTEREST_GROUP = 'Interest Group'
-    COLLEGE_LEVELS = 'College Levels'
-    KARMA_VOUCHER = 'Karma Voucher'
-    ERROR_LOG = 'Error Log'
-    DYNAMIC_TYPE = 'Dynamic Type'
-    MANAGE_ROLES = 'Manage Roles'
-    MANAGE_LOCATIONS = 'Manage Locations'
-    CHANNELS = 'Channels'
-    URL_SHORTENER = 'Url Shortener'
-    DISCORD_MODERATION = 'Discord Moderation'
+    CAMPUS = "Campus"
+    HACKATHON = "Hackathon"
+    USER_MANAGEMENT = "User Management"
+    MANAGE_ORGANIZATION = "Manage Organization"
+    TASK_MANAGEMENT = "Task Management"
+    INTEREST_GROUP = "Interest Group"
+    COLLEGE_LEVELS = "College Levels"
+    KARMA_VOUCHER = "Karma Voucher"
+    ERROR_LOG = "Error Log"
+    DYNAMIC_TYPE = "Dynamic Type"
+    MANAGE_ROLES = "Manage Roles"
+    MANAGE_LOCATIONS = "Manage Locations"
+    CHANNELS = "Channels"
+    URL_SHORTENER = "Url Shortener"
+    DISCORD_MODERATION = "Discord Moderation"
 
     @classmethod
     def get_all_values(cls):
@@ -40,25 +40,25 @@ class RoleType(Enum):
     SUSPEND = "Suspended"
     STUDENT = "Student"
     ENABLER = "Enabler"
-    TECH_TEAM = 'Tech Team'
-    IG_LEAD = 'IG Lead'
+    TECH_TEAM = "Tech Team"
+    IG_LEAD = "IG Lead"
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
 
     @classmethod
-    def IG_CAMPUS_LEAD_ROLE(cls,ig_code:str):
+    def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):
         return f"{ig_code} CampusLead"
-    
+
     @classmethod
-    def IG_LEAD_ROLE(cls,ig_code:str):
+    def IG_LEAD_ROLE(cls, ig_code: str):
         return f"{ig_code} IGLead"
 
 
 class OrganizationType(Enum):
-    COLLEGE = 'College'
-    COMPANY = 'Company'
-    COMMUNITY = 'Community'
-    SCHOOL = 'School'
+    COLLEGE = "College"
+    COMPANY = "Company"
+    COMMUNITY = "Community"
+    SCHOOL = "School"
 
     @classmethod
     def get_all_values(cls):
@@ -66,11 +66,11 @@ class OrganizationType(Enum):
 
 
 class WebHookActions(Enum):
-    SEPARATOR = '<|=|>'
-    CREATE = 'create'
-    EDIT = 'edit'
-    DELETE = 'delete'
-    UPDATE = 'update'
+    SEPARATOR = "<|=|>"
+    CREATE = "create"
+    EDIT = "edit"
+    DELETE = "delete"
+    UPDATE = "update"
 
 
 class MainRoles(Enum):
@@ -80,42 +80,42 @@ class MainRoles(Enum):
 
 
 class WebHookCategory(Enum):
-    INTEREST_GROUP = 'ig'
-    COMMUNITY = 'community'
-    ROLE = 'role'
-    USER_ROLE = 'user-role'
-    USER = 'user'
-    USER_NAME = 'user-name'
-    USER_PROFILE = 'user-profile'
-    BULK_ROLE = 'bulk-role'
-    KARMA_INFO = 'karma-info'
+    INTEREST_GROUP = "ig"
+    COMMUNITY = "community"
+    ROLE = "role"
+    USER_ROLE = "user-role"
+    USER = "user"
+    USER_NAME = "user-name"
+    USER_PROFILE = "user-profile"
+    BULK_ROLE = "bulk-role"
+    KARMA_INFO = "karma-info"
 
 
 class RefferalType(Enum):
-    KARMA = 'Karma'
-    MUCOIN = 'Mucoin'
+    KARMA = "Karma"
+    MUCOIN = "Mucoin"
 
 
 class IntegrationType(Enum):
-    KKEM = 'DWMS'
+    KKEM = "DWMS"
 
 
 class TasksTypesHashtag(Enum):
-    REFERRAL = 'referral'
-    MUCOIN = 'mucoin'
-    GITHUB = 'social_github'
-    FACEBOOK = 'social_facebook'
-    INSTAGRAM = 'social_instagram'
-    LINKEDIN = 'social_linkedin'
-    DRIBBLE = 'social_dribble'
-    BEHANCE = 'social_behance'
-    STACKOVERFLOW = 'social_stackoverflow'
-    MEDIUM = 'social_medium'
+    REFERRAL = "referral"
+    MUCOIN = "mucoin"
+    GITHUB = "social_github"
+    FACEBOOK = "social_facebook"
+    INSTAGRAM = "social_instagram"
+    LINKEDIN = "social_linkedin"
+    DRIBBLE = "social_dribble"
+    BEHANCE = "social_behance"
+    STACKOVERFLOW = "social_stackoverflow"
+    MEDIUM = "social_medium"
 
 
 class Events(Enum):
-    LEARNING_FEST = 'LearningFest'
-    TOP_100_CODERS = 'Top100'
+    LEARNING_FEST = "LearningFest"
+    TOP_100_CODERS = "Top100"
 
     @classmethod
     def get_all_values(cls):
@@ -123,53 +123,62 @@ class Events(Enum):
 
 
 class Lc(Enum):
-    KARMA = 20
-    TASK_HASHTAG = '#lcmeetreport'
+    RECORD_SUBMIT_KARMA = 20
+    RECORD_SUBMIT_HASHTAG = "#lcmeetreport"
+
+    MEET_JOIN_KARMA = 10
+    MEET_JOIN_HASHTAG = "#lcmeetjoin"
+
 
 class CouponResponseKey(Enum):
-    DISCOUNT_TYPE = 'discount_type'
-    DISCOUNT_VALUE = 'discount_value'
-    TICKET = 'ticket'
+    DISCOUNT_TYPE = "discount_type"
+    DISCOUNT_VALUE = "discount_value"
+    TICKET = "ticket"
+
 
 class DiscountTypes(Enum):
-    PERCENTAGE = 'percentage'
-    AMOUNT = 'amount'
+    PERCENTAGE = "percentage"
+    AMOUNT = "amount"
+
 
 class LaunchPadLevels(Enum):
-    LEVEL_1 = 'IEEE Launchpad Level 1'
-    LEVEL_2 = 'IEEE Launchpad Level 2'
-    LEVEL_3 = 'IEEE Launchpad Level 3'
-    LEVEL_4 = 'IEEE Launchpad Level 4'
+    LEVEL_1 = "IEEE Launchpad Level 1"
+    LEVEL_2 = "IEEE Launchpad Level 2"
+    LEVEL_3 = "IEEE Launchpad Level 3"
+    LEVEL_4 = "IEEE Launchpad Level 4"
 
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
 
 class LaunchPadRoles(Enum):
-    ADMIN = 'IEEEAdmin'
-    DC = 'IEEEDC'
+    ADMIN = "IEEEAdmin"
+    DC = "IEEEDC"
 
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
 
 class TFPTasksHashtags(Enum):
-    SCRATCH = '#tfp2.0-scratch'
-    COMMAND_LINE = '#tfp2.0-command-line'
-    GIT_GITHUB = '#tfp2.0-git-github'
-    
+    SCRATCH = "#tfp2.0-scratch"
+    COMMAND_LINE = "#tfp2.0-command-line"
+    GIT_GITHUB = "#tfp2.0-git-github"
+
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
-    
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
-    'name': 'system',
-    'gender': 'system',
-    'email': 'system',
-    'mobile': 'system',
-    'college': 'system',
-    'experience': 'input',
-    'github': 'input',
-    'linkedin': 'input',
-    'bio': 'input',
+    "name": "system",
+    "gender": "system",
+    "email": "system",
+    "mobile": "system",
+    "college": "system",
+    "experience": "input",
+    "github": "input",
+    "linkedin": "input",
+    "bio": "input",
 }
