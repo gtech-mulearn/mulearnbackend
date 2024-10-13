@@ -384,15 +384,18 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
 
-class UserOrgLinkSerializer(serializers.ModelSerializer):
+class UserOrgLinkSerializer(serializers.Serializer):
     department = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.all(), required=False, allow_null=True
     )
     graduation_year = serializers.CharField(required=False, allow_null=True)
     organization = serializers.PrimaryKeyRelatedField(
-        queryset=Organization.objects.all(), many=False, required=True
+        queryset=Organization.objects.all(), many=False, required=True, allow_null=True
     )
     is_alumni = serializers.BooleanField(required=False)
+    is_student = serializers.BooleanField(
+        required=False, allow_null=True, default=False
+    )
 
     def create(self, validated_data):
         department = validated_data.get("department", None)
@@ -400,26 +403,35 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
         is_alumni = validated_data.get("is_alumni", False)
         is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
         user_id = self.context.get("user")
-
-        org_link = UserOrganizationLink.objects.create(
-            user=user_id,
-            org=validated_data.get("organization"),
-            created_by=user_id,
-            created_at=DateTimeUtils.get_current_utc_time(),
-            verified=True,
-            department=(
-                department if is_college(validated_data.get("organization")) else None
-            ),
-            graduation_year=(
-                graduation_year
-                if is_college(validated_data.get("organization"))
-                else None
-            ),
-            is_alumni=(
-                is_alumni if is_college(validated_data.get("organization")) else None
-            ),
-        )
-        if is_college(validated_data.get("organization")):
+        if org := validated_data.get("organization"):
+            org_link = UserOrganizationLink.objects.create(
+                user=user_id,
+                org=org,
+                created_by=user_id,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                verified=True,
+                department=(
+                    department
+                    if is_college(validated_data.get("organization"))
+                    else None
+                ),
+                graduation_year=(
+                    graduation_year
+                    if is_college(validated_data.get("organization"))
+                    else None
+                ),
+                is_alumni=(
+                    is_alumni
+                    if is_college(validated_data.get("organization"))
+                    else None
+                ),
+            )
+        else:
+            org_link = "skiped_creation"
+        if validated_data.get("is_student") or (
+            validated_data.get("organization")
+            and is_college(validated_data.get("organization"))
+        ):
             student_role_id = (
                 Role.objects.only("id").get(title=RoleType.STUDENT.value).id
             )
@@ -436,8 +448,13 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
         return org_link
 
     class Meta:
-        model = UserOrganizationLink
-        fields = ["organization", "department", "graduation_year", "is_alumni"]
+        fields = [
+            "organization",
+            "department",
+            "graduation_year",
+            "is_alumni",
+            "is_student",
+        ]
 
 
 class GetUserLinkSerializer(serializers.ModelSerializer):

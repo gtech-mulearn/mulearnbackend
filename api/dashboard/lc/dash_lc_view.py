@@ -831,9 +831,9 @@ class CircleMeetListAPI(APIView):
         )
         filters = Q()
         if district_id := request.data.get("district_id"):
-            filters &= Q(org__district_id=district_id)
+            filters &= Q(circle__org__district_id=district_id)
         if category := request.data.get("category"):
-            filters &= Q(ig__category=category)
+            filters &= Q(circle__ig__category=category)
         if ig := request.data.get("ig_id"):
             filters &= Q(circle__ig_id=ig)
         try:
