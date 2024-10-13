@@ -63,6 +63,8 @@ class CircleMeetingLog(models.Model):
     pre_requirements = models.CharField(max_length=1000,null=True,blank=True)
     is_public = models.BooleanField(default=True, null=False)
     max_attendees = models.IntegerField(default=-1, null=False, blank=False)
+    tasks = models.JSONField(null=False, blank=False)
+    is_online = models.BooleanField(default=False, null=False)
     report_text = models.CharField(max_length=1000, null=True, blank=True)
     is_started = models.BooleanField(default=False, null=False)
     is_report_submitted = models.BooleanField(default=False, null=False)

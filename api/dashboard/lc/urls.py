@@ -15,9 +15,14 @@ urlpatterns = [
         name="meet-list",
     ),
     path(
-        "/meets/report/<str:meet_id>/",
+        "meets/report/<str:meet_id>/",
         dash_lc_view.CircleMeetReportSubmitAPI.as_view(),
         name="meet-report-submission",
+    ),
+    path(
+        "meets/attendees/<str:meet_id>/",
+        dash_lc_view.CircleMeetAttendeesListAPI.as_view(),
+        name="meet-attendees-list",
     ),
     path(
         "meets/interested/<str:meet_id>/",

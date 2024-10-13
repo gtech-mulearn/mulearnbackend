@@ -44,6 +44,9 @@ from .dash_lc_serializer import (
     ScheduleMeetingSerializer,
     CircleMeetSerializer,
 )
+from decouple import config
+
+BE_DOMAIN = config("BE_DOMAIN_NAME")
 
 
 class UserLearningCircleListApi(APIView):
@@ -966,3 +969,23 @@ class CircleMeetJoinAPI(APIView):
         return CustomResponse(
             general_message=f"Joined in the meetup successfully."
         ).get_success_response()
+
+
+class CircleMeetAttendeesListAPI(APIView):
+    def get(self, request, meet_id):
+        if meet_id:
+            attendees = [
+                {
+                    "fullname": attendee[0],
+                    "profile_pic": f"{BE_DOMAIN}/{settings.MEDIA_URL}{attendee[1]}",
+                }
+                for attendee in (
+                    CircleMeetAttendees.objects.filter(
+                        meet_id=meet_id, joined_at__isnull=False
+                    )
+                    .select_related("user")
+                    .values_list("user__full_name", "user_id")
+                )
+            ]
+            return CustomResponse(response=attendees).get_success_response()
+        return CustomResponse(general_message="Invalid meeting").get_failure_response()
