@@ -742,10 +742,9 @@ class CircleMeetAPI(APIView):
             circle_id=circle_id,
             is_report_submitted=False,
         ).order_by("-created_at")
-        past_meeting = CircleMeetingLog.objects.exclude(
-            meet_time__gte=DateTimeUtils.get_current_utc_time(),
+        past_meeting = CircleMeetingLog.objects.filter(
             circle_id=circle_id,
-            is_report_submitted=False,
+            is_report_submitted=True,
         ).order_by("-created_at")[:2]
 
         return CustomResponse(
