@@ -387,7 +387,7 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
     department = serializers.PrimaryKeyRelatedField(
         queryset=Department.objects.all(), required=False
     )
-    graduation_year = serializers.CharField(required=False)
+    graduation_year = serializers.CharField(required=False,allow_null=True)
     organization = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.all(), many=False, required=True
     )
