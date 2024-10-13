@@ -10,12 +10,13 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - /var/log/mulearnbackend:/var/log/mulearnbackend
+      - ./logs:/var/log/mulearnbackend
       - /var/www/mulearnbackend/assets:/app/assets
       - /var/www/mulearnbackend/media:/app/media
+      - .:/app
     env_file:
       - .env
-    entrypoint: sh entrypoint.sh
+    entrypoint: python manage.py runserver 0.0.0.0:8000
   celery:
     build:
       context: .

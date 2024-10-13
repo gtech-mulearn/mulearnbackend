@@ -671,6 +671,8 @@ class CircleMeetDetailSerializer(serializers.ModelSerializer):
     total_joined = serializers.SerializerMethodField()
     lc_members = serializers.SerializerMethodField()
     is_lc_member = serializers.SerializerMethodField()
+    tasks = serializers.JSONField(required=True)
+    is_online = serializers.BooleanField(default=False)
 
     def get_is_lc_member(self, obj):
         user_id = self.context.get("user_id")
@@ -742,6 +744,8 @@ class CircleMeetDetailSerializer(serializers.ModelSerializer):
             "total_joined",
             "lc_members",
             "is_lc_member",
+            "tasks",
+            "is_online",
         ]
 
 
@@ -756,9 +760,11 @@ class CircleMeetSerializer(serializers.ModelSerializer):
     pre_requirements = serializers.CharField(required=False, allow_null=True)
     is_public = serializers.BooleanField(default=True)
     max_attendees = serializers.IntegerField(default=-1)
+    tasks = serializers.JSONField(required=True)
     report_text = serializers.CharField(required=False, allow_null=True)
     meet_code = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    is_online = serializers.BooleanField(default=False)
 
     def create(self, validated_data):
         validated_data["id"] = uuid.uuid4()
@@ -797,7 +803,9 @@ class CircleMeetSerializer(serializers.ModelSerializer):
             "is_public",
             "is_started",
             "max_attendees",
+            "tasks",
             "report_text",
             "meet_code",
             "image",
+            "is_online",
         ]
