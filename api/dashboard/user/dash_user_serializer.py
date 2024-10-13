@@ -6,9 +6,9 @@ from rest_framework import serializers
 
 from db.organization import Department, Organization, UserOrganizationLink
 from db.task import UserIgLink
-from db.user import User, UserRoleLink
+from db.user import Role, User, UserRoleLink
 from utils.permission import JWTUtils
-from utils.types import OrganizationType
+from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 from db.user import DynamicRole, DynamicUser
 from db.user import UserInterests
@@ -59,7 +59,6 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
     def get_interest_selected(self, obj):
-        print("SDAFAS")
         if not UserInterests.objects.filter(user=obj).exists():
             return "Please select your interests"
         return None
@@ -383,46 +382,75 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             return super().update(instance, validated_data)
+
+
 class UserOrgLinkSerializer(serializers.ModelSerializer):
     department = serializers.PrimaryKeyRelatedField(
-        queryset=Department.objects.all(), required=False
+        queryset=Department.objects.all(), required=False, allow_null=True
     )
-    graduation_year = serializers.CharField(required=False,allow_null=True)
+    graduation_year = serializers.CharField(required=False, allow_null=True)
     organization = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.all(), many=False, required=True
     )
-    is_alumni=serializers.BooleanField(required=False)
+    is_alumni = serializers.BooleanField(required=False)
 
     def create(self, validated_data):
         department = validated_data.get("department", None)
         graduation_year = validated_data.get("graduation_year", None)
-        is_alumni=validated_data.get("is_alumni",False)
+        is_alumni = validated_data.get("is_alumni", False)
         is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
-        user_id=self.context.get('user')
-        
-        return UserOrganizationLink.objects.create(
+        user_id = self.context.get("user")
+
+        org_link = UserOrganizationLink.objects.create(
             user=user_id,
             org=validated_data.get("organization"),
             created_by=user_id,
             created_at=DateTimeUtils.get_current_utc_time(),
             verified=True,
-            department=department if is_college(validated_data.get("organization")) else None,
-            graduation_year=graduation_year if is_college(validated_data.get("organization")) else None,
-            is_alumni=is_alumni if is_college(validated_data.get("organization")) else None,
+            department=(
+                department if is_college(validated_data.get("organization")) else None
+            ),
+            graduation_year=(
+                graduation_year
+                if is_college(validated_data.get("organization"))
+                else None
+            ),
+            is_alumni=(
+                is_alumni if is_college(validated_data.get("organization")) else None
+            ),
         )
-            
-        
+        if is_college(validated_data.get("organization")):
+            student_role_id = (
+                Role.objects.only("id").get(title=RoleType.STUDENT.value).id
+            )
+            if not UserRoleLink.objects.filter(
+                user=user_id, role_id=student_role_id
+            ).exists():
+                UserRoleLink.objects.create(
+                    user=user_id,
+                    role_id=student_role_id,
+                    created_by=user_id,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                )
+        return org_link
 
     class Meta:
         model = UserOrganizationLink
-        fields = [ "organization", "department", "graduation_year","is_alumni"]
+        fields = ["organization", "department", "graduation_year", "is_alumni"]
+
 
 class GetUserLinkSerializer(serializers.ModelSerializer):
-    org_id=serializers.CharField(source='org.id')
-    org_title=serializers.CharField(source='org.title')
-    dept_id = serializers.CharField(source='department.id', allow_null=True, required=False)
-    dept_title=serializers.CharField(source='department.title', allow_null=True, required=False)
-    is_alumni=serializers.BooleanField()
+    org_id = serializers.CharField(source="org.id")
+    org_title = serializers.CharField(source="org.title")
+    dept_id = serializers.CharField(
+        source="department.id", allow_null=True, required=False
+    )
+    dept_title = serializers.CharField(
+        source="department.title", allow_null=True, required=False
+    )
+    is_alumni = serializers.BooleanField()
+
     class Meta:
         model = UserOrganizationLink
-        fields=["org_id","org_title","dept_id","dept_title","is_alumni"]
+        fields = ["org_id", "org_title", "dept_id", "dept_title", "is_alumni"]
