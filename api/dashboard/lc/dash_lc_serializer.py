@@ -6,7 +6,9 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import (
+    CircleMeetAttendeeReport,
     CircleMeetAttendees,
+    CircleMeetTasks,
     LearningCircle,
     UserCircleLink,
     InterestGroup,
@@ -259,28 +261,26 @@ class LearningCircleJoinSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context.get("user_id")
         circle_id = self.context.get("circle_id")
-        no_of_entry = UserCircleLink.objects.filter(
-            circle_id=circle_id, accepted=True
-        ).count()
+        # no_of_entry = UserCircleLink.objects.filter(
+        #     circle_id=circle_id, accepted=True
+        # ).count()
 
-        ig_id = LearningCircle.objects.get(pk=circle_id).ig_id
+        # ig_id = LearningCircle.objects.get(pk=circle_id).ig_id
 
-        if entry := UserCircleLink.objects.filter(
-            circle_id=circle_id, user_id=user_id
-        ).first():
+        if UserCircleLink.objects.filter(circle_id=circle_id, user_id=user_id).exists():
             raise serializers.ValidationError(
                 "Cannot send another request at the moment"
             )
 
-        if UserCircleLink.objects.filter(
-            user_id=user_id, circle_id__ig_id=ig_id, accepted=True
-        ).exists():
-            raise serializers.ValidationError(
-                "Already a member of learning circle with same interest group"
-            )
+        # if UserCircleLink.objects.filter(
+        #     user_id=user_id, circle_id__ig_id=ig_id, accepted=True
+        # ).exists():
+        #     raise serializers.ValidationError(
+        #         "Already a member of learning circle with same interest group"
+        #     )
 
-        if no_of_entry >= 5:
-            raise serializers.ValidationError("Maximum member count reached")
+        # if no_of_entry >= 5:
+        #     raise serializers.ValidationError("Maximum member count reached")
 
         validated_data["id"] = uuid.uuid4()
         validated_data["user_id"] = user_id
@@ -630,17 +630,17 @@ class AddMemberSerializer(serializers.ModelSerializer):
 
     def validate(self, data):
         user = self.context.get("user")
-        circle_id = self.context.get("circle_id")
+        # circle_id = self.context.get("circle_id")
 
         if UserCircleLink.objects.filter(user=user).exists():
             raise serializers.ValidationError(
                 "user already part of the learning circle"
             )
 
-        if UserCircleLink.objects.filter(circle_id=circle_id).count() >= 5:
-            raise serializers.ValidationError(
-                "maximum members reached in learning circle"
-            )
+        # if UserCircleLink.objects.filter(circle_id=circle_id).count() >= 5:
+        #     raise serializers.ValidationError(
+        #         "maximum members reached in learning circle"
+        #     )
 
         return data
 
@@ -671,6 +671,30 @@ class CircleMeetDetailSerializer(serializers.ModelSerializer):
     total_joined = serializers.SerializerMethodField()
     lc_members = serializers.SerializerMethodField()
     is_lc_member = serializers.SerializerMethodField()
+    is_online = serializers.BooleanField(default=False)
+    tasks = serializers.SerializerMethodField()
+    is_attendee_report_submitted = serializers.SerializerMethodField()
+    is_report_submitted = serializers.BooleanField(default=False)
+
+    def get_is_attendee_report_submitted(self, obj):
+        user_id = self.context.get("user_id")
+        return (
+            CircleMeetAttendeeReport.objects.select_related(
+                "meet_task__meet", "attendee__user"
+            )
+            .filter(meet_task__meet=obj, attendee__user_id=user_id)
+            .exists()
+        )
+
+    def get_is_report_submitted(self, obj):
+        return obj.is_report_submitted
+
+    def get_tasks(self, obj):
+        return CircleMeetTasksSerializer(
+            CircleMeetTasks.objects.filter(meet=obj),
+            many=True,
+            context={"user_id": self.context.get("user_id")},
+        ).data
 
     def get_is_lc_member(self, obj):
         user_id = self.context.get("user_id")
@@ -742,6 +766,88 @@ class CircleMeetDetailSerializer(serializers.ModelSerializer):
             "total_joined",
             "lc_members",
             "is_lc_member",
+            "is_online",
+            "tasks",
+            "is_report_submitted",
+            "is_attendee_report_submitted",
+        ]
+
+
+class CircleMeetTasksSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
+    meet = serializers.CharField(read_only=True)
+    title = serializers.CharField(required=True)
+    description = serializers.CharField(required=False, allow_null=True)
+    task = serializers.PrimaryKeyRelatedField(
+        queryset=TaskList.objects.all(), required=False, allow_null=True
+    )
+    is_completed = serializers.SerializerMethodField()
+
+    def get_is_completed(self, obj):
+        if user_id := self.context.get("user_id"):
+            return (
+                CircleMeetAttendeeReport.objects.select_related("attendee__user")
+                .filter(meet_task=obj, attendee__user_id=user_id)
+                .exists()
+            )
+        return False
+
+    def create(self, validated_data):
+        validated_data["id"] = uuid.uuid4()
+        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        if not (meet_id := self.context.get("meet_id")):
+            raise serializers.ValidationError("Meet ID is required")
+        validated_data["meet_id"] = meet_id
+        return super().create(validated_data)
+
+    class Meta:
+        model = CircleMeetTasks
+        fields = ["id", "meet", "title", "description", "task", "is_completed"]
+
+
+class CircleAttendeeReportSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
+    meet_task = serializers.PrimaryKeyRelatedField(
+        queryset=CircleMeetTasks.objects.all(), required=True, write_only=True
+    )
+    title = serializers.CharField(source="meet_task.title", read_only=True)
+    attendee = serializers.CharField(source="attendee.full_name", read_only=True)
+    is_image = serializers.BooleanField(default=False, allow_null=True)
+    image_url = serializers.ImageField(required=False, allow_null=True)
+    proof_url = serializers.CharField(required=False, allow_null=True)
+    image = serializers.SerializerMethodField()
+
+    def get_image(self, obj):
+        return (
+            f"{config('BE_DOMAIN_NAME')}/{settings.MEDIA_URL}{media}"
+            if (media := obj.image_url)
+            else None
+        )
+
+    def create(self, validated_data):
+        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        attendee = self.context.get("attendee")
+        validated_data["attendee"] = attendee
+        return CircleMeetAttendeeReport.objects.create(**validated_data)
+
+    def validate(self, attrs):
+        if attrs.get("is_image") and not attrs.get("image_url"):
+            raise serializers.ValidationError("Image URL is required")
+        if not attrs.get("is_image") and not attrs.get("proof_url"):
+            raise serializers.ValidationError("Proof URL is required")
+        return super().validate(attrs)
+
+    class Meta:
+        model = CircleMeetAttendeeReport
+        fields = [
+            "id",
+            "meet_task",
+            "attendee",
+            "is_image",
+            "image_url",
+            "proof_url",
+            "title",
+            "image",
         ]
 
 
@@ -759,6 +865,8 @@ class CircleMeetSerializer(serializers.ModelSerializer):
     report_text = serializers.CharField(required=False, allow_null=True)
     meet_code = serializers.SerializerMethodField()
     image = serializers.SerializerMethodField()
+    is_online = serializers.BooleanField(default=False)
+    is_verified = serializers.BooleanField(default=False, read_only=True)
 
     def create(self, validated_data):
         validated_data["id"] = uuid.uuid4()
@@ -800,4 +908,96 @@ class CircleMeetSerializer(serializers.ModelSerializer):
             "report_text",
             "meet_code",
             "image",
+            "is_online",
+            "is_verified",
+        ]
+
+
+class CircleMeetBasicDetails(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
+    title = serializers.CharField(required=True)
+    location = serializers.CharField(read_only=True)
+    meet_time = serializers.DateTimeField(read_only=True)
+    meet_place = serializers.CharField(read_only=True)
+    agenda = serializers.CharField(read_only=True)
+    pre_requirements = serializers.CharField(required=False, allow_null=True)
+    is_public = serializers.BooleanField(default=True)
+    max_attendees = serializers.IntegerField(default=-1)
+    report_text = serializers.CharField(required=False, allow_null=True)
+    meet_code = serializers.SerializerMethodField()
+    image = serializers.SerializerMethodField()
+    is_online = serializers.BooleanField(default=False)
+    is_verified = serializers.BooleanField(default=False, read_only=True)
+    learning_circle = serializers.CharField(source="circle.name", read_only=True)
+    join_count = serializers.SerializerMethodField()
+    interested_count = serializers.SerializerMethodField()
+    report_submitted_attendees = serializers.SerializerMethodField()
+    held_on = serializers.SerializerMethodField()
+
+    def get_held_on(self, obj):
+        return (
+            CircleMeetAttendees.objects.filter(meet=obj, joined_at__isnull=False)
+            .order_by("joined_at")
+            .values_list("joined_at", flat=True)
+            .first()
+        )
+    
+    def get_report_submitted_attendees(self, obj):
+        return CircleMeetAttendees.objects.filter(meet=obj,is_report_submitted=True).count()
+
+    def get_join_count(self, obj):
+        return CircleMeetAttendees.objects.filter(
+            meet=obj, joined_at__isnull=False
+        ).count()
+
+    def get_interested_count(self, obj):
+        return CircleMeetAttendees.objects.filter(meet=obj).count()
+
+    def create(self, validated_data):
+        validated_data["id"] = uuid.uuid4()
+        validated_data["circle_id"] = self.context.get("circle_id")
+        validated_data["created_by"] = self.context.get("user_id")
+        validated_data["updated_by"] = self.context.get("user_id")
+        validated_data["created_at"] = DateTimeUtils.get_current_utc_time()
+        validated_data["updated_at"] = DateTimeUtils.get_current_utc_time()
+        return super().create(validated_data)
+
+    def get_meet_code(self, obj):
+        if user_id := self.context.get("user_id"):
+            if UserCircleLink.objects.filter(
+                user_id=user_id, circle_id=obj.circle_id, accepted=True
+            ).exists():
+                return obj.meet_code
+        return None
+
+    def get_image(self, obj):
+        return (
+            f"{config('BE_DOMAIN_NAME')}/{settings.MEDIA_URL}{media}"
+            if (media := obj.images)
+            else None
+        )
+
+    class Meta:
+        model = CircleMeetingLog
+        fields = [
+            "id",
+            "title",
+            "location",
+            "meet_time",
+            "meet_place",
+            "agenda",
+            "pre_requirements",
+            "is_public",
+            "is_started",
+            "max_attendees",
+            "report_text",
+            "meet_code",
+            "image",
+            "is_online",
+            "is_verified",
+            "learning_circle",
+            "join_count",
+            "interested_count",
+            "report_submitted_attendees",
+            "held_on",
         ]
