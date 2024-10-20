@@ -5,6 +5,11 @@ from . import dash_lc_view
 urlpatterns = [
     path("meets/list/", dash_lc_view.CircleMeetListAPI.as_view(), name="meets-list"),
     path(
+        "meets/list/<str:is_user>/",
+        dash_lc_view.CircleMeetListAPI.as_view(),
+        name="meets-list-user",
+    ),
+    path(
         "<str:circle_id>/meet/create/",
         dash_lc_view.CircleMeetAPI.as_view(),
         name="meet-create",
@@ -18,6 +23,24 @@ urlpatterns = [
         "meets/report/<str:meet_id>/",
         dash_lc_view.CircleMeetReportSubmitAPI.as_view(),
         name="meet-report-submission",
+    ),
+    path(
+        "meets/attendee-report/<str:meet_id>/",
+        dash_lc_view.CircleAttendeeReportAPI.as_view(),
+        name="meet-report-submission",
+    ),
+    path(
+        "meets/attendee-report/<str:meet_id>/<str:task_id>/",
+        dash_lc_view.CircleMeetTaskPOWAPI.as_view(),
+        name="meet-report-submission",
+    ),
+    path(
+        "meets/verify-list/",
+        dash_lc_view.CircleMeetVerifyAPI.as_view(),
+    ),
+    path(
+        "meets/verify/<str:meet_id>/",
+        dash_lc_view.CircleMeetVerifyAPI.as_view(),
     ),
     path(
         "meets/attendees/<str:meet_id>/",

@@ -129,6 +129,9 @@ class Lc(Enum):
     MEET_JOIN_KARMA = 10
     MEET_JOIN_HASHTAG = "#lcmeetjoin"
 
+    VERIFY_MAX_KARMA = 200
+    VERIFY_HASHTAG = "#lcmeetverify"
+
 
 class CouponResponseKey(Enum):
     DISCOUNT_TYPE = "discount_type"
