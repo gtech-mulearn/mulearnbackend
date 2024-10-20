@@ -877,11 +877,11 @@ class CircleMeetListAPI(APIView):
             .select_related("circle", "circle__org", "circle__ig")
         )
         filters = Q()
-        if district_id := request.data.get("district_id"):
+        if district_id := request.query_params.get("district_id"):
             filters &= Q(circle__org__district_id=district_id)
-        if category := request.data.get("category"):
+        if category := request.query_params.get("category"):
             filters &= Q(circle__ig__category=category)
-        if ig := request.data.get("ig_id"):
+        if ig := request.query_params.get("ig_id"):
             filters &= Q(circle__ig_id=ig)
         try:
             user_id = JWTUtils.fetch_user_id(request)
@@ -1027,7 +1027,7 @@ class CircleMeetAttendeesListAPI(APIView):
                     "muid": attendee[3],
                     "proof_of_work": CircleAttendeeReportSerializer(
                         CircleMeetAttendeeReport.objects.filter(
-                            attendee__user_id=user_id, meet_task__meet_id=meet_id
+                            attendee_id=attendee[0], meet_task__meet_id=meet_id
                         ),
                         many=True,
                     ).data,
@@ -1037,7 +1037,7 @@ class CircleMeetAttendeesListAPI(APIView):
                     CircleMeetAttendees.objects.filter(
                         meet_id=meet_id, joined_at__isnull=False
                     )
-                    .select_related("user", "circle_meet_attendee_report_attendee")
+                    .select_related("user")
                     .values_list(
                         "id",
                         "user__full_name",
