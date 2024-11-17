@@ -363,81 +363,6 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
 
-class RegisterSerializer(serializers.Serializer):
-    user = UserSerializer()
-    organization = UserOrgLinkSerializer(required=False)
-    referral = ReferralSerializer(required=False)
-    integration = IntegrationSerializer(required=False)
-    mentor = MentorSerializer(required=False)
-
-    def create(self, validated_data):
-        with transaction.atomic():
-            user = UserSerializer().create(validated_data.pop("user"))
-
-            if organizations := validated_data.pop("organization", None):
-                organizations.update({"user": user})
-                UserOrgLinkSerializer().create(organizations)
-
-            if referral := validated_data.pop("referral", None):
-                referral.update({"user": user})
-                ReferralSerializer().create(referral)
-
-            if integration := validated_data.pop("integration", None):
-                integration.update({"user": user})
-                IntegrationSerializer().create(integration)
-
-            if mentor := validated_data.pop("mentor", None):
-                mentor["user"] = user
-                MentorSerializer().create(mentor)
-
-        return user
-
-    class Meta:
-        model = User
-        fields = [
-            "user",
-            "organization",
-            "referral",
-            "param",
-            "mentor",
-        ]
-
-
-class UserCountrySerializer(serializers.ModelSerializer):
-    country_name = serializers.CharField(source="name")
-
-    class Meta:
-        model = Country
-        fields = ["country_name"]
-
-
-class UserStateSerializer(serializers.ModelSerializer):
-    state_name = serializers.CharField(source="name")
-
-    class Meta:
-        model = State
-        fields = ["state_name"]
-
-
-class UserZoneSerializer(serializers.ModelSerializer):
-    zone_name = serializers.CharField(source="name")
-
-    class Meta:
-        model = Zone
-        fields = ["zone_name"]
-
-
-class LocationSerializer(serializers.ModelSerializer):
-    location = serializers.SerializerMethodField()
-
-    class Meta:
-        model = District
-        fields = ("id", "location")
-
-    def get_location(self, obj):
-        return f"{obj.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"
-
-
 class UserInterestSerializer(serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     user = serializers.CharField(read_only=True)
@@ -506,3 +431,69 @@ class UserInterestSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_at",
         ]
+
+
+class RegisterSerializer(serializers.Serializer):
+    user = UserSerializer()
+    interests = UserInterestSerializer(required=True)
+    integration = IntegrationSerializer(required=False)
+    referral = ReferralSerializer(required=False)
+
+    def create(self, validated_data):
+        with transaction.atomic():
+            user = UserSerializer().create(validated_data.pop("user"))
+            UserInterestSerializer(context={"user": user}).create(
+                validated_data.pop("interests")
+            )
+            if integration := validated_data.pop("integration", None):
+                integration.update({"user": user})
+                IntegrationSerializer().create(integration)
+
+            if referral := validated_data.pop("referral", None):
+                referral.update({"user": user})
+                ReferralSerializer().create(referral)
+        return user
+
+    class Meta:
+        model = User
+        fields = [
+            "user",
+            "interests",
+            "integration",
+            "referral",
+        ]
+
+
+class UserCountrySerializer(serializers.ModelSerializer):
+    country_name = serializers.CharField(source="name")
+
+    class Meta:
+        model = Country
+        fields = ["country_name"]
+
+
+class UserStateSerializer(serializers.ModelSerializer):
+    state_name = serializers.CharField(source="name")
+
+    class Meta:
+        model = State
+        fields = ["state_name"]
+
+
+class UserZoneSerializer(serializers.ModelSerializer):
+    zone_name = serializers.CharField(source="name")
+
+    class Meta:
+        model = Zone
+        fields = ["zone_name"]
+
+
+class LocationSerializer(serializers.ModelSerializer):
+    location = serializers.SerializerMethodField()
+
+    class Meta:
+        model = District
+        fields = ("id", "location")
+
+    def get_location(self, obj):
+        return f"{obj.name}, {obj.zone.state.name}, {obj.zone.state.country.name}"

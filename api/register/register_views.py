@@ -219,14 +219,10 @@ class RegisterDataAPI(APIView):
     def post(self, request):
         data = request.data
         data = {key: value for key, value in data.items() if value}
-        # create_user = serializers.UserSerializer(
-        #     data=data.get("user"), context={"request": request}
-        # )
 
-        create_user = serializers.UserSerializer(
-            data=data.pop("user"), context={"request": request}
+        create_user = serializers.RegisterSerializer(
+            data=data, context={"request": request}
         )
-
         if not create_user.is_valid():
             return CustomResponse(message=create_user.errors).get_failure_response()
 
