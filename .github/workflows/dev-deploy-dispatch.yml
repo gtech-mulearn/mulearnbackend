@@ -1,4 +1,4 @@
-name: Dev CI
+name: Dev Server Roll
 
 on:
   workflow_dispatch:
