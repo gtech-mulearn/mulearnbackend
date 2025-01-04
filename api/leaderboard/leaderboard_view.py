@@ -26,7 +26,7 @@ class StudentsLeaderboard(APIView):
                     queryset=UserOrganizationLink.objects.filter(
                         org__org_type=OrganizationType.COLLEGE.value
                     ).select_related("org"),
-                    to_attr="colleges"
+                    to_attr="colleges",
                 )
             )
             .order_by("-wallet_user__karma")[:20]
@@ -50,7 +50,6 @@ class StudentsMonthlyLeaderboard(APIView):
                 exist_in_guild=True,
             )
             .annotate(
-                full_name=F("full_name"),
                 institution=F("user_organization_link_user__org__title"),
                 total_karma=Coalesce(
                     Sum(
@@ -70,12 +69,18 @@ class StudentsMonthlyLeaderboard(APIView):
                 "total_karma",
                 "institution",
             )
-            .order_by("-total_karma")
+            .order_by("-total_karma")[:20]
         )
+        data = [
+            {
+                "full_name": student.full_name,
+                "total_karma": student.total_karma,
+                "institution": student.institution,
+            }
+            for student in student_monthly_leaderboard
+        ]
 
-        return CustomResponse(
-            response=student_monthly_leaderboard
-        ).get_success_response()
+        return CustomResponse(response=data).get_success_response()
 
 
 class CollegeLeaderboard(APIView):
