@@ -71,16 +71,10 @@ class StudentsMonthlyLeaderboard(APIView):
             )
             .order_by("-total_karma")[:20]
         )
-        data = [
-            {
-                "full_name": student.full_name,
-                "total_karma": student.total_karma,
-                "institution": student.institution,
-            }
-            for student in student_monthly_leaderboard
-        ]
 
-        return CustomResponse(response=data).get_success_response()
+        return CustomResponse(
+            response=student_monthly_leaderboard
+        ).get_success_response()
 
 
 class CollegeLeaderboard(APIView):
