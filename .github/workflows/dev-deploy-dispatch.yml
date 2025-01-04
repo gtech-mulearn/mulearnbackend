@@ -1,0 +1,38 @@
+name: Dev CI
+
+on:
+  workflow_dispatch:
+    inputs:
+      branch:
+        description: "Branch to deploy"
+        required: true
+        default: "dev-server"
+
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v3
+
+    - name: Configure SSH key
+      uses: webfactory/ssh-agent@v0.4.1
+      with:
+        ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+
+    - name: Deploy
+      env:
+        REMOTE_IP: ${{ secrets.DEV_REMOTE_IP }}
+        PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
+        BRANCH_NAME: ${{ github.event.inputs.branch }}
+      run: |
+        ssh -o StrictHostKeyChecking=no ubuntu@$REMOTE_IP "
+          cd $PROJECT_PATH &&
+          git fetch origin &&
+          git checkout $BRANCH_NAME &&
+          git reset --hard origin/$BRANCH_NAME &&
+          docker-compose down &&
+          docker-compose up --build -d
+        "
