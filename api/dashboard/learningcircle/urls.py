@@ -31,6 +31,10 @@ urlpatterns = [
         learningcircle_views.LearningCircleJoinAPI.as_view(),
     ),
     path(
+        "meeting/rsvp/<str:meet_id>/",
+        learningcircle_views.LearningCircleRSVPAPI.as_view(),
+    ),
+    path(
         "meeting/leave/<str:meet_id>/",
         learningcircle_views.LearningCircleJoinAPI.as_view(),
     ),

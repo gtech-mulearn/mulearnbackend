@@ -12,8 +12,10 @@ from .learningcircle_serializer import (
     CircleMeetingLogCreateEditSerializer,
     CircleMeetingLogListSerializer,
     CircleMeetupInfoSerializer,
+    CircleMeetupMinSerializer,
     LearningCircleCreateEditSerialzier,
-    LearningCircleListSerializer,
+    LearningCircleDetailSerializer,
+    LearningCircleListMinSerializer,
 )
 from django.db.models import Q
 
@@ -24,23 +26,23 @@ class LearningCircleView(APIView):
     def get(self, request, circle_id: str = None):
         if circle_id:
             learning_circle = LearningCircle.objects.get(id=circle_id)
-            circle_meetings = CircleMeetingLog.objects.filter(
-                circle_id=learning_circle, is_report_submitted=True
-            )
-            serializer = LearningCircleListSerializer(learning_circle)
-            meetings_serializer = CircleMeetingLogListSerializer(
-                circle_meetings, many=True
-            )
+            # circle_meetings = CircleMeetingLog.objects.filter(
+            #     circle_id=learning_circle, is_report_submitted=True
+            # )
+            serializer = LearningCircleDetailSerializer(learning_circle)
+            # meetings_serializer = CircleMeetingLogListSerializer(
+            #     circle_meetings, many=True
+            # )
             return CustomResponse(
                 general_message="Learning Circle fetched successfully",
-                response={**serializer.data, "past_meetups": meetings_serializer.data},
+                response={**serializer.data},
             ).get_success_response()
         learning_circles = (
-            LearningCircle.objects.filter(created_by_id=JWTUtils.fetch_user_id(request))
+            LearningCircle.objects.all()
             .order_by("-created_at", "-updated_at")
             .select_related("ig", "org", "created_by")
         )
-        serializer = LearningCircleListSerializer(learning_circles, many=True)
+        serializer = LearningCircleListMinSerializer(learning_circles, many=True)
         return CustomResponse(
             general_message="Learning Circles fetched successfully",
             response=serializer.data,
@@ -120,7 +122,7 @@ class LearningCircleMeetingView(APIView):
     def get(self, request, circle_id: str):
         learning_circle = LearningCircle.objects.get(id=circle_id)
         circle_meetings = CircleMeetingLog.objects.filter(circle_id=learning_circle)
-        serializer = CircleMeetingLogListSerializer(circle_meetings, many=True)
+        serializer = CircleMeetupMinSerializer(circle_meetings, many=True)
         return CustomResponse(
             general_message="Circle Meetings fetched successfully",
             response=serializer.data,
@@ -180,7 +182,7 @@ class LearningCircleMeetingView(APIView):
         ).get_success_response()
 
 
-class LearningCircleJoinAPI(APIView):
+class LearningCircleRSVPAPI(APIView):
     permission_classes = [CustomizePermission]
 
     def post(self, request, meet_id: str):
@@ -192,56 +194,85 @@ class LearningCircleJoinAPI(APIView):
         is_meet_ended = (
             circle_meeting.meet_time + timedelta(hours=circle_meeting.duration + 2)
         ) <= DateTimeUtils.get_current_utc_time()
+        if is_meet_started or is_meet_ended:
+            return CustomResponse(
+                general_message="Meeting has already started or ended"
+            ).get_failure_response()
+        attendee = CircleMeetingAttendees.objects.filter(
+            meet_id=circle_meeting, user_id_id=user_id
+        ).first()
+        if attendee:
+            return CustomResponse(
+                general_message="You have already RSVP'd for the Circle Meeting"
+            ).get_failure_response()
+        CircleMeetingAttendees.objects.create(
+            meet_id=circle_meeting,
+            user_id_id=user_id,
+            is_joined=False,
+            joined_at=None,
+        )
+        return CustomResponse(
+            general_message="You have successfully RSVP'd for the Circle Meeting"
+        ).get_success_response()
+
+
+class LearningCircleJoinAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, meet_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        is_meet_started = (
+            circle_meeting.meet_time <= DateTimeUtils.get_current_utc_time()
+        )
+        if not is_meet_started:
+            return CustomResponse(
+                general_message="You can only join the Circle Meeting after it has started"
+            ).get_failure_response()
+        is_meet_ended = (
+            circle_meeting.meet_time + timedelta(hours=circle_meeting.duration + 2)
+        ) <= DateTimeUtils.get_current_utc_time()
         if is_meet_ended:
             return CustomResponse(
                 general_message="The Circle Meeting has already ended"
             ).get_failure_response()
-        is_joined = False
-        joined_at = None
-        if is_meet_started:
-            meet_code = request.data.get("meet_code")
-            if not meet_code or meet_code != circle_meeting.meet_code:
-                return CustomResponse(
-                    general_message="Invalid Circle Meeting code"
-                ).get_failure_response()
-            is_joined = True
-            joined_at = DateTimeUtils.get_current_utc_time()
+
+        meet_code = request.data.get("meet_code")
+
+        if not meet_code or meet_code != circle_meeting.meet_code:
+            return CustomResponse(
+                general_message="Invalid Circle Meeting code"
+            ).get_failure_response()
+
+        is_joined = True
+        joined_at = DateTimeUtils.get_current_utc_time()
         attendee = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, user_id_id=user_id
         ).first()
+
         if attendee:
             if attendee.is_joined:
                 return CustomResponse(
                     general_message="You have already joined the Circle Meeting"
                 ).get_failure_response()
-            if not is_meet_started:
-                return CustomResponse(
-                    general_message="You can only join the Circle Meeting after it has started"
-                ).get_failure_response()
             attendee.is_joined = is_joined
             attendee.joined_at = joined_at
             attendee.save()
-            add_karma(
-                user_id, Lc.MEET_JOIN_HASHTAG.value, user_id, Lc.MEET_JOIN_KARMA.value
+        else:
+            CircleMeetingAttendees.objects.create(
+                meet_id=circle_meeting,
+                user_id_id=user_id,
+                is_joined=is_joined,
+                joined_at=joined_at,
             )
             return CustomResponse(
                 general_message="You have successfully joined the Circle Meeting"
             ).get_success_response()
-        CircleMeetingAttendees.objects.create(
-            meet_id=circle_meeting,
-            user_id_id=user_id,
-            is_joined=is_joined,
-            joined_at=joined_at,
-        )
         add_karma(
             user_id, Lc.MEET_JOIN_HASHTAG.value, user_id, Lc.MEET_JOIN_KARMA.value
         )
         return CustomResponse(
-            general_message=(
-                "You have successfully joined the Circle Meeting"
-                if is_joined
-                else "Saved Learning Circle"
-            )
+            general_message=("You have successfully joined the Circle Meeting")
         ).get_success_response()
 
     def delete(self, request, meet_id: str):
@@ -260,11 +291,7 @@ class LearningCircleJoinAPI(APIView):
             ).get_failure_response()
         attendee.delete()
         return CustomResponse(
-            general_message=(
-                "You have successfully left the Circle Meeting"
-                if attendee.is_joined
-                else "Removed from saved list."
-            )
+            general_message=("Removed for meetup attendee list.")
         ).get_success_response()
 
 
@@ -531,7 +558,7 @@ class LearningCircleMeetingListAPI(APIView):
             meetings = meetings.select_related("circle_id__ig").filter(
                 circle_id__ig__category__in=category
             )
-        serializer = CircleMeetupInfoSerializer(
+        serializer = CircleMeetupMinSerializer(
             meetings, many=True, context={"user_id": user_id}
         )
         return CustomResponse(
