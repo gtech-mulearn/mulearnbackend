@@ -509,6 +509,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "coord_x",
             "coord_y",
             "meet_time",
+            "meet_link",
             "is_started",
             "is_ended",
             "is_joined",
