@@ -3,6 +3,7 @@ from django.urls import path
 from . import dash_user_views
 
 urlpatterns = [
+    path("search/", dash_user_views.UserSearchAPI.as_view(), name="search-user"),
     path(
         "verification/",
         dash_user_views.UserVerificationAPI.as_view(),

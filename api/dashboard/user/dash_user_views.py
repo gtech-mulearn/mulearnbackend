@@ -408,3 +408,32 @@ class UserAddOrgAPI(APIView):
             instance=links, many=True
         )
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class UserSearchAPI(APIView):
+
+    def get(self, request):
+        role = request.query_params.get("role")
+        queryset = User.objects.all().select_related("wallet_user")
+        if role:
+            queryset = queryset.filter(
+                user_role_link_user__role__title=role,
+                user_role_link_user__verified=True,
+            )
+
+        queryset = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            search_fields=[
+                "full_name",
+                "email",
+                "muid",
+            ],
+        )
+        serializer = dash_user_serializer.UserBasicDetailsSerializer(
+            queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=queryset.get("pagination")
+        )
