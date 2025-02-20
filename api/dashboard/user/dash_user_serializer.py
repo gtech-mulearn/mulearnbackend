@@ -471,3 +471,47 @@ class GetUserLinkSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserOrganizationLink
         fields = ["org_id", "org_title", "dept_id", "dept_title", "is_alumni"]
+
+
+class UserBasicDetailsSerializer(serializers.ModelSerializer):
+    interest_groups = serializers.SerializerMethodField()
+    organizations = serializers.SerializerMethodField()
+    karma = serializers.CharField(source="wallet_user.karma")
+
+    class Meta:
+        model = User
+        fields = (
+            "full_name",
+            "muid",
+            "interest_groups",
+            "organizations",
+            "profile_pic",
+            "karma",
+        )
+
+    def get_organizations(self, obj):
+        org_links = (
+            obj.user_organization_link_user.all()
+            .select_related("org")
+            .only("org__id", "org__title", "org__code", "org__org_type")
+        )
+        data = []
+        for org_link in org_links:
+            data.append(
+                {
+                    "id": org_link.org.id,
+                    "title": org_link.org.title,
+                    "code": org_link.org.code,
+                    "org_type": org_link.org.org_type,
+                }
+            )
+        return data
+
+    def get_interest_groups(self, obj):
+        ig_links = (
+            obj.user_ig_link_user.all().select_related("ig").only("ig__id", "ig__name")
+        )
+        data = []
+        for ig_link in ig_links:
+            data.append({"id": ig_link.ig.id, "name": ig_link.ig.name})
+        return data
