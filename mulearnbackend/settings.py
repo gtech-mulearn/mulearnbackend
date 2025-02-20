@@ -262,9 +262,29 @@ WADHWANI_BASE_URL = decouple_config("WADHWANI_BASE_URL")
 RAZORPAY_ID = decouple_config("RAZORPAY_ID")
 RAZORPAY_SECRET = decouple_config("RAZORPAY_SECRET")
 
-DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
+# DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket
 
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS = [f"{ip[:-1]}1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
+
+MEDIAFILES_LOCATION = decouple_config("MEDIAFILES_LOCATION")
+STATICFILES_LOCATION = decouple_config("STATICFILES_LOCATION")
+PUBLIC_STORAGE_LOCATION = decouple_config("PUBLIC_STORAGE_LOCATION")
+
+AWS_STORAGE_BUCKET_NAME = decouple_config("AWS_STORAGE_BUCKET_NAME")
+AWS_S3_ACCESS_KEY_ID = decouple_config("AWS_S3_ACCESS_KEY_ID")
+AWS_S3_SECRET_ACCESS_KEY = decouple_config("AWS_S3_SECRET_ACCESS_KEY")
+# AWS_S3_REGION_NAME = decouple_config("AWS_S3_REGION_NAME")
+
+STORAGES = {
+    "default": {
+        "BACKEND": "core.storage.MediaStorage",
+        "OPTIONS": {},
+    },
+    "staticfiles": {
+        "BACKEND": "core.storage.StaticStorage",
+        "OPTIONS": {},
+    },
+}

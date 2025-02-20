@@ -1,7 +1,7 @@
 import uuid
 
 from django.db import models
-
+from core.storage.fields import ResizedImageField
 from db.organization import Organization
 
 from django.conf import settings
@@ -40,6 +40,10 @@ class InterestGroup(models.Model):
     name = models.CharField(max_length=75, unique=True)
     code = models.CharField(max_length=10, unique=True)
     icon = models.CharField(max_length=10)
+    logo = ResizedImageField(upload_to="interest_group/logos/", null=True, blank=False)
+    cover_image = ResizedImageField(upload_to="interest_group/cover_images/", null=True, blank=False)
+    short_description = models.CharField(max_length=200, null=True)
+    about = models.CharField(max_length=500, null=True)
     category =models.CharField(max_length=20,default="others",blank=False,null=False)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="interest_group_updated_by")

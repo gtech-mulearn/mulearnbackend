@@ -8,6 +8,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import (
+    InterestGroupDetailSerializer,
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
 )
@@ -58,7 +59,7 @@ class InterestGroupAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        request_data = request.data
+        request_data = request.data.copy()
 
         request_data["created_by"] = request_data["updated_by"] = user_id
 
@@ -254,7 +255,7 @@ class InterestGroupGetAPI(APIView):
                 general_message="Interest Group Does Not Exist"
             ).get_failure_response()
 
-        serializer = InterestGroupSerializer(ig_data, many=False)
+        serializer = InterestGroupDetailSerializer(ig_data, many=False)
 
         return CustomResponse(
             response={"interestGroup": serializer.data}
