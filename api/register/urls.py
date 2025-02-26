@@ -22,7 +22,9 @@ urlpatterns = [
     path("user-country/", register_views.UserCountryAPI.as_view()),
     path("user-state/", register_views.UserStateAPI.as_view()),
     path("user-zone/", register_views.UserZoneAPI.as_view()),
-    path("interests/", register_views.UserInterestAPI.as_view()),
+    # path("interests/", register_views.UserInterestAPI.as_view()),
+    path("select-domains/", register_views.UserDomainSelectionAPI.as_view()),
+    path("select-endgoals/", register_views.UserEndgoalSelectionAPI.as_view()),
     path("connect-discord/", register_views.ConnectDiscordAPI.as_view()),
     path(
         "organization/create/",
