@@ -26,7 +26,13 @@ class UserInfoAPI(APIView):
         user_muid = JWTUtils.fetch_muid(request)
         # user = cache.get(f"db_user_{user_muid}")
         # if not user:
-        user = User.objects.filter(muid=user_muid).first()
+        user = (
+            User.objects.prefetch_related(
+                "user_domains", "user_endgoals", "user_role_link_user"
+            )
+            .filter(muid=user_muid)
+            .first()
+        )
         cache.set(f"db_user_{user_muid}", user, timeout=60)
         if user is None:
             return CustomResponse(
