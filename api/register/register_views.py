@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from db.organization import Country, Department, District, Organization, State, Zone
 from django.utils.decorators import method_decorator
 from db.task import InterestGroup
-from db.user import Role, User, UserInterests
+from db.user import Role, User, UserDomains, UserEndgoals
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
@@ -60,54 +60,109 @@ class ConnectDiscordAPI(APIView):
         ).get_success_response()
 
 
-class UserInterestAPI(APIView):
+class UserDomainSelectionAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    def put(self, request):
-        if not JWTUtils.is_jwt_authenticated(request):
-            return CustomResponse(
-                general_message="Unauthorized access"
-            ).get_failure_response()
+    def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        if not (user := cache.get(f"db_user_{user_id}")):
-            user = User.objects.filter(id=user_id).first()
-        user_interest = UserInterests.objects.filter(user=user).first()
-        if not user_interest:
+        domains = request.data.get("domains")
+        if not domains or not isinstance(domains, list) or not len(domains) > 0:
             return CustomResponse(
-                general_message="User interests not found"
-            ).get_failure_response()
-        serializer = serializers.UserInterestSerializer(
-            instance=user_interest, data=request.data, context={"user": user}
-        )
-        if serializer.is_valid():
-            serializer.update(user_interest, serializer.validated_data)
+                general_message="Domains is required."
+            ).get_failure_response(status_code=400)
+        try:
+            UserDomains.objects.filter(user_id=user_id).delete()
+            UserDomains.objects.bulk_create(
+                [UserDomains(domain_name=domain, user_id=user_id) for domain in domains]
+            )
             return CustomResponse(
-                general_message="Updated interests"
+                general_message="Domains selected"
             ).get_success_response()
-        return CustomResponse(general_message=serializer.errors).get_failure_response()
+        except Exception as e:
+            print("Exception during domain selection:", e)
+            return CustomResponse(
+                general_message="An unexpected error occured"
+            ).get_failure_response(500)
+
+
+class UserEndgoalSelectionAPI(APIView):
+    permission_classes = [CustomizePermission]
 
     def post(self, request):
-        if not JWTUtils.is_jwt_authenticated(request):
-            return CustomResponse(
-                general_message="Unauthorized access"
-            ).get_failure_response()
         user_id = JWTUtils.fetch_user_id(request)
-        if not (user := cache.get(f"db_user_{user_id}")):
-            user = User.objects.filter(id=user_id).first()
-        user_interest = UserInterests.objects.filter(user=user).first()
-        if user_interest:
+        endgoals = request.data.get("endgoals")
+        if not endgoals or not isinstance(endgoals, list) or not len(endgoals) > 0:
             return CustomResponse(
-                general_message="User interests already exist"
-            ).get_failure_response()
-        serializer = serializers.UserInterestSerializer(
-            data=request.data, context={"user": user}
-        )
-        if serializer.is_valid():
-            serializer.save()
+                general_message="Endgoals is required."
+            ).get_failure_response(status_code=400)
+        try:
+            UserEndgoals.objects.filter(user_id=user_id).delete()
+            UserEndgoals.objects.bulk_create(
+                [
+                    UserEndgoals(endgoal_name=endgoal, user_id=user_id)
+                    for endgoal in endgoals
+                ]
+            )
             return CustomResponse(
-                general_message="Added interests"
+                general_message="Endgoals selected"
             ).get_success_response()
-        return CustomResponse(general_message=serializer.errors).get_failure_response()
+        except Exception as e:
+            print("Exception during endgoal selection:", e)
+            return CustomResponse(
+                general_message="An unexpected error occured"
+            ).get_failure_response(500)
+
+
+# class UserInterestAPI(APIView):
+#     permission_classes = [CustomizePermission]
+
+#     def put(self, request):
+#         if not JWTUtils.is_jwt_authenticated(request):
+#             return CustomResponse(
+#                 general_message="Unauthorized access"
+#             ).get_failure_response()
+#         user_id = JWTUtils.fetch_user_id(request)
+#         if not (user := cache.get(f"db_user_{user_id}")):
+#             user = User.objects.filter(id=user_id).first()
+#         user_interest = UserInterests.objects.filter(user=user).first()
+#         if not user_interest:
+#             return CustomResponse(
+#                 general_message="User interests not found"
+#             ).get_failure_response()
+#         serializer = serializers.UserInterestSerializer(
+#             instance=user_interest, data=request.data, context={"user": user}
+#         )
+#         if serializer.is_valid():
+#             serializer.update(user_interest, serializer.validated_data)
+#             return CustomResponse(
+#                 general_message="Updated interests"
+#             ).get_success_response()
+#         return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+#     def post(self, request):
+#         if not JWTUtils.is_jwt_authenticated(request):
+#             return CustomResponse(
+#                 general_message="Unauthorized access"
+#             ).get_failure_response()
+
+#         user_id = JWTUtils.fetch_user_id(request)
+#         if not (user := cache.get(f"db_user_{user_id}")):
+#             user = User.objects.filter(id=user_id).first()
+
+#         user_interest = UserInterests.objects.filter(user=user).first()
+#         if user_interest:
+#             return CustomResponse(
+#                 general_message="User interests already exist"
+#             ).get_failure_response()
+#         serializer = serializers.UserInterestSerializer(
+#             data=request.data, context={"user": user}
+#         )
+#         if serializer.is_valid():
+#             serializer.save()
+#             return CustomResponse(
+#                 general_message="Added interests"
+#             ).get_success_response()
+#         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
 
 class UnverifiedOrganizationCreateView(APIView):
