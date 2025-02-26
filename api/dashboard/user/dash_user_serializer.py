@@ -6,12 +6,13 @@ from rest_framework import serializers
 
 from db.organization import Department, Organization, UserOrganizationLink
 from db.task import UserIgLink
-from db.user import Role, User, UserRoleLink
+from db.user import Role, User, UserDomains, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 from db.user import DynamicRole, DynamicUser
-from db.user import UserInterests
+
+# from db.user import UserInterests
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
@@ -39,7 +40,8 @@ class UserSerializer(serializers.ModelSerializer):
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
     dynamic_type = serializers.SerializerMethodField()
-    interest_selected = serializers.SerializerMethodField()
+    user_domains = serializers.SerializerMethodField()
+    user_endgoals = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -55,13 +57,19 @@ class UserSerializer(serializers.ModelSerializer):
             "roles",
             "profile_pic",
             "dynamic_type",
-            "interest_selected",
+            "user_domains",
+            "user_endgoals",
         ]
 
-    def get_interest_selected(self, obj):
-        if not UserInterests.objects.filter(user=obj).exists():
-            return "Please select your interests"
-        return None
+    # def get_interest_selected(self, obj):
+    #     if not UserInterests.objects.filter(user=obj).exists():
+    #         return "Please select your interests"
+    #     return None
+    def get_user_domains(self, obj):
+        return obj.user_domains.values_list("domain_name", flat=True)
+
+    def get_user_endgoals(self, obj):
+        return obj.user_endgoals.values_list("endgoal_name", flat=True)
 
     def get_roles(self, obj):
         return [

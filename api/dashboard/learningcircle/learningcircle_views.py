@@ -2,7 +2,9 @@ from datetime import datetime, timedelta, timezone
 import requests
 from rest_framework.views import APIView
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees
-from db.user import UserInterests
+
+# from db.user import UserInterests
+from db.user import UserDomains
 from utils.karma import add_karma
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -518,9 +520,10 @@ class LearningCircleMeetingListAPI(APIView):
             ).get_failure_response()
         if user_id and not category and category != "all":
             user_id = JWTUtils.fetch_user_id(request)
-            interests = UserInterests.objects.filter(user_id=user_id).first()
-            if interests:
-                category = interests.choosen_interests
+            category = UserDomains.objects.filter(user_id=user_id).values_list(
+                "domain_name", flat=True
+            )
+
         if category != "all" and type(category) == str:
             category = [category]
         # if not no_location and not lat and not lon:
