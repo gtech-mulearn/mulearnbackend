@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 from io import BytesIO
 
 import qrcode
@@ -9,13 +10,18 @@ from django.core.files.storage import FileSystemStorage
 from django.db.models import Prefetch
 from PIL import Image
 from rest_framework.views import APIView
+from django.db.models import Sum
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
 from db.user import Role, Socials, User, UserRoleLink, UserSettings
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from utils.types import WebHookActions, WebHookCategory, TFPTasksHashtags
+from utils.types import (
+    WebHookActions,
+    WebHookCategory,
+    TFPTasksHashtags,
+)
 from utils.utils import DiscordWebhooks
 
 from . import profile_serializer
@@ -508,3 +514,53 @@ class UsertermAPI(APIView):
         else:
             response_data = {"message": "User terms are not approved."}
             return CustomResponse(response=response_data).get_failure_response()
+
+
+class KarmaFeedAPI(APIView):
+    def get(self, request):
+        today = datetime.now().date()
+        yesterday = today - timedelta(days=1)
+
+        top_user = (
+            KarmaActivityLog.objects.filter(
+                appraiser_approved=True,
+                created_at__date=yesterday,
+            )
+            .values("user_id", "user__full_name", "user__muid")
+            .annotate(total_karma=Sum("karma"))
+            .order_by("-total_karma")  # Sort by highest total_karma
+            .first()  # Get the first entry (highest total_karma)
+        )
+        top_user = {
+            "karma": top_user["total_karma"] if top_user else 0,
+            "full_name": top_user["user__full_name"] if top_user else None,
+            "muid": top_user["user__muid"] if top_user else None,
+        }
+        top_org = (
+            KarmaActivityLog.objects.select_related("user")
+            .prefetch_related("user__user_organization_link_user__org")
+            .filter(
+                appraiser_approved=True,
+                created_at__date=yesterday,
+            )
+            .values(
+                "user__user_organization_link_user__org__id",
+                "user__user_organization_link_user__org__title",
+            )
+            .annotate(total_karma=Sum("karma"))
+            .order_by("-total_karma")  # Sort by highest total_karma
+            .first()  # Get the first entry (highest total_karma)
+        )
+        top_college = {
+            "karma": top_org["total_karma"] if top_org else 0,
+            "name": (
+                top_org["user__user_organization_link_user__org__title"]
+                if top_org
+                else None
+            ),
+        }
+        response = {
+            "top_user": top_user,
+            "top_college": top_college,
+        }
+        return CustomResponse(response=response).get_success_response()
