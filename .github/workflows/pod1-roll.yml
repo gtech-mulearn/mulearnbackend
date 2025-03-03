@@ -52,7 +52,7 @@ jobs:
           RESTART_ALL: ${{ github.event.inputs.restart_all }}
           SYNC_CODE: ${{ github.event.inputs.sync_code }}
           SYNC_ENV: ${{ github.event.inputs.sync_env }}
-          ENV_VARS: ${{ secrets.DEV_ENV_VARIABLES }}
+          ENV_VARS: ${{ secrets.POD1_ENV_VARIABLES }}
         run: |
           if [ "$SYNC_CODE" = "true" ]; then
             rsync -avz --delete \
