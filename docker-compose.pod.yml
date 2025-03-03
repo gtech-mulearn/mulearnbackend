@@ -1,0 +1,94 @@
+name: POD1 Deployment
+
+on:
+  workflow_dispatch:
+    inputs:
+      sync_code:
+        description: "Sync code to server"
+        required: true
+        default: false
+        type: boolean
+      restart_backend:
+        description: "Restart backend service"
+        required: false
+        default: false
+        type: boolean
+      sync_env:
+        description: "Sync environment variables"
+        required: true
+        default: false
+        type: boolean
+      install_requirements:
+        description: "Install backend requirements"
+        required: false
+        default: false
+        type: boolean
+      restart_all:
+        description: "Restart and rebuild all containers"
+        required: false
+        default: false
+        type: boolean
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Configure SSH key
+        uses: webfactory/ssh-agent@v0.9.0
+        with:
+          ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+
+      - name: Deploy
+        env:
+          REMOTE_IP: ${{ secrets.DEV_REMOTE_IP }}
+          USER: ${{ secrets.DEV_REMOTE_USER }}
+          PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
+          INSTALL_REQUIREMENTS: ${{ github.event.inputs.install_requirements }}
+          RESTART_BACKEND: ${{ github.event.inputs.restart_backend }}
+          RESTART_ALL: ${{ github.event.inputs.restart_all }}
+          SYNC_CODE: ${{ github.event.inputs.sync_code }}
+          SYNC_ENV: ${{ github.event.inputs.sync_env }}
+          ENV_VARS: ${{ secrets.DEV_ENV_VARIABLES }}
+        run: |
+          if [ "$SYNC_CODE" = "true" ]; then
+            rsync -avz --delete \
+              --exclude='README.md' \
+              --exclude='.gitignore' \
+              --exclude='.git/' \
+              --exclude='__pycache__/' \
+              --exclude='.env' \
+              -e "ssh -o StrictHostKeyChecking=no" ./ $USER@$REMOTE_IP:$PROJECT_PATH --rsync-path="sudo rsync"
+          fi
+
+          ssh -o StrictHostKeyChecking=no $USER@$REMOTE_IP <<EOF
+          cd $PROJECT_PATH
+
+          if [ "$SYNC_CODE" = "true" ]; then
+            sudo docker-compose -f docker-compose.pod.yml restart backend
+          fi
+
+          if [ "$RESTART_BACKEND" = "true" ]; then
+            echo "Restarting backend service..."
+            sudo docker-compose -f docker-compose.pod.yml restart backend
+          fi
+
+          if [ "$SYNC_ENV" = "true" ]; then
+            echo "Syncing environment variables..."
+            printf "%s" "$ENV_VARS" | sudo tee .env > /dev/null
+          fi
+
+          if [ "$RESTART_ALL" = "true" ]; then
+            echo "Restarting all services..."
+            sudo docker-compose -f docker-compose.pod.yml up --build -d
+          fi
+
+          if [ "$INSTALL_REQUIREMENTS" = "true" ]; then
+            echo "Installing backend requirements..."
+            sudo docker-compose -f docker-compose.pod.yml exec backend pip install --no-cache-dir -r requirements.txt
+          fi
+
+          EOF
