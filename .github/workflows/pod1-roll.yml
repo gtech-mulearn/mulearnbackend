@@ -14,7 +14,7 @@ on:
         default: false
         type: boolean
       sync_env:
-        description: "Sync enviornment variables"
+        description: "Sync environment variables"
         required: true
         default: false
         type: boolean
@@ -40,13 +40,13 @@ jobs:
       - name: Configure SSH key
         uses: webfactory/ssh-agent@v0.9.0
         with:
-          ssh-private-key: ${{ secrets.DEV_SSH_PRIVATE_KEY }}
+          ssh-private-key: ${{ secrets.POD1_SSH_PRIVATE_KEY }}
 
       - name: Deploy
         env:
-          REMOTE_IP: ${{ secrets.DEV_REMOTE_IP }}
-          USER: ${{ secrets.DEV_REMOTE_USER }}
-          PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
+          REMOTE_IP: ${{ secrets.POD1_REMOTE_IP }}
+          USER: ${{ secrets.POD1_REMOTE_USER }}
+          PROJECT_PATH: ${{ secrets.POD1_PROJECT_PATH }}
           INSTALL_REQUIREMENTS: ${{ github.event.inputs.install_requirements }}
           RESTART_BACKEND: ${{ github.event.inputs.restart_backend }}
           RESTART_ALL: ${{ github.event.inputs.restart_all }}
@@ -68,12 +68,12 @@ jobs:
           cd $PROJECT_PATH
 
           if [ "$SYNC_CODE" = "true" ]; then
-            sudo docker compose restart backend
+            sudo docker-compose -f docker-compose.pod.yml restart backend
           fi
 
           if [ "$RESTART_BACKEND" = "true" ]; then
             echo "Restarting backend service..."
-            sudo docker-compose restart backend
+            sudo docker-compose -f docker-compose.pod.yml restart backend
           fi
 
           if [ "$SYNC_ENV" = "true" ]; then
@@ -83,12 +83,12 @@ jobs:
 
           if [ "$RESTART_ALL" = "true" ]; then
             echo "Restarting all services..."
-            sudo docker-compose up --build -d
+            sudo docker-compose -f docker-compose.pod.yml up --build -d
           fi
 
           if [ "$INSTALL_REQUIREMENTS" = "true" ]; then
             echo "Installing backend requirements..."
-           sudo  docker-compose exec backend pip install --no-cache-dir -r requirements.txt
+            sudo docker-compose -f docker-compose.pod.yml exec backend pip install --no-cache-dir -r requirements.txt
           fi
 
           EOF
