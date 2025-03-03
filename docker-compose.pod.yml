@@ -44,9 +44,9 @@ jobs:
 
       - name: Deploy
         env:
-          REMOTE_IP: ${{ secrets.DEV_REMOTE_IP }}
-          USER: ${{ secrets.DEV_REMOTE_USER }}
-          PROJECT_PATH: ${{ secrets.PROJECT_PATH }}
+          REMOTE_IP: ${{ secrets.POD_REMOTE_IP }}
+          USER: ${{ secrets.POD_REMOTE_USER }}
+          PROJECT_PATH: ${{ secrets.POD_PROJECT_PATH }}
           INSTALL_REQUIREMENTS: ${{ github.event.inputs.install_requirements }}
           RESTART_BACKEND: ${{ github.event.inputs.restart_backend }}
           RESTART_ALL: ${{ github.event.inputs.restart_all }}
