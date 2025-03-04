@@ -420,11 +420,16 @@ class UserSearchAPI(APIView):
 
     def get(self, request):
         role = request.query_params.get("role")
-        queryset = User.objects.all().select_related("wallet_user")
+        queryset = (
+            User.objects.all()
+            .select_related("wallet_user")
+            .prefetch_related("user_settings_user")
+        )
         if role:
             queryset = queryset.filter(
                 user_role_link_user__role__title=role,
                 user_role_link_user__verified=True,
+                user_settings_user__is_public=True,
             )
 
         queryset = CommonUtils.get_paginated_queryset(
