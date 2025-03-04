@@ -20,7 +20,6 @@ from db.user import Role
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         ig_queryset = (
             InterestGroup.objects.select_related("created_by", "updated_by")
