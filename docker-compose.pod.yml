@@ -1,0 +1,33 @@
+version: "3"
+services:
+  mulearnbackend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mulearnbackend
+    image: mulearnbackend
+    restart: always
+    ports:
+      - "7001:8000"
+    volumes:
+      - ./logs:/var/log/mulearn-pod1
+      - /var/www/mulearn-pod1/assets:/app/assets
+      - /var/www/mulearn-pod1/media:/app/media
+      - .:/app
+    env_file:
+      - .env
+    entrypoint: python manage.py runserver 0.0.0.0:8000
+  celery:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: celery
+    image: mulearnbackend-celery
+    restart: always
+    volumes:
+      - /var/log/mulearn-pod1:/var/log/mulearn-pod1
+      - /var/www/mulearn-pod1/assets:/app/assets
+      - /var/www/mulearn-pod1/media:/app/media
+    env_file:
+      - .env
+    command: celery -A mulearnbackend.celery worker -l info
