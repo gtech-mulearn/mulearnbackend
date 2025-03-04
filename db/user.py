@@ -6,6 +6,7 @@ from django.db import models
 from django.conf import settings
 
 from .managers import user_manager
+
 # from .task import UserIgLink
 from decouple import config as decouple_config
 
@@ -56,6 +57,42 @@ class User(models.Model):
 
         return super().save(*args, **kwargs)
 
+class UserDomains(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_domains")
+    domain_name = models.CharField(max_length=50, null=False, blank=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_domains'
+
+class UserEndgoals(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))
+    user = models.ForeignKey(User, on_delete=models.CASCADE, null=False, blank=False, related_name="user_endgoals")
+    endgoal_name = models.CharField(max_length=50, null=False, blank=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_endgoals'
+
+# class UserInterests(models.Model):
+#     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+#     user = models.ForeignKey(User, on_delete=models.CASCADE)
+#     choosen_interests = models.JSONField(max_length=100)
+#     other_interests = models.JSONField(max_length=100, blank=True, null=True)
+#     choosen_endgoals = models.JSONField(max_length=100)
+#     other_endgoals = models.JSONField(max_length=100, blank=True, null=True)
+#     created_at = models.DateTimeField(auto_now_add=True)
+#     updated_at = models.DateTimeField(auto_now=True)
+
+#     class Meta:
+#         managed = False
+#         db_table = 'user_interests'
+        
 
 class UserMentor(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)

@@ -33,6 +33,10 @@ class WadhwaniUserLogin(APIView):
         url = settings.WADHWANI_BASE_URL + "/api/v1/iamservice/oauth/login"
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
+        if not user.mobile:
+            return CustomResponse(
+                general_message="Please update your mobile number and try again."
+            ).get_failure_response()
         if not (token := request.data.get("Client-Auth-Token", None)):
             return CustomResponse(
                 general_message="Token is required"

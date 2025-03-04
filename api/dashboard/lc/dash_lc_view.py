@@ -1,20 +1,26 @@
-import uuid
+from datetime import timedelta
+import uuid, json
 from collections import defaultdict
-
 from django.conf import settings
 from django.core.mail import send_mail
 from django.db.models import Q
 from django.shortcuts import redirect
 from rest_framework.views import APIView
-
 from api.notification.notifications_utils import NotificationUtils
-from db.learning_circle import CircleMeetingLog, LearningCircle, UserCircleLink
-from db.task import TaskList
+from db.learning_circle import (
+    CircleMeetAttendeeReport,
+    CircleMeetAttendees,
+    CircleMeetTasks,
+    CircleMeetingLog,
+    LearningCircle,
+    UserCircleLink,
+)
+from db.task import KarmaActivityLog, TaskList, Wallet
 from db.user import User
-from utils.permission import JWTUtils
 from utils.response import CustomResponse
+from utils.types import Lc, RoleType
 from utils.utils import DateTimeUtils, send_template_mail
-
+from utils.permission import CustomizePermission, JWTUtils, role_required
 from .dash_ig_helper import (
     get_today_start_end,
     get_week_start_end,
@@ -23,6 +29,10 @@ from .dash_ig_helper import (
 )
 from .dash_lc_serializer import (
     AddMemberSerializer,
+    CircleAttendeeReportSerializer,
+    CircleMeetBasicDetails,
+    CircleMeetDetailSerializer,
+    CircleMeetTasksSerializer,
     IgTaskDetailsSerializer,
     LearningCircleCreateSerializer,
     LearningCircleDetailsSerializer,
@@ -35,7 +45,11 @@ from .dash_lc_serializer import (
     LearningCircleUpdateSerializer,
     MeetRecordsCreateEditDeleteSerializer,
     ScheduleMeetingSerializer,
+    CircleMeetSerializer,
 )
+from decouple import config
+
+BE_DOMAIN = config("BE_DOMAIN_NAME")
 
 
 class UserLearningCircleListApi(APIView):
@@ -373,57 +387,57 @@ class LearningCircleDetailsApi(APIView):
         return CustomResponse(general_message="Left").get_success_response()
 
 
-class SingleReportDetailAPI(APIView):
-    def get(self, request, circle_id, report_id=None):
-        circle_meeting_log = CircleMeetingLog.objects.get(id=report_id)
+# class SingleReportDetailAPI(APIView):
+#     def get(self, request, circle_id, report_id=None):
+#         circle_meeting_log = CircleMeetingLog.objects.get(id=report_id)
 
-        serializer = MeetRecordsCreateEditDeleteSerializer(
-            circle_meeting_log, many=False
-        )
+#         serializer = MeetRecordsCreateEditDeleteSerializer(
+#             circle_meeting_log, many=False
+#         )
 
-        return CustomResponse(response=serializer.data).get_success_response()
+#         return CustomResponse(response=serializer.data).get_success_response()
 
-    def post(self, request, circle_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        time = request.data.get("time")
+#     def post(self, request, circle_id):
+#         user_id = JWTUtils.fetch_user_id(request)
+#         time = request.data.get("time")
 
-        serializer = MeetRecordsCreateEditDeleteSerializer(
-            data=request.data,
-            context={"user_id": user_id, "circle_id": circle_id, "time": time},
-        )
-        if serializer.is_valid():
-            circle_meet_log = serializer.save()
+#         serializer = MeetRecordsCreateEditDeleteSerializer(
+#             data=request.data,
+#             context={"user_id": user_id, "circle_id": circle_id, "time": time},
+#         )
+#         if serializer.is_valid():
+#             circle_meet_log = serializer.save()
 
-            return CustomResponse(
-                general_message=f"Meet scheduled at {circle_meet_log.meet_time}"
-            ).get_success_response()
+#             return CustomResponse(
+#                 general_message=f"Meet scheduled at {circle_meet_log.meet_time}"
+#             ).get_success_response()
 
-        return CustomResponse(message=serializer.errors).get_failure_response()
+#         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    # def patch(self, request, circle_id):
-    #     user_id = JWTUtils.fetch_user_id(request)
-    #
-    #     learning_circle = LearningCircle.objects.filter(
-    #         id=circle_id
-    #     ).first()
-    #
-    #     serializer = MeetRecordsCreateEditDeleteSerializer(
-    #         learning_circle,
-    #         data=request.data,
-    #         context={
-    #             'user_id': user_id
-    #         }
-    #     )
-    #     if serializer.is_valid():
-    #         serializer.save()
-    #
-    #         return CustomResponse(
-    #             general_message='Meet updated successfully'
-    #         ).get_success_response()
-    #
-    #     return CustomResponse(
-    #         message=serializer.errors
-    #     ).get_failure_response()
+# def patch(self, request, circle_id):
+#     user_id = JWTUtils.fetch_user_id(request)
+#
+#     learning_circle = LearningCircle.objects.filter(
+#         id=circle_id
+#     ).first()
+#
+#     serializer = MeetRecordsCreateEditDeleteSerializer(
+#         learning_circle,
+#         data=request.data,
+#         context={
+#             'user_id': user_id
+#         }
+#     )
+#     if serializer.is_valid():
+#         serializer.save()
+#
+#         return CustomResponse(
+#             general_message='Meet updated successfully'
+#         ).get_success_response()
+#
+#     return CustomResponse(
+#         message=serializer.errors
+#     ).get_failure_response()
 
 
 class LearningCircleLeadTransfer(APIView):
@@ -701,3 +715,522 @@ class ValidateUserMeetCreateAPI(APIView):
             ).get_failure_response()
 
         return CustomResponse(general_message="success").get_success_response()
+
+
+class CircleMeetAPI(APIView):
+    """
+    Create a new meetup, and list all meeetups in an LC
+    """
+
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        tasks = request.data.get("tasks")
+        if not tasks or type(tasks) != list or len(tasks) < 1:
+            return CustomResponse(
+                general_message="At least one task is required to create a meetup"
+            ).get_failure_response()
+        serializer = CircleMeetSerializer(
+            data=request.data, context={"user_id": user, "circle_id": circle_id}
+        )
+        if serializer.is_valid():
+            circle_meet_log = serializer.save()
+            task_serializer = CircleMeetTasksSerializer(
+                data=tasks, many=True, context={"meet_id": circle_meet_log.id}
+            )
+            if task_serializer.is_valid():
+                task_serializer.save()
+            return CustomResponse(
+                general_message=f"Meet scheduled at {circle_meet_log.meet_time}"
+            ).get_success_response()
+
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    def get(self, request, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        up_coming_meeting = CircleMeetingLog.objects.filter(
+            meet_time__gte=DateTimeUtils.get_current_utc_time(),
+            circle_id=circle_id,
+            is_report_submitted=False,
+            is_started=False,
+        ).order_by("-created_at")
+        report_pending = CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            is_report_submitted=False,
+            is_started=True,
+        ).order_by("-created_at")
+        past_meeting = CircleMeetingLog.objects.filter(
+            circle_id=circle_id,
+            is_started=True,
+            is_report_submitted=True,
+        ).order_by("-created_at")[:2]
+
+        return CustomResponse(
+            response={
+                "meetups": CircleMeetSerializer(
+                    up_coming_meeting, many=True, context={"user_id": user_id}
+                ).data,
+                "past": CircleMeetSerializer(past_meeting, many=True).data,
+                "report_pending": CircleMeetSerializer(report_pending, many=True).data,
+            }
+        ).get_success_response()
+
+
+class CircleMeetReportSubmitAPI(APIView):
+    """
+    Submit report for meetup
+    """
+
+    def post(self, request, meet_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        ratings = request.data.get("ratings")
+        ratings = json.loads(ratings)
+        if not ratings or type(ratings) != dict or len(ratings) < 1:
+            return CustomResponse(
+                general_message="Attendee ratings are required to submit the report"
+            ).get_failure_response()
+        if not user:
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        participant_count = CircleMeetAttendees.objects.filter(
+            meet=meet, joined_at__isnull=False
+        ).count()
+        if participant_count < 2:
+            return CustomResponse(
+                general_message="Minimum 2 participants are required to submit the report"
+            ).get_failure_response()
+        for attendee_id, rating in ratings.items():
+            CircleMeetAttendees.objects.filter(id=attendee_id).update(
+                lc_member_rating=rating
+            )
+        serializer = MeetRecordsCreateEditDeleteSerializer(
+            data=request.data,
+            context={"user": user, "meet": meet},
+        )
+        if serializer.is_valid():
+            serializer.create(serializer.validated_data)
+            return CustomResponse(
+                general_message=f"Report submitted successfully."
+            ).get_success_response()
+
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+
+class CircleMeetDetailAPI(APIView):
+    """
+    Get details of a meetup
+    """
+
+    def get(self, request, meet_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        if not user:
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        if not meet:
+            return CustomResponse(
+                general_message="Invalid meeting"
+            ).get_failure_response()
+        serializer = CircleMeetDetailSerializer(
+            meet, many=False, context={"user_id": user_id}
+        )
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class CircleMeetListAPI(APIView):
+    """
+    List all meetups available
+    """
+
+    def get(self, request, is_user=None):
+        if is_user:
+            if not (user_id := JWTUtils.fetch_user_id(request)):
+                return CustomResponse(
+                    general_message="Unauthorized access"
+                ).get_failure_response()
+            circle_meets = CircleMeetingLog.objects.filter(
+                id__in=CircleMeetAttendees.objects.filter(user_id=user_id)
+                .only("meet_id")
+                .values_list("meet_id", flat=True)
+            )[:5]
+            serializer = CircleMeetSerializer(
+                circle_meets, many=True, context={"user_id": user_id}
+            )
+            return CustomResponse(response=serializer.data).get_success_response()
+        meet_id = request.query_params.get("meet_id")
+        if meet_id:
+            circle_meets = CircleMeetingLog.objects.filter(id=meet_id).first()
+            serializer = CircleMeetSerializer(circle_meets, many=False)
+            return CustomResponse(response=serializer.data).get_success_response()
+        circle_meets = (
+            CircleMeetingLog.objects.filter(
+                meet_time__gte=DateTimeUtils.get_current_utc_time()
+                - timedelta(minutes=30),
+                is_report_submitted=False,
+            )
+            .order_by("-created_at")
+            .select_related("circle", "circle__org", "circle__ig")
+        )
+        filters = Q()
+        if district_id := request.query_params.get("district_id"):
+            filters &= Q(circle__org__district_id=district_id)
+        if category := request.query_params.get("category"):
+            filters &= Q(circle__ig__category=category)
+        if ig := request.query_params.get("ig_id"):
+            filters &= Q(circle__ig_id=ig)
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            filters &= Q(circle__user_circle_link_circle__user_id=user_id) | Q(
+                is_public=True
+            )
+        except Exception as e:
+            filters &= Q(is_public=True)
+        circle_meets = circle_meets.filter(filters).distinct()
+        serializer = CircleMeetSerializer(circle_meets, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class CircleMeetInterestedAPI(APIView):
+    """
+    Show interest to join a meetup
+    """
+
+    def post(self, request, meet_id):
+        notes = request.data.get("notes")
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        if not user:
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        if not meet:
+            return CustomResponse(
+                general_message="Invalid meeting"
+            ).get_failure_response()
+        if CircleMeetAttendees.objects.filter(meet=meet, user=user).exists():
+            return CustomResponse(
+                general_message="You are already interested in this meetup"
+            ).get_failure_response()
+        if (
+            meet.max_attendees > 0
+            and CircleMeetAttendees.objects.filter(meet=meet).count()
+            >= meet.max_attendees
+        ):
+            return CustomResponse(
+                general_message="This meetup reached the maximum, number of attendees"
+            ).get_failure_response()
+        CircleMeetAttendees.objects.create(
+            id=uuid.uuid4(),
+            meet=meet,
+            user=user,
+            note=notes,
+            created_at=DateTimeUtils.get_current_utc_time(),
+            updated_at=DateTimeUtils.get_current_utc_time(),
+        )
+        return CustomResponse(
+            general_message=f"Interest shown successfully. You can join the meetup when it starts."
+        ).get_success_response()
+
+    def delete(self, request, meet_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        if not user:
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        if not meet:
+            return CustomResponse(
+                general_message="Invalid meeting"
+            ).get_failure_response()
+        CircleMeetAttendees.objects.filter(meet=meet, user=user).delete()
+        return CustomResponse(
+            general_message=f"Interest removed successfully."
+        ).get_success_response()
+
+
+class CircleMeetJoinAPI(APIView):
+    """
+    Join a meetup
+    """
+
+    def post(self, request, meet_code_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+        filter = (Q(meet_code=meet_code_id) | Q(id=meet_code_id)) & Q(
+            is_report_submitted=False
+        )
+        meet = CircleMeetingLog.objects.filter(filter).first()
+        if not user:
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        if not meet:
+            return CustomResponse(
+                general_message="Invalid meeting code"
+            ).get_failure_response()
+        if not meet.is_started:
+            meet.is_started = True
+            meet.save()
+        attendee = CircleMeetAttendees.objects.filter(meet=meet, user=user).first()
+        if attendee:
+            if attendee.joined_at:
+                return CustomResponse(
+                    general_message="You are already joined in this meetup"
+                ).get_failure_response()
+            attendee.joined_at = DateTimeUtils.get_current_utc_time()
+            attendee.save()
+        else:
+            attendee = CircleMeetAttendees.objects.create(
+                id=uuid.uuid4(),
+                meet=meet,
+                user=user,
+                joined_at=DateTimeUtils.get_current_utc_time(),
+                created_at=DateTimeUtils.get_current_utc_time(),
+                updated_at=DateTimeUtils.get_current_utc_time(),
+            )
+        task = TaskList.objects.filter(hashtag=Lc.MEET_JOIN_HASHTAG.value).first()
+        KarmaActivityLog.objects.create(
+            id=uuid.uuid4(),
+            user_id=attendee.user_id,
+            karma=Lc.MEET_JOIN_KARMA.value,
+            task=task,
+            updated_by=user,
+            created_by=user,
+            appraiser_approved=True,
+            peer_approved=True,
+            appraiser_approved_by=user,
+            peer_approved_by=user,
+            task_message_id="AUTO_APPROVED",
+            lobby_message_id="AUTO_APPROVED",
+            dm_message_id="AUTO_APPROVED",
+        )
+        wallet = Wallet.objects.filter(user_id=user_id).first()
+        wallet.karma += Lc.MEET_JOIN_KARMA.value
+        wallet.karma_last_updated_at = DateTimeUtils.get_current_utc_time()
+        wallet.updated_at = DateTimeUtils.get_current_utc_time()
+        wallet.save()
+        return CustomResponse(
+            general_message=f"Joined in the meetup successfully."
+        ).get_success_response()
+
+
+class CircleMeetAttendeesListAPI(APIView):
+    def get(self, request, meet_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if meet_id:
+            attendees = [
+                {
+                    "attendee_id": attendee[0],
+                    "fullname": attendee[1],
+                    "profile_pic": f"{BE_DOMAIN}/{settings.MEDIA_URL}{attendee[2]}",
+                    "muid": attendee[3],
+                    "proof_of_work": CircleAttendeeReportSerializer(
+                        CircleMeetAttendeeReport.objects.filter(
+                            attendee_id=attendee[0], meet_task__meet_id=meet_id
+                        ),
+                        many=True,
+                    ).data,
+                    "report": attendee[4],
+                }
+                for attendee in (
+                    CircleMeetAttendees.objects.filter(
+                        meet_id=meet_id, joined_at__isnull=False
+                    )
+                    .select_related("user")
+                    .values_list(
+                        "id",
+                        "user__full_name",
+                        "user_id",
+                        "user__muid",
+                        "report",
+                    )
+                    .distinct()
+                )
+            ]
+            return CustomResponse(response=attendees).get_success_response()
+        return CustomResponse(general_message="Invalid meeting").get_failure_response()
+
+
+class CircleAttendeeReportAPI(APIView):
+    def post(self, request, meet_id):
+        if not (user_id := JWTUtils.fetch_user_id(request)):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        if not (meet := CircleMeetingLog.objects.filter(id=meet_id).first()):
+            return CustomResponse(
+                general_message="Invalid meeting"
+            ).get_failure_response()
+        if not (report := request.data.get("report")):
+            return CustomResponse(
+                general_message="Report is required."
+            ).get_failure_response()
+        if not (
+            attendee := CircleMeetAttendees.objects.filter(
+                meet_id=meet_id, user_id=user_id
+            ).first()
+        ):
+            return CustomResponse(
+                general_message="You are not part of this meetup."
+            ).get_failure_response()
+        if attendee.is_report_submitted:
+            return CustomResponse(
+                general_message="You have already submitted the report."
+            ).get_failure_response()
+        task_count = (
+            CircleMeetAttendeeReport.objects.select_related("meet_task__meet")
+            .filter(attendee=attendee, meet_task__meet=meet)
+            .count()
+        )
+        if task_count < 1:
+            return CustomResponse(
+                general_message="You must complete atleast one task listed in the meetup."
+            ).get_failure_response()
+        attendee.is_report_submitted = True
+        attendee.report = report
+        attendee.save()
+        return CustomResponse(
+            general_message="Report submitted successfully."
+        ).get_success_response()
+
+
+class CircleMeetTaskPOWAPI(APIView):
+    def post(self, request, meet_id, task_id):
+        if not (user_id := JWTUtils.fetch_user_id(request)):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        if not (CircleMeetingLog.objects.filter(id=meet_id).exists()):
+            return CustomResponse(
+                general_message="Invalid meeting"
+            ).get_failure_response()
+        if not (CircleMeetTasks.objects.filter(id=task_id).exists()):
+            return CustomResponse(general_message="Invalid task").get_failure_response()
+        if not (
+            attendee := CircleMeetAttendees.objects.filter(
+                meet_id=meet_id, user_id=user_id, joined_at__isnull=False
+            ).first()
+        ):
+            return CustomResponse(
+                general_message="You are not part of this meetup."
+            ).get_failure_response()
+        if CircleMeetAttendeeReport.objects.filter(
+            meet_task_id=task_id, attendee=attendee
+        ).exists():
+            return CustomResponse(
+                general_message="You have already submitted the proof of work."
+            ).get_failure_response()
+        serializer = CircleAttendeeReportSerializer(
+            data=request.data,
+            context={"attendee": attendee},
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Proof of work submitted successfully."
+            ).get_success_response()
+        return CustomResponse(
+            general_message="Invalid proof of work.",
+            response=serializer.errors,
+        ).get_failure_response()
+
+
+class CircleMeetVerifyAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @role_required(
+        roles=[
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.DISCORD_MANAGER.value,
+            RoleType.APPRAISER.value,
+        ]
+    )
+    def get(self, request):
+        unverified_meets = CircleMeetingLog.objects.select_related("circle").filter(
+            is_report_submitted=True, is_verified=False
+        )
+        serializer = CircleMeetBasicDetails(unverified_meets, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    @role_required(
+        roles=[
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.DISCORD_MANAGER.value,
+            RoleType.APPRAISER.value,
+        ]
+    )
+    def post(self, request, meet_id):
+        return CustomResponse(
+            general_message="This endpoint only supports GET requests."
+        ).get_failure_response()
+        if not (user_id := JWTUtils.fetch_user_id(request)):
+            return CustomResponse(
+                general_message="Unauthorized access"
+            ).get_failure_response()
+        attendees_karma = request.data.get("attendees_karma")
+        if (
+            not attendees_karma
+            or type(attendees_karma) != dict
+            or len(attendees_karma) < 1
+        ):
+            return CustomResponse(
+                general_message="Attendee karma is required to verify the meetup."
+            ).get_failure_response()
+        if not (meet := CircleMeetingLog.objects.filter(id=meet_id).first()):
+            return CustomResponse(
+                general_message="Invalid meeting"
+            ).get_failure_response()
+        if not (user := User.objects.filter(id=user_id).first()):
+            return CustomResponse(general_message="Invalid user").get_failure_response()
+        if meet.is_verified:
+            return CustomResponse(
+                general_message="This meetup is already verified."
+            ).get_failure_response()
+        attendees_karma = request.data.get("attendees_karma")
+        task = TaskList.objects.filter(hashtag=Lc.VERIFY_HASHTAG.value).first()
+        kal_logs = []
+        for attendee_id, karma in attendees_karma.items():
+            if not (
+                attendee := CircleMeetAttendees.objects.filter(
+                    id=attendee_id, meet=meet
+                ).first()
+            ):
+                return CustomResponse(
+                    general_message="Invalid attendee."
+                ).get_failure_response()
+            if not (karma := int(karma)):
+                return CustomResponse(
+                    general_message="Invalid karma."
+                ).get_failure_response()
+            if karma > Lc.MAX_KARMA.value:
+                return CustomResponse(
+                    general_message=f"Karma should not be more than {Lc.MAX_KARMA.value}."
+                ).get_failure_response()
+            attendee.karma_given = karma
+            kal_logs.append(
+                KarmaActivityLog(
+                    id=uuid.uuid4(),
+                    user_id=attendee.user_id,
+                    karma=karma,
+                    task_id=task,
+                    updated_by=user,
+                    created_by=user,
+                    appraiser_approved=True,
+                    peer_approved=True,
+                    appraiser_approved_by=user,
+                    peer_approved_by=user,
+                    task_message_id="AUTO_APPROVED",
+                    lobby_message_id="AUTO_APPROVED",
+                    dm_message_id="AUTO_APPROVED",
+                )
+            )
+            attendee.save()
+        meet.is_verified = True
+        meet.save()
+        KarmaActivityLog.objects.bulk_create(kal_logs)
+        return CustomResponse(
+            general_message="Meetup verified successfully."
+        ).get_success_response()

@@ -4,21 +4,22 @@ from decouple import config as decouple_config
 from django.db import transaction
 from rest_framework import serializers
 
-from db.organization import Organization, UserOrganizationLink
+from db.organization import Department, Organization, UserOrganizationLink
 from db.task import UserIgLink
-from db.user import User, UserRoleLink
+from db.user import Role, User, UserDomains, UserRoleLink
 from utils.permission import JWTUtils
-from utils.types import OrganizationType
+from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
 from db.user import DynamicRole, DynamicUser
 
-BE_DOMAIN_NAME = decouple_config('BE_DOMAIN_NAME')
+# from db.user import UserInterests
+
+BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
-    level = serializers.CharField(
-        source="user_lvl_link_user.level.name", default=None)
+    level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
 
     class Meta:
         model = User
@@ -39,6 +40,8 @@ class UserSerializer(serializers.ModelSerializer):
     joined = serializers.CharField(source="created_at")
     roles = serializers.SerializerMethodField()
     dynamic_type = serializers.SerializerMethodField()
+    user_domains = serializers.SerializerMethodField()
+    user_endgoals = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -54,7 +57,19 @@ class UserSerializer(serializers.ModelSerializer):
             "roles",
             "profile_pic",
             "dynamic_type",
+            "user_domains",
+            "user_endgoals",
         ]
+
+    # def get_interest_selected(self, obj):
+    #     if not UserInterests.objects.filter(user=obj).exists():
+    #         return "Please select your interests"
+    #     return None
+    def get_user_domains(self, obj):
+        return obj.user_domains.values_list("domain_name", flat=True)
+
+    def get_user_endgoals(self, obj):
+        return obj.user_endgoals.values_list("endgoal_name", flat=True)
 
     def get_roles(self, obj):
         return [
@@ -63,18 +78,23 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
     def get_dynamic_type(self, obj):
-        return {dynamic_role.type for dynamic_role in
-                DynamicRole.objects.filter(role__title__in=self.get_roles(obj))}.union(
-            {dynamic_user.type for dynamic_user in DynamicUser.objects.filter(user=obj)})
+        return {
+            dynamic_role.type
+            for dynamic_role in DynamicRole.objects.filter(
+                role__title__in=self.get_roles(obj)
+            )
+        }.union(
+            {dynamic_user.type for dynamic_user in DynamicUser.objects.filter(user=obj)}
+        )
 
 
 class CollegeSerializer(serializers.ModelSerializer):
     org_type = serializers.CharField(source="org.org_type")
     department = serializers.CharField(source="department.pk", allow_null=True)
     country = serializers.CharField(
-        source="org.district.zone.state.country.pk", allow_null=True)
-    state = serializers.CharField(
-        source="org.district.zone.state.pk", allow_null=True)
+        source="org.district.zone.state.country.pk", allow_null=True
+    )
+    state = serializers.CharField(source="org.district.zone.state.pk", allow_null=True)
     district = serializers.CharField(source="org.district.pk", allow_null=True)
 
     class Meta:
@@ -126,7 +146,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             "graduation_year",
             "interest_groups",
             "igs",
-            "district"
+            "district",
         ]
 
     def validate(self, data):
@@ -134,10 +154,10 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("User id is a required field")
 
         if (
-                "email" in data
-                and User.objects.filter(email=data["email"])
-                .exclude(id=data["user_id"].id)
-                .all()
+            "email" in data
+            and User.objects.filter(email=data["email"])
+            .exclude(id=data["user_id"].id)
+            .all()
         ):
             raise serializers.ValidationError("This email is already in use")
         return super().validate(data)
@@ -188,14 +208,16 @@ class UserDetailsSerializer(serializers.ModelSerializer):
             return super().update(instance, validated_data)
 
     def get_organizations(self, user):
-        organization_links = user.user_organization_link_user.select_related(
-            "org")
+        organization_links = user.user_organization_link_user.select_related("org")
         if not organization_links.exists():
             return None
 
         organizations_data = []
         for link in organization_links:
-            if link.org.org_type == OrganizationType.COLLEGE.value or OrganizationType.SCHOOL.value:
+            if (
+                link.org.org_type == OrganizationType.COLLEGE.value
+                or OrganizationType.SCHOOL.value
+            ):
                 serializer = CollegeSerializer(link)
             else:
                 serializer = OrgSerializer(link)
@@ -259,18 +281,18 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "department",
             "graduation_year",
             "admin",
-            "district"
+            "district",
         ]
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
         if (
-                college := instance.user_organization_link_user.filter(
-                    org__org_type=OrganizationType.COLLEGE.value
-                )
-                        .select_related("org__district__zone__state__country", "department")
-                        .first()
+            college := instance.user_organization_link_user.filter(
+                org__org_type=OrganizationType.COLLEGE.value
+            )
+            .select_related("org__district__zone__state__country", "department")
+            .first()
         ):
             data.update(
                 {
@@ -307,7 +329,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
 
         with transaction.atomic():
             if isinstance(
-                    organization_ids := validated_data.pop("organizations", None), list
+                organization_ids := validated_data.pop("organizations", None), list
             ):
                 instance.user_organization_link_user.all().delete()
                 organizations = Organization.objects.filter(
@@ -315,8 +337,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 ).order_by("org_type")
 
                 if (
-                        organizations.exists()
-                        and organizations.first().org_type != OrganizationType.COLLEGE.value
+                    organizations.exists()
+                    and organizations.first().org_type != OrganizationType.COLLEGE.value
                 ):
                     validated_data.pop("department", None)
                     validated_data.pop("graduation_year", None)
@@ -329,10 +351,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                             created_by=admin,
                             created_at=current_time,
                             verified=True,
-                            department_id=validated_data.pop(
-                                "department", None),
-                            graduation_year=validated_data.pop(
-                                "graduation_year", None),
+                            department_id=validated_data.pop("department", None),
+                            graduation_year=validated_data.pop("graduation_year", None),
                         )
                         for org in organizations
                     ]
@@ -354,7 +374,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             if isinstance(
-                    interest_group_ids := validated_data.pop("interest_groups", None), list
+                interest_group_ids := validated_data.pop("interest_groups", None), list
             ):
                 instance.user_ig_link_user.all().delete()
                 UserIgLink.objects.bulk_create(
@@ -370,3 +390,136 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                 )
 
             return super().update(instance, validated_data)
+
+
+class UserOrgLinkSerializer(serializers.Serializer):
+    department = serializers.PrimaryKeyRelatedField(
+        queryset=Department.objects.all(), required=False, allow_null=True
+    )
+    graduation_year = serializers.CharField(required=False, allow_null=True)
+    organization = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(), many=False, required=True, allow_null=True
+    )
+    is_alumni = serializers.BooleanField(required=False)
+    is_student = serializers.BooleanField(
+        required=False, allow_null=True, default=False
+    )
+
+    def create(self, validated_data):
+        department = validated_data.get("department", None)
+        graduation_year = validated_data.get("graduation_year", None)
+        is_alumni = validated_data.get("is_alumni", False)
+        is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
+        user_id = self.context.get("user")
+        if org := validated_data.get("organization"):
+            org_link = UserOrganizationLink.objects.create(
+                user=user_id,
+                org=org,
+                created_by=user_id,
+                created_at=DateTimeUtils.get_current_utc_time(),
+                verified=True,
+                department=(
+                    department
+                    if is_college(validated_data.get("organization"))
+                    else None
+                ),
+                graduation_year=(
+                    graduation_year
+                    if is_college(validated_data.get("organization"))
+                    else None
+                ),
+                is_alumni=(
+                    is_alumni
+                    if is_college(validated_data.get("organization"))
+                    else None
+                ),
+            )
+        else:
+            org_link = "skiped_creation"
+        if validated_data.get("is_student") or (
+            validated_data.get("organization")
+            and is_college(validated_data.get("organization"))
+        ):
+            student_role_id = (
+                Role.objects.only("id").get(title=RoleType.STUDENT.value).id
+            )
+            if not UserRoleLink.objects.filter(
+                user=user_id, role_id=student_role_id
+            ).exists():
+                UserRoleLink.objects.create(
+                    user=user_id,
+                    role_id=student_role_id,
+                    created_by=user_id,
+                    created_at=DateTimeUtils.get_current_utc_time(),
+                    verified=True,
+                )
+        return org_link
+
+    class Meta:
+        fields = [
+            "organization",
+            "department",
+            "graduation_year",
+            "is_alumni",
+            "is_student",
+        ]
+
+
+class GetUserLinkSerializer(serializers.ModelSerializer):
+    org_id = serializers.CharField(source="org.id")
+    org_title = serializers.CharField(source="org.title")
+    dept_id = serializers.CharField(
+        source="department.id", allow_null=True, required=False
+    )
+    dept_title = serializers.CharField(
+        source="department.title", allow_null=True, required=False
+    )
+    is_alumni = serializers.BooleanField()
+
+    class Meta:
+        model = UserOrganizationLink
+        fields = ["org_id", "org_title", "dept_id", "dept_title", "is_alumni"]
+
+
+class UserBasicDetailsSerializer(serializers.ModelSerializer):
+    interest_groups = serializers.SerializerMethodField()
+    organizations = serializers.SerializerMethodField()
+    karma = serializers.CharField(source="wallet_user.karma")
+
+    class Meta:
+        model = User
+        fields = (
+            "full_name",
+            "muid",
+            "interest_groups",
+            "organizations",
+            "profile_pic",
+            "karma",
+        )
+
+    def get_organizations(self, obj):
+        org_links = (
+            obj.user_organization_link_user.all()
+            .select_related("org")
+            .only("org__id", "org__title", "org__code", "org__org_type")
+        )
+        data = []
+        for org_link in org_links:
+            data.append(
+                {
+                    "id": org_link.org.id,
+                    "title": org_link.org.title,
+                    "code": org_link.org.code,
+                    "org_type": org_link.org.org_type,
+                }
+            )
+        return data
+
+    def get_interest_groups(self, obj):
+        ig_links = (
+            obj.user_ig_link_user.all().select_related("ig").only("ig__id", "ig__name")
+        )
+        data = []
+        for ig_link in ig_links:
+            data.append({"id": ig_link.ig.id, "name": ig_link.ig.name})
+        return data

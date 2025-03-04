@@ -158,11 +158,10 @@ class UserOrganizationLink(models.Model):
                                    related_name='user_organization_link_department')
     graduation_year = models.CharField(max_length=10, blank=True, null=True)
     verified = models.BooleanField()
-    is_alumni = models.IntegerField(blank=True, null=True, default=False)
+    is_alumni = models.BooleanField(blank=True, null=True, default=False)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='user_organization_link_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-
     class Meta:
         managed = False
         db_table = 'user_organization_link'
@@ -219,3 +218,21 @@ class OrgKarmaLog(models.Model):
     @property
     def district(self):
         return self.org.district
+
+
+class UnverifiedOrganization(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=lambda:str(uuid.uuid4()))
+    title = models.CharField(max_length=100)
+    org_type = models.CharField(max_length=25)
+    graduation_year = models.IntegerField(blank=True, null=True)
+    department = models.ForeignKey(Department, models.DO_NOTHING, related_name='unverified_organizations_dept', null=True)
+    verified = models.BooleanField(null=True)
+    verified_by = models.ForeignKey(User, models.DO_NOTHING, db_column='verified_by', related_name='unverified_organizations_verified_by', null=True)
+    verified_at = models.DateTimeField(null=True)
+    org = models.ForeignKey(Organization, models.DO_NOTHING, related_name='unverified_organizations_org')
+    created_by = models.ForeignKey(User, models.DO_NOTHING, db_column='created_by', related_name='unverified_organizations_created_by')
+    created_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'unverified_organization'

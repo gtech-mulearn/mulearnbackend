@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 import uuid
 
 from django.db import models
@@ -8,16 +9,19 @@ from rest_framework import serializers
 from db.organization import (
     Organization,
     District,
+    UnverifiedOrganization,
+    UserOrganizationLink,
     Zone,
     State,
     OrgAffiliation,
     Department,
     OrgKarmaType,
     OrgKarmaLog,
-    College
+    College,
 )
 from utils.permission import JWTUtils
 from utils.types import OrganizationType
+from utils.utils import DateTimeUtils
 
 
 class InstitutionSerializer(serializers.ModelSerializer):
@@ -116,7 +120,9 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         validated_data["updated_by_id"] = user_id
         orgobj = Organization.objects.create(**validated_data)
         if validated_data.get("org_type") == OrganizationType.COLLEGE.value:
-            College.objects.create(org=orgobj, created_by_id=user_id, updated_by_id=user_id)
+            College.objects.create(
+                org=orgobj, created_by_id=user_id, updated_by_id=user_id
+            )
         return orgobj
 
     def update(self, instance, validated_data):
@@ -274,8 +280,8 @@ class OrganizationMergerSerializer(serializers.Serializer):
         # Simulate the transaction
         for relation in Organization._meta.related_objects:
             if isinstance(
-                    relation,
-                    (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+                relation,
+                (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
             ):
                 related_model = relation.related_model
                 related_field_name = relation.field.name
@@ -286,7 +292,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                         field.name
                         for field in related_model._meta.fields
                         if isinstance(field, models.ForeignKey)
-                           and field.related_model == Organization
+                        and field.related_model == Organization
                     ),
                     None,
                 )
@@ -297,7 +303,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                 continue
 
             if existing_relations := related_model.objects.filter(
-                    **{related_field_name: instance}
+                **{related_field_name: instance}
             ):
                 update_summary.append(
                     {
@@ -326,8 +332,8 @@ class OrganizationMergerSerializer(serializers.Serializer):
             for relation in Organization._meta.related_objects:
                 # Determine related model and related field name
                 if isinstance(
-                        relation,
-                        (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
+                    relation,
+                    (models.ForeignKey, models.OneToOneField, models.ManyToManyField),
                 ):
                     related_model = relation.related_model
                     related_field_name = relation.field.name
@@ -339,7 +345,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                             field.name
                             for field in related_model._meta.fields
                             if isinstance(field, models.ForeignKey)
-                               and field.related_model == Organization
+                            and field.related_model == Organization
                         ),
                         None,
                     )
@@ -355,7 +361,7 @@ class OrganizationMergerSerializer(serializers.Serializer):
                 # Handle OneToOne relationships: delete existing relation if it points to the instance
                 if isinstance(relation, (models.OneToOneField, models.OneToOneRel)):
                     if existing_relation := related_model.objects.filter(
-                            **{related_field_name: instance}
+                        **{related_field_name: instance}
                     ).first():
                         existing_relation.delete()
 
@@ -424,7 +430,65 @@ class OrganizationImportSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         representation = super().to_representation(instance)
 
-        representation['affiliation_id'] = instance.affiliation.title if instance.affiliation else None
-        representation['district_id'] = instance.district.name if instance.district else None
+        representation["affiliation_id"] = (
+            instance.affiliation.title if instance.affiliation else None
+        )
+        representation["district_id"] = (
+            instance.district.name if instance.district else None
+        )
 
         return representation
+
+
+class OrganizationVerifySerializer(serializers.ModelSerializer):
+    verified = serializers.BooleanField(required=True)
+    org_id = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.all(), required=True
+    )
+
+    def update(self, instance, validated_data):
+        if instance.verified:
+            raise serializers.ValidationError("Organization already verified")
+        instance.verified = validated_data.get("verified")
+        instance.org = validated_data.get("org_id")
+        instance.verified_by_id = self.context.get("user_id")
+        instance.verified_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        if instance.verified:
+            if UserOrganizationLink.objects.filter(
+                user_id=instance.created_by_id, org_id=instance.org_id
+            ).exists():
+                raise serializers.ValidationError(
+                    "Unable to assign organization to user"
+                )
+            UserOrganizationLink.objects.create(
+                user_id=instance.created_by_id,
+                org=validated_data.get("org_id"),
+                department_id=instance.department_id,
+                graduation_year=instance.graduation_year,
+                verified=True,
+                created_by_id=instance.verified_by_id,
+            )
+        return instance
+
+    class Meta:
+        model = UnverifiedOrganization
+        fields = ["verified", "org_id"]
+
+
+class UnverifiedOrganizationsSerializer(serializers.ModelSerializer):
+    id = serializers.CharField(read_only=True)
+    created_by = serializers.CharField(source="created_by.full_name", read_only=True)
+    department = serializers.CharField(source="department.title", read_only=True)
+
+    class Meta:
+        model = UnverifiedOrganization
+        fields = [
+            "id",
+            "title",
+            "org_type",
+            "graduation_year",
+            "department",
+            "created_by",
+            "created_at",
+        ]
