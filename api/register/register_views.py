@@ -35,7 +35,7 @@ class ConnectDiscordAPI(APIView):
                 general_message="Invalid or no token given"
             ).get_failure_response()
         token_url = "https://discord.com/api/oauth2/token"
-        redirect_uri = f"{FR_DOMAIN_NAME}/dashboard/connect-discord/"
+        redirect_uri = f"{FR_DOMAIN_NAME}/dashboard/connect-discord"
         data = {
             "client_id": DISCORD_CLIENT_ID,
             "client_secret": DISCORD_CLIENT_SECRET,
