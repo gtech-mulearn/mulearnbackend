@@ -78,8 +78,9 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
 class StudentLeaderboardSerializer(serializers.ModelSerializer):
     institution = serializers.SerializerMethodField()
-    total_karma = serializers.IntegerField(source="wallet_user.karma", default=0)
-    full_name = serializers.CharField()
+    total_karma = serializers.IntegerField(
+        source="wallet_user.karma", default=0)
+    full_name = serializers.CharField(source="full_name")
 
     def get_institution(self, user):
         return user.colleges[0].org.title if user.colleges else None

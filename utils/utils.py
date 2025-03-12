@@ -15,7 +15,6 @@ from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
-import string, random
 
 
 class CommonUtils:
@@ -78,9 +77,9 @@ class CommonUtils:
                     "totalPages": paginator.num_pages,
                     "isNext": queryset.has_next(),
                     "isPrev": queryset.has_previous(),
-                    "nextPage": (
-                        queryset.next_page_number() if queryset.has_next() else None
-                    ),
+                    "nextPage": queryset.next_page_number()
+                    if queryset.has_next()
+                    else None,
                 },
             }
 
@@ -99,9 +98,9 @@ class CommonUtils:
             gzip.compress(response.content),
             content_type="text/csv",
         )
-        compressed_response["Content-Disposition"] = (
-            f'attachment; filename="{csv_name}.csv"'
-        )
+        compressed_response[
+            "Content-Disposition"
+        ] = f'attachment; filename="{csv_name}.csv"'
         compressed_response["Content-Encoding"] = "gzip"
 
         return compressed_response
@@ -237,9 +236,3 @@ def send_template_mail(
     email.attach(attachment)
     email.content_subtype = "html"
     return email.send()
-
-
-def generate_code(char_count=6):
-    characters = string.ascii_uppercase + string.digits
-    code = "".join(random.choices(characters, k=char_count))
-    return code

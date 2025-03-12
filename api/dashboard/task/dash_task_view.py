@@ -10,7 +10,6 @@ from utils.types import Events, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
     TaskImportSerializer,
-    TaskListPublicSerializer,
     TaskListSerializer,
     TaskModifySerializer,
     TaskTypeCreateUpdateSerializer,
@@ -21,65 +20,6 @@ from openpyxl import load_workbook
 from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
-
-
-class TaskPublicListAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    def get(self, request):
-        task_queryset = TaskList.objects.select_related(
-            "channel", "type", "level", "ig", "org"
-        ).all()
-
-        ig_id = request.query_params.get("ig_id")
-        if ig_id:
-            task_queryset = task_queryset.filter(ig_id=ig_id)
-
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            task_queryset,
-            request,
-            search_fields=[
-                "hashtag",
-                "title",
-                "description",
-                "karma",
-                "channel__name",
-                "type__title",
-                "active",
-                "variable_karma",
-                "usage_count",
-                "level__name",
-                "org__title",
-                "ig__name",
-                "event",
-            ],
-            sort_fields={
-                "hashtag": "hashtag",
-                "title": "title",
-                "description": "description",
-                "karma": "karma",
-                "channels": "channel__name",
-                "type": "type__title",
-                "active": "active",
-                "variable_karma": "variable_karma",
-                "usage_count": "usage_count",
-                "level": "level__name",
-                "org": "org__title",
-                "ig": "ig__name",
-                "event": "event",
-                "updated_at": "updated_at",
-                "created_at": "created_at",
-            },
-        )
-
-        task_serializer_data = TaskListPublicSerializer(
-            paginated_queryset.get("queryset"), many=True
-        ).data
-
-        return CustomResponse().paginated_response(
-            data=task_serializer_data,
-            pagination=paginated_queryset.get("pagination"),
-        )
 
 
 class TaskListAPI(APIView):
@@ -94,7 +34,13 @@ class TaskListAPI(APIView):
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+            "created_by",
+            "updated_by",
+            "channel",
+            "type",
+            "level",
+            "ig",
+            "org"
         ).all()
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -141,7 +87,8 @@ class TaskListAPI(APIView):
         )
 
         task_serializer_data = TaskListSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"),
+            many=True
         ).data
 
         return CustomResponse().paginated_response(
@@ -166,7 +113,9 @@ class TaskListAPI(APIView):
         serializer = TaskModifySerializer(data=mutable_data)
 
         if not serializer.is_valid():
-            return CustomResponse(message=serializer.errors).get_failure_response()
+            return CustomResponse(
+                message=serializer.errors
+            ).get_failure_response()
 
         serializer.save()
         return CustomResponse(
@@ -204,14 +153,22 @@ class TaskAPI(APIView):
 
         task = TaskList.objects.get(pk=task_id)
 
-        serializer = TaskModifySerializer(task, data=mutable_data, partial=True)
+        serializer = TaskModifySerializer(
+            task,
+            data=mutable_data,
+            partial=True
+        )
 
         if not serializer.is_valid():
-            return CustomResponse(message=serializer.errors).get_failure_response()
+            return CustomResponse(
+                message=serializer.errors
+            ).get_failure_response()
 
         serializer.save()
 
-        return CustomResponse(general_message=serializer.data).get_success_response()
+        return CustomResponse(
+            general_message=serializer.data
+        ).get_success_response()
 
     @role_required(
         [
@@ -241,12 +198,24 @@ class TaskListCSV(APIView):
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+            "created_by",
+            "updated_by",
+            "channel",
+            "type",
+            "level",
+            "ig",
+            "org"
         ).all()
 
-        task_serializer_data = TaskListSerializer(task_queryset, many=True).data
+        task_serializer_data = TaskListSerializer(
+            task_queryset,
+            many=True
+        ).data
 
-        return CommonUtils.generate_csv(task_serializer_data, "Task List")
+        return CommonUtils.generate_csv(
+            task_serializer_data,
+            "Task List"
+        )
 
 
 class ImportTaskListCSV(APIView):
@@ -347,19 +316,40 @@ class ImportTaskListCSV(APIView):
             igs_to_fetch.add(ig)
             orgs_to_fetch.add(org)
 
-        channels = Channel.objects.filter(name__in=channels_to_fetch).values(
-            "id", "name"
+        channels = Channel.objects.filter(
+            name__in=channels_to_fetch
+        ).values(
+            "id",
+            "name"
         )
 
-        task_types = TaskType.objects.filter(title__in=task_types_to_fetch).values(
-            "id", "title"
+        task_types = TaskType.objects.filter(
+            title__in=task_types_to_fetch
+        ).values(
+            "id",
+            "title"
         )
 
-        levels = Level.objects.filter(name__in=levels_to_fetch).values("id", "name")
+        levels = Level.objects.filter(
+            name__in=levels_to_fetch
+        ).values(
+            "id",
+            "name"
+        )
 
-        igs = InterestGroup.objects.filter(name__in=igs_to_fetch).values("id", "name")
+        igs = InterestGroup.objects.filter(
+            name__in=igs_to_fetch
+        ).values(
+            "id",
+            "name"
+        )
 
-        orgs = Organization.objects.filter(code__in=orgs_to_fetch).values("id", "code")
+        orgs = Organization.objects.filter(
+            code__in=orgs_to_fetch
+        ).values(
+            "id",
+            "code"
+        )
 
         channels_dict = {channel["name"]: channel["id"] for channel in channels}
         task_types_dict = {
@@ -422,22 +412,20 @@ class ImportTaskListCSV(APIView):
         if task_list_serializer.is_valid():
             task_list_serializer.save()
             for task_data in task_list_serializer.data:
-                success_data.append(
-                    {
-                        "hashtag": task_data.get("hashtag", ""),
-                        "title": task_data.get("title", ""),
-                        "description": task_data.get("description", ""),
-                        "karma": task_data.get("karma", ""),
-                        "usage_count": task_data.get("usage_count", ""),
-                        "variable_karma": task_data.get("variable_karma", ""),
-                        "level": task_data.get("level_id", ""),
-                        "channel": task_data.get("channel_id", ""),
-                        "type": task_data.get("type_id", ""),
-                        "ig": task_data.get("ig_id", ""),
-                        "org": task_data.get("org_id", ""),
-                        "event": task_data.get("event", ""),
-                    }
-                )
+                success_data.append({
+                    'hashtag': task_data.get('hashtag', ''),
+                    'title': task_data.get('title', ''),
+                    'description': task_data.get('description', ''),
+                    'karma': task_data.get('karma', ''),
+                    'usage_count': task_data.get('usage_count', ''),
+                    'variable_karma': task_data.get('variable_karma', ''),
+                    'level': task_data.get('level_id', ''),
+                    'channel': task_data.get('channel_id', ''),
+                    'type': task_data.get('type_id', ''),
+                    'ig': task_data.get('ig_id', ''),
+                    'org': task_data.get('org_id', ''),
+                    'event': task_data.get('event', ''),
+                })
         else:
             error_rows.append(task_list_serializer.errors)
 
@@ -457,9 +445,14 @@ class ChannelDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        channels = Channel.objects.values("id", "name")
+        channels = Channel.objects.values(
+            "id",
+            "name"
+        )
 
-        return CustomResponse(response=channels).get_success_response()
+        return CustomResponse(
+            response=channels
+        ).get_success_response()
 
 
 class IGDropdownAPI(APIView):
@@ -473,8 +466,13 @@ class IGDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        igs = InterestGroup.objects.values("id", "name")
-        return CustomResponse(response=igs).get_success_response()
+        igs = InterestGroup.objects.values(
+            "id",
+            "name"
+        )
+        return CustomResponse(
+            response=igs
+        ).get_success_response()
 
 
 class OrganizationDropdownAPI(APIView):
@@ -488,8 +486,13 @@ class OrganizationDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        organizations = Organization.objects.values("id", "title")
-        return CustomResponse(response=organizations).get_success_response()
+        organizations = Organization.objects.values(
+            "id",
+            "title"
+        )
+        return CustomResponse(
+            response=organizations
+        ).get_success_response()
 
 
 class LevelDropdownAPI(APIView):
@@ -503,8 +506,13 @@ class LevelDropdownAPI(APIView):
         ]
     )
     def get(self, request):
-        levels = Level.objects.values("id", "name")
-        return CustomResponse(response=levels).get_success_response()
+        levels = Level.objects.values(
+            "id",
+            "name"
+        )
+        return CustomResponse(
+            response=levels
+        ).get_success_response()
 
 
 class TaskTypesDropDownAPI(APIView):
@@ -518,8 +526,13 @@ class TaskTypesDropDownAPI(APIView):
         ]
     )
     def get(self, request):
-        task_types = TaskType.objects.values("id", "title")
-        return CustomResponse(response=task_types).get_success_response()
+        task_types = TaskType.objects.values(
+            "id",
+            "title"
+        )
+        return CustomResponse(
+            response=task_types
+        ).get_success_response()
 
 
 class EventDropDownApi(APIView):
@@ -532,29 +545,31 @@ class EventDropDownApi(APIView):
     )
     def get(self, request):
         events = Events.get_all_values()
-        return CustomResponse(response=events).get_success_response()
+        return CustomResponse(
+            response=events
+        ).get_success_response()
 
 
 class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        wb = load_workbook("./excel-templates/task_base_template.xlsx")
-        ws = wb["Data Definitions"]
-        levels = Level.objects.all().values_list("name", flat=True)
-        channels = Channel.objects.all().values_list("name", flat=True)
-        task_types = TaskType.objects.all().values_list("title", flat=True)
-        igs = InterestGroup.objects.all().values_list("name", flat=True)
-        orgs = Organization.objects.all().values_list("code", flat=True)
+        wb = load_workbook('./excel-templates/task_base_template.xlsx')
+        ws = wb['Data Definitions']
+        levels = Level.objects.all().values_list('name', flat=True)
+        channels = Channel.objects.all().values_list('name', flat=True)
+        task_types = TaskType.objects.all().values_list('title', flat=True)
+        igs = InterestGroup.objects.all().values_list('name', flat=True)
+        orgs = Organization.objects.all().values_list('code', flat=True)
         events = Events.get_all_values()
 
         data = {
-            "level": levels,
-            "channel": channels,
-            "type": task_types,
-            "ig": igs,
-            "org": orgs,
-            "event": events,
+            'level': levels,
+            'channel': channels,
+            'type': task_types,
+            'ig': igs,
+            'org': orgs,
+            'event': events
         }
         # Write data column-wise
         for col_num, (col_name, col_values) in enumerate(data.items(), start=1):
@@ -564,14 +579,10 @@ class TaskBaseTemplateAPI(APIView):
         with NamedTemporaryFile() as tmp:
             tmp.close()  # with statement opened tmp, close it so wb.save can open it
             wb.save(tmp.name)
-            with open(tmp.name, "rb") as f:
+            with open(tmp.name, 'rb') as f:
                 f.seek(0)
                 new_file_object = f.read()
-        return FileResponse(
-            BytesIO(new_file_object),
-            as_attachment=True,
-            filename="task_base_template.xlsx",
-        )
+        return FileResponse(BytesIO(new_file_object), as_attachment=True, filename='task_base_template.xlsx')
 
 
 class TaskTypeCrudAPI(APIView):
@@ -585,18 +596,13 @@ class TaskTypeCrudAPI(APIView):
     def get(self, request):
         taskType = TaskType.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            taskType,
-            request,
-            ["title"],
-            {
-                "title": "title",
-                "updated_by": "updated_by",
-                "created_by": "created_by",
-                "updated_at": "updated_at",
-                "created_at": "created_at",
-            },
+            taskType, request, ["title"],
+            {"title": "title", "updated_by": "updated_by", "created_by": "created_by", "updated_at": "updated_at",
+             "created_at": "created_at"}
         )
-        serializer = TasktypeSerializer(paginated_queryset.get("queryset"), many=True)
+        serializer = TasktypeSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
 
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
@@ -632,9 +638,7 @@ class TaskTypeCrudAPI(APIView):
     def put(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
         if taskType is None:
-            return CustomResponse(
-                general_message="task type not found"
-            ).get_failure_response()
+            return CustomResponse(general_message="task type not found").get_failure_response()
         serializer = TaskTypeCreateUpdateSerializer(
             taskType, data=request.data, context={"request": request}
         )
