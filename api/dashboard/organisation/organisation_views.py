@@ -10,7 +10,6 @@ from db.organization import (
     Department,
     OrgAffiliation,
     Organization,
-    UnverifiedOrganization,
     UserOrganizationLink,
     District,
 )
@@ -31,8 +30,6 @@ from .serializers import (
     OrganizationKarmaTypeGetPostPatchDeleteSerializer,
     OrganizationKarmaLogGetPostPatchDeleteSerializer,
     OrganizationImportSerializer,
-    OrganizationVerifySerializer,
-    UnverifiedOrganizationsSerializer,
 )
 
 
@@ -716,43 +713,9 @@ class TransferAPI(APIView):
             return CustomResponse(
                 response={"To Organisations not present"}
             ).get_failure_response()
-
+        
         UserOrganizationLink.objects.filter(org=from_org).update(org=to_org)
         from_org.delete()
         return CustomResponse(
-            response={"Organisations transferred successfully"}
-        ).get_success_response()
-
-
-class UnverifiedOrganizationsListAPI(APIView):
-    permission_classes = [CustomizePermission]
-
-    def get(self, request):
-        unverified_orgs = (
-            UnverifiedOrganization.objects.select_related("created_by", "department")
-            .filter(verified__isnull=True)
-            .order_by("-created_at")
-        )
-        seializer = UnverifiedOrganizationsSerializer(unverified_orgs, many=True)
-        return CustomResponse(response=seializer.data).get_success_response()
-
-
-class VerifyOrganizationAPI(APIView):
-    permission_classes = [CustomizePermission]
-
-    def post(self, request, uorg_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        unverifed_org = UnverifiedOrganization.objects.filter(id=uorg_id).first()
-        if not unverifed_org:
-            return CustomResponse(
-                general_message="Organization does not exist"
-            ).get_failure_response()
-        serialzier = OrganizationVerifySerializer(
-            data=request.data, context={"user_id": user_id}
-        )
-        if serialzier.is_valid():
-            serialzier.update(unverifed_org, serialzier.validated_data)
-            return CustomResponse(
-                general_message="Organization verified successfully"
+                response={"Organisations transferred successfully"}
             ).get_success_response()
-        return CustomResponse(general_message=serialzier.errors).get_failure_response()

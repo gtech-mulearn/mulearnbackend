@@ -7,11 +7,10 @@ from django.core.files.storage import FileSystemStorage
 from django.db.models import Q
 from rest_framework.views import APIView
 
-from db.organization import UserOrganizationLink
 from db.user import ForgotPassword, User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCategory
+from utils.types import RoleType, WebHookActions, WebHookCategory
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.cache import cache
@@ -24,16 +23,10 @@ class UserInfoAPI(APIView):
 
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        # user = cache.get(f"db_user_{user_muid}")
-        # if not user:
-        user = (
-            User.objects.prefetch_related(
-                "user_domains", "user_endgoals", "user_role_link_user"
-            )
-            .filter(muid=user_muid)
-            .first()
-        )
-        cache.set(f"db_user_{user_muid}", user, timeout=60)
+        user = cache.get(f"db_user_{user_muid}")
+        if not user:
+            user = User.objects.filter(muid=user_muid).first()
+            cache.set(f"db_user_{user_muid}", user, timeout=10)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
@@ -379,72 +372,3 @@ class UserProfilePictureView(APIView):
         return CustomResponse(
             response={"user_id": user.id, "profile_pic": uploaded_file_url}
         ).get_success_response()
-
-
-class UserAddOrgAPI(APIView):
-    def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not (user := cache.get(f"db_user_{user_id}")):
-            user = User.objects.filter(id=user_id).first()
-        if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
-        serializer = dash_user_serializer.UserOrgLinkSerializer(
-            data=request.data, context={"user": user}
-        )
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(
-                general_message="organisation linked successfully"
-            ).get_success_response()
-        return CustomResponse(response=serializer.errors).get_failure_response()
-
-    def get(self, request):
-        user = User.objects.filter(id=JWTUtils.fetch_user_id(request)).first()
-        if user is None:
-            return CustomResponse(
-                general_message="No user data available"
-            ).get_failure_response()
-
-        links = UserOrganizationLink.objects.filter(
-            user=user, org__org_type=OrganizationType.COLLEGE.value
-        ).select_related("org", "department")
-        serializer = dash_user_serializer.GetUserLinkSerializer(
-            instance=links, many=True
-        )
-        return CustomResponse(response=serializer.data).get_success_response()
-
-
-class UserSearchAPI(APIView):
-
-    def get(self, request):
-        role = request.query_params.get("role")
-        queryset = (
-            User.objects.all()
-            .select_related("wallet_user")
-            .filter(user_settings_user__is_public=True)
-            .prefetch_related("user_settings_user")
-        )
-        if role:
-            queryset = queryset.filter(
-                user_role_link_user__role__title=role,
-                user_role_link_user__verified=True,
-            )
-
-        queryset = CommonUtils.get_paginated_queryset(
-            queryset,
-            request,
-            search_fields=[
-                "full_name",
-                "email",
-                "muid",
-            ],
-        )
-        serializer = dash_user_serializer.UserBasicDetailsSerializer(
-            queryset.get("queryset"), many=True
-        )
-
-        return CustomResponse().paginated_response(
-            data=serializer.data, pagination=queryset.get("pagination")
-        )
