@@ -8,7 +8,8 @@ from utils.utils import DateTimeUtils
 
 
 class TaskListPublicSerializer(serializers.ModelSerializer):
-    channel = serializers.CharField(source="channel.name", required=False, default=None)
+    channel_name = serializers.CharField(source="channel.name", required=False, default=None)
+    discord_id = serializers.CharField(source="channel.discord_id", required=False, default=None)
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
@@ -21,7 +22,8 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "karma",
-            "channel",
+            "channel_name",
+            "discord_id",
             "type",
             "variable_karma",
             "level",
