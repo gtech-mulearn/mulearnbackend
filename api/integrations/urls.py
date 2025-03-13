@@ -4,4 +4,5 @@ from django.urls import path, include
 urlpatterns = [
     path('kkem/', include('api.integrations.kkem.urls')),
     path('wadhwani/', include('api.integrations.wadhwani.urls')),
+    path('qseverse/', include('api.integrations.qseverse.urls')),
 ]
