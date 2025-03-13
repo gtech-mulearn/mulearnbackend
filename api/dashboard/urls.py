@@ -25,4 +25,5 @@ urlpatterns = [
     path("events/", include("api.dashboard.events.urls")),
     path("coupon/", include("api.dashboard.coupon.urls")),
     path("projects/", include("api.dashboard.projects.urls")),
+    path("achievement/", include("api.dashboard.achievement.urls")),
 ]
