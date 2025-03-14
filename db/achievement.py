@@ -11,6 +11,7 @@ class Achievement(models.Model):
     has_vc            = models.BooleanField()
     tags              = models.JSONField()
     type              = models.CharField(max_length=36)
+    template_id       = models.CharField(max_length=100, null=True, blank=True)
     updated_by        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements_updated', db_column='updated_by')
     updated_at        = models.DateTimeField(auto_now=True)
     created_by        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements_created', db_column='created_by')
