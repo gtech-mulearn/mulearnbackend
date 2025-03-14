@@ -38,16 +38,16 @@ class UserAchievements(models.Model):
     is_issued = models.BooleanField(default=False)
     vc_url = models.CharField(max_length=100, blank=True, null=True)
 
-    updated_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, 
-        related_name='user_achievements_updated_by'
-    )
-    updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE, 
-        related_name='user_achievements_created_by'
-    )
-    created_at = models.DateTimeField(auto_now_add=True)
+    # updated_by = models.ForeignKey(
+    #     User, on_delete=models.CASCADE, 
+    #     related_name='user_achievements_updated_by'
+    # )
+    # updated_at = models.DateTimeField(auto_now=True)
+    # created_by = models.ForeignKey(
+    #     User, on_delete=models.CASCADE, 
+    #     related_name='user_achievements_created_by'
+    # )
+    # created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         db_table = 'user_achievements'
