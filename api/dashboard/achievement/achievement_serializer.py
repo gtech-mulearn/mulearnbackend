@@ -9,6 +9,8 @@ class AchievementSerializer(serializers.ModelSerializer):
         fields = '__all__'
 
 class AchievementBasicSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(source="title") 
+
     class Meta:
         model = Achievement
         fields = ['id', 'title', 'description', 'icon', 'level_based', 'tags']
