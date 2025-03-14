@@ -417,7 +417,6 @@ class UserAddOrgAPI(APIView):
 
 
 class UserSearchAPI(APIView):
-
     def get(self, request):
         role = request.query_params.get("role")
         queryset = (
@@ -425,6 +424,7 @@ class UserSearchAPI(APIView):
             .select_related("wallet_user")
             .filter(user_settings_user__is_public=True)
             .prefetch_related("user_settings_user")
+            .order_by("-wallet_user__karma")
         )
         if role:
             queryset = queryset.filter(

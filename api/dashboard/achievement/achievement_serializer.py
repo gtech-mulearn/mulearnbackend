@@ -13,7 +13,7 @@ class AchievementBasicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Achievement
-        fields = ['id', 'achievement_name', 'description', 'icon', 'level_based', 'tags']
+        fields = ['id', 'achievement_name', 'description', 'icon', 'level_based', 'tags', 'template_id']
 
 class UserAchievementsSerializer(serializers.ModelSerializer):
     achievement = AchievementBasicSerializer(source='achievement_id', read_only=True)
