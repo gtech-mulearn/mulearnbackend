@@ -149,7 +149,7 @@ class UserAchievementsListAPIView(APIView):
 
 class UserAchievementsIssueAPIView(APIView):
     def post(self, request):
-        user_id = request.data.get("user_id")
+        user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
             return CustomResponse(general_message="Invalid or missing token").get_failure_response()
 
