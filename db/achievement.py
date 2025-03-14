@@ -19,3 +19,18 @@ class Achievement(models.Model):
     class Meta:
         db_table = 'achievement'
         managed = False
+
+class UserAchievements(models.Model):
+    id                 = models.CharField(primary_key=True, default=uuid.uuid4, max_length=36)
+    user_id            = models.ForeignKey('User', on_delete=models.CASCADE, related_name='achievements', db_column='user_id')
+    achievement_id     = models.ForeignKey('Achievement', on_delete=models.CASCADE, related_name='users', db_column='achievement_id')
+    is_issued          = models.BooleanField(default=False)
+    vc_url             = models.CharField(max_length=100)
+    updated_by         = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements_updated',db_column='updated_by')
+    updated_at         = models.DateTimeField(auto_now=True)
+    created_by         = models.ForeignKey(User, on_delete=models.CASCADE, related_name='achievements_created',db_column='created_by')
+    created_at         = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'user_achievements'
+        managed = False
