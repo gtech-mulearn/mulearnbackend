@@ -444,6 +444,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     is_joined = serializers.SerializerMethodField()
     attendees = serializers.SerializerMethodField()
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
+    created_by_id = serializers.CharField(source="created_by.id", read_only=True)
     ig_id = serializers.CharField(source="circle_id.ig.id", read_only=True)
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
 
