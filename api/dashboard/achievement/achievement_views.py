@@ -147,6 +147,42 @@ class UserAchievementsListAPIView(APIView):
             return CustomResponse(general_message=f"An unexpected error occurred: {str(e)}").get_failure_response()
 
 
+class UserAchievementsIssueAPIView(APIView):
+    def post(self, request):
+        user_id = request.data.get("user_id")
+        if not user_id:
+            return CustomResponse(general_message="Invalid or missing token").get_failure_response()
+
+        achievement_id = request.data.get("achievement_id")
+        vc_url = request.data.get("vc_url")
+
+        if not achievement_id:
+            return CustomResponse(general_message="Achievement ID is required").get_failure_response()
+
+        if not vc_url:
+            return CustomResponse(general_message="VC URL is required").get_failure_response()
+
+        if not User.objects.filter(id=user_id).exists():
+            return CustomResponse(general_message="User Not Exists").get_failure_response()
+
+        try:
+            user_achievement = UserAchievements.objects.get(user_id=user_id, achievement_id=achievement_id)
+        except UserAchievements.DoesNotExist:
+            return CustomResponse(general_message="Achievement record not found").get_failure_response()
+
+        if user_achievement.is_issued:
+            return CustomResponse(general_message="This achievement has already been issued").get_failure_response()
+
+        UserAchievements.objects.filter(user_id=user_id, achievement_id=achievement_id).update(is_issued=True, vc_url=vc_url)
+
+        return CustomResponse(general_message="Achievement issued successfully").get_success_response()
+
+
+
+
+
+
+
 
 
 
