@@ -123,27 +123,32 @@ class AchievementDeleteAPIView(APIView):
 class UserAchievementsListAPIView(APIView):
     def get(self, request, muid):
         try:
-            # Validate the user
             user = get_object_or_404(User, muid=muid)
 
-            # Fetch all achievements related to this user
-            user_achievements = UserAchievements.objects.filter(user_id=user.id)
+            user_achievements = (
+                UserAchievements.objects
+                .filter(user_id=user.id)
+                .select_related('achievement_id')
+                .only('id', 'user_id', 'achievement_id', 'is_issued', 'vc_url', 'achievement_id__name', 'achievement_id__description')
+            )
 
+            # If no achievements found
             if not user_achievements.exists():
                 return CustomResponse(general_message="No achievements found for this user").get_failure_response()
 
-            # Serialize data
+            # Serialize and return response
             serializer = achievement_serializer.UserAchievementsSerializer(user_achievements, many=True)
             return CustomResponse(response=serializer.data).get_success_response()
 
         except ValidationError:
             return CustomResponse(general_message="Invalid format for muid").get_failure_response()
 
-        except ObjectDoesNotExist:
-            return CustomResponse(general_message="User not found").get_failure_response()
-
         except Exception as e:
             return CustomResponse(general_message=f"An unexpected error occurred: {str(e)}").get_failure_response()
+
+
+
+
 
 
 
