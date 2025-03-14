@@ -7,6 +7,7 @@ from utils.permission import JWTUtils
 from db.user import User
 import uuid
 from django.utils.timezone import now
+from django.core.exceptions import ObjectDoesNotExist, ValidationError
 class AchievementListAPIView(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -121,16 +122,28 @@ class AchievementDeleteAPIView(APIView):
 
 class UserAchievementsListAPIView(APIView):
     def get(self, request, muid):
+        try:
+            # Validate the user
+            user = get_object_or_404(User, muid=muid)
 
-        user = get_object_or_404(User, muid=muid)
+            # Fetch all achievements related to this user
+            user_achievements = UserAchievements.objects.filter(user_id=user.id)
 
-        # Fetch all achievements linked to this user
-        user_achievements = UserAchievements.objects.filter(user_id=user.id)
+            if not user_achievements.exists():
+                return CustomResponse(general_message="No achievements found for this user").get_failure_response()
 
-        # Serialize data
-        serializer = achievement_serializer.UserAchievementsSerializer(user_achievements, many=True)
+            # Serialize data
+            serializer = achievement_serializer.UserAchievementsSerializer(user_achievements, many=True)
+            return CustomResponse(response=serializer.data).get_success_response()
 
-        return CustomResponse(response=serializer.data).get_success_response()
+        except ValidationError:
+            return CustomResponse(general_message="Invalid format for muid").get_failure_response()
+
+        except ObjectDoesNotExist:
+            return CustomResponse(general_message="User not found").get_failure_response()
+
+        except Exception as e:
+            return CustomResponse(general_message=f"An unexpected error occurred: {str(e)}").get_failure_response()
 
 
 
