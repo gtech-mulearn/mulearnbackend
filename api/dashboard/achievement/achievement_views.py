@@ -38,7 +38,7 @@ class AchievementCreateAPIView(APIView):
 
 
         data = request.data
-        required_fields = ["title", "description", "icon", "tags", "type", "level_based", "has_vc"]
+        required_fields = ["name", "description", "icon", "tags", "type", "level_based", "has_vc"]
 
 
         missing_fields = [field for field in required_fields if field not in data]
@@ -48,19 +48,20 @@ class AchievementCreateAPIView(APIView):
             ).get_failure_response()
 
 
-        if Achievement.objects.filter(title=data["title"]).exists():
-            return CustomResponse(general_message="Title already exists").get_failure_response()
+        if Achievement.objects.filter(name=data["name"]).exists():
+            return CustomResponse(general_message="Name already exists").get_failure_response()
 
 
         achievement = Achievement.objects.create(
             id=str(uuid.uuid4()),
-            title=data["title"],
+            name=data["name"],
             description=data["description"],
             icon=data["icon"],
             tags=data["tags"],
             type=data["type"],
             level_based=data["level_based"],
             has_vc=data["has_vc"],
+            template_id = data.get("template_id"),
             created_by=user,
             updated_by=user,
             created_at=now(),
