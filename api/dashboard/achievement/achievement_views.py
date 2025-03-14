@@ -1,7 +1,7 @@
-
+from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
 from . import achievement_serializer
-from db.achievement import Achievement
+from db.achievement import Achievement, UserAchievements
 from utils.response import CustomResponse
 from utils.permission import JWTUtils
 from db.user import User
@@ -118,6 +118,20 @@ class AchievementDeleteAPIView(APIView):
 
         achievement.delete()
         return CustomResponse(general_message="Achievement deleted successfully").get_success_response()
+
+class UserAchievementsListAPIView(APIView):
+    def get(self, request, muid):
+
+        user = get_object_or_404(User, muid=muid)
+
+        # Fetch all achievements linked to this user
+        user_achievements = UserAchievements.objects.filter(user_id=user.id)
+
+        # Serialize data
+        serializer = achievement_serializer.UserAchievementsSerializer(user_achievements, many=True)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
 
 
 
