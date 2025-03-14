@@ -516,32 +516,42 @@ class UsertermAPI(APIView):
             return CustomResponse(response=response_data).get_failure_response()
 
 
+from datetime import datetime, timedelta
+from django.db.models import Sum
+from rest_framework.views import APIView
+
+
 class KarmaFeedAPI(APIView):
     def get(self, request):
         today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
+
+        first_day_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        last_day_of_last_month = today.replace(day=1) - timedelta(days=1)
 
         top_user = (
             KarmaActivityLog.objects.filter(
                 appraiser_approved=True,
-                created_at__date=yesterday,
+                created_at__date__range=(first_day_of_last_month, last_day_of_last_month),
             )
             .values("user_id", "user__full_name", "user__muid")
             .annotate(total_karma=Sum("karma"))
             .order_by("-total_karma")  # Sort by highest total_karma
             .first()  # Get the first entry (highest total_karma)
         )
+
         top_user = {
             "karma": top_user["total_karma"] if top_user else 0,
             "full_name": top_user["user__full_name"] if top_user else None,
             "muid": top_user["user__muid"] if top_user else None,
         }
+
+        # Fetch the top college based on last month's karma
         top_org = (
             KarmaActivityLog.objects.select_related("user")
             .prefetch_related("user__user_organization_link_user__org")
             .filter(
                 appraiser_approved=True,
-                created_at__date=yesterday,
+                created_at__date__range=(first_day_of_last_month, last_day_of_last_month),
             )
             .values(
                 "user__user_organization_link_user__org__id",
@@ -551,6 +561,7 @@ class KarmaFeedAPI(APIView):
             .order_by("-total_karma")  # Sort by highest total_karma
             .first()  # Get the first entry (highest total_karma)
         )
+
         top_college = {
             "karma": top_org["total_karma"] if top_org else 0,
             "name": (
@@ -559,8 +570,11 @@ class KarmaFeedAPI(APIView):
                 else None
             ),
         }
+
         response = {
             "top_user": top_user,
             "top_college": top_college,
         }
+
         return CustomResponse(response=response).get_success_response()
+
