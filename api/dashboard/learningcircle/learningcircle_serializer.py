@@ -522,4 +522,5 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "is_joined",
             "attendees",
             "created_by",
+            "created_by_id"
         ]
