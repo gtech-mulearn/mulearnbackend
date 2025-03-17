@@ -524,7 +524,7 @@ class LearningCircleMeetingListAPI(APIView):
                 "domain_name", flat=True
             )
 
-        if category != "all" and type(category) == str:
+        if category != "all" and isinstance(category, str):
             category = [category]
         # if not no_location and not lat and not lon:
         #     user_ip = request.META.get("REMOTE_ADDR")
@@ -553,18 +553,26 @@ class LearningCircleMeetingListAPI(APIView):
             filter = Q(
                 meet_time__gte=DateTimeUtils.get_current_utc_time() - timedelta(hours=2)
             ) | Q(id__in=user_meetups)
-        meetings = (
-            CircleMeetingLog.objects.filter(filter).order_by("meet_time")
-            # .prefetch_related("circle_meeting_attendance_meet_id")
-        )
-        if category and category != "all" and type(category) == list:
+        meetings = CircleMeetingLog.objects.filter(filter).order_by("meet_time")
+        if category and category != "all" and isinstance(category, list):
             meetings = meetings.select_related("circle_id__ig").filter(
                 circle_id__ig__category__in=category
             )
+        meet_ids = meetings.values_list("id", flat=True)
+        attendees_map = {
+            meet_id: list(CircleMeetingAttendees.objects.filter(meet_id=meet_id)
+                          .values_list("user_id", flat=True))
+            for meet_id in meet_ids
+        }
+
         serializer = CircleMeetupMinSerializer(
             meetings, many=True, context={"user_id": user_id}
         )
+        response_data = serializer.data
+        for item in response_data:
+            item["attendees"] = attendees_map.get(item["id"], [])
+
         return CustomResponse(
             general_message="Meetings fetched successfully",
-            response=serializer.data,
+            response=response_data,
         ).get_success_response()
