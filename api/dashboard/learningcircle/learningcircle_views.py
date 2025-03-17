@@ -558,21 +558,12 @@ class LearningCircleMeetingListAPI(APIView):
             meetings = meetings.select_related("circle_id__ig").filter(
                 circle_id__ig__category__in=category
             )
-        meet_ids = meetings.values_list("id", flat=True)
-        attendees_map = {
-            meet_id: list(CircleMeetingAttendees.objects.filter(meet_id=meet_id)
-                          .values_list("user_id", flat=True))
-            for meet_id in meet_ids
-        }
 
         serializer = CircleMeetupMinSerializer(
             meetings, many=True, context={"user_id": user_id}
         )
-        response_data = serializer.data
-        for item in response_data:
-            item["attendees"] = attendees_map.get(item["id"], [])
 
         return CustomResponse(
             general_message="Meetings fetched successfully",
-            response=response_data,
+            response=serializer.data,
         ).get_success_response()
