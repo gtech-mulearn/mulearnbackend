@@ -439,6 +439,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     coord_y = serializers.FloatField(read_only=True)
     meet_place = serializers.CharField(read_only=True)
     meet_time = serializers.DateTimeField(read_only=True)
+    meet_code = serializers.DateTimeField(read_only=True)
     meet_code = serializers.SerializerMethodField()
     is_started = serializers.SerializerMethodField()
     is_ended = serializers.SerializerMethodField()
