@@ -439,6 +439,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     coord_y = serializers.FloatField(read_only=True)
     meet_place = serializers.CharField(read_only=True)
     meet_time = serializers.DateTimeField(read_only=True)
+    meet_code = serializers.CharField(read_only=True)
     is_started = serializers.SerializerMethodField()
     is_ended = serializers.SerializerMethodField()
     is_joined = serializers.SerializerMethodField()
@@ -502,6 +503,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             )
         return data
 
+
     class Meta:
         model = CircleMeetingLog
         fields = [
@@ -513,6 +515,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "ig_name",
             "mode",
             "meet_place",
+            "meet_code",
             "coord_x",
             "coord_y",
             "meet_time",
