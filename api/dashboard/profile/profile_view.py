@@ -11,6 +11,8 @@ from django.db.models import Prefetch
 from PIL import Image
 from rest_framework.views import APIView
 from django.db.models import Sum
+from django.core.cache import cache
+from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
@@ -525,13 +527,23 @@ class KarmaFeedAPI(APIView):
     def get(self, request):
         today = datetime.now().date()
 
-        first_day_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(day=1)
+        cache_key = f"karma_feed_{today}"
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            return CustomResponse(response=cached_response).get_success_response()
+
+        first_day_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(
+            day=1
+        )
         last_day_of_last_month = today.replace(day=1) - timedelta(days=1)
 
         top_user = (
             KarmaActivityLog.objects.filter(
                 appraiser_approved=True,
-                created_at__date__range=(first_day_of_last_month, last_day_of_last_month),
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
             )
             .values("user_id", "user__full_name", "user__muid")
             .annotate(total_karma=Sum("karma"))
@@ -551,7 +563,10 @@ class KarmaFeedAPI(APIView):
             .prefetch_related("user__user_organization_link_user__org")
             .filter(
                 appraiser_approved=True,
-                created_at__date__range=(first_day_of_last_month, last_day_of_last_month),
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
             )
             .values(
                 "user__user_organization_link_user__org__id",
@@ -575,6 +590,12 @@ class KarmaFeedAPI(APIView):
             "top_user": top_user,
             "top_college": top_college,
         }
+        try:
+            midnight = now().replace(hour=23, minute=59, second=59)
+            cache_timeout = (midnight - now()).seconds
+            cache.set(cache_key, response, cache_timeout)
+        except Exception as e:
+            print(e)
+            pass
 
         return CustomResponse(response=response).get_success_response()
-
