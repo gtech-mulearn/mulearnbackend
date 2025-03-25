@@ -602,7 +602,7 @@ class KarmaFeedAPI(APIView):
 
 class UserPermuteAPI(APIView):
     def get(self, request, muid):
-        user = User.objects.filter(muid=muid).first()
+        user = User.objects.prefetch_related("user_domains", "user_organization_link_user__org").filter(muid=muid).first()
         if user is None:
             return  CustomResponse(
                 general_message="No user data available"

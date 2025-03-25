@@ -492,11 +492,11 @@ class UserTermSerializer(serializers.ModelSerializer):
 class UserPermuteSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField()
     user_domains = serializers.SerializerMethodField()
-    college_name = serializers.SerializerMethodField()  # Changed from college_id to college_name
+    college_name = serializers.SerializerMethodField()
 
     class Meta:
         model = User
-        fields = ["full_name", "user_domains", "college_name"]  # Changed field name
+        fields = ["full_name", "user_domains", "college_name"]
 
     def get_user_domains(self, obj):
         return obj.user_domains.values_list("domain_name", flat=True)
@@ -511,7 +511,7 @@ class UserPermuteSerializer(serializers.ModelSerializer):
     def _get_org_type(self, obj):
         return OrganizationType.COLLEGE.value
 
-    def get_college_name(self, obj):  # Updated method name
+    def get_college_name(self, obj):
         org_type = self._get_org_type(obj)
         user_org_link = self._get_user_org_link(obj, org_type)
-        return user_org_link.org.title if user_org_link and user_org_link.org else None  # Fetching org name
+        return user_org_link.org.title if user_org_link and user_org_link.org else None
