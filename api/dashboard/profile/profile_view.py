@@ -599,3 +599,14 @@ class KarmaFeedAPI(APIView):
             pass
 
         return CustomResponse(response=response).get_success_response()
+
+class UserPermuteAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.filter(muid=muid).first()
+        if user is None:
+            return  CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPermuteSerializer(user, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
