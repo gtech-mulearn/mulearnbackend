@@ -640,6 +640,6 @@ class UserLevelFeedAPI(APIView):
                 "level_order": user_level.get("level__level_order"),
                 "level_name": user_level.get("level__name"),
                 "level_karma": user_level.get("level__karma"),
-                "user_karma": user_karma.get("total_karma"),
+                "user_karma": user_karma.get("total_karma", 0) if user_karma else 0,
             }
         ).get_success_response()
