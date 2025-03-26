@@ -508,8 +508,12 @@ class LearningCircleMeetingListAPI(APIView):
         lat = request_data.get("lat")
         lon = request_data.get("lon")
         user_id = None
-        if JWTUtils.is_jwt_authenticated(request):
-            user_id = JWTUtils.fetch_user_id(request)
+        try:
+            if JWTUtils.is_jwt_authenticated(request):
+                user_id = JWTUtils.fetch_user_id(request)
+        except Exception as e:
+            print(e)
+            pass
         if saved or participated:
             if not user_id:
                 return CustomResponse(
@@ -521,7 +525,7 @@ class LearningCircleMeetingListAPI(APIView):
                 general_message="Please provide either saved or participated"
             ).get_failure_response()
         if user_id and not category and category != "all":
-            user_id = JWTUtils.fetch_user_id(request)
+            # user_id = JWTUtils.fetch_user_id(request)
             category = UserDomains.objects.filter(user_id=user_id).values_list(
                 "domain_name", flat=True
             )
