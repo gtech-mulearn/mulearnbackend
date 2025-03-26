@@ -902,10 +902,10 @@ class UserLogAPI(BaseAPI):
 class IGLeaderboardView(APIView):
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
-        # if ig_id is None:
-        #     return CustomResponse(
-        #         general_message="No IG ID provided"
-        #     ).get_failure_response()
+        if ig_id is None:
+            return CustomResponse(
+                general_message="No IG ID provided"
+            ).get_failure_response()
         logs = (
             KarmaActivityLog.objects.select_related("user", "task")
             .prefetch_related("user__wallet_user")
