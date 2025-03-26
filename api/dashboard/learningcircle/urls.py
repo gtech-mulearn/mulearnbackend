@@ -12,7 +12,7 @@ urlpatterns = [
     path("meeting/list/", learningcircle_views.LearningCircleMeetingListAPI.as_view()),
     path(
         "meeting/list/<str:circle_id>/",
-        learningcircle_views.LearningCircleMeetingView.as_view(),
+        learningcircle_views.LearningCircleMeetingListView.as_view(),
     ),
     path(
         "meeting/edit/<str:meet_id>/",
