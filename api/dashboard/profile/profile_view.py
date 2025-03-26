@@ -633,6 +633,7 @@ class UserLevelFeedAPI(APIView):
             )
             .annotate(total_karma=Sum("karma"))
             .values("total_karma")
+            .first()
         )
         return CustomResponse(
             response={
