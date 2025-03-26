@@ -614,6 +614,8 @@ class UserLevelFeedAPI(APIView):
     permission_classes = [CustomizePermission]
 
     def get(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(general_message="Unauthorized").get_failure_response()
         user_id = JWTUtils.fetch_user_id(request)
         user_level = (
             UserLvlLink.objects.select_related("level")
@@ -623,19 +625,20 @@ class UserLevelFeedAPI(APIView):
             .first()
         )
         user_karma = (
-            KarmaActivityLog.objects.filter(
+            KarmaActivityLog.objects.select_related("task")
+            .filter(
                 user_id=user_id,
                 appraiser_approved=True,
                 task__level_id=user_level.get("level_id"),
             )
             .annotate(total_karma=Sum("karma"))
-            .values_list("total_karma", flat=True)
-            .first()
+            .values("total_karma")
         )
         return CustomResponse(
             response={
                 "level_order": user_level.get("level__level_order"),
-                "level_karma": user_level.get("level__name"),
-                "user_karma": user_karma,
+                "level_name": user_level.get("level__name"),
+                "level_karma": user_level.get("level__karma"),
+                "user_karma": user_karma.get("total_karma"),
             }
         ).get_success_response()
