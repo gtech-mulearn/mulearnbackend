@@ -118,9 +118,7 @@ class LearningCircleMeetingInfoAPI(APIView):
         ).get_success_response()
 
 
-class LearningCircleMeetingView(APIView):
-    permission_classes = [CustomizePermission]
-
+class LearningCircleMeetingListView(APIView):
     def get(self, request, circle_id: str):
         learning_circle = LearningCircle.objects.get(id=circle_id)
         circle_meetings = CircleMeetingLog.objects.filter(circle_id=learning_circle)
@@ -129,6 +127,10 @@ class LearningCircleMeetingView(APIView):
             general_message="Circle Meetings fetched successfully",
             response=serializer.data,
         ).get_success_response()
+
+
+class LearningCircleMeetingView(APIView):
+    permission_classes = [CustomizePermission]
 
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
