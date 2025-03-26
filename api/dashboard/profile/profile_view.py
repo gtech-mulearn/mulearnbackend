@@ -15,7 +15,7 @@ from django.core.cache import cache
 from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink, UserLvlLink
 from db.user import Role, Socials, User, UserRoleLink, UserSettings
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -608,3 +608,34 @@ class KarmaFeedAPI(APIView):
             pass
 
         return CustomResponse(response=response).get_success_response()
+
+
+class UserLevelFeedAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_level = (
+            UserLvlLink.objects.select_related("level")
+            .filter(user_id=user_id)
+            .values("level_id", "level__level_order", "level__name", "level__karma")
+            .order_by("-created_at")
+            .first()
+        )
+        user_karma = (
+            KarmaActivityLog.objects.filter(
+                user_id=user_id,
+                appraiser_approved=True,
+                task__level_id=user_level.get("level_id"),
+            )
+            .annotate(total_karma=Sum("karma"))
+            .values_list("total_karma", flat=True)
+            .first()
+        )
+        return CustomResponse(
+            response={
+                "level_order": user_level.get("level__level_order"),
+                "level_karma": user_level.get("level__name"),
+                "user_karma": user_karma,
+            }
+        ).get_success_response()
