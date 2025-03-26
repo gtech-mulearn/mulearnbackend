@@ -2,7 +2,7 @@ import uuid
 from io import BytesIO
 from tempfile import NamedTemporaryFile
 
-from django.db.models import F, Prefetch, Sum
+from django.db.models import F, Prefetch, Sum, Q
 from django.http import FileResponse
 from openpyxl import load_workbook
 from rest_framework.views import APIView
@@ -14,6 +14,7 @@ from db.organization import (
     UserOrganizationLink,
     District,
 )
+from django.db.models import Count
 from db.user import User
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -142,6 +143,8 @@ class InstitutionPostUpdateDeleteAPI(APIView):
         ).get_success_response()
 
 
+
+
 class InstitutionAPI(APIView):
     def get(self, request, org_type, district_id=None):
         if district_id:
@@ -151,20 +154,19 @@ class InstitutionAPI(APIView):
         else:
             organisations = Organization.objects.filter(org_type=org_type)
 
-        org_queryset = organisations.select_related(
-            "affiliation",
-            # 'district',
-            # "district__zone__state__country",
-            # "district__zone__state",
-            # "district__zone",
-            # "district",
-        ).prefetch_related(
-            Prefetch(
-                "user_organization_link_org",
-                queryset=UserOrganizationLink.objects.filter(
-                    verified=True
-                ).select_related("user"),
+        org_queryset = (
+            organisations
+            .select_related("affiliation")
+            .prefetch_related(
+                Prefetch(
+                    "user_organization_link_org",
+                    queryset=UserOrganizationLink.objects.filter(
+                        verified=True
+                    ).select_related("user"),
+                )
             )
+            .annotate(user_count=Count("user_organization_link_org", filter=Q(user_organization_link_org__verified=True)))
+            .order_by("-user_count")  # Sort by highest user_count
         )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(

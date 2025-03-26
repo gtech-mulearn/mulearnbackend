@@ -417,7 +417,6 @@ class UserAddOrgAPI(APIView):
 
 
 class UserSearchAPI(APIView):
-
     def get(self, request):
         role = request.query_params.get("role")
         queryset = (
@@ -425,6 +424,7 @@ class UserSearchAPI(APIView):
             .select_related("wallet_user")
             .filter(user_settings_user__is_public=True)
             .prefetch_related("user_settings_user")
+            .order_by("-wallet_user__karma")
         )
         if role:
             queryset = queryset.filter(
@@ -448,3 +448,34 @@ class UserSearchAPI(APIView):
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=queryset.get("pagination")
         )
+
+
+class UserPreferencesAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user = User.objects.get(id=JWTUtils.fetch_user_id(request))
+
+        response = {
+            "interested_in_work": user.interested_in_work,
+            "interested_in_gig_work": user.interested_in_gig_work,
+        }
+
+        return CustomResponse(response=response).get_success_response()
+
+    def patch(self, request):
+        user = User.objects.get(id=JWTUtils.fetch_user_id(request))
+
+        interested_in_work = request.data.get("interested_in_work")
+        interested_in_gig_work = request.data.get("interested_in_gig_work")
+
+        if isinstance(interested_in_work, bool):
+            user.interested_in_work = interested_in_work
+        if isinstance(interested_in_gig_work, bool):
+            user.interested_in_gig_work = interested_in_gig_work
+
+        user.save()
+
+        return CustomResponse(
+            general_message="Preferences updated successfully"
+        ).get_success_response()

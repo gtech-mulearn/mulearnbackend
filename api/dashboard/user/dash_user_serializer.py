@@ -59,6 +59,8 @@ class UserSerializer(serializers.ModelSerializer):
             "dynamic_type",
             "user_domains",
             "user_endgoals",
+            "interested_in_work",
+            "interested_in_gig_work",
         ]
 
     # def get_interest_selected(self, obj):

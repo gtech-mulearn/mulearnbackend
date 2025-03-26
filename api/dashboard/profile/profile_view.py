@@ -11,6 +11,8 @@ from django.db.models import Prefetch
 from PIL import Image
 from rest_framework.views import APIView
 from django.db.models import Sum
+from django.core.cache import cache
+from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
@@ -23,9 +25,10 @@ from utils.types import (
     TFPTasksHashtags,
 )
 from utils.utils import DiscordWebhooks
+from django.contrib.auth.hashers import check_password
 
 from . import profile_serializer
-from .profile_serializer import LinkSocials
+from .profile_serializer import LinkSocials, ResetPasswordSerialzier
 from .profile_serializer import UserTermSerializer
 
 
@@ -403,14 +406,22 @@ class ResetPasswordAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        return self.save_password(request, user)
+        serializer = ResetPasswordSerialzier(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def save_password(self, request, user_obj):
-        new_password = request.data.get("password")
+        current_password = serializer.validated_data.get("current_password")
+        new_password = serializer.validated_data.get("password")
+
+        if not check_password(current_password, user.password):
+            return CustomResponse(
+                general_message="Current Password is incorrect"
+            ).get_failure_response()
+
         hashed_pwd = make_password(new_password)
 
-        user_obj.password = hashed_pwd
-        user_obj.save()
+        user.password = hashed_pwd
+        user.save()
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()
@@ -516,32 +527,55 @@ class UsertermAPI(APIView):
             return CustomResponse(response=response_data).get_failure_response()
 
 
+from datetime import datetime, timedelta
+from django.db.models import Sum
+from rest_framework.views import APIView
+
+
 class KarmaFeedAPI(APIView):
     def get(self, request):
         today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
+
+        cache_key = f"karma_feed_{today}"
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            return CustomResponse(response=cached_response).get_success_response()
+
+        first_day_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(
+            day=1
+        )
+        last_day_of_last_month = today.replace(day=1) - timedelta(days=1)
 
         top_user = (
             KarmaActivityLog.objects.filter(
                 appraiser_approved=True,
-                created_at__date=yesterday,
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
             )
             .values("user_id", "user__full_name", "user__muid")
             .annotate(total_karma=Sum("karma"))
             .order_by("-total_karma")  # Sort by highest total_karma
             .first()  # Get the first entry (highest total_karma)
         )
+
         top_user = {
             "karma": top_user["total_karma"] if top_user else 0,
             "full_name": top_user["user__full_name"] if top_user else None,
             "muid": top_user["user__muid"] if top_user else None,
         }
+
+        # Fetch the top college based on last month's karma
         top_org = (
             KarmaActivityLog.objects.select_related("user")
             .prefetch_related("user__user_organization_link_user__org")
             .filter(
                 appraiser_approved=True,
-                created_at__date=yesterday,
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
             )
             .values(
                 "user__user_organization_link_user__org__id",
@@ -551,6 +585,7 @@ class KarmaFeedAPI(APIView):
             .order_by("-total_karma")  # Sort by highest total_karma
             .first()  # Get the first entry (highest total_karma)
         )
+
         top_college = {
             "karma": top_org["total_karma"] if top_org else 0,
             "name": (
@@ -559,8 +594,17 @@ class KarmaFeedAPI(APIView):
                 else None
             ),
         }
+
         response = {
             "top_user": top_user,
             "top_college": top_college,
         }
+        try:
+            midnight = now().replace(hour=23, minute=59, second=59)
+            cache_timeout = (midnight - now()).seconds
+            cache.set(cache_key, response, cache_timeout)
+        except Exception as e:
+            print(e)
+            pass
+
         return CustomResponse(response=response).get_success_response()
