@@ -25,9 +25,10 @@ from utils.types import (
     TFPTasksHashtags,
 )
 from utils.utils import DiscordWebhooks
+from django.contrib.auth.hashers import check_password
 
 from . import profile_serializer
-from .profile_serializer import LinkSocials
+from .profile_serializer import LinkSocials, ResetPasswordSerialzier
 from .profile_serializer import UserTermSerializer
 
 
@@ -405,14 +406,22 @@ class ResetPasswordAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        return self.save_password(request, user)
+        serializer = ResetPasswordSerialzier(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def save_password(self, request, user_obj):
-        new_password = request.data.get("password")
+        current_password = serializer.validated_data.get("current_password")
+        new_password = serializer.validated_data.get("password")
+
+        if not check_password(current_password, user.password):
+            return CustomResponse(
+                general_message="Current Password is incorrect"
+            ).get_failure_response()
+
         hashed_pwd = make_password(new_password)
 
-        user_obj.password = hashed_pwd
-        user_obj.save()
+        user.password = hashed_pwd
+        user.save()
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()
