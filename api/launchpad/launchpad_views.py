@@ -1,165 +1,218 @@
 import uuid
 
-from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q
+from django.db.models import (
+    Sum,
+    Max,
+    Prefetch,
+    F,
+    OuterRef,
+    Subquery,
+    IntegerField,
+    Count,
+    Q,
+)
 
 from rest_framework.views import APIView
+from django.core.files.storage import FileSystemStorage
+from decouple import config as decouple_config
 
-from .serializers import LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,\
-      CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer, LaunchpadUpdateUserSerializer,LaunchPadRankSerializer,\
-          TaskCompletedLeaderBoardSerializer
-from api.dashboard.profile.profile_serializer import UserProfileSerializer , LinkSocials ,UserLevelSerializer ,UserLogSerializer
+from .serializers import (
+    LaunchpadLeaderBoardSerializer,
+    LaunchpadParticipantsSerializer,
+    LaunchpadUserListSerializer,
+    CollegeDataSerializer,
+    LaunchpadUserSerializer,
+    UserProfileUpdateSerializer,
+    LaunchpadUpdateUserSerializer,
+    LaunchPadRankSerializer,
+    TaskCompletedLeaderBoardSerializer,
+)
+from api.dashboard.profile.profile_serializer import (
+    UserProfileSerializer,
+    LinkSocials,
+    UserLevelSerializer,
+    UserLogSerializer,
+)
 
 from utils.response import CustomResponse
 from utils.utils import CommonUtils, ImportCSV
 from utils.types import LaunchPadLevels, LaunchPadRoles
 from utils.permission import JWTUtils
-from db.user import User, UserRoleLink , Role , Socials
+from db.user import User, UserRoleLink, Role, Socials
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog, Level, TaskList, Wallet
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink , LaunchPad
-
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
 
 
 class Leaderboard(APIView):
     def get(self, request):
-        total_karma_subquery = KarmaActivityLog.objects.filter(
-            user=OuterRef('id'),
-            task__event='launchpad',
-            appraiser_approved=True,
-        ).values('user').annotate(
-            total_karma=Sum('karma')
-        ).values('total_karma')
+        total_karma_subquery = (
+            KarmaActivityLog.objects.filter(
+                user=OuterRef("id"),
+                task__event="launchpad",
+                appraiser_approved=True,
+            )
+            .values("user")
+            .annotate(total_karma=Sum("karma"))
+            .values("total_karma")
+        )
         allowed_org_types = ["College", "School", "Company"]
 
         intro_task_completed_users = KarmaActivityLog.objects.filter(
-            task__event='launchpad',
+            task__event="launchpad",
             appraiser_approved=True,
-            task__hashtag='#lp24-introduction',
-        ).values('user')
+            task__hashtag="#lp24-introduction",
+        ).values("user")
 
-        latest_org_link = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__title')[:1]
+        latest_org_link = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__title")[:1]
+        )
 
-        latest_district = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__name')[:1]
+        latest_district = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__name")[:1]
+        )
 
-        latest_state = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+        latest_state = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__zone__state__name")[:1]
+        )
 
-        users = User.objects.filter(
-            karma_activity_log_user__task__event="launchpad",
-            karma_activity_log_user__appraiser_approved=True,
-            id__in=intro_task_completed_users
-        ).annotate(
-            karma=Subquery(total_karma_subquery, output_field=IntegerField()),
-            org=Subquery(latest_org_link),
-            district_name=Subquery(latest_district),
-            state=Subquery(latest_state),
-            time_=Max("karma_activity_log_user__created_at"),
-        ).order_by("-karma", "time_")
+        users = (
+            User.objects.filter(
+                karma_activity_log_user__task__event="launchpad",
+                karma_activity_log_user__appraiser_approved=True,
+                id__in=intro_task_completed_users,
+            )
+            .annotate(
+                karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+                org=Subquery(latest_org_link),
+                district_name=Subquery(latest_district),
+                state=Subquery(latest_state),
+                time_=Max("karma_activity_log_user__created_at"),
+            )
+            .order_by("-karma", "time_")
+        )
 
-        rank_list = list(users) 
+        rank_list = list(users)
         for index, user in enumerate(rank_list):
             user.rank = index + 1
-        
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            users,
-            request,
-            ["full_name", "karma", "org", "district_name", "state"]
+            users, request, ["full_name", "karma", "org", "district_name", "state"]
         )
 
         final_users = paginated_queryset.get("queryset")
         if request.query_params.get("search"):
             final_users = list(final_users)
             for user in final_users:
-                user.rank = next(rank_user.rank for rank_user in rank_list if rank_user.muid == user.muid)
+                user.rank = next(
+                    rank_user.rank
+                    for rank_user in rank_list
+                    if rank_user.muid == user.muid
+                )
 
-        serializer = LaunchpadLeaderBoardSerializer(
-            final_users,
-            many=True
-        )
-        
+        serializer = LaunchpadLeaderBoardSerializer(final_users, many=True)
+
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
+
 
 class TaskCompletedLeaderboard(APIView):
     def get(self, request):
 
-        launchpad_tasks = TaskList.objects.filter(event='launchpad').values('id')
+        launchpad_tasks = TaskList.objects.filter(event="launchpad").values("id")
 
-        completed_tasks_counts = KarmaActivityLog.objects.filter(
-            task__event='launchpad',
-            appraiser_approved=True,
-        ).values('user').annotate(
-            completed_tasks=Count('task', distinct=True)
-        ).filter(completed_tasks=launchpad_tasks.count())
-        
-        allowed_org_types = ["College", "School", "Company"]
-        
-        completed_users = completed_tasks_counts.values('user')
-        
-        latest_org_link = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__title')[:1]
-
-        latest_district = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__name')[:1]
-
-        latest_state = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
-        
-        wallet_subquery = Wallet.objects.filter(
-            user=OuterRef('id')  
-        ).values('karma')[:1] 
-
-        users = User.objects.filter(
-            karma_activity_log_user__task__event="launchpad",
-            karma_activity_log_user__appraiser_approved=True,
-            id__in=completed_users
-        ).annotate(
-            karma=Subquery(wallet_subquery,output_field=IntegerField()),
-            org=Subquery(latest_org_link),
-            district_name=Subquery(latest_district),
-            state=Subquery(latest_state),
-            time_=Max("karma_activity_log_user__created_at"),
-        ).order_by("-karma", "time_")
-
-        rank_list = list(users) 
-        for index, user in enumerate(rank_list):
-            user.rank = index + 1 
-        
-        
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            users,
-            request,
-            ["muid","full_name","org"]
+        completed_tasks_counts = (
+            KarmaActivityLog.objects.filter(
+                task__event="launchpad",
+                appraiser_approved=True,
+            )
+            .values("user")
+            .annotate(completed_tasks=Count("task", distinct=True))
+            .filter(completed_tasks=launchpad_tasks.count())
         )
-        
+
+        allowed_org_types = ["College", "School", "Company"]
+
+        completed_users = completed_tasks_counts.values("user")
+
+        latest_org_link = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__title")[:1]
+        )
+
+        latest_district = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__name")[:1]
+        )
+
+        latest_state = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__zone__state__name")[:1]
+        )
+
+        wallet_subquery = Wallet.objects.filter(user=OuterRef("id")).values("karma")[:1]
+
+        users = (
+            User.objects.filter(
+                karma_activity_log_user__task__event="launchpad",
+                karma_activity_log_user__appraiser_approved=True,
+                id__in=completed_users,
+            )
+            .annotate(
+                karma=Subquery(wallet_subquery, output_field=IntegerField()),
+                org=Subquery(latest_org_link),
+                district_name=Subquery(latest_district),
+                state=Subquery(latest_state),
+                time_=Max("karma_activity_log_user__created_at"),
+            )
+            .order_by("-karma", "time_")
+        )
+
+        rank_list = list(users)
+        for index, user in enumerate(rank_list):
+            user.rank = index + 1
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            users, request, ["muid", "full_name", "org"]
+        )
+
         final_users = paginated_queryset.get("queryset")
         if request.query_params.get("search"):
             final_users = list(final_users)
             for user in final_users:
-                user.rank = next(rank_user.rank for rank_user in rank_list if rank_user.muid == user.muid)
+                user.rank = next(
+                    rank_user.rank
+                    for rank_user in rank_list
+                    if rank_user.muid == user.muid
+                )
 
-        serializer = TaskCompletedLeaderBoardSerializer(
-            final_users,
-            many=True
-        )
+        serializer = TaskCompletedLeaderBoardSerializer(final_users, many=True)
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
+
 
 class ListParticipantsAPI(APIView):
     def get(self, request):
@@ -167,44 +220,59 @@ class ListParticipantsAPI(APIView):
         allowed_levels = LaunchPadLevels.get_all_values()
 
         intro_task_completed_users = KarmaActivityLog.objects.filter(
-            task__event='launchpad',
+            task__event="launchpad",
             appraiser_approved=True,
-            task__hashtag='#lp24-introduction',
-        ).values('user')
+            task__hashtag="#lp24-introduction",
+        ).values("user")
 
-        latest_org_link = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__title')[:1]
-
-        latest_district = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__name')[:1]
-
-        latest_state = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
-
-        users = User.objects.filter(
-            karma_activity_log_user__task__event="launchpad",
-            karma_activity_log_user__appraiser_approved=True,
-            id__in=intro_task_completed_users
-        ).prefetch_related(
-            Prefetch(
-                "user_role_link_user",
-                queryset=UserRoleLink.objects.filter(verified=True, role__title__in=allowed_levels).select_related('role')
+        latest_org_link = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
             )
-        ).annotate(
-            org=Subquery(latest_org_link),
-            district_name=Subquery(latest_district),
-            state=Subquery(latest_state),
-            level=F("user_role_link_user__role__title"),
-            time_=Max("karma_activity_log_user__created_at"),
-        ).filter(
-            Q(level__in=allowed_levels) | Q(level__isnull=True)
-        ).distinct()
+            .order_by("-created_at")
+            .values("org__title")[:1]
+        )
+
+        latest_district = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__name")[:1]
+        )
+
+        latest_state = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__zone__state__name")[:1]
+        )
+
+        users = (
+            User.objects.filter(
+                karma_activity_log_user__task__event="launchpad",
+                karma_activity_log_user__appraiser_approved=True,
+                id__in=intro_task_completed_users,
+            )
+            .prefetch_related(
+                Prefetch(
+                    "user_role_link_user",
+                    queryset=UserRoleLink.objects.filter(
+                        verified=True, role__title__in=allowed_levels
+                    ).select_related("role"),
+                )
+            )
+            .annotate(
+                org=Subquery(latest_org_link),
+                district_name=Subquery(latest_district),
+                state=Subquery(latest_state),
+                level=F("user_role_link_user__role__title"),
+                time_=Max("karma_activity_log_user__created_at"),
+            )
+            .filter(Q(level__in=allowed_levels) | Q(level__isnull=True))
+            .distinct()
+        )
 
         if district := request.query_params.get("district"):
             users = users.filter(district_name=district)
@@ -219,7 +287,13 @@ class ListParticipantsAPI(APIView):
             users,
             request,
             ["full_name", "level", "org", "district_name", "state"],
-            sort_fields={"full_name": "full_name", "org": "org", "district_name": "district_name", "state": "state", "level": "level"}
+            sort_fields={
+                "full_name": "full_name",
+                "org": "org",
+                "district_name": "district_name",
+                "state": "state",
+                "level": "level",
+            },
         )
 
         serializer = LaunchpadParticipantsSerializer(
@@ -236,91 +310,121 @@ class LaunchpadDetailsCount(APIView):
         allowed_levels = LaunchPadLevels.get_all_values()
 
         intro_task_completed_users = KarmaActivityLog.objects.filter(
-            task__event='launchpad',
+            task__event="launchpad",
             appraiser_approved=True,
-            task__hashtag='#lp24-introduction',
-        ).values('user')
+            task__hashtag="#lp24-introduction",
+        ).values("user")
 
-        latest_org_link = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__title')[:1]
-
-        latest_district = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__name')[:1]
-
-        latest_state = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
-
-        users = User.objects.filter(
-            karma_activity_log_user__task__event="launchpad",
-            karma_activity_log_user__appraiser_approved=True,
-            id__in=intro_task_completed_users
-        ).prefetch_related(
-            Prefetch(
-                "user_role_link_user",
-                queryset=UserRoleLink.objects.filter(verified=True,
-                                                     role__title__in=allowed_levels).select_related('role')
+        latest_org_link = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
             )
-        ).annotate(
-            org=Subquery(latest_org_link),
-            district_name=Subquery(latest_district),
-            state=Subquery(latest_state),
-            level=F("user_role_link_user__role__title"),
-            time_=Max("karma_activity_log_user__created_at"),
-        ).distinct()
+            .order_by("-created_at")
+            .values("org__title")[:1]
+        )
+
+        latest_district = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__name")[:1]
+        )
+
+        latest_state = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__zone__state__name")[:1]
+        )
+
+        users = (
+            User.objects.filter(
+                karma_activity_log_user__task__event="launchpad",
+                karma_activity_log_user__appraiser_approved=True,
+                id__in=intro_task_completed_users,
+            )
+            .prefetch_related(
+                Prefetch(
+                    "user_role_link_user",
+                    queryset=UserRoleLink.objects.filter(
+                        verified=True, role__title__in=allowed_levels
+                    ).select_related("role"),
+                )
+            )
+            .annotate(
+                org=Subquery(latest_org_link),
+                district_name=Subquery(latest_district),
+                state=Subquery(latest_state),
+                level=F("user_role_link_user__role__title"),
+                time_=Max("karma_activity_log_user__created_at"),
+            )
+            .distinct()
+        )
 
         # Count participants at each level
         level_counts = {
-            "total_participants": users.values('id').count(),
+            "total_participants": users.values("id").count(),
             "Level_1": users.filter(level=LaunchPadLevels.LEVEL_1.value).count(),
             "Level_2": users.filter(level=LaunchPadLevels.LEVEL_2.value).count(),
             "Level_3": users.filter(level=LaunchPadLevels.LEVEL_3.value).count(),
-            "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count()
+            "Level_4": users.filter(level=LaunchPadLevels.LEVEL_4.value).count(),
         }
 
         return CustomResponse(response=level_counts).get_success_response()
+
 
 class CollegeData(APIView):
     def get(self, request):
         allowed_levels = LaunchPadLevels.get_all_values()
 
-        org = Organization.objects.filter(
-            org_type="College",
-        ).prefetch_related(
-            Prefetch(
-                "user_organization_link_org",
-                queryset=UserOrganizationLink.objects.filter(
-                    user__user_role_link_user__role__title__in=allowed_levels
+        org = (
+            Organization.objects.filter(
+                org_type="College",
+            )
+            .prefetch_related(
+                Prefetch(
+                    "user_organization_link_org",
+                    queryset=UserOrganizationLink.objects.filter(
+                        user__user_role_link_user__role__title__in=allowed_levels
+                    ),
                 )
             )
-        ).filter(
-            user_organization_link_org__user__user_role_link_user__role__title__in=allowed_levels
-        ).annotate(
-            district_name=F("district__name"),
-            state=F("district__zone__state__name"),
-            total_users=Count("user_organization_link_org__user"),
-            level1 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_1.value)
-            ),
-            level2 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_2.value)
-            ),
-            level3 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_3.value)
-            ),
-            level4 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value)
+            .filter(
+                user_organization_link_org__user__user_role_link_user__role__title__in=allowed_levels
             )
-        ).order_by("-total_users")
+            .annotate(
+                district_name=F("district__name"),
+                state=F("district__zone__state__name"),
+                total_users=Count("user_organization_link_org__user"),
+                level1=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_1.value
+                    ),
+                ),
+                level2=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_2.value
+                    ),
+                ),
+                level3=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_3.value
+                    ),
+                ),
+                level4=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value
+                    ),
+                ),
+            )
+            .order_by("-total_users")
+        )
 
         if district := request.query_params.get("district"):
             org = org.filter(district_name=district)
@@ -333,7 +437,11 @@ class CollegeData(APIView):
             org,
             request,
             ["title", "district_name", "state"],
-            sort_fields={"title": "title", "district_name": "district_name", "state": "state"}
+            sort_fields={
+                "title": "title",
+                "district_name": "district_name",
+                "state": "state",
+            },
         )
 
         serializer = CollegeDataSerializer(
@@ -348,15 +456,19 @@ class LaunchPadUser(APIView):
 
     def post(self, request):
         data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = data.pop("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
-        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+        if not (
+            auth_user := LaunchPadUsers.objects.filter(
+                email=auth_mail, role=LaunchPadRoles.ADMIN.value
+            ).first()
+        ):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         serializer = LaunchpadUserSerializer(data=data)
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
 
-        colleges = data.get('colleges')
+        colleges = data.get("colleges")
         errors = {}
         error = False
         not_found_colleges = []
@@ -365,31 +477,37 @@ class LaunchPadUser(APIView):
             if not Organization.objects.filter(id=college, org_type="College").exists():
                 error = True
                 not_found_colleges.append(college)
-            elif link := LaunchPadUserCollegeLink.objects.filter(college_id=college).first():
-                    link.delete()
+            elif link := LaunchPadUserCollegeLink.objects.filter(
+                college_id=college
+            ).first():
+                link.delete()
             else:
                 LaunchPadUserCollegeLink.objects.create(
                     id=uuid.uuid4(),
                     user=user,
                     college_id=college,
                     created_by=auth_user,
-                    updated_by=auth_user
+                    updated_by=auth_user,
                 )
-        errors[data.get('email')] = {}
-        errors[data.get('email')]["not_found_colleges"] = not_found_colleges
+        errors[data.get("email")] = {}
+        errors[data.get("email")]["not_found_colleges"] = not_found_colleges
         if error:
             return CustomResponse(message=errors).get_failure_response()
-        return CustomResponse(general_message="Successfully added user").get_success_response()
+        return CustomResponse(
+            general_message="Successfully added user"
+        ).get_success_response()
 
     def get(self, request):
-        auth_mail = request.query_params.get('current_user', None)
-        if not LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).exists():
+        auth_mail = request.query_params.get("current_user", None)
+        if not LaunchPadUsers.objects.filter(
+            email=auth_mail, role=LaunchPadRoles.ADMIN.value
+        ).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         users = LaunchPadUsers.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users,
             request,
-            ["full_name", "phone_number", "email", "role", "district", "zone"]
+            ["full_name", "phone_number", "email", "role", "district", "zone"],
         )
 
         serializer = LaunchpadUserListSerializer(
@@ -401,19 +519,30 @@ class LaunchPadUser(APIView):
 
     def put(self, request, email):
         data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = data.pop("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
-        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+        if not (
+            auth_user := LaunchPadUsers.objects.filter(
+                email=auth_mail, role=LaunchPadRoles.ADMIN.value
+            ).first()
+        ):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         try:
             user = LaunchPadUsers.objects.get(email=email)
         except LaunchPadUsers.DoesNotExist:
-            return CustomResponse(general_message="User not found").get_failure_response()
-        serializer = LaunchpadUpdateUserSerializer(user, data=data, context={"auth_user": auth_user})
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+        serializer = LaunchpadUpdateUserSerializer(
+            user, data=data, context={"auth_user": auth_user}
+        )
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message="Successfully updated user").get_success_response()
+            return CustomResponse(
+                general_message="Successfully updated user"
+            ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
 
 class LaunchPadUserPublic(APIView):
 
@@ -421,7 +550,9 @@ class LaunchPadUserPublic(APIView):
         try:
             user = LaunchPadUsers.objects.get(email=email)
         except LaunchPadUsers.DoesNotExist:
-            return CustomResponse(general_message="User not found").get_failure_response()
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
         serializer = LaunchpadUserListSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -438,7 +569,7 @@ class UserProfile(APIView):
 
     def put(self, request):
         data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = data.pop("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if not (user := LaunchPadUsers.objects.filter(email=auth_mail).first()):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
@@ -446,14 +577,16 @@ class UserProfile(APIView):
         serializer = UserProfileUpdateSerializer(user, data=data)
         if serializer.is_valid():
             serializer.save()
-            return CustomResponse(general_message="Successfully updated user").get_success_response()
+            return CustomResponse(
+                general_message="Successfully updated user"
+            ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
 class UserBasedCollegeData(APIView):
 
     def get(self, request):
-        auth_mail = request.query_params.get('current_user', None)
+        auth_mail = request.query_params.get("current_user", None)
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         user = LaunchPadUsers.objects.get(email=auth_mail)
@@ -462,44 +595,53 @@ class UserBasedCollegeData(APIView):
 
         allowed_levels = LaunchPadLevels.get_all_values()
 
-        org = Organization.objects.filter(
-            org_type="College",
-            id__in=college_ids
-        ).prefetch_related(
-            Prefetch(
-                "user_organization_link_org",
-                queryset=UserOrganizationLink.objects.filter(
-                    user__user_role_link_user__role__title__in=allowed_levels
+        org = (
+            Organization.objects.filter(org_type="College", id__in=college_ids)
+            .prefetch_related(
+                Prefetch(
+                    "user_organization_link_org",
+                    queryset=UserOrganizationLink.objects.filter(
+                        user__user_role_link_user__role__title__in=allowed_levels
+                    ),
                 )
             )
-        ).filter(
-            user_organization_link_org__user__user_role_link_user__role__title__in=allowed_levels
-        ).annotate(
-            district_name=F("district__name"),
-            state=F("district__zone__state__name"),
-            total_users=Count("user_organization_link_org__user"),
-            level1 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_1.value)
-            ),
-            level2 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_2.value)
-            ),
-            level3 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_3.value)
-            ),
-            level4 = Count(
-                "user_organization_link_org__user",
-                filter=Q(user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value)
+            .filter(
+                user_organization_link_org__user__user_role_link_user__role__title__in=allowed_levels
             )
-        ).order_by("-total_users")
+            .annotate(
+                district_name=F("district__name"),
+                state=F("district__zone__state__name"),
+                total_users=Count("user_organization_link_org__user"),
+                level1=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_1.value
+                    ),
+                ),
+                level2=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_2.value
+                    ),
+                ),
+                level3=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_3.value
+                    ),
+                ),
+                level4=Count(
+                    "user_organization_link_org__user",
+                    filter=Q(
+                        user_organization_link_org__user__user_role_link_user__role__title=LaunchPadLevels.LEVEL_4.value
+                    ),
+                ),
+            )
+            .order_by("-total_users")
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            org,
-            request,
-            ["title", "district_name", "state"]
+            org, request, ["title", "district_name", "state"]
         )
 
         serializer = CollegeDataSerializer(
@@ -514,35 +656,51 @@ class BulkLaunchpadUser(APIView):
 
     def post(self, request):
         data = request.data
-        auth_mail = data.pop('current_user', None)
+        auth_mail = data.pop("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
-        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+        if not (
+            auth_user := LaunchPadUsers.objects.filter(
+                email=auth_mail, role=LaunchPadRoles.ADMIN.value
+            ).first()
+        ):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
         try:
-            file_obj = request.FILES['user_data']
+            file_obj = request.FILES["user_data"]
         except KeyError:
-            return CustomResponse(general_message={'File not found.'}).get_failure_response()
+            return CustomResponse(
+                general_message={"File not found."}
+            ).get_failure_response()
         excel_data = ImportCSV()
         excel_data = excel_data.read_excel_file(file_obj)
         if not excel_data:
-            return CustomResponse(general_message={'Empty csv file.'}).get_failure_response()
+            return CustomResponse(
+                general_message={"Empty csv file."}
+            ).get_failure_response()
         errors = {}
         error = False
 
         for data in excel_data[1:]:
             not_found_colleges = []
-            data['colleges'] = data['colleges'].split(",") if data.get('colleges') else []
+            data["colleges"] = (
+                data["colleges"].split(",") if data.get("colleges") else []
+            )
             serializer = LaunchpadUserSerializer(data=data)
             if not serializer.is_valid():
                 continue
             user = serializer.save()
-            if data.get('colleges') is None:
+            if data.get("colleges") is None:
                 continue
-            for college in data.get('colleges'):
-                if not (org := Organization.objects.filter(title=college, org_type="College").first()):
+            for college in data.get("colleges"):
+                if not (
+                    org := Organization.objects.filter(
+                        title=college, org_type="College"
+                    ).first()
+                ):
                     error = True
                     not_found_colleges.append(college)
-                elif link := LaunchPadUserCollegeLink.objects.filter(college_id=college).first():
+                elif link := LaunchPadUserCollegeLink.objects.filter(
+                    college_id=college
+                ).first():
                     link.delete()
                 else:
                     LaunchPadUserCollegeLink.objects.create(
@@ -550,110 +708,152 @@ class BulkLaunchpadUser(APIView):
                         user=user,
                         college=org,
                         created_by=auth_user,
-                        updated_by=auth_user
+                        updated_by=auth_user,
                     )
-            errors[data.get('email')] = {}
-            errors[data.get('email')]["not_found_colleges"] = not_found_colleges
+            errors[data.get("email")] = {}
+            errors[data.get("email")]["not_found_colleges"] = not_found_colleges
         if error:
             return CustomResponse(message=errors).get_failure_response()
-        return CustomResponse(general_message="Successfully added users").get_success_response()
+        return CustomResponse(
+            general_message="Successfully added users"
+        ).get_success_response()
 
 
 class LaunchPadListAdmin(APIView):
 
     def get(self, request):
-        auth_mail = request.query_params.get('current_user', None)
+        auth_mail = request.query_params.get("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
-        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
+        if not (
+            auth_user := LaunchPadUsers.objects.filter(
+                email=auth_mail, role=LaunchPadRoles.ADMIN.value
+            ).first()
+        ):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
-        total_karma_subquery = KarmaActivityLog.objects.filter(
-            user=OuterRef('id'),
-            task__event='launchpad',
-            appraiser_approved=True,
-        ).values('user').annotate(
-            total_karma=Sum('karma')
-        ).values('total_karma')
+        total_karma_subquery = (
+            KarmaActivityLog.objects.filter(
+                user=OuterRef("id"),
+                task__event="launchpad",
+                appraiser_approved=True,
+            )
+            .values("user")
+            .annotate(total_karma=Sum("karma"))
+            .values("total_karma")
+        )
         allowed_org_types = ["College", "School", "Company"]
 
         intro_task_completed_users = KarmaActivityLog.objects.filter(
-            task__event='launchpad',
+            task__event="launchpad",
             appraiser_approved=True,
-            task__hashtag='#lp24-introduction',
-        ).values('user')
+            task__hashtag="#lp24-introduction",
+        ).values("user")
 
-        latest_org_link = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__title')[:1]
+        latest_org_link = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__title")[:1]
+        )
 
-        latest_district = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__name')[:1]
+        latest_district = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__name")[:1]
+        )
 
-        latest_state = UserOrganizationLink.objects.filter(
-            user=OuterRef('id'),
-            org__org_type__in=allowed_org_types
-        ).order_by('-created_at').values('org__district__zone__state__name')[:1]
+        latest_state = (
+            UserOrganizationLink.objects.filter(
+                user=OuterRef("id"), org__org_type__in=allowed_org_types
+            )
+            .order_by("-created_at")
+            .values("org__district__zone__state__name")[:1]
+        )
 
-        users = User.objects.filter(
-            karma_activity_log_user__task__event="launchpad",
-            karma_activity_log_user__appraiser_approved=True,
-            id__in=intro_task_completed_users
-        ).annotate(
-            karma=Subquery(total_karma_subquery, output_field=IntegerField()),
-            org=Subquery(latest_org_link),
-            district_name=Subquery(latest_district),
-            state=Subquery(latest_state),
-            time_=Max("karma_activity_log_user__created_at"),
-        ).order_by("-karma", "time_")
+        users = (
+            User.objects.filter(
+                karma_activity_log_user__task__event="launchpad",
+                karma_activity_log_user__appraiser_approved=True,
+                id__in=intro_task_completed_users,
+            )
+            .annotate(
+                karma=Subquery(total_karma_subquery, output_field=IntegerField()),
+                org=Subquery(latest_org_link),
+                district_name=Subquery(latest_district),
+                state=Subquery(latest_state),
+                time_=Max("karma_activity_log_user__created_at"),
+            )
+            .order_by("-karma", "time_")
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            users,
-            request,
-            ["full_name", "karma", "org", "district_name", "state"]
+            users, request, ["full_name", "karma", "org", "district_name", "state"]
         )
 
         serializer = LaunchpadLeaderBoardSerializer(
             paginated_queryset.get("queryset"), many=True
-        )        
+        )
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
-        
-        
+
+
 class BaseAPI(APIView):
     def get_authenticated_user(self, request, launchpad_id):
-        auth_mail = request.query_params.get('current_user', None)
+        auth_mail = request.query_params.get("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
         if launchpad_id is None:
-            return None, CustomResponse(general_message="No launchpad id provided").get_failure_response()
-        if not (auth_user := LaunchPadUsers.objects.filter(email=auth_mail, role=LaunchPadRoles.ADMIN.value).first()):
-            return None, CustomResponse(general_message="Unauthorized").get_failure_response()
+            return (
+                None,
+                CustomResponse(
+                    general_message="No launchpad id provided"
+                ).get_failure_response(),
+            )
+        if not (
+            auth_user := LaunchPadUsers.objects.filter(
+                email=auth_mail, role=LaunchPadRoles.ADMIN.value
+            ).first()
+        ):
+            return (
+                None,
+                CustomResponse(general_message="Unauthorized").get_failure_response(),
+            )
         try:
             user = LaunchPad.objects.get(launchpad_id=launchpad_id).user
         except LaunchPad.DoesNotExist:
-            return None, CustomResponse(general_message="Invalid Launchpad ID").get_failure_response()
+            return (
+                None,
+                CustomResponse(
+                    general_message="Invalid Launchpad ID"
+                ).get_failure_response(),
+            )
         return user, None
- 
+
+
 class UserProfileAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
         user, response = self.get_authenticated_user(request, launchpad_id)
         if response:
             return response
         serializer = UserProfileSerializer(user, many=False)
-        launchpad_karma = KarmaActivityLog.objects.filter(
-            user=user,
-            task__event='launchpad',
-            appraiser_approved=True,
-        ).aggregate(total_karma=Sum('karma'))['total_karma'] or 0
+        launchpad_karma = (
+            KarmaActivityLog.objects.filter(
+                user=user,
+                task__event="launchpad",
+                appraiser_approved=True,
+            ).aggregate(total_karma=Sum("karma"))["total_karma"]
+            or 0
+        )
         rank_serializer = LaunchPadRankSerializer(user)
-        launchpad_rank = rank_serializer.data['launchpad_rank']
-        
+        launchpad_rank = rank_serializer.data["launchpad_rank"]
+
         data = serializer.data
-        data['launchpad_karma'] = launchpad_karma
-        data['launchpad_rank'] = launchpad_rank
+        data["launchpad_karma"] = launchpad_karma
+        data["launchpad_rank"] = launchpad_rank
         return CustomResponse(response=data).get_success_response()
+
 
 class GetSocialsAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
@@ -664,28 +864,98 @@ class GetSocialsAPI(BaseAPI):
         serializer = LinkSocials(instance=social_instance)
         return CustomResponse(response=serializer.data).get_success_response()
 
+
 class UserLevelsAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
         user, response = self.get_authenticated_user(request, launchpad_id)
         if response:
             return response
         user_levels_link_query = Level.objects.all().order_by("level_order")
-        serializer = UserLevelSerializer(user_levels_link_query, many=True, context={"user_id": user.id})
+        serializer = UserLevelSerializer(
+            user_levels_link_query, many=True, context={"user_id": user.id}
+        )
         return CustomResponse(response=serializer.data).get_success_response()
+
 
 class UserLogAPI(BaseAPI):
     def get(self, request, launchpad_id=None):
-        launchpad_log = request.query_params.get('launchpad_log', False)
+        launchpad_log = request.query_params.get("launchpad_log", False)
         user, response = self.get_authenticated_user(request, launchpad_id)
         if response:
             return response
 
         query = Q(user=user.id, appraiser_approved=True)
         if launchpad_log:
-            query &= Q(task__event='launchpad')
-        karma_activity_log = KarmaActivityLog.objects.filter(query).order_by("-created_at")
+            query &= Q(task__event="launchpad")
+        karma_activity_log = KarmaActivityLog.objects.filter(query).order_by(
+            "-created_at"
+        )
         if not karma_activity_log.exists():
-            return CustomResponse(general_message="No karma details available for user").get_success_response()
+            return CustomResponse(
+                general_message="No karma details available for user"
+            ).get_success_response()
 
         serializer = UserLogSerializer(karma_activity_log, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class IGLeaderboardView(APIView):
+    def get(self, request):
+        ig_id = request.query_params.get("ig_id")
+        # if ig_id is None:
+        #     return CustomResponse(
+        #         general_message="No IG ID provided"
+        #     ).get_failure_response()
+        logs = (
+            KarmaActivityLog.objects.select_related("user", "task")
+            .prefetch_related("user__wallet_user")
+            .filter(task__ig_id=ig_id, appraiser_approved=True)
+            .values("user_id")
+            .annotate(
+                ig_karma=Sum("karma"),
+            )
+            .order_by("-ig_karma")
+            .values(
+                "user_id",
+                "user__full_name",
+                "user__email",
+                "user__muid",
+                # "user__profile_pic",
+                "ig_karma",
+                "user__wallet_user__karma",
+            )
+        )
+        fs = FileSystemStorage()
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            logs,
+            request,
+            search_fields=[
+                "user__full_name",
+                "user__email",
+                "user__muid",
+            ],
+            sort_fields={
+                "ig_karma": "ig_karma",
+                "total_karma": "total_karma",
+            },
+        )
+
+        data = [
+            {
+                "full_name": row.get("user__full_name"),
+                "email": row.get("user__email"),
+                "muid": row.get("user__muid"),
+                "profile_pic": (
+                    f"{decouple_config('BE_DOMAIN_NAME')}{fs.url('user/profile/{}.png'.format('user_id'))}"
+                    if fs.exists("user/profile/{}.png".format("user_id"))
+                    else None
+                ),
+                "ig_karma": row.get("ig_karma"),
+                "total_karma": row.get("user__wallet_user__karma"),
+            }
+            for row in paginated_queryset.get("queryset")
+        ]
+        return CustomResponse().paginated_response(
+            data=data, pagination=paginated_queryset.get("pagination")
+        )
