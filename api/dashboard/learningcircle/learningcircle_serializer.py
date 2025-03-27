@@ -431,6 +431,43 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
             )
         return data
 
+class CircleMeeupPublicSerializer(serializers.ModelSerializer):
+    title = serializers.CharField(read_only=True)
+    org = serializers.CharField(source="circle_id.org.title", read_only=True)
+    meet_place = serializers.CharField(read_only=True)
+    meet_time = serializers.DateTimeField(read_only=True)
+    is_started = serializers.SerializerMethodField()
+    is_ended = serializers.SerializerMethodField()
+    ig_id = serializers.CharField(source="circle_id.ig.id", read_only=True)
+    ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
+    created_by = serializers.CharField(source="created_by.full_name", read_only=True)
+
+    def get_is_started(self, obj):
+        return obj.meet_time <= DateTimeUtils.get_current_utc_time()
+
+    def get_is_ended(self, obj):
+        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
+            timezone.utc
+        )
+
+    class Meta:
+        model = CircleMeetingLog
+        fields = [
+            "id",
+            "title",
+            "description",
+            "org",
+            "ig_id",
+            "ig_name",
+            "mode",
+            "meet_place",
+            "circle_id",
+            "meet_time",
+            "meet_link",
+            "is_started",
+            "is_ended",
+            "created_by",
+        ]
 
 class CircleMeetupMinSerializer(serializers.ModelSerializer):
     title = serializers.CharField(read_only=True)
