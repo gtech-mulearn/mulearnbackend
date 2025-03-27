@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from rest_framework.views import APIView
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees
+from utils.utils import CommonUtils
 
 # from db.user import UserInterests
 from db.user import UserDomains
@@ -15,6 +16,7 @@ from .learningcircle_serializer import (
     CircleMeetingLogListSerializer,
     CircleMeetupInfoSerializer,
     CircleMeetupMinSerializer,
+    CircleMeeupPublicSerializer,
     LearningCircleCreateEditSerialzier,
     LearningCircleDetailSerializer,
     LearningCircleListMinSerializer,
@@ -493,6 +495,33 @@ class LearningCircleReportAPI(APIView):
         return CustomResponse(
             general_message="The report has been deleted successfully"
         ).get_success_response()
+
+
+class LearningCircleMeetingPublicListView(APIView):
+    def get(self, request):
+        request_data = request.query_params
+        ig_id = request_data.get("ig_id", None)
+        queryset = (
+            CircleMeetingLog.objects.select_related("circle_id__ig")
+            .all()
+            .order_by("-meet_time")
+        )
+        if ig_id:
+            queryset = queryset.filter(circle_id__ig_id=ig_id)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            search_fields=["title", "description", "circle_id__ig__name"],
+        )
+
+        serializer = CircleMeeupPublicSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
 
 class LearningCircleMeetingListAPI(APIView):
