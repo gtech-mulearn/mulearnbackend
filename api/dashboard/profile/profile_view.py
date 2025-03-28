@@ -16,10 +16,19 @@ from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink, UserLvlLink
-from db.user import Role, Socials, User, UserRoleLink, UserSettings
+from db.user import (
+    Role,
+    Socials,
+    User,
+    UserDomains,
+    UserEndgoals,
+    UserRoleLink,
+    UserSettings,
+)
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import (
+    OrganizationType,
     WebHookActions,
     WebHookCategory,
     TFPTasksHashtags,
@@ -643,3 +652,60 @@ class UserLevelFeedAPI(APIView):
                 "user_karma": user_karma.get("total_karma", 0) if user_karma else 0,
             }
         ).get_success_response()
+
+
+class UserPreferencesAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        domains = UserDomains.objects.filter(user_id=user_id).values_list(
+            "domain_name", flat=True
+        )
+        endgoals = UserEndgoals.objects.filter(user_id=user_id).values_list(
+            "endgoal_name", flat=True
+        )
+        orgs = (
+            UserOrganizationLink.objects.select_related("org")
+            .filter(
+                user_id=user_id,
+                org__org_type__in=[
+                    OrganizationType.COLLEGE.value,
+                    OrganizationType.COMPANY.value,
+                    OrganizationType.SCHOOL.value,
+                ],
+            )
+            .values("org_id", "org__title")
+        )
+        return CustomResponse(
+            response={
+                "domains": domains,
+                "endgoals": endgoals,
+                "orgs": [
+                    {"id": org.get("org_id"), "name": org.get("org__title")}
+                    for org in orgs
+                ],
+            }
+        ).get_success_response()
+
+    def patch(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
+
+        if not user_settings:
+            return CustomResponse(
+                general_message="User settings not found"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPreferencesSerializer(
+            user_settings, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                general_message="User settings updated successfully"
+            ).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()

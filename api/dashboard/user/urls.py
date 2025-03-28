@@ -4,11 +4,6 @@ from . import dash_user_views
 
 urlpatterns = [
     path(
-        "preferences/",
-        dash_user_views.UserPreferencesAPI.as_view(),
-        name="update-preferences",
-    ),
-    path(
         "preferences/", dash_user_views.UserPreferencesAPI.as_view(), name="preferences"
     ),
     path("search/", dash_user_views.UserSearchAPI.as_view(), name="search-user"),
