@@ -217,6 +217,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         instance.report_description = validated_data.get(
             "report_description", instance.report_description
         )
+        instance.mode = validated_data.get("mode", instance.mode)
         instance.coord_x = validated_data.get("coord_x", instance.coord_x)
         instance.coord_y = validated_data.get("coord_y", instance.coord_y)
         instance.meet_place = validated_data.get("meet_place", instance.meet_place)
