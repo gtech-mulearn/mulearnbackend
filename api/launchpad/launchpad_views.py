@@ -901,27 +901,35 @@ class UserLogAPI(BaseAPI):
 
 class IGLeaderboardView(APIView):
     def get(self, request):
-        ig_id = request.query_params.get("ig_id")
-        if ig_id is None:
+        category = request.query_params.get("category")
+        # ig_id = request.query_params.get("ig_id")
+
+        if category is None:
             return CustomResponse(
-                general_message="No IG ID provided"
+                general_message="No category provided"
             ).get_failure_response()
+
+        # if ig_id is None:
+        #     return CustomResponse(
+        #         general_message="No IG ID provided"
+        #     ).get_failure_response()
+
         logs = (
-            KarmaActivityLog.objects.select_related("user", "task")
+            KarmaActivityLog.objects.select_related("user", "task", "task__ig")
             .prefetch_related("user__wallet_user")
-            .filter(task__ig_id=ig_id, appraiser_approved=True)
-            .values("user_id")
+            .filter(task__ig__category=category, appraiser_approved=True)
+            .values("user_id", "task__ig__category")
             .annotate(
-                ig_karma=Sum("karma"),
+                category_karma=Sum("karma"),
             )
-            .order_by("-ig_karma")
+            .order_by("-category_karma")
             .values(
                 "user_id",
                 "user__full_name",
                 "user__email",
                 "user__muid",
                 # "user__profile_pic",
-                "ig_karma",
+                "category_karma",
                 "user__wallet_user__karma",
             )
         )
@@ -936,10 +944,34 @@ class IGLeaderboardView(APIView):
                 "user__muid",
             ],
             sort_fields={
-                "ig_karma": "ig_karma",
-                "total_karma": "total_karma",
+                "category_karma": "category_karma",
+                "total_karma": "user__wallet_user__karma",
             },
         )
+
+        ig_data = {}
+        for entry in (
+            KarmaActivityLog.objects.select_related("task__ig")
+            .filter(
+                appraiser_approved=True,
+                task__ig__category=category,
+                user_id__in=[
+                    row.get("user_id") for row in paginated_queryset.get("queryset")
+                ],
+            )
+            .values("task__ig_id", "user_id")
+            .annotate(ig_karma=Sum("karma"))
+            .values("user_id", "ig_karma", "task__ig__name", "task__ig_id")
+        ):
+            if not ig_data.get(entry.get("user_id")):
+                ig_data[entry.get("user_id")] = []
+            ig_data[entry.get("user_id")].append(
+                {
+                    "ig_id": entry.get("task__ig_id"),
+                    "ig_karma": entry.get("ig_karma"),
+                    "ig_name": entry.get("task__ig__name"),
+                }
+            )
 
         data = [
             {
@@ -951,8 +983,9 @@ class IGLeaderboardView(APIView):
                     if fs.exists("user/profile/{}.png".format("user_id"))
                     else None
                 ),
-                "ig_karma": row.get("ig_karma"),
+                "category_karma": row.get("category_karma"),
                 "total_karma": row.get("user__wallet_user__karma"),
+                "ig_data": ig_data.get(row.get("user_id")),
             }
             for row in paginated_queryset.get("queryset")
         ]
