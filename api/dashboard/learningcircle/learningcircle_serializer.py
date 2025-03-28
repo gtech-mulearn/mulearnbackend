@@ -349,6 +349,7 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
     attendees = serializers.SerializerMethodField()
     meet_code = serializers.SerializerMethodField()
     ig = serializers.CharField(source="circle_id.ig.name", read_only=True)
+    created_by_id = serializers.CharField(source="created_by.id", read_only=True)
 
     class Meta:
         model = CircleMeetingLog
@@ -371,6 +372,7 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
             "attendees",
             "is_member",
             "meet_code",
+            "created_by_id",
         ]
 
     def get_is_member(self, obj):
