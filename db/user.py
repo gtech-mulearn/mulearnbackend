@@ -29,6 +29,8 @@ class User(models.Model):
     district = models.ForeignKey("District", on_delete=models.CASCADE, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     suspended_at = models.DateTimeField(blank=True, null=True)
+    interested_in_work = models.BooleanField(default=False)
+    interested_in_gig_work = models.BooleanField(default=False)
     suspended_by = models.ForeignKey("self", on_delete=models.SET(settings.SYSTEM_ADMIN_ID), blank=True, null=True,
                                      related_name="user_suspended_by_user", db_column="suspended_by", default=None)
     objects = user_manager.ActiveUserManager()
@@ -61,6 +63,7 @@ class UserDomains(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_domains")
     domain_name = models.CharField(max_length=50, null=False, blank=False)
+    # is_primary = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

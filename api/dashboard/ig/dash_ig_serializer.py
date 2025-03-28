@@ -1,4 +1,3 @@
-
 from rest_framework import serializers
 
 from db.task import InterestGroup
@@ -6,10 +5,13 @@ from db.task import InterestGroup
 
 class InterestGroupSerializer(serializers.ModelSerializer):
 
-    updated_by = serializers.CharField(source='updated_by.full_name')
-    created_by = serializers.CharField(source='created_by.full_name')
+    updated_by = serializers.CharField(source="updated_by.full_name")
+    created_by = serializers.CharField(source="created_by.full_name")
     members = serializers.SerializerMethodField()
-    category = serializers.ChoiceField(choices=["hardware", "coder", "creative", "manager", "others"])
+    category = serializers.ChoiceField(
+        choices=["maker", "coder", "creative", "manager", "others"]
+    )
+
     class Meta:
         model = InterestGroup
         fields = [
@@ -33,11 +35,4 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InterestGroup
-        fields = [
-            "name",
-            "code",
-            "category",
-            "icon",
-            "created_by",
-            "updated_by"
-        ]
+        fields = ["name", "code", "category", "icon", "created_by", "updated_by"]

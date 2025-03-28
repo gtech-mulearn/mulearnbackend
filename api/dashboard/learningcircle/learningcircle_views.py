@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 import requests
 from rest_framework.views import APIView
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees
+from utils.utils import CommonUtils
 
 # from db.user import UserInterests
 from db.user import UserDomains
@@ -12,9 +13,9 @@ from utils.types import Lc
 from utils.utils import DateTimeUtils, generate_code
 from .learningcircle_serializer import (
     CircleMeetingLogCreateEditSerializer,
-    CircleMeetingLogListSerializer,
     CircleMeetupInfoSerializer,
     CircleMeetupMinSerializer,
+    CircleMeeupPublicSerializer,
     LearningCircleCreateEditSerialzier,
     LearningCircleDetailSerializer,
     LearningCircleListMinSerializer,
@@ -118,9 +119,7 @@ class LearningCircleMeetingInfoAPI(APIView):
         ).get_success_response()
 
 
-class LearningCircleMeetingView(APIView):
-    permission_classes = [CustomizePermission]
-
+class LearningCircleMeetingListView(APIView):
     def get(self, request, circle_id: str):
         learning_circle = LearningCircle.objects.get(id=circle_id)
         circle_meetings = CircleMeetingLog.objects.filter(circle_id=learning_circle)
@@ -129,6 +128,10 @@ class LearningCircleMeetingView(APIView):
             general_message="Circle Meetings fetched successfully",
             response=serializer.data,
         ).get_success_response()
+
+
+class LearningCircleMeetingView(APIView):
+    permission_classes = [CustomizePermission]
 
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -224,8 +227,8 @@ class LearningCircleJoinAPI(APIView):
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
-        is_meet_started = (
-            circle_meeting.meet_time <= DateTimeUtils.get_current_utc_time()
+        is_meet_started = circle_meeting.meet_time <= (
+            DateTimeUtils.get_current_utc_time() + timedelta(hours=2)
         )
         if not is_meet_started:
             return CustomResponse(
@@ -493,6 +496,33 @@ class LearningCircleReportAPI(APIView):
         ).get_success_response()
 
 
+class LearningCircleMeetingPublicListView(APIView):
+    def get(self, request):
+        request_data = request.query_params
+        ig_id = request_data.get("ig_id", None)
+        queryset = (
+            CircleMeetingLog.objects.select_related("circle_id__ig")
+            .all()
+            .order_by("-meet_time")
+        )
+        if ig_id:
+            queryset = queryset.filter(circle_id__ig_id=ig_id)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            search_fields=["title", "description", "circle_id__ig__name"],
+        )
+
+        serializer = CircleMeeupPublicSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
+
+
 class LearningCircleMeetingListAPI(APIView):
 
     def get(self, request):
@@ -508,6 +538,10 @@ class LearningCircleMeetingListAPI(APIView):
         user_id = None
         if JWTUtils.is_jwt_authenticated(request):
             user_id = JWTUtils.fetch_user_id(request)
+        else:
+            return CustomResponse(
+                general_message="User not authenticated"
+            ).get_failure_response(status_code=401)
         if saved or participated:
             if not user_id:
                 return CustomResponse(
@@ -519,7 +553,7 @@ class LearningCircleMeetingListAPI(APIView):
                 general_message="Please provide either saved or participated"
             ).get_failure_response()
         if user_id and not category and category != "all":
-            user_id = JWTUtils.fetch_user_id(request)
+            # user_id = JWTUtils.fetch_user_id(request)
             category = UserDomains.objects.filter(user_id=user_id).values_list(
                 "domain_name", flat=True
             )
@@ -550,9 +584,10 @@ class LearningCircleMeetingListAPI(APIView):
         if saved or participated:
             filter = Q(id__in=user_meetups)
         else:
-            filter = Q(
-                meet_time__gte=DateTimeUtils.get_current_utc_time() - timedelta(hours=2)
-            ) | Q(id__in=user_meetups)
+            filter = Q()
+            # filter = Q(
+            #     meet_time__gte=DateTimeUtils.get_current_utc_time() - timedelta(hours=2)
+            # ) | Q(id__in=user_meetups)
         meetings = CircleMeetingLog.objects.filter(filter).order_by("meet_time")
         if category and category != "all" and isinstance(category, list):
             meetings = meetings.select_related("circle_id__ig").filter(
