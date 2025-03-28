@@ -490,9 +490,38 @@ class UserTermSerializer(serializers.ModelSerializer):
         return instance
 
 
+
 class ResetPasswordSerialzier(serializers.Serializer):
     current_password = serializers.CharField(required=True, allow_null=False)
     password = serializers.CharField(required=True, allow_null=False)
 
     class Meta:
         fields = ("current_password", "password")
+        
+        
+class UserPermuteSerializer(serializers.ModelSerializer):
+    full_name = serializers.CharField()
+    user_domains = serializers.SerializerMethodField()
+    college_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = User
+        fields = ["full_name", "user_domains", "college_name"]
+
+    def get_user_domains(self, obj):
+        return obj.user_domains.values_list("domain_name", flat=True)
+
+    def _get_user_org_link(self, obj, org_type):
+        if not hasattr(self, "user_org_link"):
+            self.user_org_link = obj.user_organization_link_user.filter(
+                org__org_type=org_type
+            ).first()
+        return self.user_org_link
+
+    def _get_org_type(self, obj):
+        return OrganizationType.COLLEGE.value
+
+    def get_college_name(self, obj):
+        org_type = self._get_org_type(obj)
+        user_org_link = self._get_user_org_link(obj, org_type)
+        return user_org_link.org.title if user_org_link and user_org_link.org else None
