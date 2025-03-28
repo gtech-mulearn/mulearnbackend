@@ -526,6 +526,7 @@ class LearningCircleMeetingPublicListView(APIView):
 class LearningCircleMeetingListAPI(APIView):
 
     def get(self, request):
+
         request_data = request.query_params
         category = request_data.get("category", None)
         saved = request_data.get("saved", "0")
