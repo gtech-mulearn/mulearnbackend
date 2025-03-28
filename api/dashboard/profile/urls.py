@@ -24,4 +24,5 @@ urlpatterns = [
     path("userterm-approved/<str:muid>/", profile_view.UsertermAPI.as_view()),
     path("karma-feed/", profile_view.KarmaFeedAPI.as_view()),
     path("user-level-feed/", profile_view.UserLevelFeedAPI.as_view()),
+    path("user-preferences/", profile_view.UserPreferencesAPI.as_view()),
 ]
