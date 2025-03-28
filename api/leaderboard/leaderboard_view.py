@@ -15,7 +15,6 @@ class StudentsLeaderboard(APIView):
         students_leaderboard = (
             User.objects.prefetch_related(
                 "user_role_link_user__role",
-                "user_organization_link_user__org",
             )
             .filter(
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
