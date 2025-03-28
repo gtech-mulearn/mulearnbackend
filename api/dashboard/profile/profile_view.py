@@ -619,6 +619,7 @@ class KarmaFeedAPI(APIView):
         return CustomResponse(response=response).get_success_response()
 
 
+
 class UserLevelFeedAPI(APIView):
     permission_classes = [CustomizePermission]
 
@@ -709,3 +710,15 @@ class UserPreferencesAPI(APIView):
             ).get_success_response()
 
         return CustomResponse(response=serializer.errors).get_failure_response()
+
+    
+class UserPermuteAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.prefetch_related("user_domains", "user_organization_link_user__org").filter(muid=muid).first()
+        if user is None:
+            return  CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPermuteSerializer(user, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()
