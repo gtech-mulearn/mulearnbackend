@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from db.achievement import Achievement, UserAchievements
+from db.achievement import Achievement, UserAchievementsLog
 # from db.user import User
 
 class AchievementSerializer(serializers.ModelSerializer):
@@ -13,11 +13,11 @@ class AchievementBasicSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = Achievement
-        fields = ['id', 'achievement_name', 'description', 'icon', 'level_based', 'tags', 'template_id']
+        fields = ['id', 'achievement_name', 'description', 'icon', 'level_id', 'tags', 'template_id']
 
 class UserAchievementsSerializer(serializers.ModelSerializer):
     achievement = AchievementBasicSerializer(source='achievement_id', read_only=True)
 
     class Meta:
-        model = UserAchievements
+        model = UserAchievementsLog
         fields = ['id', 'user_id', 'achievement', 'is_issued', 'vc_url']
