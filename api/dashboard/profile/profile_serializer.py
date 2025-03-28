@@ -489,6 +489,16 @@ class UserTermSerializer(serializers.ModelSerializer):
         instance.save()
         return instance
 
+
+
+class ResetPasswordSerialzier(serializers.Serializer):
+    current_password = serializers.CharField(required=True, allow_null=False)
+    password = serializers.CharField(required=True, allow_null=False)
+
+    class Meta:
+        fields = ("current_password", "password")
+        
+        
 class UserPermuteSerializer(serializers.ModelSerializer):
     full_name = serializers.CharField()
     user_domains = serializers.SerializerMethodField()

@@ -23,5 +23,8 @@ urlpatterns = [
     path("change-password/", profile_view.ResetPasswordAPI.as_view()),
     path("userterm-approved/<str:muid>/", profile_view.UsertermAPI.as_view()),
     path("karma-feed/", profile_view.KarmaFeedAPI.as_view()),
+    path("user-level-feed/", profile_view.UserLevelFeedAPI.as_view()),
+    path("user-preferences/", profile_view.UserPreferencesAPI.as_view()),
     path("permute/<str:muid>/", profile_view.UserPermuteAPI.as_view()),
+
 ]
