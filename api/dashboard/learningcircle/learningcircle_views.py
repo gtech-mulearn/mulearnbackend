@@ -537,12 +537,12 @@ class LearningCircleMeetingListAPI(APIView):
         lat = request_data.get("lat")
         lon = request_data.get("lon")
         user_id = None
-        try:
-            if JWTUtils.is_jwt_authenticated(request):
-                user_id = JWTUtils.fetch_user_id(request)
-        except Exception as e:
-            print(e)
-            pass
+        if JWTUtils.is_jwt_authenticated(request):
+            user_id = JWTUtils.fetch_user_id(request)
+        else:
+            return CustomResponse(
+                general_message="User not authenticated"
+            ).get_failure_response(status_code=401)
         if saved or participated:
             if not user_id:
                 return CustomResponse(

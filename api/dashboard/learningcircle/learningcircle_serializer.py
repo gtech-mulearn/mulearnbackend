@@ -483,6 +483,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     is_started = serializers.SerializerMethodField()
     is_ended = serializers.SerializerMethodField()
     is_joined = serializers.SerializerMethodField()
+    is_rsvp = serializers.SerializerMethodField()
     attendees = serializers.SerializerMethodField()
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     created_by_id = serializers.CharField(source="created_by.id", read_only=True)
@@ -497,12 +498,24 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             timezone.utc
         )
 
-    def get_is_joined(self, obj):
+    def _current_user_attendee(self, obj):
         if user_id := self.context.get("user_id"):
-            return obj.circle_meeting_attendance_meet_id.filter(
+            if hasattr(self, "_attendee"):
+                return self._attendee
+            attendee = obj.circle_meeting_attendance_meet_id.filter(
                 user_id=user_id
-            ).exists()
+            ).first()
+            self._attendee = attendee
+            return attendee
+        return None
+
+    def get_is_joined(self, obj):
+        if attendee := self._current_user_attendee(obj):
+            return attendee.is_joined
         return False
+
+    def get_is_rsvp(self, obj):
+        return bool(self._current_user_attendee(obj))
 
     def get_attendees(self, obj):
         query = (
@@ -554,6 +567,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "ig_name",
             "mode",
             "meet_place",
+            "is_rsvp",
             # "meet_code",
             "circle_id",
             "coord_x",
