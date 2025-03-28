@@ -227,8 +227,8 @@ class LearningCircleJoinAPI(APIView):
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
-        is_meet_started = (
-            circle_meeting.meet_time <= DateTimeUtils.get_current_utc_time()
+        is_meet_started = circle_meeting.meet_time <= (
+            DateTimeUtils.get_current_utc_time() + timedelta(hours=2)
         )
         if not is_meet_started:
             return CustomResponse(
@@ -583,10 +583,10 @@ class LearningCircleMeetingListAPI(APIView):
         )
         if saved or participated:
             filter = Q(id__in=user_meetups)
-        else:
-            filter = Q(
-                meet_time__gte=DateTimeUtils.get_current_utc_time() - timedelta(hours=2)
-            ) | Q(id__in=user_meetups)
+        # else:
+        #     filter = Q(
+        #         meet_time__gte=DateTimeUtils.get_current_utc_time() - timedelta(hours=2)
+        #     ) | Q(id__in=user_meetups)
         meetings = CircleMeetingLog.objects.filter(filter).order_by("meet_time")
         if category and category != "all" and isinstance(category, list):
             meetings = meetings.select_related("circle_id__ig").filter(
