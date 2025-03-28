@@ -13,7 +13,6 @@ from utils.types import Lc
 from utils.utils import DateTimeUtils, generate_code
 from .learningcircle_serializer import (
     CircleMeetingLogCreateEditSerializer,
-    CircleMeetingLogListSerializer,
     CircleMeetupInfoSerializer,
     CircleMeetupMinSerializer,
     CircleMeeupPublicSerializer,
