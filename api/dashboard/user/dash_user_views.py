@@ -449,7 +449,6 @@ class UserSearchAPI(APIView):
             request,
             search_fields=[
                 "full_name",
-                "email",
                 "muid",
             ],
         )
