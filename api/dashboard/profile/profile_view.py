@@ -11,21 +11,33 @@ from django.db.models import Prefetch
 from PIL import Image
 from rest_framework.views import APIView
 from django.db.models import Sum
+from django.core.cache import cache
+from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
-from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink
-from db.user import Role, Socials, User, UserRoleLink, UserSettings
+from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink, UserLvlLink
+from db.user import (
+    Role,
+    Socials,
+    User,
+    UserDomains,
+    UserEndgoals,
+    UserRoleLink,
+    UserSettings,
+)
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import (
+    OrganizationType,
     WebHookActions,
     WebHookCategory,
     TFPTasksHashtags,
 )
 from utils.utils import DiscordWebhooks
+from django.contrib.auth.hashers import check_password
 
 from . import profile_serializer
-from .profile_serializer import LinkSocials
+from .profile_serializer import LinkSocials, ResetPasswordSerialzier
 from .profile_serializer import UserTermSerializer
 
 
@@ -403,14 +415,22 @@ class ResetPasswordAPI(APIView):
                 general_message="No user data available"
             ).get_failure_response()
 
-        return self.save_password(request, user)
+        serializer = ResetPasswordSerialzier(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(response=serializer.errors).get_failure_response()
 
-    def save_password(self, request, user_obj):
-        new_password = request.data.get("password")
+        current_password = serializer.validated_data.get("current_password")
+        new_password = serializer.validated_data.get("password")
+
+        if not check_password(current_password, user.password):
+            return CustomResponse(
+                general_message="Current Password is incorrect"
+            ).get_failure_response()
+
         hashed_pwd = make_password(new_password)
 
-        user_obj.password = hashed_pwd
-        user_obj.save()
+        user.password = hashed_pwd
+        user.save()
         return CustomResponse(
             general_message="New Password Saved Successfully"
         ).get_success_response()
@@ -516,32 +536,55 @@ class UsertermAPI(APIView):
             return CustomResponse(response=response_data).get_failure_response()
 
 
+from datetime import datetime, timedelta
+from django.db.models import Sum
+from rest_framework.views import APIView
+
+
 class KarmaFeedAPI(APIView):
     def get(self, request):
         today = datetime.now().date()
-        yesterday = today - timedelta(days=1)
+
+        cache_key = f"karma_feed_{today}"
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            return CustomResponse(response=cached_response).get_success_response()
+
+        first_day_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(
+            day=1
+        )
+        last_day_of_last_month = today.replace(day=1) - timedelta(days=1)
 
         top_user = (
             KarmaActivityLog.objects.filter(
                 appraiser_approved=True,
-                created_at__date=yesterday,
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
             )
             .values("user_id", "user__full_name", "user__muid")
             .annotate(total_karma=Sum("karma"))
             .order_by("-total_karma")  # Sort by highest total_karma
             .first()  # Get the first entry (highest total_karma)
         )
+
         top_user = {
             "karma": top_user["total_karma"] if top_user else 0,
             "full_name": top_user["user__full_name"] if top_user else None,
             "muid": top_user["user__muid"] if top_user else None,
         }
+
+        # Fetch the top college based on last month's karma
         top_org = (
             KarmaActivityLog.objects.select_related("user")
             .prefetch_related("user__user_organization_link_user__org")
             .filter(
                 appraiser_approved=True,
-                created_at__date=yesterday,
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
             )
             .values(
                 "user__user_organization_link_user__org__id",
@@ -551,6 +594,7 @@ class KarmaFeedAPI(APIView):
             .order_by("-total_karma")  # Sort by highest total_karma
             .first()  # Get the first entry (highest total_karma)
         )
+
         top_college = {
             "karma": top_org["total_karma"] if top_org else 0,
             "name": (
@@ -559,8 +603,122 @@ class KarmaFeedAPI(APIView):
                 else None
             ),
         }
+
         response = {
             "top_user": top_user,
             "top_college": top_college,
         }
+        try:
+            midnight = now().replace(hour=23, minute=59, second=59)
+            cache_timeout = (midnight - now()).seconds
+            cache.set(cache_key, response, cache_timeout)
+        except Exception as e:
+            print(e)
+            pass
+
         return CustomResponse(response=response).get_success_response()
+
+
+
+class UserLevelFeedAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(general_message="Unauthorized").get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        user_level = (
+            UserLvlLink.objects.select_related("level")
+            .filter(user_id=user_id)
+            .values("level_id", "level__level_order", "level__name", "level__karma")
+            .order_by("-created_at")
+            .first()
+        )
+        user_karma = (
+            KarmaActivityLog.objects.select_related("task")
+            .filter(
+                user_id=user_id,
+                appraiser_approved=True,
+                task__level_id=user_level.get("level_id"),
+            )
+            .annotate(total_karma=Sum("karma"))
+            .values("total_karma")
+            .first()
+        )
+        return CustomResponse(
+            response={
+                "level_order": user_level.get("level__level_order"),
+                "level_name": user_level.get("level__name"),
+                "level_karma": user_level.get("level__karma"),
+                "user_karma": user_karma.get("total_karma", 0) if user_karma else 0,
+            }
+        ).get_success_response()
+
+
+class UserPreferencesAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        domains = UserDomains.objects.filter(user_id=user_id).values_list(
+            "domain_name", flat=True
+        )
+        endgoals = UserEndgoals.objects.filter(user_id=user_id).values_list(
+            "endgoal_name", flat=True
+        )
+        orgs = (
+            UserOrganizationLink.objects.select_related("org")
+            .filter(
+                user_id=user_id,
+                org__org_type__in=[
+                    OrganizationType.COLLEGE.value,
+                    OrganizationType.COMPANY.value,
+                    OrganizationType.SCHOOL.value,
+                ],
+            )
+            .values("org_id", "org__title")
+        )
+        return CustomResponse(
+            response={
+                "domains": domains,
+                "endgoals": endgoals,
+                "orgs": [
+                    {"id": org.get("org_id"), "name": org.get("org__title")}
+                    for org in orgs
+                ],
+            }
+        ).get_success_response()
+
+    def patch(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
+
+        if not user_settings:
+            return CustomResponse(
+                general_message="User settings not found"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPreferencesSerializer(
+            user_settings, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                general_message="User settings updated successfully"
+            ).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    
+class UserPermuteAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.prefetch_related("user_domains", "user_organization_link_user__org").filter(muid=muid).first()
+        if user is None:
+            return  CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPermuteSerializer(user, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()

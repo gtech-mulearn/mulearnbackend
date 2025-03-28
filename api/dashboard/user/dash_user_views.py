@@ -417,19 +417,31 @@ class UserAddOrgAPI(APIView):
 
 
 class UserSearchAPI(APIView):
-
     def get(self, request):
         role = request.query_params.get("role")
+        ig_id = request.query_params.get("ig_id")
+        org_id = request.query_params.get("org_id")
+
         queryset = (
             User.objects.all()
             .select_related("wallet_user")
             .filter(user_settings_user__is_public=True)
             .prefetch_related("user_settings_user")
+            .order_by("-wallet_user__karma")
         )
         if role:
             queryset = queryset.filter(
                 user_role_link_user__role__title=role,
                 user_role_link_user__verified=True,
+            )
+        if ig_id:
+            queryset = queryset.prefetch_related("user_ig_link_user").filter(
+                user_ig_link_user__ig_id=ig_id
+            )
+
+        if org_id:
+            queryset = queryset.prefetch_related("user_organization_link_user").filter(
+                user_organization_link_user__org_id=org_id
             )
 
         queryset = CommonUtils.get_paginated_queryset(
@@ -437,7 +449,6 @@ class UserSearchAPI(APIView):
             request,
             search_fields=[
                 "full_name",
-                "email",
                 "muid",
             ],
         )
@@ -448,3 +459,34 @@ class UserSearchAPI(APIView):
         return CustomResponse().paginated_response(
             data=serializer.data, pagination=queryset.get("pagination")
         )
+
+
+class UserPreferencesAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user = User.objects.get(id=JWTUtils.fetch_user_id(request))
+
+        response = {
+            "interested_in_work": user.interested_in_work,
+            "interested_in_gig_work": user.interested_in_gig_work,
+        }
+
+        return CustomResponse(response=response).get_success_response()
+
+    def patch(self, request):
+        user = User.objects.get(id=JWTUtils.fetch_user_id(request))
+
+        interested_in_work = request.data.get("interested_in_work")
+        interested_in_gig_work = request.data.get("interested_in_gig_work")
+
+        if isinstance(interested_in_work, bool):
+            user.interested_in_work = interested_in_work
+        if isinstance(interested_in_gig_work, bool):
+            user.interested_in_gig_work = interested_in_gig_work
+
+        user.save()
+
+        return CustomResponse(
+            general_message="Preferences updated successfully"
+        ).get_success_response()
