@@ -4,7 +4,7 @@ from rest_framework.views import APIView
 from . import serializers
 
 from db.organization import Organization, UserOrganizationLink
-from db.user import User
+from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -13,7 +13,11 @@ from utils.utils import DateTimeUtils
 class StudentsLeaderboard(APIView):
     def get(self, request):
         students_leaderboard = (
-            User.objects.filter(
+            User.objects.prefetch_related(
+                "user_role_link_user__role",
+                "user_organization_link_user__org",
+            )
+            .filter(
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 exist_in_guild=True,
@@ -27,7 +31,12 @@ class StudentsLeaderboard(APIView):
                         org__org_type=OrganizationType.COLLEGE.value
                     ).select_related("org"),
                     to_attr="colleges",
-                )
+                ),
+                Prefetch(
+                    "user_role_link_user",
+                    queryset=UserRoleLink.objects.all().select_related("org"),
+                    to_attr="colleges",
+                ),
             )
             .order_by("-wallet_user__karma")[:20]
         )
@@ -43,8 +52,14 @@ class StudentsLeaderboard(APIView):
 class StudentsMonthlyLeaderboard(APIView):
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
+        print("REquest reeceivd")
         student_monthly_leaderboard = (
-            User.objects.filter(
+            User.objects.prefetch_related(
+                "user_role_link_user__role",
+                "user_organization_link_user__org",
+                "karma_activity_log_user",
+            )
+            .filter(
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 exist_in_guild=True,
