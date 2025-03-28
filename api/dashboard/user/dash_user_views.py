@@ -419,6 +419,9 @@ class UserAddOrgAPI(APIView):
 class UserSearchAPI(APIView):
     def get(self, request):
         role = request.query_params.get("role")
+        ig_id = request.query_params.get("ig_id")
+        org_id = request.query_params.get("org_id")
+
         queryset = (
             User.objects.all()
             .select_related("wallet_user")
@@ -430,6 +433,15 @@ class UserSearchAPI(APIView):
             queryset = queryset.filter(
                 user_role_link_user__role__title=role,
                 user_role_link_user__verified=True,
+            )
+        if ig_id:
+            queryset = queryset.prefetch_related("user_ig_link_user").filter(
+                user_ig_link_user__ig_id=ig_id
+            )
+
+        if org_id:
+            queryset = queryset.prefetch_related("user_organization_link_user").filter(
+                user_organization_link_user__org_id=org_id
             )
 
         queryset = CommonUtils.get_paginated_queryset(
