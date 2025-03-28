@@ -498,24 +498,21 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             timezone.utc
         )
 
-    def _current_user_attendee(self, obj):
+    def get_is_joined(self, obj):
         if user_id := self.context.get("user_id"):
-            if hasattr(self, "_attendee"):
-                return self._attendee
             attendee = obj.circle_meeting_attendance_meet_id.filter(
                 user_id=user_id
             ).first()
-            self._attendee = attendee
-            return attendee
-        return None
-
-    def get_is_joined(self, obj):
-        if attendee := self._current_user_attendee(obj):
-            return attendee.is_joined
+            if attendee:
+                return attendee.is_joined
         return False
 
     def get_is_rsvp(self, obj):
-        return bool(self._current_user_attendee(obj))
+        if user_id := self.context.get("user_id"):
+            return obj.circle_meeting_attendance_meet_id.filter(
+                user_id=user_id
+            ).exists()
+        return False
 
     def get_attendees(self, obj):
         query = (
