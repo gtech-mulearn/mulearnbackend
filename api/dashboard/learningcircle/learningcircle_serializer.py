@@ -487,7 +487,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     is_ended = serializers.SerializerMethodField()
     is_joined = serializers.SerializerMethodField()
     is_rsvp = serializers.SerializerMethodField()
-    attendees = serializers.SerializerMethodField()
+    attendees_count = serializers.SerializerMethodField()
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     created_by_id = serializers.CharField(source="created_by.id", read_only=True)
     ig_id = serializers.CharField(source="circle_id.ig.id", read_only=True)
@@ -517,44 +517,8 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             ).exists()
         return False
 
-    def get_attendees(self, obj):
-        query = (
-            obj.circle_meeting_attendance_meet_id.select_related("user_id")
-            .prefetch_related("user_id__user_organization_link_user")
-            .only(
-                "user_id__full_name",
-                "is_joined",
-                "is_report_submitted",
-                "user_id__user_organization_link_user__org_id",
-            )[:3]
-        )
-        data = []
-        user_id = self.context.get("user_id")
-        cur_user_org = None
-        if user_id:
-            try:
-                cur_user = (
-                    User.objects.prefetch_related("user_organization_link_user")
-                    .only("user_organization_link_user__org_id")
-                    .get(id=user_id)
-                )
-                cur_user_org = cur_user.user_organization_link_user__org_id
-            except:
-                pass
-        for attendee in query:
-            data.append(
-                {
-                    "full_name": attendee.user_id.full_name,
-                    "is_joined": attendee.is_joined,
-                    "is_report_submitted": attendee.is_report_submitted,
-                    "profile_pic": attendee.user_id.profile_pic,
-                    "is_same_org": cur_user_org
-                    in attendee.user_id.user_organization_link_user.all().values_list(
-                        "org_id", flat=True
-                    ),
-                }
-            )
-        return data
+    def get_attendees_count(self, obj):
+        return obj.circle_meeting_attendance_meet_id.count()
 
     class Meta:
         model = CircleMeetingLog
@@ -577,7 +541,7 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "is_started",
             "is_ended",
             "is_joined",
-            "attendees",
+            "attendees_count",
             "created_by",
             "created_by_id",
         ]
