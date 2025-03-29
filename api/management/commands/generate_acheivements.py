@@ -49,8 +49,8 @@ class Command(BaseCommand):
                     UserAchievementsLog(
                         user_id=user,
                         achievement_id=achievement,
-                        created_by=settings.SYSTEM_ADMIN_ID,
-                        updated_by=settings.SYSTEM_ADMIN_ID,
+                        created_by_id=settings.SYSTEM_ADMIN_ID,
+                        updated_by_id=settings.SYSTEM_ADMIN_ID,
                     )
                 )
             UserAchievementsLog.objects.bulk_create(batch)
