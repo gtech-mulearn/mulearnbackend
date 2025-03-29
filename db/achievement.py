@@ -1,14 +1,13 @@
 from django.db import models
 import uuid
+from db.task import Level
 from db.user import User
 
 
 class Achievement(models.Model):
     id = models.CharField(primary_key=True, default=uuid.uuid4, max_length=36)
     name = models.CharField(max_length=75, unique=True)
-    level_id = models.ForeignKey(
-        "Level", on_delete=models.CASCADE, db_column="level_id"
-    )
+    level_id = models.ForeignKey(Level, on_delete=models.CASCADE, db_column="level_id")
     description = models.CharField(max_length=300)
     icon = models.CharField(max_length=100)
     has_vc = models.BooleanField()

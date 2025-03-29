@@ -17,7 +17,7 @@ class Command(BaseCommand):
         users = User.objects.select_related("user_lvl_link_user__level").filter()
         levels = {}
 
-        for i in range(1, 7):
+        for i in range(1, 8):
             levels[i] = Achievement.objects.filter(level_id__level_order=i).first()
         i = 0
         print("started generating achievements")
@@ -49,8 +49,8 @@ class Command(BaseCommand):
                     UserAchievementsLog(
                         user_id=user,
                         achievement_id=achievement,
-                        created_by=settings.SYSTEM_ADMIN_ID,
-                        updated_by=settings.SYSTEM_ADMIN_ID,
+                        created_by_id=settings.SYSTEM_ADMIN_ID,
+                        updated_by_id=settings.SYSTEM_ADMIN_ID,
                     )
                 )
             UserAchievementsLog.objects.bulk_create(batch)
