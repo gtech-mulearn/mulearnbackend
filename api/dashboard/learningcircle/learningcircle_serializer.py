@@ -494,7 +494,9 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
 
     def get_is_started(self, obj):
-        return obj.meet_time <= DateTimeUtils.get_current_utc_time()
+        return (
+            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
+        )
 
     def get_is_ended(self, obj):
         return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
