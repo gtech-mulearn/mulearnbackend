@@ -13,10 +13,7 @@ from utils.utils import DateTimeUtils
 class StudentsLeaderboard(APIView):
     def get(self, request):
         students_leaderboard = (
-            User.objects.prefetch_related(
-                "user_role_link_user__role",
-            )
-            .filter(
+            User.objects.filter(
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_role_link_user__role__title=RoleType.STUDENT.value,
                 exist_in_guild=True,
