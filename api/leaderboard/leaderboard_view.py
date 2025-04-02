@@ -27,12 +27,7 @@ class StudentsLeaderboard(APIView):
                         org__org_type=OrganizationType.COLLEGE.value
                     ).select_related("org"),
                     to_attr="colleges",
-                ),
-                Prefetch(
-                    "user_role_link_user",
-                    queryset=UserRoleLink.objects.all().select_related("org"),
-                    to_attr="colleges",
-                ),
+                )
             )
             .order_by("-wallet_user__karma")[:20]
         )
