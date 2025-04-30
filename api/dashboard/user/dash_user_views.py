@@ -347,7 +347,7 @@ class UserProfilePictureView(APIView):
         ).get_success_response()
 
     def post(self, request):
-        user_id = request.data.get("user_id")
+        user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
 
         if user is None:
