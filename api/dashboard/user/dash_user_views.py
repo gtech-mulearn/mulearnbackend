@@ -23,7 +23,7 @@ class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        user_muid = JWTUtils.fetch_muid(request)
+        user_muid = request.data.get("user_id")
         # user = cache.get(f"db_user_{user_muid}")
         # if not user:
         user = (
