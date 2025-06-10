@@ -23,7 +23,7 @@ class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        user_muid = request.data.get("user_id")
+        user_muid = JWTUtils.fetch_muid(request)
         # user = cache.get(f"db_user_{user_muid}")
         # if not user:
         user = (
@@ -347,7 +347,7 @@ class UserProfilePictureView(APIView):
         ).get_success_response()
 
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
+        user_id = request.data.get("user_id")
         user = User.objects.filter(id=user_id).first()
 
         if user is None:
