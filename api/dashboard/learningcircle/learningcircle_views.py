@@ -1,7 +1,7 @@
 from datetime import datetime, timedelta, timezone
 import requests
 from rest_framework.views import APIView
-from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees
+from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink
 from utils.utils import CommonUtils
 
 # from db.user import UserInterests
@@ -20,8 +20,13 @@ from .learningcircle_serializer import (
     LearningCircleDetailSerializer,
     LearningCircleListMinSerializer,
 )
-from django.db.models import Q
-
+from django.db.models import Sum, F, Q
+from db.user import User
+from db.task import (
+    KarmaActivityLog,
+    
+)
+from collections import defaultdict
 
 class LearningCircleView(APIView):
     permission_classes = [CustomizePermission]
@@ -603,3 +608,389 @@ class LearningCircleMeetingListAPI(APIView):
             general_message="Meetings fetched successfully",
             response=serializer.data,
         ).get_success_response()
+
+
+
+
+
+class LearningCircleBasicDetailsView(APIView):
+
+    def get(self, request, circle_id):
+        try:
+            circle = LearningCircle.objects.select_related('ig').get(id=circle_id)
+            member_count = UserCircleLink.objects.filter(
+                circle_id=circle.id,
+                accepted=True
+            ).count()
+            # Calculate total karma
+            member_ids = UserCircleLink.objects.filter(
+                circle_id=circle_id,
+                accepted=True
+            ).values_list('user_id', flat=True)
+            
+            total_karma = KarmaActivityLog.objects.filter(
+                user_id__in=member_ids,
+                task__ig=circle.ig
+            ).aggregate(total=Sum('karma'))['total'] or 0
+            
+            # Calculate circle rankings using Django ORM
+            circle_karma = self.get_circle_rankings()
+            
+            # Find the rank of the current circle
+            circle_rank = next((item['rank'] for item in circle_karma if item['id'] == circle_id), None)
+            
+            # Get pending invitations count
+            pending_invites = UserCircleLink.objects.filter(
+                circle_id=circle_id,
+                is_invited=1,
+                accepted__isnull=True
+            ).count()
+            
+            response_data = {
+                'circle_id': circle.id,
+                'circle_title': circle.title,
+                'ig_id': circle.ig_id,
+                'ig_name': circle.ig.name,
+                'member_count': member_count,
+                'total_karma': total_karma,
+                'rank': circle_rank,
+                'pending_invites': pending_invites,
+            }
+            
+            return CustomResponse(
+                general_message="Learning Circle basic details fetched successfully",
+                response=response_data
+            ).get_success_response()
+        
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+                general_message="Learning Circle not found"
+            ).get_failure_response()
+    
+    @staticmethod
+    def get_circle_rankings():
+    
+        user_circle_links = UserCircleLink.objects.filter(accepted=True).values('circle_id', 'user_id')
+        
+        circle_to_users = defaultdict(list)
+        for link in user_circle_links:
+            circle_to_users[link['circle_id']].append(link['user_id'])
+        
+        circle_igs = dict(LearningCircle.objects.values_list('id', 'ig_id'))
+        
+        user_karma = (
+            KarmaActivityLog.objects
+            .values('user_id', 'task__ig')
+            .annotate(total_karma=Sum('karma'))
+        )
+
+        # Build a user-IG karma map
+        user_ig_karma = defaultdict(int)
+        for entry in user_karma:
+            user_ig_karma[(entry['user_id'], entry['task__ig'])] += entry['total_karma']
+
+        # Build circle karma list
+        circle_data = []
+        for circle_id, user_ids in circle_to_users.items():
+            ig_id = circle_igs.get(circle_id)
+            total = sum(user_ig_karma.get((uid, ig_id), 0) for uid in user_ids)
+            circle_data.append({
+                'id': circle_id,
+                'total_karma': total
+            })
+
+        # Include circles with no members (0 karma)
+        all_circle_ids = set(circle_igs.keys())
+        existing_ids = {c['id'] for c in circle_data}
+        for missing_id in all_circle_ids - existing_ids:
+            circle_data.append({
+                'id': missing_id,
+                'total_karma': 0
+            })
+
+        # Sort and assign rank
+        circle_data.sort(key=lambda x: x['total_karma'], reverse=True)
+        for i, c in enumerate(circle_data):
+            c['rank'] = i + 1
+
+        return circle_data
+    
+
+class LearningCircleMemberDetailsView(APIView):
+
+    def get(self, request, circle_id):
+        try:
+            circle = LearningCircle.objects.select_related('ig').get(id=circle_id)
+            
+            member_links = UserCircleLink.objects.filter(
+                circle_id=circle_id,
+                accepted=True
+            ).select_related('user')
+            
+            leaders = set(link.user_id for link in member_links if link.lead)
+            
+            member_ids = [link.user_id for link in member_links]
+            
+            users = {user.id: user for user in User.objects.filter(id__in=member_ids)}
+    
+            karma_data = KarmaActivityLog.objects.filter(
+                user_id__in=member_ids,
+                task__ig=circle.ig
+            ).values('user_id').annotate(
+                ig_karma=Sum('karma')
+            )
+            
+            karma_by_user = {item['user_id']: item['ig_karma'] for item in karma_data}
+          
+            for link in member_links:
+                user_id = link.user_id
+                user = users.get(user_id)
+                if not user:
+                    continue
+                member_details = []
+                member_details.append({
+                    'id': user.id,
+                    'full_name': user.full_name,
+                    'profile_pic': user.profile_pic,
+                    'muid': user.muid,
+                    'ig_karma': karma_by_user.get(user.id, 0),
+                    'is_leader': user.id in leaders
+                })
+            
+            # Sort by karma (highest first)
+            member_details = sorted(member_details, key=lambda x: x['ig_karma'], reverse=True)
+            
+            return CustomResponse(
+                general_message="Learning Circle member details fetched successfully",
+                response=member_details
+            ).get_success_response()
+        
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+                general_message="Learning Circle not found"
+            ).get_failure_response()
+            
+            
+class LearningCircleManageRequestsView(APIView):
+  
+    def get(self, request, circle_id):
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+           
+            pending_requests = UserCircleLink.objects.filter(
+                circle_id=circle_id,
+                accepted__isnull=True
+            ).select_related('user')
+            
+            if not pending_requests.exists():
+                return CustomResponse(
+                    general_message="No pending requests to join.",
+                    response=[]
+                ).get_success_response()
+                
+            pending_requests_data = [
+                {
+                    "user_id": request.user_id,
+                    "full_name": request.user.full_name,
+                    "email": request.user.email
+                }
+                for request in pending_requests
+            ]
+            
+            return CustomResponse(
+                general_message="Pending requests fetched successfully.",
+                response=pending_requests_data
+            ).get_success_response()
+
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+                general_message="Learning Circle not found."
+            ).get_failure_response()
+
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"An error occurred: {str(e)}"
+            ).get_failure_response()
+
+    def post(self, request, circle_id):
+        try:
+            user_id = request.data.get('user_id')
+            action = request.data.get('action')  
+            
+            if action not in ["accept", "reject"]:
+                return CustomResponse(
+                    general_message="Invalid action. Use 'accept' or 'reject'."
+                ).get_failure_response()
+            
+            admin_user_id = request.user.id
+            is_admin = UserCircleLink.objects.filter(
+                circle_id=circle_id,
+                user_id=admin_user_id,
+                lead=True,
+                accepted=True
+            ).exists()
+            
+            if not is_admin:
+                return CustomResponse(
+                    general_message="You do not have permission to manage this circle."
+                ).get_failure_response()
+     
+            link = UserCircleLink.objects.filter(
+                circle_id=circle_id,
+                user_id=user_id,
+                accepted__isnull=True
+            ).first()
+            
+            if not link:
+                return CustomResponse(
+                    general_message="No pending request found for this user."
+                ).get_failure_response()
+            
+            if action == "accept":
+                link.accepted = True
+                link.save()
+                return CustomResponse(
+                    general_message="User request accepted successfully."
+                ).get_success_response()
+            
+            if action == "reject":
+                link.delete()
+                return CustomResponse(
+                    general_message="User request rejected successfully."
+                ).get_success_response()
+        
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+                general_message="Learning Circle not found"
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"An error occurred: {str(e)}"
+            ).get_failure_response()
+            
+
+class LearningCircleCreateOnlineMeetingView(APIView):
+    """
+    API to create an online meeting for a learning circle.
+    Only admins or leaders of the learning circle can create meetings.
+    """
+    # permission_classes = [CustomizePermission]
+
+    def post(self, request, circle_id):
+        try:
+            # Fetch the authenticated user's ID with error handling
+            try:
+                user_id = JWTUtils.fetch_user_id(request)
+                if not user_id:
+                    return CustomResponse(
+                        general_message="Authentication failed. User ID not found."
+                    ).get_failure_response()
+            except Exception as jwt_error:
+                return CustomResponse(
+                    general_message="Authentication failed. Invalid token."
+                ).get_failure_response()
+
+            # Validate circle_id parameter
+            try:
+                circle_id = int(circle_id)
+            except (ValueError, TypeError):
+                return CustomResponse(
+                    general_message="Invalid circle ID provided."
+                ).get_failure_response()
+
+            # Fetch the learning circle with better error handling
+            try:
+                learning_circle = LearningCircle.objects.get(id=circle_id)
+            except LearningCircle.DoesNotExist:
+                return CustomResponse(
+                    general_message="Learning Circle not found."
+                ).get_failure_response()
+
+            # Check if the user is an admin or leader of the circle
+            try:
+                is_leader = UserCircleLink.objects.filter(
+                    circle_id=circle_id,
+                    user_id=user_id,
+                    lead=True,
+                    accepted=True
+                ).exists()
+            except Exception as db_error:
+                return CustomResponse(
+                    general_message="Error checking user permissions."
+                ).get_failure_response()
+
+            if not is_leader:
+                return CustomResponse(
+                    general_message="You do not have permission to create a meeting in this circle."
+                ).get_failure_response()
+
+            # Extract data from the request with safe access
+            title = request.data.get("title", "") if hasattr(request, 'data') and request.data else ""
+            description = request.data.get("description", "") if hasattr(request, 'data') and request.data else ""
+            meet_time = request.data.get("meet_time") if hasattr(request, 'data') and request.data else None
+            duration = request.data.get("duration") if hasattr(request, 'data') and request.data else None
+            meet_link = request.data.get("meet_link") if hasattr(request, 'data') and request.data else None
+
+            # Validate required fields
+            if not meet_link:
+                return CustomResponse(
+                    general_message="Meeting creation failed. 'meet_link' is required for online meetings."
+                ).get_failure_response()
+
+            # Generate a unique meeting code with error handling
+            try:
+                meet_code = generate_code()
+                if not meet_code:
+                    raise ValueError("Failed to generate meeting code")
+            except Exception as code_error:
+                return CustomResponse(
+                    general_message="Failed to generate meeting code."
+                ).get_failure_response()
+
+            # Prepare data for serializer
+            meeting_data = {
+                "title": title,
+                "description": description,
+                "meet_time": meet_time,
+                "duration": duration,
+                "mode": "online",
+                "meet_link": meet_link,
+                "circle_id": circle_id,
+                "created_by": user_id,
+                "meet_code": meet_code,
+            }
+
+            # Use serializer to validate and create the meeting
+            try:
+                serializer = CircleMeetingLogCreateEditSerializer(data=meeting_data)
+                if not serializer.is_valid():
+                    return CustomResponse(
+                        general_message="Meeting creation failed",
+                        response=serializer.errors
+                    ).get_failure_response()
+
+                # Save the meeting
+                meeting = serializer.save()
+                
+                return CustomResponse(
+                    general_message="Meeting created successfully",
+                    response={
+                        "meet_code": meet_code,
+                        "meeting_id": meeting.id if hasattr(meeting, 'id') else None
+                    }
+                ).get_success_response()
+                
+            except Exception as serializer_error:
+                return CustomResponse(
+                    general_message="Failed to create meeting due to data validation error."
+                ).get_failure_response()
+
+        except Exception as e:
+            # Log the actual error for debugging
+            import logging
+            logger = logging.getLogger(__name__)
+            logger.error(f"Unexpected error in LearningCircleCreateOnlineMeetingView: {str(e)}")
+            
+            return CustomResponse(
+                general_message="An unexpected error occurred while creating the meeting."
+            ).get_failure_response()
