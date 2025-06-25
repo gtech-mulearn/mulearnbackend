@@ -237,6 +237,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
                 "hashtag": task.hashtag,
                 "completed": is_completed,
                 "karma": task.karma,
+                "task_description": task.description
             }
             for task in tasks
             if (is_completed := (task.id in completed_tasks)) or task.active
