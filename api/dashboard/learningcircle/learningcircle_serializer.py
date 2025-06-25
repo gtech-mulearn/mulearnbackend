@@ -10,6 +10,16 @@ from db.user import User
 from utils.types import LearningCircleRecurrenceType
 from utils.utils import DateTimeUtils
 
+from django.db import models
+from db.task import (
+    InterestGroup,
+    KarmaActivityLog,
+    Level,
+    TaskList,
+    Wallet,
+    UserIgLink,
+    UserLvlLink,
+)
 
 class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     ig = serializers.PrimaryKeyRelatedField(
@@ -553,3 +563,53 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "created_by",
             "created_by_id",
         ]
+
+
+# # class LearningCircleKarmaSerializer(serializers.ModelSerializer):
+#     total_karma = serializers.SerializerMethodField()
+#     rank = serializers.SerializerMethodField()
+#     member_count = serializers.SerializerMethodField()
+    
+#     class Meta:
+#         model = LearningCircle
+#         fields = ['id', 'title', 'ig', 'total_karma', 'rank', 'member_count']
+    
+#     def get_total_karma(self, obj):
+#         # Get all members (attendees) of this circle's meetings
+#         members = CircleMeetingAttendees.objects.filter(
+#             meet_id__circle_id=obj,
+#             is_joined=True
+#         ).values_list('user_id', flat=True).distinct()
+        
+#         # Sum karma points for these members related to this circle's interest group
+#         total_karma = 0
+#         for member_id in members:
+#             # Filter KarmaActivityLog for the member and tasks related to the specific IG
+#             user_karma = KarmaActivityLog.objects.filter(
+#             user_id=member_id,  # Filter by user
+#             task__ig=obj.ig,    # Filter by the IG related to the task
+#             ).aggregate(total=models.Sum('karma'))['total'] or 0
+#             total_karma += user_karma
+            
+#         return total_karma
+        
+#     def get_rank(self, obj):
+#         # Get all circles and sort by karma
+#         all_circles = LearningCircle.objects.all()
+#         ranked_circles = sorted(
+#             all_circles, 
+#             key=lambda circle: self.get_total_karma(circle),
+#             reverse=True
+#         )
+        
+#         # Find position of current circle
+#         for index, circle in enumerate(ranked_circles):
+#             if circle.id == obj.id:
+#                 return index + 1  # 1-based ranking
+#         return None
+    
+#     def get_member_count(self, obj):
+#         return CircleMeetingAttendees.objects.filter(
+#             meet_id__circle_id=obj,
+#             is_joined=True
+#         ).values('user_id').distinct().count()
