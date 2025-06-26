@@ -27,7 +27,7 @@ class IssueVerifiableCredentialView(APIView):
                 response = requests.post(
                     f"{BASE_URL}api/issue_vc_app",
                     json=payload,
-                    headers={"Content-Type": "application/json"},
+                    headers= HEADERS,
                 )
                 response.raise_for_status()
                 return CustomResponse(
