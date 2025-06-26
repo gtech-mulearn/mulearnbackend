@@ -28,4 +28,5 @@ urlpatterns = [
         "get-user-levels/<str:launchpad_id>/", launchpad_views.UserLevelsAPI.as_view()
     ),
     path("ig-leaderboard/", launchpad_views.IGLeaderboardView.as_view()),
+    path("reterive_candidate/", launchpad_views.RetrieveCandidatesView.as_view()),
 ]

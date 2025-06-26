@@ -26,6 +26,7 @@ from .serializers import (
     LaunchpadUpdateUserSerializer,
     LaunchPadRankSerializer,
     TaskCompletedLeaderBoardSerializer,
+    RetrieveCandidatesViewSerializer,
 )
 from api.dashboard.profile.profile_serializer import (
     UserProfileSerializer,
@@ -42,6 +43,7 @@ from db.user import User, UserRoleLink, Role, Socials
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog, Level, TaskList, Wallet
 from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
+
 
 
 class Leaderboard(APIView):
@@ -991,4 +993,42 @@ class IGLeaderboardView(APIView):
         ]
         return CustomResponse().paginated_response(
             data=data, pagination=paginated_queryset.get("pagination")
+        )
+class RetrieveCandidatesView(APIView):
+    def get(self, request):
+        user_id = request.query_params.get("user_id")
+        if not user_id:
+            return CustomResponse(general_message="User ID is required").get_failure_response()
+
+        logs = (
+            KarmaActivityLog.objects.select_related("user", "task", "task__ig")
+            .prefetch_related("user__wallet_user")
+            .filter(appraiser_approved=True, user_id=user_id)
+            .values(
+                "user__muid",
+                "user__full_name",
+                "user__college",
+                "user__district",
+                "user__profile_pic",
+                "user__wallet_user__karma"
+            )
+            .annotate(category_karma=Sum("karma"))
+            .order_by("-category_karma")
+        )
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            logs,
+            request,
+            search_fields=["user__full_name", "user__muid"],
+            sort_fields={
+                "karma_points": "user__wallet_user__karma",
+                "name": "user__full_name",
+            },
+        )
+
+        serializer = RetrieveCandidatesViewSerializer(paginated_queryset.get("queryset"), many=True)
+
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated_queryset.get("pagination")
         )

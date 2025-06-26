@@ -91,6 +91,21 @@ class LaunchpadLeaderBoardSerializer(serializers.ModelSerializer):
             "launchpad_id",
         )
 
+class RetrieveCandidatesViewSerializer(serializers.Serializer):
+    muid = serializers.CharField()
+    name = serializers.CharField(source="user__full_name")
+    college = serializers.SerializerMethodField()
+    district = serializers.CharField(source="user__district", allow_blank=True, allow_null=True)
+    karma_points = serializers.IntegerField(source="user__wallet_user__karma")
+    photo = serializers.CharField(source="user__profile_pic")
+    profile_url = serializers.SerializerMethodField()
+
+    def get_college(self, obj):
+        return obj.get("user__college", "")
+
+    def get_profile_url(self, obj):
+        return f"https://mulearn.org/profile/{obj.get('user__muid')}"
+
 
 class TaskCompletedLeaderBoardSerializer(serializers.ModelSerializer):
     # rank = serializers.SerializerMethodField('get_rank')
