@@ -14,8 +14,8 @@ class LaunchpadCompanies(models.Model):
     poc_phone=models.CharField(max_length=20, null=True)
     username= models.CharField(max_length=100, unique=True)
     password=models.CharField(max_length=100 ,null=True)
-created_at = models.DateTimeField(auto_now_add=True)
-updated_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
   
 class Meta:
     managed = False
@@ -23,21 +23,21 @@ class Meta:
 
 class LaunchpadRecruters(models.Model):
 
- id = models.CharField(primary_key=True, max_length=36)
- company_id = models.ForeignKey(LaunchpadCompanies, on_delete=models.CASCADE, related_name="launchpad_company")
- name = models.CharField(max_length=100)
- email = models.CharField(max_length=100)
- phone = models.CharField(max_length=20)
- password = models.CharField(max_length=255)
- role = models.CharField(max_length=50, null=True)
- created_at = models.DateTimeField(auto_now_add=True)
- updated_at = models.DateTimeField(auto_now=True)
-   
+    id = models.CharField(primary_key=True, max_length=36)
+    company_id = models.ForeignKey(LaunchpadCompanies, on_delete=models.CASCADE, related_name="launchpad_company")
+    name = models.CharField(max_length=100)
+    email = models.CharField(max_length=100)
+    phone = models.CharField(max_length=20)
+    password = models.CharField(max_length=255)
+    role = models.CharField(max_length=50, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    
 class Meta:
         managed = False
         db_table = 'launchpad_recruiters'
 
- class launchpad_jobs(models.Model):
+class launchpad_jobs(models.Model):
      id = models.CharField(primary_key=True, max_length=36)
      company_id = models.ForeignKey(LaunchpadCompanies, on_delete=models.CASCADE)
      namae = models.CharField(max_length=255)
