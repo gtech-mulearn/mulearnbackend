@@ -17,9 +17,9 @@ class LaunchpadCompanies(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
   
-class Meta:
-    managed = False
-    db_table = 'launchpad_companies'
+    class Meta:
+      managed = False
+      db_table = 'launchpad_companies'
 
 class LaunchpadRecruters(models.Model):
 
@@ -33,14 +33,14 @@ class LaunchpadRecruters(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
-class Meta:
+    class Meta:
         managed = False
         db_table = 'launchpad_recruiters'
 
-class launchpad_jobs(models.Model):
+class LaunchpadJob(models.Model):
      id = models.CharField(primary_key=True, max_length=36)
      company_id = models.ForeignKey(LaunchpadCompanies, on_delete=models.CASCADE)
-     namae = models.CharField(max_length=255)
+     name = models.CharField(max_length=255)
      skills = models.CharField(max_length=255, null=True)
      experience = models.CharField(max_length=225, null=True)
      domain = models.CharField(max_length=225, null=True)
@@ -49,7 +49,7 @@ class launchpad_jobs(models.Model):
      created_at = models.DateTimeField(auto_now_add=True)
      updated_at = models.DateTimeField(auto_now=True)
 
-class Meta:
+     class Meta:
         managed = False
         db_table = 'launchpad_jobs'
 

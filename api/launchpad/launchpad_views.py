@@ -27,6 +27,9 @@ from .serializers import (
     LaunchPadRankSerializer,
     TaskCompletedLeaderBoardSerializer,
     RetrieveCandidatesViewSerializer,
+    LaunchPadCompanySerializer,
+    LaunchPadRecruiterSerializer,
+    LaunchPadJobSerializer,
 )
 from api.dashboard.profile.profile_serializer import (
     UserProfileSerializer,
@@ -42,9 +45,60 @@ from utils.permission import JWTUtils
 from db.user import User, UserRoleLink, Role, Socials
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog, Level, TaskList, Wallet
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad, LaunchpadCompanies, LaunchpadRecruters, LaunchpadJob
 
 
+class RegisterCompany(APIView):
+    def post(self, request):
+        data = request.data
+        email = data.get("email")
+        password = data.get("password")
+        if not email or not password:
+            return CustomResponse(general_message="Email and password are required.").get_failure_response()
+        
+        if LaunchpadCompanies.objects.filter(email=email).exists():
+            return CustomResponse(general_message="Company with this email already exists.").get_failure_response()
+        
+        company = LaunchpadCompanies.objects.create(email=email, password=password)
+        serializer = LaunchPadCompanySerializer(company)
+        return CustomResponse(response=serializer.data).get_success_response()
+class LoginCompany(APIView):
+    def post(self, request):
+        data = request.data
+        email = data.get("email")
+        password = data.get("password")
+        if not email or not password:
+            return CustomResponse(general_message="Email and password are required.").get_failure_response()
+        
+        try:
+            company = LaunchpadCompanies.objects.get(email=email, password=password)
+            serializer = LaunchPadCompanySerializer(company)
+            return CustomResponse(response=serializer.data).get_success_response()
+        except LaunchpadCompanies.DoesNotExist:
+            return CustomResponse(general_message="Invalid email or password.").get_failure_response()
+        
+class AddRecruiter(APIView):
+    def post(self, request):
+        data = request.data
+        email = data.get("email")
+        password = data.get("password")
+        company_id = data.get("company_id")
+        
+        if not email or not password or not company_id:
+            return CustomResponse(general_message="Email, password, and company ID are required.").get_failure_response()
+        
+        try:
+            company = LaunchpadCompanies.objects.get(id=company_id)
+            recruiter = LaunchpadRecruters.objects.create(
+                email=email,
+                password=password,
+                company=company
+            )
+            serializer = LaunchPadRecruiterSerializer(recruiter)
+            return CustomResponse(response=serializer.data).get_success_response()
+        except LaunchpadCompanies.DoesNotExist:
+            return CustomResponse(general_message="Company not found.").get_failure_response()
+    
 
 class Leaderboard(APIView):
     def get(self, request):

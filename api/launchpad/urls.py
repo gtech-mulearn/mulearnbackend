@@ -29,4 +29,8 @@ urlpatterns = [
     ),
     path("ig-leaderboard/", launchpad_views.IGLeaderboardView.as_view()),
     path("reterive_candidate/", launchpad_views.RetrieveCandidatesView.as_view()),
+    path("login-company/", launchpad_views.LoginCompany.as_view()),
+    path("add-recruiter/", launchpad_views.AddRecruiter.as_view()),
+    path("register-company/", launchpad_views.RegisterCompany.as_view()),
+    
 ]

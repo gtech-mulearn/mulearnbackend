@@ -7,10 +7,26 @@ from rest_framework import serializers
 from db.user import User
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink,LaunchpadCompanies,LaunchpadRecruters,LaunchpadJob,LaunchPad
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
 
+
+class LaunchPadCompanySerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchpadCompanies
+        fields = '__all__'
+        
+class LaunchPadRecruiterSerializer(serializers.ModelSerializer):
+    class Meta: 
+        model = LaunchpadRecruters
+        fields = '__all__'
+
+class LaunchPadJobSerializer(serializers.ModelSerializer):
+    class Meta:         
+        model = LaunchpadJob
+        fields = '__all__'
+    
 
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:
