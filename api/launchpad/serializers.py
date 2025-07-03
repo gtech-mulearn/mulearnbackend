@@ -1,17 +1,45 @@
 import uuid
-
 from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Q
-
 from rest_framework import serializers
-
 from db.user import User
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
 from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
+from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs
 
 
+class LaunchpadCompaniesSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchpadCompanies
+        fields = [
+            'id', 'name', 'poc_name', 'poc_role', 'poc_email', 
+            'poc_phone', 'username', 'password', 'created_at', 'updated_at'
+        ]
+
+class LaunchpadRecruiterSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchpadRecruiters
+        fields = [
+            'id', 'company', 'name', 'email', 
+            'phone', 'password', 'role', 'created_at', 'updated_at'
+        ]
+
+class LaunchpadJobsSerializer(serializers.ModelSerializer):
+    skills = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+    experience = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+    task_description = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+
+    class Meta:
+        model = LaunchpadJobs
+        fields = [
+            'id', 'company', 'recruiter', 'title', 'skills', 'experience', 'domain', 
+            'interest_groups', 'task_description', 'created_at', 'updated_at'
+        ]
+
+
+#<--------------------------------------------------- old launchpad ------------------------------------------------->
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:
         model = LaunchPad

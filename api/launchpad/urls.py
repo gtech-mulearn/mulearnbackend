@@ -1,8 +1,17 @@
 from django.urls import path
-
 from . import launchpad_views
+from .launchpad_views import RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, LoginCompanyAPI, LoginRecruiterAPI
 
 urlpatterns = [
+
+    path('register-company/', RegisterCompanyAPI.as_view()),
+    path('register-recruiter/', RegisterRecruiterAPI.as_view()),
+    path('company-list/', CompanyListAPI.as_view()),
+    path("login-company/", LoginCompanyAPI.as_view()),
+    path("login-recruiter/", LoginRecruiterAPI.as_view()),
+    path('add-job/', AddJobAPI.as_view()),
+
+    #<----------------------- old launchpad -------------------------->
     path("leaderboard/", launchpad_views.Leaderboard.as_view()),
     path(
         "task-completed-leaderboard/",
