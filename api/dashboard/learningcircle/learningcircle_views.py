@@ -741,6 +741,8 @@ class LearningCircleMemberDetailsView(APIView):
             )
             
             karma_by_user = {item['user_id']: item['ig_karma'] for item in karma_data}
+            
+            member_details = []
           
             for link in member_links:
                 user_id = link.user_id
