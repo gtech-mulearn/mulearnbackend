@@ -1,39 +1,16 @@
 import uuid
-
-from django.db.models import (
-    Sum,
-    Max,
-    Prefetch,
-    F,
-    OuterRef,
-    Subquery,
-    IntegerField,
-    Count,
-    Q,
-)
-
+from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q
 from rest_framework.views import APIView
 from django.core.files.storage import FileSystemStorage
 from decouple import config as decouple_config
-
 from .serializers import (
-    LaunchpadLeaderBoardSerializer,
-    LaunchpadParticipantsSerializer,
-    LaunchpadUserListSerializer,
-    CollegeDataSerializer,
-    LaunchpadUserSerializer,
-    UserProfileUpdateSerializer,
-    LaunchpadUpdateUserSerializer,
-    LaunchPadRankSerializer,
-    TaskCompletedLeaderBoardSerializer,
+    LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,
+    CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer,
+    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer,
 )
 from api.dashboard.profile.profile_serializer import (
-    UserProfileSerializer,
-    LinkSocials,
-    UserLevelSerializer,
-    UserLogSerializer,
+    UserProfileSerializer, LinkSocials, UserLevelSerializer, UserLogSerializer,
 )
-
 from utils.response import CustomResponse
 from utils.utils import CommonUtils, ImportCSV
 from utils.types import LaunchPadLevels, LaunchPadRoles
@@ -44,6 +21,237 @@ from db.task import KarmaActivityLog, Level, TaskList, Wallet
 from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
 
 
+from rest_framework import status
+from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs
+from .serializers import LaunchpadCompaniesSerializer, LaunchpadRecruiterSerializer, LaunchpadJobsSerializer
+from django.contrib.auth.hashers import make_password, check_password
+from django.db import IntegrityError
+from utils.permission import CustomizePermission
+from utils.response import CustomResponse
+
+
+class RegisterCompanyAPI(APIView):
+  def post(self, request):
+    required_fields = ['name', 'username']
+    for field in required_fields:
+      if not request.data.get(field):
+        return CustomResponse(
+          message={field: [f'{field} is required']},
+          general_message="Registration failed"
+        ).get_failure_response()
+
+    serializer = LaunchpadCompaniesSerializer(data={
+      'id': str(uuid.uuid4()),
+      'name': request.data.get('name'),
+      'poc_name': request.data.get('poc_name'),
+      'poc_role': request.data.get('poc_role'),
+      'poc_email': request.data.get('poc_email'),
+      'poc_phone': request.data.get('poc_phone') or None,
+      'username': request.data.get('username'),
+      'password': make_password(request.data.get('password'))
+    })
+
+    if serializer.is_valid():
+      company = serializer.save()
+      return CustomResponse(
+        response={
+          'id': company.id,
+          'name': company.name,
+          'username': company.username,
+          'poc_name': company.poc_name,
+          'poc_email': company.poc_email,
+          'created_at': company.created_at
+        },
+        general_message="Company registered successfully"
+      ).get_success_response()
+
+    return CustomResponse(
+      message=serializer.errors,
+      general_message="Registration failed"
+    ).get_failure_response()
+
+class CompanyListAPI(APIView):
+  def get(self, request):
+    companies = LaunchpadCompanies.objects.all()
+    data = [
+      {
+        'id': company.id,
+        'name': company.name
+      } for company in companies
+    ]
+    return CustomResponse(
+      response=data,
+      general_message="Company list fetched successfully"
+    ).get_success_response()
+
+class RegisterRecruiterAPI(APIView):
+  permission_classes = [CustomizePermission]
+  def post(self, request):
+    required_fields = ['company_id', 'name', 'email', 'phone', 'password'
+]
+    for field in required_fields:
+      if not request.data.get(field):
+        return CustomResponse(
+          message={field: [f'{field} is required']},
+          general_message="Signup failed"
+        ).get_failure_response()
+
+    serializer = LaunchpadRecruiterSerializer(data={
+      'id': str(uuid.uuid4()),
+      'company': request.data.get('company_id'),
+      'name': request.data.get('name'),
+      'email': request.data.get('email'),
+      'phone': request.data.get('phone'),
+      'password': make_password(request.data.get('password')),
+      'role': request.data.get('role')
+    })
+
+    if serializer.is_valid():
+      try:
+        recruiter = serializer.save()
+        return CustomResponse(
+          response={
+            'id': recruiter.id,
+            'name': recruiter.name,
+            'email': recruiter.email,
+            'phone': recruiter.phone,
+            'role': recruiter.role,
+            'company_id': recruiter.company_id,
+            'created_at': recruiter.created_at
+          },
+          general_message="Recruiter registered successfully"
+        ).get_success_response()
+      except IntegrityError as e:
+        if 'email' in str(e):
+          return CustomResponse(
+            message={'email': ['A recruiter with this email already exists.']},
+            general_message="Signup failed"
+          ).get_failure_response()
+        else:
+          return CustomResponse(
+            message={'detail': ['Database error occurred.' + str(e)]},
+            general_message="Signup failed"
+          ).get_failure_response()
+
+    return CustomResponse(
+      message=serializer.errors,
+      general_message="Signup failed"
+    ).get_failure_response()
+  
+class AddJobAPI(APIView):
+  permission_classes = [CustomizePermission]
+  
+  def post(self, request):
+    required_fields = ['company_id', 'recruiter_id', 'title', 'domain', 'interest_groups']
+    for field in required_fields:
+      if not request.data.get(field):
+        return CustomResponse(
+          message={field: [f'{field} is required']},
+          general_message="Job creation failed"
+        ).get_failure_response()
+    
+    serializer = LaunchpadJobsSerializer(data={
+      'id': str(uuid.uuid4()),
+      'company': request.data.get('company_id'),
+      'recruiter': request.data.get('recruiter_id'),
+      'title': request.data.get('title'),
+      'skills': request.data.get('skills'),
+      'experience': request.data.get('experience'),
+      'domain': request.data.get('domain'),
+      'interest_groups': request.data.get('interest_groups'),
+      'task_description': request.data.get('task_description')
+    })
+
+    if serializer.is_valid():
+      try:
+        job = serializer.save()
+        response_data = {
+            'id': job.id,
+            'company_id': job.company_id,
+            'recruiter_id': job.recruiter_id,
+            'title': job.title,
+            'skills': job.skills or None,
+            'experience': job.experience or None,
+            'domain': job.domain,
+            'interest_groups': job.interest_groups,
+            'task_description': job.task_description or None,
+            'created_at': job.created_at
+        }
+        return CustomResponse(
+          response=response_data,
+          general_message="Job created successfully"
+        ).get_success_response()
+      except IntegrityError as e:
+        return CustomResponse(
+          message={'detail': ['Database error occurred.' + str(e)]},
+          general_message="Job creation failed"
+        ).get_failure_response()
+
+    return CustomResponse(
+      message=serializer.errors,
+      general_message="Job creation failed"
+    ).get_failure_response()
+  
+class LoginCompanyAPI(APIView):
+    def post(self, request):
+        data = request.data
+        usernameOrEmail = data.get("username") or data.get("email")
+        password = data.get("password")
+        if not usernameOrEmail or not password:
+            return CustomResponse(general_message="Username/email and password are required.").get_failure_response()
+        
+        company = None
+        try:
+            company = LaunchpadCompanies.objects.get(username=usernameOrEmail)
+        except LaunchpadCompanies.DoesNotExist:
+            try:
+                company = LaunchpadCompanies.objects.get(poc_email=usernameOrEmail)
+            except LaunchpadCompanies.DoesNotExist:
+                return CustomResponse(general_message="Invalid credentials.").get_failure_response()
+        
+        if not check_password(password, company.password):
+            return CustomResponse(general_message="Invalid credentials.").get_failure_response()
+        
+        return CustomResponse(response={
+            'id': company.id,
+            'name': company.name,
+            'username': company.username,
+            'poc_name': company.poc_name,
+            'poc_email': company.poc_email,
+            'created_at': company.created_at
+        }).get_success_response()
+
+class LoginRecruiterAPI(APIView):
+    def post(self, request):
+        data = request.data
+        emailOrPhone = data.get('email') or data.get('phone')
+        password = data.get("password")
+        if not emailOrPhone or not password:
+            return CustomResponse(general_message="Email/phone and password are required.").get_failure_response()
+        
+        recruiter = None
+        try:
+            recruiter = LaunchpadRecruiters.objects.get(email=emailOrPhone)
+        except LaunchpadRecruiters.DoesNotExist:
+            try:
+                recruiter = LaunchpadRecruiters.objects.get(phone=emailOrPhone)
+            except LaunchpadRecruiters.DoesNotExist:
+                return CustomResponse(general_message="Invalid credentials.").get_failure_response()
+        
+        if not check_password(password, recruiter.password):
+            return CustomResponse(general_message="Invalid credentials.").get_failure_response()
+        
+        return CustomResponse(response={
+            'id': recruiter.id,
+            'name': recruiter.name,
+            'email': recruiter.email,
+            'phone': recruiter.phone,
+            'role': recruiter.role,
+            'company_id': recruiter.company_id,
+            'created_at': recruiter.created_at
+        }).get_success_response()
+
+#<--------------------------------------------------- old launchpad ------------------------------------------------->
 class Leaderboard(APIView):
     def get(self, request):
         total_karma_subquery = (
