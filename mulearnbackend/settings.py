@@ -262,9 +262,13 @@ WADHWANI_BASE_URL = decouple_config("WADHWANI_BASE_URL")
 RAZORPAY_ID = decouple_config("RAZORPAY_ID")
 RAZORPAY_SECRET = decouple_config("RAZORPAY_SECRET")
 
+QSEVERSE_BASE_URL = decouple_config("QSEVERSE_BASE_URL")
+QSEVERSE_API_KEY = decouple_config("QSEVERSE_API_KEY")
+
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket
 
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS = [f"{ip[:-1]}1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
+DEFAULT_CHARSET = "utf-8"

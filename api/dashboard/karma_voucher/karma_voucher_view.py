@@ -182,8 +182,7 @@ class ImportVoucherLogAPI(APIView):
             # Preparing email context and attachment
             from_mail = decouple.config("FROM_MAIL")
             subject = "Congratulations on earning Karma points!"
-            text = f"""Greetings from GTech µLearn!
-
+            text = f"""Greetings from GTech MuLearn!
             Great news! You are just one step away from claiming your internship/contribution Karma points.
 
             Name: {full_name}
@@ -192,9 +191,10 @@ class ImportVoucherLogAPI(APIView):
             To claim your karma points copy this `voucher {code}` and paste it #task-dropbox channel along with your voucher image.
             """
 
+            month_week = f'{month}/{week}'
             karma_voucher_image = generate_karma_voucher(
                 name=str(full_name), karma=str(int(karma)), code=code, hashtag=task_hashtag,
-                month=time_or_event)
+                month=month_week)
             karma_voucher_image.seek(0)
             email_obj = EmailMessage(
                 subject=subject,
@@ -202,6 +202,7 @@ class ImportVoucherLogAPI(APIView):
                 from_email=from_mail,
                 to=[email],
             )
+            email_obj.encoding = 'utf-8'
             attachment = MIMEImage(karma_voucher_image.read())
             attachment.add_header(
                 'Content-Disposition',
@@ -209,7 +210,11 @@ class ImportVoucherLogAPI(APIView):
                 filename=f'{str(full_name)}.jpg',
             )
             email_obj.attach(attachment)
-            email_obj.send(fail_silently=False)
+            try:
+                email_obj.send(fail_silently=False)
+            except Exception as e:
+                # Log the email error but don't fail the entire operation
+                print(f"Failed to send email to {email}: {str(e)}")
 
         return CustomResponse(
             response={"Success": success_rows, "Failed": error_rows}
@@ -301,6 +306,7 @@ class VoucherLogAPI(APIView):
                 from_email=from_mail,
                 to=[email],
             )
+            email_obj.encoding = 'utf-8'
             attachment = MIMEImage(karma_voucher_image.read())
             attachment.add_header(
                 'Content-Disposition',
@@ -308,7 +314,10 @@ class VoucherLogAPI(APIView):
                 filename=f'{str(full_name)}.jpg',
             )
             email_obj.attach(attachment)
-            email_obj.send(fail_silently=False)
+            try:
+                email_obj.send(fail_silently=False)
+            except Exception as e:
+                print(f"Failed to send email to {email}: {str(e)}")
             return CustomResponse(general_message='Voucher created successfully',
                                   response=serializer.data).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
