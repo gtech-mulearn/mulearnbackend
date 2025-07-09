@@ -4,7 +4,7 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.learning_circle import LearningCircle
-from db.organization import College, UserOrganizationLink, Organization
+from db.organization import College, UserOrganizationLink, Organization, Department
 from db.task import KarmaActivityLog
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
@@ -81,13 +81,20 @@ class CollegeListSerializer(serializers.ModelSerializer):
         return {'total_karma_gained': total_karma_gained, 'total_karma_increased': total_karma_increased,
                 'increased_percentage': increased_percentage}
 
-class CollegeChangeSerializer(serializers.Serializer):
-    college_code = serializers.CharField(max_length=50, required=True)
 
-    def validate_college_code(self, value):
+class CollegeChangeSerializer(serializers.Serializer):
+    org_id = serializers.CharField(max_length=36, required=True)
+    department_id = serializers.CharField(max_length=36, required=False, allow_null=True)
+
+    def validate_org_id(self, value):
         if not Organization.objects.filter(
-            code=value,
+            id=value,
             org_type=OrganizationType.COLLEGE.value
         ).exists():
-            raise serializers.ValidationError("Invalid college code provided")
+            raise serializers.ValidationError("Invalid organization ID provided")
+        return value
+
+    def validate_department_id(self, value):
+        if value and not Department.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Invalid department ID provided")
         return value
