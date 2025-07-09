@@ -1,4 +1,7 @@
 import uuid
+import jwt
+from datetime import timedelta
+from decouple import config
 from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q
 from rest_framework.views import APIView
 from django.core.files.storage import FileSystemStorage
@@ -28,6 +31,42 @@ from django.contrib.auth.hashers import make_password, check_password
 from django.db import IntegrityError
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
+from utils.launchpad_permission import LaunchpadJWTPermission
+
+
+def get_current_utc_time():
+    from django.utils import timezone
+    return timezone.now()
+
+def generate_launchpad_jwt(user, user_type):
+    access_expiry_time = get_current_utc_time() + timedelta(hours=3)
+    access_expiry = access_expiry_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    
+    access_token = jwt.encode(
+        {
+            "id": user.id,
+            "user_type": user_type,  # "company" or "recruiter"
+            "expiry": access_expiry,
+            "tokenType": "access",
+        },
+        config("SECRET_KEY"),
+        algorithm="HS256",
+    )
+    
+    refresh_expiry_time = get_current_utc_time() + timedelta(days=7)  # 7 days
+    refresh_expiry = refresh_expiry_time.strftime("%Y-%m-%d %H:%M:%S%z")
+    
+    refresh_token = jwt.encode(
+        {
+            "id": user.id,
+            "user_type": user_type,
+            "expiry": refresh_expiry,
+            "tokenType": "refresh",
+        },
+        config("SECRET_KEY"),
+        algorithm="HS256",
+    )
+    return access_token, refresh_token
 
 
 class RegisterCompanyAPI(APIView):
@@ -139,58 +178,64 @@ class RegisterRecruiterAPI(APIView):
     ).get_failure_response()
   
 class AddJobAPI(APIView):
-  permission_classes = [CustomizePermission]
-  
-  def post(self, request):
-    required_fields = ['company_id', 'recruiter_id', 'title', 'domain', 'interest_groups']
-    for field in required_fields:
-      if not request.data.get(field):
-        return CustomResponse(
-          message={field: [f'{field} is required']},
-          general_message="Job creation failed"
-        ).get_failure_response()
+    permission_classes = [LaunchpadJWTPermission]
     
-    serializer = LaunchpadJobsSerializer(data={
-      'id': str(uuid.uuid4()),
-      'company': request.data.get('company_id'),
-      'recruiter': request.data.get('recruiter_id'),
-      'title': request.data.get('title'),
-      'skills': request.data.get('skills'),
-      'experience': request.data.get('experience'),
-      'domain': request.data.get('domain'),
-      'interest_groups': request.data.get('interest_groups'),
-      'task_description': request.data.get('task_description')
-    })
+    def post(self, request):
+        user = request.launchpad_user
+        user_type = request.launchpad_user_type
+        
+        if user_type != "recruiter":
+            return CustomResponse(general_message="Only recruiters can add jobs.").get_failure_response()
+        
+        required_fields = ['title', 'domain', 'interest_groups']
+        for field in required_fields:
+            if not request.data.get(field):
+                return CustomResponse(
+                    message={field: [f'{field} is required']},
+                    general_message="Job creation failed"
+                ).get_failure_response()
+        
+        serializer = LaunchpadJobsSerializer(data={
+            'id': str(uuid.uuid4()),
+            'company': user.company_id,
+            'recruiter': user.id,
+            'title': request.data.get('title'),
+            'skills': request.data.get('skills'),
+            'experience': request.data.get('experience'),
+            'domain': request.data.get('domain'),
+            'interest_groups': request.data.get('interest_groups'),
+            'task_description': request.data.get('task_description')
+        })
 
-    if serializer.is_valid():
-      try:
-        job = serializer.save()
-        response_data = {
-            'id': job.id,
-            'company_id': job.company_id,
-            'recruiter_id': job.recruiter_id,
-            'title': job.title,
-            'skills': job.skills or None,
-            'experience': job.experience or None,
-            'domain': job.domain,
-            'interest_groups': job.interest_groups,
-            'task_description': job.task_description or None,
-            'created_at': job.created_at
-        }
+        if serializer.is_valid():
+            try:
+                job = serializer.save()
+                response_data = {
+                    'id': job.id,
+                    'company_id': job.company_id,
+                    'recruiter_id': job.recruiter_id,
+                    'title': job.title,
+                    'skills': job.skills or None,
+                    'experience': job.experience or None,
+                    'domain': job.domain,
+                    'interest_groups': job.interest_groups,
+                    'task_description': job.task_description or None,
+                    'created_at': job.created_at
+                }
+                return CustomResponse(
+                    response=response_data,
+                    general_message="Job created successfully"
+                ).get_success_response()
+            except IntegrityError as e:
+                return CustomResponse(
+                    message={'detail': ['Database error occurred.' + str(e)]},
+                    general_message="Job creation failed"
+                ).get_failure_response()
+
         return CustomResponse(
-          response=response_data,
-          general_message="Job created successfully"
-        ).get_success_response()
-      except IntegrityError as e:
-        return CustomResponse(
-          message={'detail': ['Database error occurred.' + str(e)]},
-          general_message="Job creation failed"
+            message=serializer.errors,
+            general_message="Job creation failed"
         ).get_failure_response()
-
-    return CustomResponse(
-      message=serializer.errors,
-      general_message="Job creation failed"
-    ).get_failure_response()
   
 class LoginCompanyAPI(APIView):
     def post(self, request):
@@ -212,13 +257,17 @@ class LoginCompanyAPI(APIView):
         if not check_password(password, company.password):
             return CustomResponse(general_message="Invalid credentials.").get_failure_response()
         
+        access_token, refresh_token = generate_launchpad_jwt(company, "company")
+        
         return CustomResponse(response={
             'id': company.id,
             'name': company.name,
             'username': company.username,
             'poc_name': company.poc_name,
             'poc_email': company.poc_email,
-            'created_at': company.created_at
+            'created_at': company.created_at,
+            'accessToken': access_token,
+            'refreshToken': refresh_token
         }).get_success_response()
 
 class LoginRecruiterAPI(APIView):
@@ -241,6 +290,8 @@ class LoginRecruiterAPI(APIView):
         if not check_password(password, recruiter.password):
             return CustomResponse(general_message="Invalid credentials.").get_failure_response()
         
+        access_token, refresh_token = generate_launchpad_jwt(recruiter, "recruiter")
+        
         return CustomResponse(response={
             'id': recruiter.id,
             'name': recruiter.name,
@@ -248,8 +299,116 @@ class LoginRecruiterAPI(APIView):
             'phone': recruiter.phone,
             'role': recruiter.role,
             'company_id': recruiter.company_id,
-            'created_at': recruiter.created_at
+            'created_at': recruiter.created_at,
+            'accessToken': access_token,
+            'refreshToken': refresh_token
         }).get_success_response()
+
+class GetCompanyInfoAPI(APIView):
+    def post(self, request):
+        company_id = request.data.get('company_id')
+        if not company_id:
+            return CustomResponse(general_message="Company ID is required.").get_failure_response()
+        
+        try:
+            company = LaunchpadCompanies.objects.get(id=company_id)
+            return CustomResponse(response={
+                'id': company.id,
+                'name': company.name,
+                'username': company.username,
+                'poc_name': company.poc_name,
+                'poc_role': company.poc_role,
+                'poc_email': company.poc_email,
+                'poc_phone': company.poc_phone,
+                'created_at': company.created_at,
+                'updated_at': company.updated_at,
+                'recruiters': [
+                    {
+                        'id': recruiter.id,
+                        'name': recruiter.name,
+                        'email': recruiter.email,
+                        'phone': recruiter.phone,
+                        'role': recruiter.role,
+                        'created_at': recruiter.created_at,
+                        'updated_at': recruiter.updated_at
+                    }
+                    for recruiter in LaunchpadRecruiters.objects.filter(company=company)
+                ]
+
+            }).get_success_response()
+        except LaunchpadCompanies.DoesNotExist:
+            return CustomResponse(general_message="Company not found.").get_failure_response()
+
+class GetRecruiterInfoAPI(APIView):
+    def post(self, request):
+        recruiter_id = request.data.get('recruiter_id')
+        if not recruiter_id:
+            return CustomResponse(general_message="Recruiter ID is required.").get_failure_response()
+        
+        try:
+            recruiter = LaunchpadRecruiters.objects.select_related('company').get(id=recruiter_id)
+            return CustomResponse(response={
+                'id': recruiter.id,
+                'name': recruiter.name,
+                'email': recruiter.email,
+                'phone': recruiter.phone,
+                'role': recruiter.role,
+                'company_id': recruiter.company_id,
+                'company_name': recruiter.company.name if recruiter.company else None,
+                'created_at': recruiter.created_at,
+                'updated_at': recruiter.updated_at
+            }).get_success_response()
+        except LaunchpadRecruiters.DoesNotExist:
+            return CustomResponse(general_message="Recruiter not found.").get_failure_response()
+
+
+class RefreshTokenAPI(APIView):
+    def post(self, request):
+        refresh_token = request.data.get("refreshToken")
+        if not refresh_token:
+            return CustomResponse(general_message="Refresh token is required.").get_failure_response()
+        
+        try:
+            payload = jwt.decode(
+                refresh_token,
+                config("SECRET_KEY"),
+                algorithms=["HS256"],
+                verify=True,
+            )
+        except jwt.ExpiredSignatureError:
+            return CustomResponse(general_message="Refresh token has expired.").get_failure_response()
+        except jwt.InvalidTokenError:
+            return CustomResponse(general_message="Invalid refresh token.").get_failure_response()
+        
+        user_id = payload.get("id")
+        user_type = payload.get("user_type")
+        token_type = payload.get("tokenType")
+        
+        if token_type != "refresh":
+            return CustomResponse(general_message="Invalid token type.").get_failure_response()
+
+        user = None
+        if user_type == "company":
+            try:
+                user = LaunchpadCompanies.objects.get(id=user_id)
+            except LaunchpadCompanies.DoesNotExist:
+                return CustomResponse(general_message="Company not found.").get_failure_response()
+        elif user_type == "recruiter":
+            try:
+                user = LaunchpadRecruiters.objects.get(id=user_id)
+            except LaunchpadRecruiters.DoesNotExist:
+                return CustomResponse(general_message="Recruiter not found.").get_failure_response()
+        else:
+            return CustomResponse(general_message="Invalid user type.").get_failure_response()
+        
+        # Generate new tokens
+        access_token, new_refresh_token = generate_launchpad_jwt(user, user_type)
+        
+        return CustomResponse(response={
+            "accessToken": access_token,
+            "refreshToken": new_refresh_token
+        }).get_success_response()
+
 
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class Leaderboard(APIView):
