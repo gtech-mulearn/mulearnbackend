@@ -61,6 +61,6 @@ urlpatterns = [
     ),
     path(
         "meeting/create/<str:circle_id>/",
-        learningcircle_views.LearningCircleCreateOnlineMeetingView.as_view(),
+        learningcircle_views.LearningCircleCreateMeetingView.as_view(),
     )
 ]

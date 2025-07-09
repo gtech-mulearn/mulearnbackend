@@ -619,13 +619,15 @@ class LearningCircleBasicDetailsView(APIView):
         try:
             circle = LearningCircle.objects.select_related('ig').get(id=circle_id)
             member_count = UserCircleLink.objects.filter(
-                circle_id=circle.id,
-                accepted=True
+                circle=circle_id,
+                accepted=True,
+                accepted__isnull=False
             ).count()
             # Calculate total karma
             member_ids = UserCircleLink.objects.filter(
-                circle_id=circle_id,
-                accepted=True
+                circle=circle_id,
+                accepted=True,
+                accepted__isnull=False
             ).values_list('user_id', flat=True)
             
             total_karma = KarmaActivityLog.objects.filter(
@@ -723,9 +725,12 @@ class LearningCircleMemberDetailsView(APIView):
             circle = LearningCircle.objects.select_related('ig').get(id=circle_id)
             
             member_links = UserCircleLink.objects.filter(
-                circle_id=circle_id,
-                accepted=True
+                circle=circle_id,
+                accepted=True,
+                accepted__isnull=False  # Exclude None values
             ).select_related('user')
+            
+            
             
             leaders = set(link.user_id for link in member_links if link.lead)
             
@@ -749,7 +754,6 @@ class LearningCircleMemberDetailsView(APIView):
                 user = users.get(user_id)
                 if not user:
                     continue
-                member_details = []
                 member_details.append({
                     'id': user.id,
                     'full_name': user.full_name,
@@ -870,13 +874,12 @@ class LearningCircleManageRequestsView(APIView):
                 general_message=f"An error occurred: {str(e)}"
             ).get_failure_response()
             
-
-class LearningCircleCreateOnlineMeetingView(APIView):
+class LearningCircleCreateMeetingView(APIView):
     """
-    API to create an online meeting for a learning circle.
+    API to create an online and offline meeting for a learning circle.
     Only admins or leaders of the learning circle can create meetings.
     """
-    # permission_classes = [CustomizePermission]
+    permission_classes = [CustomizePermission]
 
     def post(self, request, circle_id):
         try:
@@ -890,14 +893,6 @@ class LearningCircleCreateOnlineMeetingView(APIView):
             except Exception as jwt_error:
                 return CustomResponse(
                     general_message="Authentication failed. Invalid token."
-                ).get_failure_response()
-
-            # Validate circle_id parameter
-            try:
-                circle_id = int(circle_id)
-            except (ValueError, TypeError):
-                return CustomResponse(
-                    general_message="Invalid circle ID provided."
                 ).get_failure_response()
 
             # Fetch the learning circle with better error handling
@@ -932,11 +927,36 @@ class LearningCircleCreateOnlineMeetingView(APIView):
             meet_time = request.data.get("meet_time") if hasattr(request, 'data') and request.data else None
             duration = request.data.get("duration") if hasattr(request, 'data') and request.data else None
             meet_link = request.data.get("meet_link") if hasattr(request, 'data') and request.data else None
+            coord_x = request.data.get("coord_x") if hasattr(request, 'data') and request.data else None
+            coord_y = request.data.get("coord_y") if hasattr(request, 'data') and request.data else None
+            meet_place = request.data.get("meet_place", "") if hasattr(request, 'data') and request.data else ""
+            mode = request.data.get("mode", "online") if hasattr(request, 'data') and request.data else "online"
 
-            # Validate required fields
-            if not meet_link:
+            # Basic validation moved to view level for clearer error messages
+            if mode == "online":
+                if not meet_link:
+                    return CustomResponse(
+                        general_message="Meeting creation failed. 'meet_link' is required for online meetings."
+                    ).get_failure_response()
+                if not meet_place:
+                    return CustomResponse(
+                        general_message="Meeting creation failed. 'meet_place' is required for online meetings."
+                    ).get_failure_response()
+                # For online meetings, clear offline-specific fields
+                coord_x = None
+                coord_y = None
+
+            elif mode == "offline":
+                if not coord_x or not coord_y or not meet_place:
+                    return CustomResponse(
+                        general_message="Meeting creation failed. 'coord_x', 'coord_y', and 'meet_place' are required for offline meetings."
+                    ).get_failure_response()
+                # For offline meetings, clear online-specific fields
+                meet_link = None
+
+            else:
                 return CustomResponse(
-                    general_message="Meeting creation failed. 'meet_link' is required for online meetings."
+                    general_message="Meeting creation failed. Invalid meeting mode. Must be 'online' or 'offline'."
                 ).get_failure_response()
 
             # Generate a unique meeting code with error handling
@@ -949,22 +969,32 @@ class LearningCircleCreateOnlineMeetingView(APIView):
                     general_message="Failed to generate meeting code."
                 ).get_failure_response()
 
-            # Prepare data for serializer
+            # Prepare data for serializer - only include relevant fields
             meeting_data = {
                 "title": title,
                 "description": description,
                 "meet_time": meet_time,
                 "duration": duration,
-                "mode": "online",
-                "meet_link": meet_link,
+                "mode": mode,
                 "circle_id": circle_id,
                 "created_by": user_id,
                 "meet_code": meet_code,
+                "meet_place": meet_place,
             }
+
+            # Add mode-specific fields
+            if mode == "online":
+                meeting_data["meet_link"] = meet_link
+            elif mode == "offline":
+                meeting_data["coord_x"] = coord_x
+                meeting_data["coord_y"] = coord_y
 
             # Use serializer to validate and create the meeting
             try:
-                serializer = CircleMeetingLogCreateEditSerializer(data=meeting_data)
+                serializer = CircleMeetingLogCreateEditSerializer(
+                    data=meeting_data, 
+                    context={'user_id': user_id, 'meet_code': meet_code}
+                )
                 if not serializer.is_valid():
                     return CustomResponse(
                         general_message="Meeting creation failed",
@@ -981,7 +1011,7 @@ class LearningCircleCreateOnlineMeetingView(APIView):
                         "meeting_id": meeting.id if hasattr(meeting, 'id') else None
                     }
                 ).get_success_response()
-                
+
             except Exception as serializer_error:
                 return CustomResponse(
                     general_message="Failed to create meeting due to data validation error."
@@ -991,8 +1021,8 @@ class LearningCircleCreateOnlineMeetingView(APIView):
             # Log the actual error for debugging
             import logging
             logger = logging.getLogger(__name__)
-            logger.error(f"Unexpected error in LearningCircleCreateOnlineMeetingView: {str(e)}")
-            
+            logger.error(f"Unexpected error in LearningCircleCreateMeetingView: {str(e)}")
+
             return CustomResponse(
                 general_message="An unexpected error occurred while creating the meeting."
             ).get_failure_response()
