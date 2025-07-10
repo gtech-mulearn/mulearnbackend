@@ -15,7 +15,7 @@ class LaunchpadCompaniesSerializer(serializers.ModelSerializer):
         model = LaunchpadCompanies
         fields = [
             'id', 'name', 'poc_name', 'poc_role', 'poc_email', 
-            'poc_phone', 'username', 'password', 'created_at', 'updated_at'
+            'poc_phone', 'username', 'password','is_verified', 'created_at', 'updated_at'
         ]
 
 class LaunchpadRecruiterSerializer(serializers.ModelSerializer):

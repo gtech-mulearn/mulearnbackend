@@ -12,6 +12,7 @@ class LaunchpadCompanies(models.Model):
     poc_phone = models.CharField(max_length=20)
     username = models.CharField(max_length=50, unique=True)
     password = models.CharField(max_length=255)
+    is_verified = models.BooleanField(default=False)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
