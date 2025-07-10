@@ -409,6 +409,26 @@ class RefreshTokenAPI(APIView):
             "refreshToken": new_refresh_token
         }).get_success_response()
 
+class CompanyVerifyAPI(APIView):
+    def post(self, request):
+        company_id = request.data.get('id')
+
+        if not company_id:
+            return CustomResponse(general_message="Company ID is required.").get_failure_response()
+
+        try:
+            company = LaunchpadCompanies.objects.get(id=company_id)
+            company.is_verified = True
+            company.save()
+
+            return CustomResponse(response={
+                "company_name": company.name,
+                "message": f"Company '{company.name}' verified successfully."
+            }).get_success_response()
+
+        except LaunchpadCompanies.DoesNotExist:
+            return CustomResponse(general_message="Company not found.").get_failure_response()
+
 
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class Leaderboard(APIView):
