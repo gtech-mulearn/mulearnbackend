@@ -3,7 +3,7 @@ from . import launchpad_views
 from .launchpad_views import (
     RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, 
     LoginCompanyAPI, LoginRecruiterAPI, GetCompanyInfoAPI, GetRecruiterInfoAPI,
-    RefreshTokenAPI
+    RefreshTokenAPI, CompanyVerifyAPI
 )
 
 urlpatterns = [
@@ -16,6 +16,7 @@ urlpatterns = [
     path('add-job/', AddJobAPI.as_view()),
     path('company-info/', GetCompanyInfoAPI.as_view()),
     path('recruiter-info/', GetRecruiterInfoAPI.as_view()),
+    path('company-verify/', CompanyVerifyAPI.as_view()),
 
     #<----------------------- old launchpad -------------------------->
     path("leaderboard/", launchpad_views.Leaderboard.as_view()),
