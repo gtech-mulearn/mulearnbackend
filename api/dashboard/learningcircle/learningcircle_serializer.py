@@ -10,6 +10,16 @@ from db.user import User
 from utils.types import LearningCircleRecurrenceType
 from utils.utils import DateTimeUtils
 
+from django.db import models
+from db.task import (
+    InterestGroup,
+    KarmaActivityLog,
+    Level,
+    TaskList,
+    Wallet,
+    UserIgLink,
+    UserLvlLink,
+)
 
 class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     ig = serializers.PrimaryKeyRelatedField(
@@ -200,17 +210,21 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         model = LearningCircle
         fields = ["id", "ig", "title", "org", "attendees"]
 
-
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
     ONLINE_MEET_PLACE_CHOICES = ("Zoom", "Google Meet", "Microsoft Teams", "Other")
+    
     circle_id = serializers.PrimaryKeyRelatedField(
         queryset=LearningCircle.objects.all(), required=True
     )
-    meet_link = serializers.URLField(required=False, allow_null=True)
-    meet_place = serializers.CharField(required=True)
-
+    meet_link = serializers.URLField(required=False, allow_null=True, allow_blank=True)
+    meet_place = serializers.CharField(required=False, allow_null=True, allow_blank=True)
+    coord_x = serializers.FloatField(required=False, allow_null=True)
+    coord_y = serializers.FloatField(required=False, allow_null=True)
+    mode = serializers.ChoiceField(choices=[('online', 'Online'), ('offline', 'Offline')], required=True)
+    
     def update(self, instance, validated_data):
         instance.title = validated_data.get("title", instance.title)
+        instance.description = validated_data.get("description", instance.description)
         instance.is_report_needed = validated_data.get(
             "is_report_needed", instance.is_report_needed
         )
@@ -221,6 +235,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         instance.coord_x = validated_data.get("coord_x", instance.coord_x)
         instance.coord_y = validated_data.get("coord_y", instance.coord_y)
         instance.meet_place = validated_data.get("meet_place", instance.meet_place)
+        instance.meet_link = validated_data.get("meet_link", instance.meet_link)
         instance.meet_time = validated_data.get("meet_time", instance.meet_time)
         instance.duration = validated_data.get("duration", instance.duration)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
@@ -243,15 +258,27 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         report_description = attrs.get("report_description")
         mode = attrs.get("mode")
         meet_place = attrs.get("meet_place")
+        meet_link = attrs.get("meet_link")
+        coord_x = attrs.get("coord_x")
+        coord_y = attrs.get("coord_y")
+        
+        # Handle report validation
         if not is_report_needed:
             attrs["report_description"] = None
         else:
             if not report_description:
                 raise serializers.ValidationError("Report description is required")
+        
+        # Mode-specific validation
         if mode == "online":
-            if not attrs.get("meet_link"):
+            # Validate online requirements
+            if not meet_link:
                 raise serializers.ValidationError(
                     "Meeting link is required for online mode"
+                )
+            if not meet_place:
+                raise serializers.ValidationError(
+                    "Meeting place is required for online mode"
                 )
             if meet_place not in self.ONLINE_MEET_PLACE_CHOICES:
                 raise serializers.ValidationError(
@@ -259,6 +286,23 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
                         self.ONLINE_MEET_PLACE_CHOICES
                     )
                 )
+            # Clear offline fields for online mode
+            attrs["coord_x"] = None
+            attrs["coord_y"] = None
+            
+        elif mode == "offline":
+            # Validate offline requirements
+            if coord_x is None or coord_y is None:
+                raise serializers.ValidationError(
+                    "Coordinates (coord_x and coord_y) are required for offline mode"
+                )
+            if not meet_place:
+                raise serializers.ValidationError(
+                    "Meeting place is required for offline mode"
+                )
+            # Clear online fields for offline mode
+            attrs["meet_link"] = None
+            
         return super().validate(attrs)
 
     def validate_circle_id(self, value):
@@ -286,7 +330,6 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
             "description",
             "mode",
         ]
-
 
 class CircleMeetingLogListSerializer(serializers.ModelSerializer):
     circle = serializers.CharField(source="circle_id.id", read_only=True)
@@ -553,3 +596,53 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "created_by",
             "created_by_id",
         ]
+
+
+# # class LearningCircleKarmaSerializer(serializers.ModelSerializer):
+#     total_karma = serializers.SerializerMethodField()
+#     rank = serializers.SerializerMethodField()
+#     member_count = serializers.SerializerMethodField()
+    
+#     class Meta:
+#         model = LearningCircle
+#         fields = ['id', 'title', 'ig', 'total_karma', 'rank', 'member_count']
+    
+#     def get_total_karma(self, obj):
+#         # Get all members (attendees) of this circle's meetings
+#         members = CircleMeetingAttendees.objects.filter(
+#             meet_id__circle_id=obj,
+#             is_joined=True
+#         ).values_list('user_id', flat=True).distinct()
+        
+#         # Sum karma points for these members related to this circle's interest group
+#         total_karma = 0
+#         for member_id in members:
+#             # Filter KarmaActivityLog for the member and tasks related to the specific IG
+#             user_karma = KarmaActivityLog.objects.filter(
+#             user_id=member_id,  # Filter by user
+#             task__ig=obj.ig,    # Filter by the IG related to the task
+#             ).aggregate(total=models.Sum('karma'))['total'] or 0
+#             total_karma += user_karma
+            
+#         return total_karma
+        
+#     def get_rank(self, obj):
+#         # Get all circles and sort by karma
+#         all_circles = LearningCircle.objects.all()
+#         ranked_circles = sorted(
+#             all_circles, 
+#             key=lambda circle: self.get_total_karma(circle),
+#             reverse=True
+#         )
+        
+#         # Find position of current circle
+#         for index, circle in enumerate(ranked_circles):
+#             if circle.id == obj.id:
+#                 return index + 1  # 1-based ranking
+#         return None
+    
+#     def get_member_count(self, obj):
+#         return CircleMeetingAttendees.objects.filter(
+#             meet_id__circle_id=obj,
+#             is_joined=True
+#         ).values('user_id').distinct().count()
