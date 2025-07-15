@@ -20,9 +20,13 @@ from .learningcircle_serializer import (
     LearningCircleDetailSerializer,
     LearningCircleListMinSerializer,
 )
-from django.db.models import Q
 
 from django.db.models import Sum, Q
+from db.user import User
+from db.task import (
+    KarmaActivityLog,
+    
+)
 
 
 class LearningCircleView(APIView):
