@@ -1,25 +1,18 @@
 from datetime import datetime, timedelta, timezone
 
 import pytz
-from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees
+from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink
 from rest_framework import serializers
 
 from db.organization import Organization
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog
 from db.user import User
 from utils.types import LearningCircleRecurrenceType
 from utils.utils import DateTimeUtils
 
-from django.db import models
-from db.task import (
-    InterestGroup,
-    KarmaActivityLog,
-    Level,
-    TaskList,
-    Wallet,
-    UserIgLink,
-    UserLvlLink,
-)
+import collections
+from django.db.models import Sum
+
 
 class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     ig = serializers.PrimaryKeyRelatedField(
@@ -107,13 +100,95 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
             "created_by",
         ]
 
+    def to_representation(self, instance):
+        # Override to add calculated fields that don't exist on the model
+        data = super().to_representation(instance)
+        
+        data['rank'] = self.get_rank(instance)
+        data['total_karma'] = self.get_total_karma(instance)
+        data['total_members'] = self.get_total_members(instance)
+        
+        return data
+
     def get_created_by(self, obj):
+        # Using select_related on the initial queryset (if fetching multiple LearningCircles)
+        # would make this access more efficient by avoiding a separate query for each obj.created_by.
         return {
             "full_name": obj.created_by.full_name,
             "profile_pic": obj.created_by.profile_pic,
             "muid": obj.created_by.muid,
         }
 
+    def get_total_members(self, obj):
+        """Calculate total number of accepted members in this circle"""
+        return UserCircleLink.objects.filter(
+            circle=obj.id,
+            accepted=True,
+            accepted__isnull=False
+        ).count()
+
+    @property
+    def _all_circle_rankings_data(self):
+        """
+        Calculates and caches the rankings for all circles.
+        This method will only run once per serializer instance.
+        """
+        if not hasattr(self, '_cached_circle_rankings'):
+            user_circle_links = UserCircleLink.objects.filter(accepted=True).values('circle_id', 'user_id')
+
+            circle_to_users = collections.defaultdict(list)
+            for link in user_circle_links:
+                circle_to_users[link['circle_id']].append(link['user_id'])
+
+            circle_igs = dict(LearningCircle.objects.values_list('id', 'ig_id'))
+
+            user_karma = (
+                KarmaActivityLog.objects
+                .values('user_id', 'task__ig')
+                .annotate(total_karma=Sum('karma'))
+            )
+
+            user_ig_karma = collections.defaultdict(int)
+            for entry in user_karma:
+                user_ig_karma[(entry['user_id'], entry['task__ig'])] += entry['total_karma']
+
+            circle_data = []
+            for circle_id, user_ids in circle_to_users.items():
+                ig_id = circle_igs.get(circle_id)
+                total = sum(user_ig_karma.get((uid, ig_id), 0) for uid in user_ids)
+                circle_data.append({
+                    'id': circle_id,
+                    'total_karma': total
+                })
+
+            all_circle_ids = set(circle_igs.keys())
+            existing_ids = {c['id'] for c in circle_data}
+            for missing_id in all_circle_ids - existing_ids:
+                circle_data.append({
+                    'id': missing_id,
+                    'total_karma': 0
+                })
+
+            circle_data.sort(key=lambda x: x['total_karma'], reverse=True)
+
+            # Assign ranks efficiently, handling ties if necessary (though current logic doesn't)
+            for i, c in enumerate(circle_data):
+                c['rank'] = i + 1
+
+            # Store as a dictionary for quick lookup by circle ID
+            self._cached_circle_rankings = {item['id']: item for item in circle_data}
+        return self._cached_circle_rankings
+
+    def get_total_karma(self, obj):
+        # Get total karma of learning circle
+        karma_data = self._all_circle_rankings_data.get(obj.id)
+        return karma_data['total_karma'] if karma_data else 0
+
+    def get_rank(self, obj):
+        # Get the rank of the current circle from pre-calculated rankings
+        karma_data = self._all_circle_rankings_data.get(obj.id)
+        return karma_data['rank'] if karma_data else None
+    
     # next_meetup = serializers.SerializerMethodField()
 
     # def _get_next_weekday(self, target_day: int):
@@ -210,21 +285,17 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         model = LearningCircle
         fields = ["id", "ig", "title", "org", "attendees"]
 
+
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
     ONLINE_MEET_PLACE_CHOICES = ("Zoom", "Google Meet", "Microsoft Teams", "Other")
-    
     circle_id = serializers.PrimaryKeyRelatedField(
         queryset=LearningCircle.objects.all(), required=True
     )
-    meet_link = serializers.URLField(required=False, allow_null=True, allow_blank=True)
-    meet_place = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    coord_x = serializers.FloatField(required=False, allow_null=True)
-    coord_y = serializers.FloatField(required=False, allow_null=True)
-    mode = serializers.ChoiceField(choices=[('online', 'Online'), ('offline', 'Offline')], required=True)
-    
+    meet_link = serializers.URLField(required=False, allow_null=True)
+    meet_place = serializers.CharField(required=True)
+
     def update(self, instance, validated_data):
         instance.title = validated_data.get("title", instance.title)
-        instance.description = validated_data.get("description", instance.description)
         instance.is_report_needed = validated_data.get(
             "is_report_needed", instance.is_report_needed
         )
@@ -235,7 +306,6 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         instance.coord_x = validated_data.get("coord_x", instance.coord_x)
         instance.coord_y = validated_data.get("coord_y", instance.coord_y)
         instance.meet_place = validated_data.get("meet_place", instance.meet_place)
-        instance.meet_link = validated_data.get("meet_link", instance.meet_link)
         instance.meet_time = validated_data.get("meet_time", instance.meet_time)
         instance.duration = validated_data.get("duration", instance.duration)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
@@ -258,27 +328,15 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         report_description = attrs.get("report_description")
         mode = attrs.get("mode")
         meet_place = attrs.get("meet_place")
-        meet_link = attrs.get("meet_link")
-        coord_x = attrs.get("coord_x")
-        coord_y = attrs.get("coord_y")
-        
-        # Handle report validation
         if not is_report_needed:
             attrs["report_description"] = None
         else:
             if not report_description:
                 raise serializers.ValidationError("Report description is required")
-        
-        # Mode-specific validation
         if mode == "online":
-            # Validate online requirements
-            if not meet_link:
+            if not attrs.get("meet_link"):
                 raise serializers.ValidationError(
                     "Meeting link is required for online mode"
-                )
-            if not meet_place:
-                raise serializers.ValidationError(
-                    "Meeting place is required for online mode"
                 )
             if meet_place not in self.ONLINE_MEET_PLACE_CHOICES:
                 raise serializers.ValidationError(
@@ -286,23 +344,6 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
                         self.ONLINE_MEET_PLACE_CHOICES
                     )
                 )
-            # Clear offline fields for online mode
-            attrs["coord_x"] = None
-            attrs["coord_y"] = None
-            
-        elif mode == "offline":
-            # Validate offline requirements
-            if coord_x is None or coord_y is None:
-                raise serializers.ValidationError(
-                    "Coordinates (coord_x and coord_y) are required for offline mode"
-                )
-            if not meet_place:
-                raise serializers.ValidationError(
-                    "Meeting place is required for offline mode"
-                )
-            # Clear online fields for offline mode
-            attrs["meet_link"] = None
-            
         return super().validate(attrs)
 
     def validate_circle_id(self, value):
@@ -330,6 +371,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
             "description",
             "mode",
         ]
+
 
 class CircleMeetingLogListSerializer(serializers.ModelSerializer):
     circle = serializers.CharField(source="circle_id.id", read_only=True)
@@ -596,53 +638,3 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "created_by",
             "created_by_id",
         ]
-
-
-# # class LearningCircleKarmaSerializer(serializers.ModelSerializer):
-#     total_karma = serializers.SerializerMethodField()
-#     rank = serializers.SerializerMethodField()
-#     member_count = serializers.SerializerMethodField()
-    
-#     class Meta:
-#         model = LearningCircle
-#         fields = ['id', 'title', 'ig', 'total_karma', 'rank', 'member_count']
-    
-#     def get_total_karma(self, obj):
-#         # Get all members (attendees) of this circle's meetings
-#         members = CircleMeetingAttendees.objects.filter(
-#             meet_id__circle_id=obj,
-#             is_joined=True
-#         ).values_list('user_id', flat=True).distinct()
-        
-#         # Sum karma points for these members related to this circle's interest group
-#         total_karma = 0
-#         for member_id in members:
-#             # Filter KarmaActivityLog for the member and tasks related to the specific IG
-#             user_karma = KarmaActivityLog.objects.filter(
-#             user_id=member_id,  # Filter by user
-#             task__ig=obj.ig,    # Filter by the IG related to the task
-#             ).aggregate(total=models.Sum('karma'))['total'] or 0
-#             total_karma += user_karma
-            
-#         return total_karma
-        
-#     def get_rank(self, obj):
-#         # Get all circles and sort by karma
-#         all_circles = LearningCircle.objects.all()
-#         ranked_circles = sorted(
-#             all_circles, 
-#             key=lambda circle: self.get_total_karma(circle),
-#             reverse=True
-#         )
-        
-#         # Find position of current circle
-#         for index, circle in enumerate(ranked_circles):
-#             if circle.id == obj.id:
-#                 return index + 1  # 1-based ranking
-#         return None
-    
-#     def get_member_count(self, obj):
-#         return CircleMeetingAttendees.objects.filter(
-#             meet_id__circle_id=obj,
-#             is_joined=True
-#         ).values('user_id').distinct().count()
