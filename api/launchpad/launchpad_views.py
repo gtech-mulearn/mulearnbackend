@@ -783,15 +783,18 @@ class StudentJobInvitationsAPI(APIView):
     
     def get(self, request):
         user_id = request.auth["id"]
+        status_filter = request.query_params.get('status', None)  
         
         invitations = LaunchpadJobApplications.objects.select_related(
             'job', 'job__company', 'job__recruiter'
         ).filter(student_id=user_id)
         
-        # Order by most recent first
-        invitations = invitations.order_by('-invited_at')
+        if status_filter:
+            invitations = invitations.filter(status=status_filter)
         
-        # Apply pagination
+      
+        invitations = invitations.order_by('-invited_at')
+    
         paginated_queryset = CommonUtils.get_paginated_queryset(
             invitations,
             request,
@@ -813,6 +816,8 @@ class StudentJobInvitationsAPI(APIView):
                 'company_name': invitation.job.company.name,
                 'company_id': invitation.job.company.id,
                 'recruiter_name': invitation.job.recruiter.name,
+                'recruiter_email': invitation.job.recruiter.email,
+                'recruiter_phone': invitation.job.recruiter.phone,
                 'skills': invitation.job.skills,
                 'experience': invitation.job.experience,
                 'location': invitation.job.location,
@@ -826,13 +831,32 @@ class StudentJobInvitationsAPI(APIView):
                 'applied_at': invitation.applied_at,
             }
             
-            # Add task info if it's a task-based job
+            if invitation.status == 'interview_scheduled':
+                invitation_data['interview_details'] = {
+                    'interview_date': getattr(invitation, 'interview_date', None),
+                    'interview_time': getattr(invitation, 'interview_time', None),
+                    'interview_platform': getattr(invitation, 'interview_platform', None),
+                    'interview_link': getattr(invitation, 'interview_link', None),
+                    'interview_scheduled_at': invitation.updated_at
+                }
+            
             if invitation.job.opening_type == "Task" and invitation.job.task:
-                invitation_data['task_id'] = invitation.job.task.id
-                invitation_data['task_description'] = invitation.job.task.task_description
-                invitation_data['task_verified'] = invitation.job.task.is_verified
-                invitation_data['task_hashtag'] = invitation.job.task.hashtags
-    
+                invitation_data['task_info'] = {
+                    'task_id': invitation.job.task.id,
+                    'task_description': invitation.job.task.task_description,
+                    'task_verified': invitation.job.task.is_verified,
+                    'task_hashtag': invitation.job.task.hashtags
+                }
+
+            if invitation.status in ['applied', 'interview_scheduled', 'accepted', 'rejected']:
+                invitation_data['application_details'] = {
+                    'resume_link': invitation.resume_link,
+                    'linkedin_link': invitation.linkedin_link,
+                    'portfolio_link': invitation.portfolio_link,
+                    'cover_letter': invitation.cover_letter,
+                    'other_link': invitation.other_link
+                }
+            
             data.append(invitation_data)
         
         return CustomResponse().paginated_response(
