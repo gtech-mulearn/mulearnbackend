@@ -88,18 +88,21 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
     roles = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma_distribution = serializers.SerializerMethodField()
+    application_status = serializers.SerializerMethodField()
+    application_timeline = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'full_name', 'email', 'muid', 'profile_pic',
             'karma', 'level', 'college_name', 'interest_groups', 
-            'roles', 'rank', 'karma_distribution'
+            'roles', 'rank', 'karma_distribution', 'application_status',
+            'application_timeline'
         ]
     
     def get_college_name(self, obj):
         college_link = obj.user_organization_link_user.filter(
-            org__org_type=OrganizationType.COLLEGE.value
+            org__org_type='College'
         ).first()
         return college_link.org.title if college_link else None
     
@@ -116,9 +119,26 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
         return [link.role.title for link in obj.user_role_link_user.all()]
     
     def get_rank(self, obj):
-        # Get rank from context (similar to district views)
+        # Get rank from context
         ranks = self.context.get('ranks', {})
         return ranks.get(obj.id, None)
+    
+    def get_application_status(self, obj):
+        # Get application status from context
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return application_status_map[obj.id]['status']
+        return 'not_invited'  # Student hasn't been invited yet
+    
+    def get_application_timeline(self, obj):
+        # Get application timeline from context
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return {
+                'invited_at': application_status_map[obj.id]['invited_at'],
+                'applied_at': application_status_map[obj.id]['applied_at']
+            }
+        return None
     
     def get_karma_distribution(self, obj):
         return (
