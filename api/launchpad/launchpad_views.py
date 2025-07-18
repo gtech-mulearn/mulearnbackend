@@ -585,6 +585,20 @@ class ListLaunchpadStudentsAPI(APIView):
         except LaunchpadJobs.DoesNotExist:
             return CustomResponse(general_message="Job not found.").get_failure_response()
         
+        # Get all applications for this job to determine status
+        job_applications = LaunchpadJobApplications.objects.filter(
+            job=job
+        ).values('student_id', 'status', 'applied_at', 'invited_at')
+        
+        # Create a dictionary for quick lookup of application status
+        application_status_map = {
+            app['student_id']: {
+                'status': app['status'],
+                'applied_at': app['applied_at'],
+                'invited_at': app['invited_at']
+            }
+            for app in job_applications
+        }
         
         rank = (
             Wallet.objects.filter(
@@ -597,7 +611,6 @@ class ListLaunchpadStudentsAPI(APIView):
                 "karma",
             )
         )
-        
         
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
         
@@ -622,21 +635,14 @@ class ListLaunchpadStudentsAPI(APIView):
                 user_ig_link_user__ig__name__in=interest_groups
             ).distinct()
         
-        
-        # already_applied = LaunchpadJobApplications.objects.filter(
-        #     job=job
-        # ).values_list('student_id', flat=True)
-        
-        # eligible_students = eligible_students.exclude(id__in=already_applied)
-        
-        # Order by karma descending (highest karma first) - similar to district views
+
         eligible_students = eligible_students.order_by('-karma', '-wallet_user__updated_at', 'wallet_user__created_at')
         
-        # Apply pagination using CommonUtils (similar to district views)
+       
         paginated_queryset = CommonUtils.get_paginated_queryset(
             eligible_students,
             request,
-            ["full_name", "level"],  # searchable fields
+            ["full_name", "level"], 
             {
                 "full_name": "full_name",
                 "muid": "muid", 
@@ -645,11 +651,15 @@ class ListLaunchpadStudentsAPI(APIView):
             },
         )
         
-        # Serialize the data
+        
         serializer = EligibleStudentSerializer(
             paginated_queryset.get("queryset"), 
             many=True, 
-            context={"ranks": ranks, "job": job}
+            context={
+                "ranks": ranks, 
+                "job": job,
+                "application_status_map": application_status_map
+            }
         )
         
         return CustomResponse(
@@ -666,7 +676,6 @@ class ListLaunchpadStudentsAPI(APIView):
             },
             general_message="Eligible students fetched successfully"
         ).get_success_response()
-
 
 class SendJobInvitationsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
@@ -899,29 +908,37 @@ class AcceptedStudentsAPI(APIView):
     
     def get(self, request, job_id=None):
         if request.auth["user_type"] != "recruiter":
-            return CustomResponse(general_message="Only recruiters can view accepted students.").get_failure_response()
+            return CustomResponse(general_message="Only recruiters can view students.").get_failure_response()
         
         recruiter_id = request.auth["id"]
+        status_filter = request.query_params.get('status', None)  # Get status filter from query params
         
-        # Base query for accepted applications
-        accepted_applications = LaunchpadJobApplications.objects.select_related(
+        # Base query for applications
+        applications = LaunchpadJobApplications.objects.select_related(
             'job', 'job__company', 'student', 'student__wallet_user'
         ).filter(
-            job__recruiter_id=recruiter_id,
-            status='applied'
+            job__recruiter_id=recruiter_id
         )
+        
+        # Apply status filter if provided
+        if status_filter:
+            if status_filter not in ['invited', 'applied', 'accepted', 'rejected', 'interview_scheduled']:
+                return CustomResponse(
+                    general_message="Invalid status. Valid statuses: invited, applied, accepted, rejected, interview_scheduled"
+                ).get_failure_response()
+            applications = applications.filter(status=status_filter)
         
         # Filter by specific job if provided
         if job_id:
             try:
                 job = LaunchpadJobs.objects.get(id=job_id, recruiter_id=recruiter_id)
-                accepted_applications = accepted_applications.filter(job_id=job_id)
+                applications = applications.filter(job_id=job_id)
             except LaunchpadJobs.DoesNotExist:
                 return CustomResponse(general_message="Job not found or unauthorized.").get_failure_response()
         
         # Apply pagination
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            accepted_applications,
+            applications,
             request,
             ["student__full_name", "job__title", "job__company__name"],
             {
@@ -929,6 +946,8 @@ class AcceptedStudentsAPI(APIView):
                 "job_title": "job__title",
                 "company_name": "job__company__name",
                 "applied_at": "applied_at",
+                "invited_at": "invited_at",
+                "status": "status",
             },
         )
         
@@ -979,7 +998,8 @@ class AcceptedStudentsAPI(APIView):
                     'portfolio_link': application.portfolio_link,
                     'cover_letter': application.cover_letter,
                     'other_link': application.other_link
-                },
+                } if application.status != 'invited' else None,  # Only show details if applied
+                'status': application.status,
                 'timeline': {
                     'invited_at': application.invited_at,
                     'applied_at': application.applied_at
@@ -1004,29 +1024,28 @@ class AcceptedStudentsAPI(APIView):
                 'job_id': job_id,
                 'job_title': job.title,
                 'company_name': job.company.name,
-                'total_accepted': len(data),
-                'total_applications': LaunchpadJobApplications.objects.filter(
-                    job_id=job_id, status__in=['applied', 'accepted', 'rejected']
-                ).count(),
-                'total_invited': LaunchpadJobApplications.objects.filter(
-                    job_id=job_id
-                ).count()
+                'total_invited': LaunchpadJobApplications.objects.filter(job_id=job_id, status='invited').count(),
+                'total_applied': LaunchpadJobApplications.objects.filter(job_id=job_id, status='applied').count(),
+                'total_accepted': LaunchpadJobApplications.objects.filter(job_id=job_id, status='accepted').count(),
+                'total_rejected': LaunchpadJobApplications.objects.filter(job_id=job_id, status='rejected').count(),
+                'filtered_count': len(data)
             }
         else:
             # Overall stats for recruiter
             job_stats = {
-                'total_accepted_across_jobs': len(data),
+                'total_invited': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='invited').count(),
+                'total_applied': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='applied').count(),
+                'total_accepted': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='accepted').count(),
+                'total_rejected': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='rejected').count(),
                 'total_jobs': LaunchpadJobs.objects.filter(recruiter_id=recruiter_id).count(),
-                'jobs_with_accepted_candidates': LaunchpadJobApplications.objects.filter(
-                    job__recruiter_id=recruiter_id,
-                    status='applied'
-                ).values('job_id').distinct().count()
+                'filtered_count': len(data)
             }
         
         return CustomResponse().paginated_response(
             data={
-                'accepted_students': data,
-                'statistics': job_stats
+                'applications': data,
+                'statistics': job_stats,
+                'current_filter': status_filter or 'all'
             },
             pagination=paginated_queryset.get("pagination")
         )
