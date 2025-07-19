@@ -42,7 +42,7 @@ def get_current_utc_time():
     return timezone.now()
 
 def generate_launchpad_jwt(user, user_type):
-    access_expiry_time = get_current_utc_time() + timedelta(hours=3)
+    access_expiry_time = get_current_utc_time() + timedelta(hours=9)
     access_expiry = access_expiry_time.strftime("%Y-%m-%d %H:%M:%S%z")
     
     access_token = jwt.encode(
@@ -569,27 +569,38 @@ class CompanyVerifyAPI(APIView):
         except LaunchpadCompanies.DoesNotExist:
             return CustomResponse(general_message="Company not found.").get_failure_response()
 
+
 class ListLaunchpadStudentsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
-    
+
     def get(self, request, job_id):
-        if request.auth["user_type"] != "recruiter":
-            return CustomResponse(general_message="Only recruiters can view eligible students.").get_failure_response()
-        
+        user_type = request.auth["user_type"]
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(
+                general_message="Only recruiters and companies can view eligible students.").get_failure_response()
+
         try:
             job = LaunchpadJobs.objects.get(id=job_id)
-            recruiter_id = request.auth["id"]
-            if job.recruiter_id != recruiter_id:
-                return CustomResponse(general_message="You can only view students for your own jobs.").get_failure_response()
-            
+            user_id = request.auth["id"]
+
+            if user_type == "recruiter" and job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only view students for your own jobs.").get_failure_response()
+            elif user_type == "company" and job.recruiter.company_id != user_id:
+                print(job.recruiter.company_id)
+                return CustomResponse(
+                    general_message="You can only view students for jobs posted by your company.").get_failure_response()
+
         except LaunchpadJobs.DoesNotExist:
             return CustomResponse(general_message="Job not found.").get_failure_response()
-        
+        except AttributeError:
+            return CustomResponse(general_message="Invalid job or user relationship.").get_failure_response()
+
         # Get all applications for this job to determine status
         job_applications = LaunchpadJobApplications.objects.filter(
             job=job
         ).values('student_id', 'status', 'applied_at', 'invited_at')
-        
+
         # Create a dictionary for quick lookup of application status
         application_status_map = {
             app['student_id']: {
@@ -599,7 +610,7 @@ class ListLaunchpadStudentsAPI(APIView):
             }
             for app in job_applications
         }
-        
+
         rank = (
             Wallet.objects.filter(
                 user__interested_in_work=True,
@@ -611,9 +622,9 @@ class ListLaunchpadStudentsAPI(APIView):
                 "karma",
             )
         )
-        
+
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
-        
+
         eligible_students = User.objects.filter(
             interested_in_work=True,
             wallet_user__karma__gte=job.minimum_karma
@@ -628,40 +639,37 @@ class ListLaunchpadStudentsAPI(APIView):
             karma=F("wallet_user__karma"),
             level=F("user_lvl_link_user__level__name"),
         )
-        
+
         if job.interest_groups:
             interest_groups = [ig.strip() for ig in job.interest_groups.split(',')]
             eligible_students = eligible_students.filter(
                 user_ig_link_user__ig__name__in=interest_groups
             ).distinct()
-        
 
         eligible_students = eligible_students.order_by('-karma', '-wallet_user__updated_at', 'wallet_user__created_at')
-        
-       
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             eligible_students,
             request,
-            ["full_name", "level"], 
+            ["full_name", "level"],
             {
                 "full_name": "full_name",
-                "muid": "muid", 
+                "muid": "muid",
                 "karma": "wallet_user__karma",
                 "level": "user_lvl_link_user__level__level_order",
             },
         )
-        
-        
+
         serializer = EligibleStudentSerializer(
-            paginated_queryset.get("queryset"), 
-            many=True, 
+            paginated_queryset.get("queryset"),
+            many=True,
             context={
-                "ranks": ranks, 
+                "ranks": ranks,
                 "job": job,
                 "application_status_map": application_status_map
             }
         )
-        
+
         return CustomResponse(
             response={
                 'job_info': {
