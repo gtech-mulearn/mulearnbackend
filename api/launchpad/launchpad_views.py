@@ -306,17 +306,34 @@ class AddJobAPI(APIView):
 
 class ListJobsAPI(APIView):
     authentication_classes = [CustomizePermission, LaunchpadJWTPermission]
+    
     def get(self, request):
-        jobs = LaunchpadJobs.objects.prefetch_related(
+        user_type = request.auth.get("user_type")
+        user_id = request.auth.get("id")
+        
+        jobs_query = LaunchpadJobs.objects.prefetch_related(
             Prefetch('task', queryset=LaunchpadJobTasks.objects.all())
         ).select_related('company', 'recruiter')
+        
+        if user_type == "recruiter":
+            try:
+                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                jobs = jobs_query.filter(company_id=recruiter.company_id)
+            except LaunchpadRecruiters.DoesNotExist:
+                return CustomResponse(general_message="Recruiter not found.").get_failure_response()
+        elif user_type == "company":
+            jobs = jobs_query.filter(company_id=user_id)
+        else:
+            jobs = jobs_query.all()
         
         data = []
         for job in jobs:
             job_data = {
                 'id': job.id,
                 'company_id': job.company_id,
+                'company_name': job.company.name if job.company else None,
                 'recruiter_id': job.recruiter_id,
+                'recruiter_name': job.recruiter.name if job.recruiter else None,
                 'title': job.title,
                 'skills': job.skills or None,
                 'experience': job.experience or None,
@@ -327,7 +344,9 @@ class ListJobsAPI(APIView):
                 'salary_range': job.salary_range or None,
                 'job_type': job.job_type or None,
                 'minimum_karma': job.minimum_karma,
-                'created_at': job.created_at
+                'created_at': job.created_at,
+                'updated_at': job.updated_at,
+                'posted_by_current_recruiter': job.recruiter_id == user_id if user_type == "recruiter" else None
             }
             
             if job.opening_type == "Task":
@@ -338,8 +357,42 @@ class ListJobsAPI(APIView):
             
             data.append(job_data)
         
+        if user_type == "recruiter":
+            try:
+                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                company_name = recruiter.company.name if recruiter.company else "Unknown Company"
+                total_company_jobs = len(data)
+                own_jobs = len([job for job in data if job['recruiter_id'] == user_id])
+                other_recruiters_jobs = total_company_jobs - own_jobs
+            except LaunchpadRecruiters.DoesNotExist:
+                company_name = "Unknown Company"
+                own_jobs = 0
+                other_recruiters_jobs = 0
+                
+            summary = {
+                'total_jobs': len(data),
+                'general_jobs': len([job for job in data if job['opening_type'] == 'General']),
+                'task_jobs': len([job for job in data if job['opening_type'] == 'Task']),
+                'own_jobs': own_jobs,
+                'other_recruiters_jobs': other_recruiters_jobs,
+                'company_name': company_name,
+                'user_type': user_type,
+                'user_id': user_id
+            }
+        else:
+            summary = {
+                'total_jobs': len(data),
+                'general_jobs': len([job for job in data if job['opening_type'] == 'General']),
+                'task_jobs': len([job for job in data if job['opening_type'] == 'Task']),
+                'user_type': user_type,
+                'user_id': user_id
+            }
+        
         return CustomResponse(
-            response=data,
+            response={
+                'jobs': data,
+                'summary': summary
+            },
             general_message="Job list fetched successfully"
         ).get_success_response()
 
@@ -2025,6 +2078,7 @@ class BaseAPI(APIView):
             return (
                 None,
                 CustomResponse(
+                   
                     general_message="Invalid Launchpad ID"
                 ).get_failure_response(),
             )
