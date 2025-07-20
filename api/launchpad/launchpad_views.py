@@ -511,6 +511,7 @@ class GetCompanyInfoAPI(APIView):
                 'website': company.website,
                 'description': company.description,
                 'address': company.address,
+                'is_verified': company.is_verified,
                 'created_at': company.created_at,
                 'updated_at': company.updated_at,
                 'recruiters': [
