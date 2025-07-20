@@ -653,12 +653,13 @@ class ListLaunchpadStudentsAPI(APIView):
         # Get all applications for this job to determine status
         job_applications = LaunchpadJobApplications.objects.filter(
             job=job
-        ).values('student_id', 'status', 'applied_at', 'invited_at')
+        ).values('student_id', 'id', 'status', 'applied_at', 'invited_at')
 
         # Create a dictionary for quick lookup of application status
         application_status_map = {
             app['student_id']: {
                 'status': app['status'],
+                'id': app['id'],
                 'applied_at': app['applied_at'],
                 'invited_at': app['invited_at']
             }

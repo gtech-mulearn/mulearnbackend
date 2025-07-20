@@ -90,6 +90,7 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     application_status = serializers.SerializerMethodField()
     application_timeline = serializers.SerializerMethodField()
+    application_id = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -97,7 +98,7 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'email', 'muid', 'profile_pic',
             'karma', 'level', 'college_name', 'interest_groups', 
             'roles', 'rank', 'karma_distribution', 'application_status',
-            'application_timeline'
+            'application_timeline', 'application_id'
         ]
     
     def get_college_name(self, obj):
@@ -139,7 +140,13 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
                 'applied_at': application_status_map[obj.id]['applied_at']
             }
         return None
-    
+        
+    def get_application_id(self, obj):
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return application_status_map[obj.id].get('id', None)
+        return None
+       
     def get_karma_distribution(self, obj):
         return (
             KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
