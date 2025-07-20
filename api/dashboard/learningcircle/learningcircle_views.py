@@ -15,7 +15,7 @@ from .learningcircle_serializer import (
     CircleMeetingLogCreateEditSerializer,
     CircleMeetupInfoSerializer,
     CircleMeetupMinSerializer,
-    CircleMeeupPublicSerializer,
+    CircleMeetupPublicSerializer,
     LearningCircleCreateEditSerialzier,
     LearningCircleDetailSerializer,
     LearningCircleListMinSerializer,
@@ -114,9 +114,9 @@ class LearningCircleView(APIView):
 
 class LearningCircleMeetingInfoAPI(APIView):
     def get(self, request, meet_id: str):
-        user_id = None
-        if JWTUtils.is_jwt_authenticated(request):
-            user_id = JWTUtils.fetch_user_id(request)
+        # user_id = None
+        # if JWTUtils.is_jwt_authenticated(request):
+        user_id = JWTUtils.fetch_user_id(request)
         meet = CircleMeetingLog.objects.get(id=meet_id)
         serializer = CircleMeetupInfoSerializer(meet, context={"user_id": user_id})
         return CustomResponse(
@@ -520,7 +520,7 @@ class LearningCircleMeetingPublicListView(APIView):
             search_fields=["title", "description", "circle_id__ig__name"],
         )
 
-        serializer = CircleMeeupPublicSerializer(
+        serializer = CircleMeetupPublicSerializer(
             paginated_queryset.get("queryset"), many=True
         )
 
