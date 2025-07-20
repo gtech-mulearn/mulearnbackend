@@ -91,6 +91,7 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
     application_status = serializers.SerializerMethodField()
     application_timeline = serializers.SerializerMethodField()
     application_id = serializers.SerializerMethodField()
+    application_details = serializers.SerializerMethodField() 
     
     class Meta:
         model = User
@@ -98,7 +99,7 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             'id', 'full_name', 'email', 'muid', 'profile_pic',
             'karma', 'level', 'college_name', 'interest_groups', 
             'roles', 'rank', 'karma_distribution', 'application_status',
-            'application_timeline', 'application_id'
+            'application_timeline', 'application_id', 'application_details'
         ]
     
     def get_college_name(self, obj):
@@ -145,6 +146,18 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
         application_status_map = self.context.get('application_status_map', {})
         if obj.id in application_status_map:
             return application_status_map[obj.id].get('id', None)
+        return None
+        
+     def get_application_details(self, obj):
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map and application_status_map[obj.id]['status'] in ['applied', 'interview_scheduled', 'accepted', 'rejected']:
+            return {
+                'resume_link': application_status_map[obj.id].get('resume_link', None),
+                'linkedin_link': application_status_map[obj.id].get('linkedin_link', None),
+                'portfolio_link': application_status_map[obj.id].get('portfolio_link', None),
+                'cover_letter': application_status_map[obj.id].get('cover_letter', None),
+                'other_link': application_status_map[obj.id].get('other_link', None)
+            }
         return None
        
     def get_karma_distribution(self, obj):
