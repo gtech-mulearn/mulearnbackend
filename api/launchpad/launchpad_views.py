@@ -1133,6 +1133,115 @@ class ScheduleInterviewAPI(APIView):
             return CustomResponse(general_message="Application not found.").get_failure_response()
         
 
+class ApplicationFinalDecisionAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    
+    def post(self, request):
+        user_type = request.auth["user_type"]
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(general_message="Only recruiters and companies can make application final decisions.").get_failure_response()
+        
+        user_id = request.auth["id"]
+        application_id = request.data.get('application_id')
+        decision = request.data.get('decision')  # 'accepted' or 'rejected'
+        
+        if not application_id or not decision:
+            return CustomResponse(
+                message={
+                    'application_id': ['Application ID is required.'],
+                    'decision': ['Decision is required (accepted/rejected).']
+                },
+                general_message="Application final decision failed"
+            ).get_failure_response()
+        
+        if decision not in ['accepted', 'rejected']:
+            return CustomResponse(
+                message={'decision': ['Decision must be either "accepted" or "rejected".']},
+                general_message="Invalid decision"
+            ).get_failure_response()
+        
+        try:
+            application = LaunchpadJobApplications.objects.select_related(
+                'job', 'job__company', 'job__recruiter', 'student', 'student__wallet_user'
+            ).get(id=application_id)
+            
+            if user_type == "recruiter" and application.job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only make decisions on applications for your own jobs."
+                ).get_failure_response()
+            elif user_type == "company" and application.job.recruiter.company_id != user_id:
+                return CustomResponse(
+                    general_message="You can only make decisions on applications for jobs posted by your company."
+                ).get_failure_response()
+            
+            valid_statuses = ['applied', 'interview_scheduled']
+            if application.status not in valid_statuses:
+                return CustomResponse(
+                    general_message=f"Cannot make final decision on this application. Current status: {application.status}. Valid statuses: {', '.join(valid_statuses)}"
+                ).get_failure_response()
+            
+            old_status = application.status
+            application.status = decision
+            application.updated_at = timezone.now()
+            application.save()
+            
+            college_link = application.student.user_organization_link_user.filter(
+                org__org_type='College'
+            ).first()
+            
+            response_data = {
+                'application_id': application.id,
+                'decision': decision,
+                'previous_status': old_status,
+                'decision_made_at': application.updated_at,
+                'decision_made_by': {
+                    'user_type': user_type,
+                    'user_id': user_id,
+                    'name': application.job.recruiter.name if user_type == "recruiter" else application.job.company.name
+                },
+                'student_info': {
+                    'id': application.student.id,
+                    'full_name': application.student.full_name,
+                    'email': application.student.email,
+                    'muid': application.student.muid,
+                    'karma': application.student.wallet_user.karma if application.student.wallet_user else 0,
+                    'college_name': college_link.org.title if college_link else None
+                },
+                'job_info': {
+                    'id': application.job.id,
+                    'title': application.job.title,
+                    'company_name': application.job.company.name,
+                    'recruiter_name': application.job.recruiter.name,
+                    'opening_type': application.job.opening_type,
+                    'domain': application.job.domain
+                },
+                'application_timeline': {
+                    'invited_at': application.invited_at,
+                    'applied_at': application.applied_at,
+                    'interview_date': getattr(application, 'interview_date', None),
+                    'interview_time': getattr(application, 'interview_time', None),
+                    'decision_made_at': application.updated_at
+                }
+            }
+            
+            success_message = f"Candidate {'accepted' if decision == 'accepted' else 'rejected'} successfully"
+            
+            return CustomResponse(
+                response=response_data,
+                general_message=success_message
+            ).get_success_response()
+            
+        except LaunchpadJobApplications.DoesNotExist:
+            return CustomResponse(
+                general_message="Application not found."
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(
+                message={'detail': [str(e)]},
+                general_message="Application final decision failed"
+            ).get_failure_response()
+
+
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class Leaderboard(APIView):
     def get(self, request):
