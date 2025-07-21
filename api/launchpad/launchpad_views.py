@@ -641,7 +641,6 @@ class ListLaunchpadStudentsAPI(APIView):
                 return CustomResponse(
                     general_message="You can only view students for your own jobs.").get_failure_response()
             elif user_type == "company" and job.recruiter.company_id != user_id:
-                print(job.recruiter.company_id)
                 return CustomResponse(
                     general_message="You can only view students for jobs posted by your company.").get_failure_response()
 
@@ -650,18 +649,26 @@ class ListLaunchpadStudentsAPI(APIView):
         except AttributeError:
             return CustomResponse(general_message="Invalid job or user relationship.").get_failure_response()
 
-        # Get all applications for this job to determine status
+        # Get all applications for this job with more details
         job_applications = LaunchpadJobApplications.objects.filter(
             job=job
-        ).values('student_id', 'id', 'status', 'applied_at', 'invited_at')
+        ).values(
+            'student_id', 'status', 'applied_at', 'invited_at',
+            'resume_link', 'linkedin_link', 'portfolio_link', 
+            'cover_letter', 'other_link'
+        )
 
-        # Create a dictionary for quick lookup of application status
+        # Create a dictionary for quick lookup of application status and links
         application_status_map = {
             app['student_id']: {
                 'status': app['status'],
-                'id': app['id'],
                 'applied_at': app['applied_at'],
-                'invited_at': app['invited_at']
+                'invited_at': app['invited_at'],
+                'resume_link': app['resume_link'],
+                'linkedin_link': app['linkedin_link'],
+                'portfolio_link': app['portfolio_link'],
+                'cover_letter': app['cover_letter'],
+                'other_link': app['other_link']
             }
             for app in job_applications
         }
