@@ -746,6 +746,282 @@ class ListLaunchpadStudentsAPI(APIView):
             },
             general_message="Eligible students fetched successfully"
         ).get_success_response()
+    
+class HireRequestsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    
+    def get(self, request):
+        user_type = request.auth["user_type"]
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(
+                general_message="Only recruiters and companies can view hire requests."
+            ).get_failure_response()
+        
+        user_id = request.auth["id"]
+        job_id = request.query_params.get('job_id', None)
+        status_filter = request.query_params.get('status', None)
+        
+        # Base query for applications
+        applications = LaunchpadJobApplications.objects.select_related(
+            'job', 'job__company', 'job__recruiter', 'student', 'student__wallet_user'
+        ).prefetch_related(
+            'student__user_organization_link_user__org',
+            'student__user_ig_link_user__ig',
+            'student__user_role_link_user__role'
+        )
+        
+        # Filter by user type
+        if user_type == "recruiter":
+            applications = applications.filter(job__recruiter_id=user_id)
+        elif user_type == "company":
+            applications = applications.filter(job__company_id=user_id)
+        
+        # Filter by specific job if provided
+        if job_id:
+            try:
+                if user_type == "recruiter":
+                    job = LaunchpadJobs.objects.get(id=job_id, recruiter_id=user_id)
+                else:  # company
+                    job = LaunchpadJobs.objects.get(id=job_id, company_id=user_id)
+                applications = applications.filter(job_id=job_id)
+            except LaunchpadJobs.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job not found or unauthorized."
+                ).get_failure_response()
+        
+        # Apply status filter if provided
+        if status_filter:
+            valid_statuses = ['invited', 'applied', 'interview_scheduled', 'accepted', 'rejected']
+            if status_filter not in valid_statuses:
+                return CustomResponse(
+                    general_message=f"Invalid status. Valid statuses: {', '.join(valid_statuses)}"
+                ).get_failure_response()
+            applications = applications.filter(status=status_filter)
+        
+        # Apply pagination
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            applications,
+            request,
+            ["student__full_name", "job__title", "job__company__name", "status"],
+            {
+                "student_name": "student__full_name",
+                "student_email": "student__email",
+                "student_muid": "student__muid",
+                "job_title": "job__title",
+                "company_name": "job__company__name",
+                "recruiter_name": "job__recruiter__name",
+                "karma": "student__wallet_user__karma",
+                "status": "status",
+                "invited_at": "invited_at",
+                "applied_at": "applied_at",
+            },
+        )
+        
+        data = []
+        for application in paginated_queryset.get("queryset"):
+            student = application.student
+            job = application.job
+            
+            # Get student's college info
+            college_link = student.user_organization_link_user.filter(
+                org__org_type='College'
+            ).first()
+            
+            # Get student's interest groups
+            interest_groups = [
+                {
+                    'id': ig_link.ig.id,
+                    'name': ig_link.ig.name
+                }
+                for ig_link in student.user_ig_link_user.all()
+            ]
+            
+            # Get student's roles
+            roles = [
+                {
+                    'id': role_link.role.id,
+                    'title': role_link.role.title
+                }
+                for role_link in student.user_role_link_user.filter(verified=True)
+            ]
+            
+            # Get student's karma distribution
+            karma_distribution = list(
+                KarmaActivityLog.objects.filter(
+                    user=student, 
+                    appraiser_approved=True
+                ).values(
+                    task_type=F('task__type__title')
+                ).annotate(
+                    karma=Sum('karma')
+                ).order_by('-karma')
+            )
+            
+            # Calculate student's rank
+            rank = Wallet.objects.filter(
+                user__interested_in_work=True,
+                karma__gt=student.wallet_user.karma if student.wallet_user else 0
+            ).count() + 1
+            
+            application_data = {
+                'application_id': application.id,
+                'status': application.status,
+                'timeline': {
+                    'invited_at': application.invited_at,
+                    'applied_at': application.applied_at,
+                    'updated_at': application.updated_at
+                },
+                'student_info': {
+                    'id': student.id,
+                    'full_name': student.full_name,
+                    'email': student.email,
+                    'muid': student.muid,
+                    'profile_pic': student.profile_pic,
+                    'karma': student.wallet_user.karma if student.wallet_user else 0,
+                    'rank': rank,
+                    'level': student.user_lvl_link_user.level.name if hasattr(student, 'user_lvl_link_user') and student.user_lvl_link_user else None,
+                    'interested_in_work': student.interested_in_work,
+                    'college_name': college_link.org.title if college_link else None,
+                    'college_district': college_link.org.district.name if college_link and college_link.org.district else None,
+                    'college_state': college_link.org.district.zone.state.name if college_link and college_link.org.district and college_link.org.district.zone else None,
+                    'interest_groups': interest_groups,
+                    'roles': roles,
+                    'karma_distribution': karma_distribution,
+                    'created_at': student.created_at,
+                    'last_active': student.last_active if hasattr(student, 'last_active') else None
+                },
+                'job_info': {
+                    'id': job.id,
+                    'title': job.title,
+                    'company_name': job.company.name,
+                    'company_id': job.company_id,
+                    'recruiter_name': job.recruiter.name,
+                    'recruiter_id': job.recruiter_id,
+                    'recruiter_email': job.recruiter.email,
+                    'recruiter_phone': job.recruiter.phone,
+                    'opening_type': job.opening_type,
+                    'domain': job.domain,
+                    'skills': job.skills,
+                    'experience': job.experience,
+                    'location': job.location,
+                    'salary_range': job.salary_range,
+                    'job_type': job.job_type,
+                    'minimum_karma': job.minimum_karma,
+                    'interest_groups': job.interest_groups,
+                    'created_at': job.created_at,
+                    'updated_at': job.updated_at
+                },
+                'application_details': {
+                    'resume_link': application.resume_link,
+                    'linkedin_link': application.linkedin_link,
+                    'portfolio_link': application.portfolio_link,
+                    'cover_letter': application.cover_letter,
+                    'other_link': application.other_link,
+                    'links_available': bool(
+                        application.resume_link or 
+                        application.linkedin_link or 
+                        application.portfolio_link or 
+                        application.cover_letter or 
+                        application.other_link
+                    )
+                } if application.status != 'invited' else None
+            }
+            
+            # Add interview details if scheduled
+            if application.status == 'interview_scheduled':
+                application_data['interview_details'] = {
+                    'interview_date': getattr(application, 'interview_date', None),
+                    'interview_time': getattr(application, 'interview_time', None),
+                    'interview_platform': getattr(application, 'interview_platform', None),
+                    'interview_link': getattr(application, 'interview_link', None),
+                    'interview_scheduled_at': application.updated_at
+                }
+            
+            # Add task info if task-based job
+            if job.opening_type == "Task" and job.task:
+                application_data['task_info'] = {
+                    'task_id': job.task.id,
+                    'task_description': job.task.task_description,
+                    'task_verified': job.task.is_verified,
+                    'task_hashtag': job.task.hashtags
+                }
+            
+            data.append(application_data)
+        
+        # Prepare summary statistics
+        total_applications = applications.count()
+        
+        if job_id:
+            # Stats for specific job
+            summary_stats = {
+                'job_id': job_id,
+                'job_title': job.title,
+                'company_name': job.company.name,
+                'recruiter_name': job.recruiter.name,
+                'total_applications': total_applications,
+                'invited': applications.filter(status='invited').count(),
+                'applied': applications.filter(status='applied').count(),
+                'interview_scheduled': applications.filter(status='interview_scheduled').count(),
+                'accepted': applications.filter(status='accepted').count(),
+                'rejected': applications.filter(status='rejected').count(),
+                'withdrawn': applications.filter(status='withdrawn').count(),
+                'filtered_count': len(data),
+                'filter_applied': {
+                    'job_id': job_id,
+                    'status': status_filter
+                }
+            }
+        else:
+            # Overall stats for user
+            if user_type == "recruiter":
+                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                user_jobs = LaunchpadJobs.objects.filter(recruiter_id=user_id)
+                user_name = recruiter.name
+                company_name = recruiter.company.name if recruiter.company else None
+            else:  # company
+                company = LaunchpadCompanies.objects.get(id=user_id)
+                user_jobs = LaunchpadJobs.objects.filter(company_id=user_id)
+                user_name = company.name
+                company_name = company.name
+            
+            summary_stats = {
+                'user_type': user_type,
+                'user_name': user_name,
+                'company_name': company_name,
+                'total_jobs': user_jobs.count(),
+                'total_applications': total_applications,
+                'invited': applications.filter(status='invited').count(),
+                'applied': applications.filter(status='applied').count(),
+                'interview_scheduled': applications.filter(status='interview_scheduled').count(),
+                'accepted': applications.filter(status='accepted').count(),
+                'rejected': applications.filter(status='rejected').count(),
+                'withdrawn': applications.filter(status='withdrawn').count(),
+                'filtered_count': len(data),
+                'filter_applied': {
+                    'status': status_filter
+                },
+                'recent_activity': {
+                    'applications_this_week': applications.filter(
+                        applied_at__gte=timezone.now() - timedelta(days=7)
+                    ).count(),
+                    'interviews_this_week': applications.filter(
+                        status='interview_scheduled',
+                        updated_at__gte=timezone.now() - timedelta(days=7)
+                    ).count()
+                }
+            }
+        
+        return CustomResponse().paginated_response(
+            data={
+                'hire_requests': data,
+                'summary': summary_stats,
+                'current_filters': {
+                    'job_id': job_id,
+                    'status': status_filter
+                }
+            },
+            pagination=paginated_queryset.get("pagination")
+        )
 
 class SendJobInvitationsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]

@@ -1,7 +1,7 @@
 from django.urls import path
 from . import launchpad_views
 from .launchpad_views import (
-    RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, 
+    HireRequestsAPI, RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, 
     LoginCompanyAPI, LoginRecruiterAPI, GetCompanyInfoAPI, GetRecruiterInfoAPI,
     RefreshTokenAPI, CompanyVerifyAPI, ListJobsAPI, VerifyTaskAPI, ListLaunchpadStudentsAPI,
     SendJobInvitationsAPI, StudentJobInvitationsAPI, StudentApplyToJobAPI, AcceptedStudentsAPI,
@@ -22,6 +22,7 @@ urlpatterns = [
     path('list-jobs/', ListJobsAPI.as_view()),
     path('verify-task/', VerifyTaskAPI.as_view()),
     path('list-launchpad-students/<str:job_id>/', ListLaunchpadStudentsAPI.as_view()),
+    path('hire-requests/', HireRequestsAPI.as_view(), name='hire-requests'),
     path('send-job-invitations/', SendJobInvitationsAPI.as_view()),
     path('student/job-invitations/', StudentJobInvitationsAPI.as_view(), name='student-job-invitations'),
     path('student/apply-to-job/', StudentApplyToJobAPI.as_view(), name='student-apply-to-job'),
