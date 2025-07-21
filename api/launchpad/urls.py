@@ -3,7 +3,9 @@ from . import launchpad_views
 from .launchpad_views import (
     RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, 
     LoginCompanyAPI, LoginRecruiterAPI, GetCompanyInfoAPI, GetRecruiterInfoAPI,
-    RefreshTokenAPI, CompanyVerifyAPI
+    RefreshTokenAPI, CompanyVerifyAPI, ListJobsAPI, VerifyTaskAPI, ListLaunchpadStudentsAPI,
+    SendJobInvitationsAPI, StudentJobInvitationsAPI, StudentApplyToJobAPI, AcceptedStudentsAPI,
+    ScheduleInterviewAPI, ApplicationFinalDecisionAPI
 )
 
 urlpatterns = [
@@ -17,7 +19,16 @@ urlpatterns = [
     path('company-info/', GetCompanyInfoAPI.as_view()),
     path('recruiter-info/', GetRecruiterInfoAPI.as_view()),
     path('company-verify/', CompanyVerifyAPI.as_view()),
-
+    path('list-jobs/', ListJobsAPI.as_view()),
+    path('verify-task/', VerifyTaskAPI.as_view()),
+    path('list-launchpad-students/<str:job_id>/', ListLaunchpadStudentsAPI.as_view()),
+    path('send-job-invitations/', SendJobInvitationsAPI.as_view()),
+    path('student/job-invitations/', StudentJobInvitationsAPI.as_view(), name='student-job-invitations'),
+    path('student/apply-to-job/', StudentApplyToJobAPI.as_view(), name='student-apply-to-job'),
+    path('accepted-students/', AcceptedStudentsAPI.as_view(), name='accepted-students'),
+    path('accepted-students/<str:job_id>/', AcceptedStudentsAPI.as_view(), name='accepted-students'),
+    path('schedule-interview/', ScheduleInterviewAPI.as_view(), name='schedule-interview'),
+    path('application-final-decision/', ApplicationFinalDecisionAPI.as_view(), name='application-final-decision'),
     #<----------------------- old launchpad -------------------------->
     path("leaderboard/", launchpad_views.Leaderboard.as_view()),
     path(

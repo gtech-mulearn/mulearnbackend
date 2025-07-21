@@ -4,17 +4,21 @@ from rest_framework import serializers
 from db.user import User
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad, LaunchpadJobTasks
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
+from utils.types import  OrganizationType
 from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs
-
+from db.task import (
+    KarmaActivityLog,
+    Wallet
+)
 
 class LaunchpadCompaniesSerializer(serializers.ModelSerializer):
     class Meta:
         model = LaunchpadCompanies
         fields = [
-            'id', 'name', 'poc_name', 'poc_role', 'poc_email', 
+            'id', 'name', 'poc_name', 'poc_role', 'poc_email', 'website' , 'description', 'address',
             'poc_phone', 'username', 'password','is_verified', 'created_at', 'updated_at'
         ]
 
@@ -29,16 +33,127 @@ class LaunchpadRecruiterSerializer(serializers.ModelSerializer):
 class LaunchpadJobsSerializer(serializers.ModelSerializer):
     skills = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
     experience = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
-    task_description = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
-
+    task = serializers.PrimaryKeyRelatedField(
+        queryset=LaunchpadJobTasks.objects.all(), required=False, allow_null=True
+    )
+    opening_type = serializers.CharField(required=False, allow_blank=True, allow_null=True, default="General")
+    
     class Meta:
         model = LaunchpadJobs
         fields = [
-            'id', 'company', 'recruiter', 'title', 'skills', 'experience', 'domain', 
-            'interest_groups', 'task_description', 'created_at', 'updated_at'
+            'id', 'company', 'recruiter', 'title', 'skills', 'experience', 'domain', 'opening_type','location','salary_range','job_type', 'minimum_karma',
+            'interest_groups', 'task', 'created_at', 'updated_at'
         ]
 
+class TaskVerificationSerializer(serializers.Serializer):
+    task_id = serializers.CharField(required=True)
+    hashtag = serializers.CharField(required=True)
+    is_verified = serializers.BooleanField(default=True)
+    
+    def validate_hashtag(self, value):
+        if not value.startswith('#'):
+            raise serializers.ValidationError("Hashtag must start with '#'")
+        return value
+    
+    def validate_task_id(self, value):
+        if not LaunchpadJobTasks.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Task not found")
+        return value
+    
+    def save(self):
+        task_id = self.validated_data['task_id']
+        hashtag = self.validated_data['hashtag']  
+        
+        task = LaunchpadJobTasks.objects.get(id=task_id)
+        task.hashtags = hashtag
+        task.is_verified = True  
+        task.save()
+        
+        return task
 
+class LaunchpadJobTaskSerializer(serializers.ModelSerializer):
+    hashtags = serializers.CharField(required=False, allow_blank=True, allow_null=True, default=None)
+
+    class Meta:
+        model = LaunchpadJobTasks
+        fields = [
+            'id', 'task_description', 'hashtags', 'is_verified', 'created_at', 'updated_at'
+        ]
+
+class EligibleStudentSerializer(serializers.ModelSerializer):
+    karma = serializers.IntegerField(source='wallet_user.karma', default=0)
+    level = serializers.CharField(source='user_lvl_link_user.level.name', default=None)
+    college_name = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
+    roles = serializers.SerializerMethodField()
+    rank = serializers.SerializerMethodField()
+    karma_distribution = serializers.SerializerMethodField()
+    application_status = serializers.SerializerMethodField()
+    application_timeline = serializers.SerializerMethodField()
+    application_id = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = User
+        fields = [
+            'id', 'full_name', 'email', 'muid', 'profile_pic',
+            'karma', 'level', 'college_name', 'interest_groups', 
+            'roles', 'rank', 'karma_distribution', 'application_status',
+            'application_timeline', 'application_id'
+        ]
+    
+    def get_college_name(self, obj):
+        college_link = obj.user_organization_link_user.filter(
+            org__org_type='College'
+        ).first()
+        return college_link.org.title if college_link else None
+    
+    def get_interest_groups(self, obj):
+        return [
+            {
+                'id': ig_link.ig.id,
+                'name': ig_link.ig.name
+            }
+            for ig_link in obj.user_ig_link_user.all()
+        ]
+    
+    def get_roles(self, obj):
+        return [link.role.title for link in obj.user_role_link_user.all()]
+    
+    def get_rank(self, obj):
+        # Get rank from context
+        ranks = self.context.get('ranks', {})
+        return ranks.get(obj.id, None)
+    
+    def get_application_status(self, obj):
+        # Get application status from context
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return application_status_map[obj.id]['status']
+        return 'not_invited'  # Student hasn't been invited yet
+    
+    def get_application_timeline(self, obj):
+        # Get application timeline from context
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return {
+                'invited_at': application_status_map[obj.id]['invited_at'],
+                'applied_at': application_status_map[obj.id]['applied_at']
+            }
+        return None
+        
+    def get_application_id(self, obj):
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return application_status_map[obj.id].get('id', None)
+        return None
+       
+    def get_karma_distribution(self, obj):
+        return (
+            KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
+            .values(task_type=F('task__type__title'))
+            .annotate(karma=Sum('karma'))
+            .order_by()
+        )
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:

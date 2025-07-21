@@ -2,14 +2,17 @@ import uuid
 import jwt
 from datetime import timedelta
 from decouple import config
-from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q
+from django.utils import timezone
+from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q, Prefetch
 from rest_framework.views import APIView
 from django.core.files.storage import FileSystemStorage
 from decouple import config as decouple_config
+from utils.permission import role_required
+from utils.types import RoleType
 from .serializers import (
-    LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,
+    LaunchpadJobTaskSerializer, LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,
     CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer,
-    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer,
+    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer, TaskVerificationSerializer
 )
 from api.dashboard.profile.profile_serializer import (
     UserProfileSerializer, LinkSocials, UserLevelSerializer, UserLogSerializer,
@@ -21,12 +24,12 @@ from utils.permission import JWTUtils
 from db.user import User, UserRoleLink, Role, Socials
 from db.organization import UserOrganizationLink, Organization
 from db.task import KarmaActivityLog, Level, TaskList, Wallet
-from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad
+from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad , LaunchpadJobApplications
 
 
 from rest_framework import status
-from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs
-from .serializers import LaunchpadCompaniesSerializer, LaunchpadRecruiterSerializer, LaunchpadJobsSerializer
+from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs , LaunchpadJobTasks
+from .serializers import LaunchpadCompaniesSerializer, LaunchpadRecruiterSerializer, LaunchpadJobsSerializer, EligibleStudentSerializer
 from django.contrib.auth.hashers import make_password, check_password
 from django.db import IntegrityError
 from utils.permission import CustomizePermission
@@ -39,7 +42,7 @@ def get_current_utc_time():
     return timezone.now()
 
 def generate_launchpad_jwt(user, user_type):
-    access_expiry_time = get_current_utc_time() + timedelta(hours=3)
+    access_expiry_time = get_current_utc_time() + timedelta(hours=9)
     access_expiry = access_expiry_time.strftime("%Y-%m-%d %H:%M:%S%z")
     
     access_token = jwt.encode(
@@ -86,6 +89,9 @@ class RegisterCompanyAPI(APIView):
       'poc_role': request.data.get('poc_role'),
       'poc_email': request.data.get('poc_email'),
       'poc_phone': request.data.get('poc_phone') or None,
+      'website': request.data.get('website') or None,
+      'description': request.data.get('description') or None,
+      'address': request.data.get('address') or None,
       'username': request.data.get('username'),
       'password': make_password(request.data.get('password'))
     })
@@ -115,7 +121,14 @@ class CompanyListAPI(APIView):
     data = [
       {
         'id': company.id,
-        'name': company.name
+        'name': company.name,
+        'poc_name': company.poc_name,
+        'poc_email': company.poc_email,
+        'poc_phone': company.poc_phone,
+        'website': company.website,
+        'description': company.description,
+        'address': company.address,
+        'is_verified': company.is_verified,
       } for company in companies
     ]
     return CustomResponse(
@@ -124,27 +137,27 @@ class CompanyListAPI(APIView):
     ).get_success_response()
 
 class RegisterRecruiterAPI(APIView):
-  permission_classes = [CustomizePermission]
+  authentication_classes = [LaunchpadJWTPermission]
   def post(self, request):
-    required_fields = ['company_id', 'name', 'email', 'phone', 'password'
-]
-    for field in required_fields:
-      if not request.data.get(field):
-        return CustomResponse(
-          message={field: [f'{field} is required']},
-          general_message="Signup failed"
-        ).get_failure_response()
+    print(request.auth)
+    if request.auth["user_type"] != "company":
+      return CustomResponse(general_message="Only companies can register recruiters.").get_failure_response()
+    company = LaunchpadCompanies.objects.filter(id=request.auth["id"]).first()
+    if company.is_verified is False:
+      return CustomResponse(
+        general_message="Company is not verified. Please contact admin."
+      ).get_failure_response()
 
     serializer = LaunchpadRecruiterSerializer(data={
       'id': str(uuid.uuid4()),
-      'company': request.data.get('company_id'),
+      'company': company.id,
       'name': request.data.get('name'),
       'email': request.data.get('email'),
       'phone': request.data.get('phone'),
       'password': make_password(request.data.get('password')),
       'role': request.data.get('role')
     })
-
+   
     if serializer.is_valid():
       try:
         recruiter = serializer.save()
@@ -178,65 +191,239 @@ class RegisterRecruiterAPI(APIView):
     ).get_failure_response()
   
 class AddJobAPI(APIView):
-    permission_classes = [LaunchpadJWTPermission]
-    
+    authentication_classes = [LaunchpadJWTPermission]
+
     def post(self, request):
-        user = request.launchpad_user
-        user_type = request.launchpad_user_type
-        
-        if user_type != "recruiter":
+        if request.auth["user_type"] != "recruiter":
             return CustomResponse(general_message="Only recruiters can add jobs.").get_failure_response()
-        
-        required_fields = ['title', 'domain', 'interest_groups']
-        for field in required_fields:
-            if not request.data.get(field):
+        recruiter_obj = LaunchpadRecruiters.objects.filter(id=request.auth["id"]).first()
+
+        if request.data.get('opening_type') == "General":
+            print
+            serializer = LaunchpadJobsSerializer(data={
+                'id': str(uuid.uuid4()),
+                'company': recruiter_obj.company_id,
+                'recruiter': recruiter_obj.id,
+                'title': request.data.get('title'),
+                'skills': request.data.get('skills'),
+                'experience': request.data.get('experience'),
+                "minimum_karma": request.data.get('minimum_karma') or 0,
+                'opening_type': request.data.get('opening_type') or "General",
+                'location': request.data.get('location') or None,
+                'salary_range': request.data.get('salary_range') or None,
+                'job_type': request.data.get('job_type') or None,
+                'domain': request.data.get('domain'),
+                'interest_groups': request.data.get('interest_groups')
+            })   
+       
+            if serializer.is_valid():
+                try:
+                    job = serializer.save()
+                    response_data = {
+                        'id': job.id,
+                        'company_id': job.company_id,
+                        'recruiter_id': job.recruiter_id,
+                        'title': job.title,
+                        'skills': job.skills or None,
+                        'experience': job.experience or None,
+                        'domain': job.domain,
+                        'interest_groups': job.interest_groups,
+                        'created_at': job.created_at
+                    }
+                    return CustomResponse(
+                        response=response_data,
+                        general_message="Job created successfully"
+                    ).get_success_response()
+                except IntegrityError as e:
+                    return CustomResponse(
+                        message={'detail': ['Database error occurred.' + str(e)]},
+                        general_message="Job creation failed"
+                    ).get_failure_response()
+        elif request.data.get('opening_type') == "Task":
+            if not request.data.get('task_description'):
                 return CustomResponse(
-                    message={field: [f'{field} is required']},
+                    message={'task_description': ['Task description is required for task-based openings.']},
                     general_message="Job creation failed"
                 ).get_failure_response()
-        
-        serializer = LaunchpadJobsSerializer(data={
-            'id': str(uuid.uuid4()),
-            'company': user.company_id,
-            'recruiter': user.id,
-            'title': request.data.get('title'),
-            'skills': request.data.get('skills'),
-            'experience': request.data.get('experience'),
-            'domain': request.data.get('domain'),
-            'interest_groups': request.data.get('interest_groups'),
-            'task_description': request.data.get('task_description')
-        })
-
-        if serializer.is_valid():
-            try:
-                job = serializer.save()
-                response_data = {
-                    'id': job.id,
-                    'company_id': job.company_id,
-                    'recruiter_id': job.recruiter_id,
-                    'title': job.title,
-                    'skills': job.skills or None,
-                    'experience': job.experience or None,
-                    'domain': job.domain,
-                    'interest_groups': job.interest_groups,
-                    'task_description': job.task_description or None,
-                    'created_at': job.created_at
-                }
+            
+            task_serializer = LaunchpadJobTaskSerializer(data={
+                'id': str(uuid.uuid4()),
+                'task_description': request.data.get('task_description')
+            })
+            if not task_serializer.is_valid():
                 return CustomResponse(
-                    response=response_data,
-                    general_message="Job created successfully"
-                ).get_success_response()
-            except IntegrityError as e:
-                return CustomResponse(
-                    message={'detail': ['Database error occurred.' + str(e)]},
+                    message=task_serializer.errors,
                     general_message="Job creation failed"
                 ).get_failure_response()
+            task = task_serializer.save()
+            serializer = LaunchpadJobsSerializer(data={
+                'id': str(uuid.uuid4()),
+                'company': recruiter_obj.company_id,
+                'recruiter': recruiter_obj.id,
+                'title': request.data.get('title'),
+                'skills': request.data.get('skills'),
+                'experience': request.data.get('experience') or None,
+                "minimum_karma": request.data.get('minimum_karma') or 0,
+                'opening_type': request.data.get('opening_type') or "Task",
+                'location': request.data.get('location') or None,
+                'salary_range': request.data.get('salary_range') or None,
+                'job_type': request.data.get('job_type') or None,
+                'domain': request.data.get('domain'),
+                'interest_groups': request.data.get('interest_groups'),
+                'task': task.id
+            })
 
+            if serializer.is_valid():
+                try:
+                    job = serializer.save()
+                    response_data = {
+                        'id': job.id,
+                        'company_id': job.company_id,
+                        'recruiter_id': job.recruiter_id,
+                        'title': job.title,
+                        'skills': job.skills or None,
+                        'experience': job.experience or None,
+                        'domain': job.domain,
+                        'interest_groups': job.interest_groups,
+                        'task_id': job.task.id if job.task else None,
+                        'task': job.task.task_description if job.task else None,
+                        'created_at': job.created_at
+                    }
+                    return CustomResponse(
+                        response=response_data,
+                        general_message="Job created successfully"
+                    ).get_success_response()
+                except IntegrityError as e:
+                    return CustomResponse(
+                        message={'detail': ['Database error occurred.' + str(e)]},
+                        general_message="Job creation failed"
+                    ).get_failure_response()
+               
         return CustomResponse(
             message=serializer.errors,
             general_message="Job creation failed"
         ).get_failure_response()
-  
+
+class ListJobsAPI(APIView):
+    authentication_classes = [CustomizePermission, LaunchpadJWTPermission]
+    
+    def get(self, request):
+        user_type = request.auth.get("user_type")
+        user_id = request.auth.get("id")
+        
+        jobs_query = LaunchpadJobs.objects.prefetch_related(
+            Prefetch('task', queryset=LaunchpadJobTasks.objects.all())
+        ).select_related('company', 'recruiter')
+        
+        if user_type == "recruiter":
+            try:
+                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                jobs = jobs_query.filter(company_id=recruiter.company_id)
+            except LaunchpadRecruiters.DoesNotExist:
+                return CustomResponse(general_message="Recruiter not found.").get_failure_response()
+        elif user_type == "company":
+            jobs = jobs_query.filter(company_id=user_id)
+        else:
+            jobs = jobs_query.all()
+        
+        data = []
+        for job in jobs:
+            job_data = {
+                'id': job.id,
+                'company_id': job.company_id,
+                'company_name': job.company.name if job.company else None,
+                'recruiter_id': job.recruiter_id,
+                'recruiter_name': job.recruiter.name if job.recruiter else None,
+                'title': job.title,
+                'skills': job.skills or None,
+                'experience': job.experience or None,
+                'domain': job.domain,
+                'interest_groups': job.interest_groups,
+                'opening_type': job.opening_type,
+                'location': job.location or None,
+                'salary_range': job.salary_range or None,
+                'job_type': job.job_type or None,
+                'minimum_karma': job.minimum_karma,
+                'created_at': job.created_at,
+                'updated_at': job.updated_at,
+                'posted_by_current_recruiter': job.recruiter_id == user_id if user_type == "recruiter" else None
+            }
+            
+            if job.opening_type == "Task":
+                job_data['task_id'] = getattr(job.task, 'id', None) if hasattr(job, 'task') and job.task else None
+                job_data['task_description'] = getattr(job.task, 'task_description', None) if hasattr(job, 'task') and job.task else None
+                job_data['task_hashtag'] = getattr(job.task, 'hashtags', None) if hasattr(job, 'task') and job.task else None
+                job_data['task_verified'] = getattr(job.task, 'is_verified', False) if hasattr(job, 'task') and job.task else False
+            
+            data.append(job_data)
+        
+        if user_type == "recruiter":
+            try:
+                recruiter = LaunchpadRecruiters.objects.get(id=user_id)
+                company_name = recruiter.company.name if recruiter.company else "Unknown Company"
+                total_company_jobs = len(data)
+                own_jobs = len([job for job in data if job['recruiter_id'] == user_id])
+                other_recruiters_jobs = total_company_jobs - own_jobs
+            except LaunchpadRecruiters.DoesNotExist:
+                company_name = "Unknown Company"
+                own_jobs = 0
+                other_recruiters_jobs = 0
+                
+            summary = {
+                'total_jobs': len(data),
+                'general_jobs': len([job for job in data if job['opening_type'] == 'General']),
+                'task_jobs': len([job for job in data if job['opening_type'] == 'Task']),
+                'own_jobs': own_jobs,
+                'other_recruiters_jobs': other_recruiters_jobs,
+                'company_name': company_name,
+                'user_type': user_type,
+                'user_id': user_id
+            }
+        else:
+            summary = {
+                'total_jobs': len(data),
+                'general_jobs': len([job for job in data if job['opening_type'] == 'General']),
+                'task_jobs': len([job for job in data if job['opening_type'] == 'Task']),
+                'user_type': user_type,
+                'user_id': user_id
+            }
+        
+        return CustomResponse(
+            response={
+                'jobs': data,
+                'summary': summary
+            },
+            general_message="Job list fetched successfully"
+        ).get_success_response()
+
+class VerifyTaskAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        serializer = TaskVerificationSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return CustomResponse(
+                message=serializer.errors,
+                general_message="Validation failed"
+            ).get_failure_response()
+        
+        try:
+            task = serializer.save()
+            return CustomResponse(response={
+                "task_id": task.id,
+                "task_description": task.task_description,
+                "hashtag": task.hashtags,
+                "is_verified": task.is_verified,
+                "message": "Task verified successfully."
+            }).get_success_response()
+            
+        except Exception as e:
+            return CustomResponse(
+                message={'detail': [str(e)]},
+                general_message="Task verification failed"
+            ).get_failure_response()
+
 class LoginCompanyAPI(APIView):
     def post(self, request):
         data = request.data
@@ -256,7 +443,8 @@ class LoginCompanyAPI(APIView):
         
         if not check_password(password, company.password):
             return CustomResponse(general_message="Invalid credentials.").get_failure_response()
-        
+        if company.is_verified is False:
+            return CustomResponse(general_message="Company is not verified.").get_failure_response()
         access_token, refresh_token = generate_launchpad_jwt(company, "company")
         
         return CustomResponse(response={
@@ -320,6 +508,10 @@ class GetCompanyInfoAPI(APIView):
                 'poc_role': company.poc_role,
                 'poc_email': company.poc_email,
                 'poc_phone': company.poc_phone,
+                'website': company.website,
+                'description': company.description,
+                'address': company.address,
+                'is_verified': company.is_verified,
                 'created_at': company.created_at,
                 'updated_at': company.updated_at,
                 'recruiters': [
@@ -409,10 +601,12 @@ class RefreshTokenAPI(APIView):
             "refreshToken": new_refresh_token
         }).get_success_response()
 
-class CompanyVerifyAPI(APIView):
-    def post(self, request):
-        company_id = request.data.get('id')
 
+class CompanyVerifyAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request):
+        company_id = request.data.get('company_id')
         if not company_id:
             return CustomResponse(general_message="Company ID is required.").get_failure_response()
 
@@ -428,6 +622,679 @@ class CompanyVerifyAPI(APIView):
 
         except LaunchpadCompanies.DoesNotExist:
             return CustomResponse(general_message="Company not found.").get_failure_response()
+
+
+class ListLaunchpadStudentsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+
+    def get(self, request, job_id):
+        user_type = request.auth["user_type"]
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(
+                general_message="Only recruiters and companies can view eligible students.").get_failure_response()
+
+        try:
+            job = LaunchpadJobs.objects.get(id=job_id)
+            user_id = request.auth["id"]
+
+            if user_type == "recruiter" and job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only view students for your own jobs.").get_failure_response()
+            elif user_type == "company" and job.recruiter.company_id != user_id:
+                print(job.recruiter.company_id)
+                return CustomResponse(
+                    general_message="You can only view students for jobs posted by your company.").get_failure_response()
+
+        except LaunchpadJobs.DoesNotExist:
+            return CustomResponse(general_message="Job not found.").get_failure_response()
+        except AttributeError:
+            return CustomResponse(general_message="Invalid job or user relationship.").get_failure_response()
+
+        # Get all applications for this job to determine status
+        job_applications = LaunchpadJobApplications.objects.filter(
+            job=job
+        ).values('student_id', 'id', 'status', 'applied_at', 'invited_at')
+
+        # Create a dictionary for quick lookup of application status
+        application_status_map = {
+            app['student_id']: {
+                'status': app['status'],
+                'id': app['id'],
+                'applied_at': app['applied_at'],
+                'invited_at': app['invited_at']
+            }
+            for app in job_applications
+        }
+
+        rank = (
+            Wallet.objects.filter(
+                user__interested_in_work=True,
+                karma__gte=job.minimum_karma
+            )
+            .order_by("-karma", "-updated_at", "created_at")
+            .values(
+                "user_id",
+                "karma",
+            )
+        )
+
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        eligible_students = User.objects.filter(
+            interested_in_work=True,
+            wallet_user__karma__gte=job.minimum_karma
+        ).select_related(
+            'wallet_user', 'user_lvl_link_user__level'
+        ).prefetch_related(
+            'user_ig_link_user__ig',
+            'user_organization_link_user__org',
+            'user_role_link_user__role'
+        ).distinct().annotate(
+            user_id=F("id"),
+            karma=F("wallet_user__karma"),
+            level=F("user_lvl_link_user__level__name"),
+        )
+
+        if job.interest_groups:
+            interest_groups = [ig.strip() for ig in job.interest_groups.split(',')]
+            eligible_students = eligible_students.filter(
+                user_ig_link_user__ig__name__in=interest_groups
+            ).distinct()
+
+        eligible_students = eligible_students.order_by('-karma', '-wallet_user__updated_at', 'wallet_user__created_at')
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            eligible_students,
+            request,
+            ["full_name", "level"],
+            {
+                "full_name": "full_name",
+                "muid": "muid",
+                "karma": "wallet_user__karma",
+                "level": "user_lvl_link_user__level__level_order",
+            },
+        )
+
+        serializer = EligibleStudentSerializer(
+            paginated_queryset.get("queryset"),
+            many=True,
+            context={
+                "ranks": ranks,
+                "job": job,
+                "application_status_map": application_status_map
+            }
+        )
+
+        return CustomResponse(
+            response={
+                'job_info': {
+                    'id': job.id,
+                    'title': job.title,
+                    'minimum_karma': job.minimum_karma,
+                    'domain': job.domain,
+                    'interest_groups': job.interest_groups
+                },
+                'data': serializer.data,
+                'pagination': paginated_queryset.get("pagination"),
+            },
+            general_message="Eligible students fetched successfully"
+        ).get_success_response()
+
+class SendJobInvitationsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    
+    def post(self, request):
+        if request.auth["user_type"] != "recruiter":
+            return CustomResponse(general_message="Only recruiters can send invitations.").get_failure_response()
+        
+        try:
+            job_id = request.data.get('job_id')
+            if not job_id:
+                return CustomResponse(general_message="Job ID is required.").get_failure_response()
+            job = LaunchpadJobs.objects.get(id=job_id)
+            recruiter_id = request.auth["id"]
+            
+            # Ensure recruiter owns this job
+            if job.recruiter_id != recruiter_id:
+                return CustomResponse(general_message="You can only send invitations for your own jobs.").get_failure_response()
+                
+        except LaunchpadJobs.DoesNotExist:
+            return CustomResponse(general_message="Job not found.").get_failure_response()
+        
+        student_ids = request.data.get('student_ids', [])
+        
+        if not student_ids:
+            return CustomResponse(general_message="Please provide student IDs to invite.").get_failure_response()
+        
+        if not isinstance(student_ids, list):
+            return CustomResponse(general_message="student_ids must be a list.").get_failure_response()
+        
+        # Verify students exist and are eligible
+        eligible_students = User.objects.filter(
+            id__in=student_ids,
+            wallet_user__karma__gte=job.minimum_karma,
+            interested_in_work=True
+        )
+        
+        if len(eligible_students) != len(student_ids):
+            invalid_students = set(student_ids) - set(eligible_students.values_list('id', flat=True))
+            return CustomResponse(
+                message={'invalid_students': list(invalid_students)},
+                general_message="Some students are not eligible for this job."
+            ).get_failure_response()
+        
+        # Create invitation records
+        invitations = []
+        already_invited = []
+        
+        for student in eligible_students:
+            existing_invitation = LaunchpadJobApplications.objects.filter(
+                job=job, student=student
+            ).first()
+            
+            if existing_invitation:
+                already_invited.append({
+                    'student_id': student.id,
+                    'student_name': student.full_name,
+                    'current_status': existing_invitation.status
+                })
+            else:
+                invitation = LaunchpadJobApplications(
+                    id=str(uuid.uuid4()),
+                    job=job,
+                    student=student,
+                    status='invited',
+                    invited_at=timezone.now()
+                )
+                invitations.append(invitation)
+        
+        # Bulk create invitations
+        if invitations:
+            LaunchpadJobApplications.objects.bulk_create(invitations)
+        
+        # Prepare response data
+        invited_students = [
+            {
+                'student_id': inv.student.id,
+                'student_name': inv.student.full_name,
+                'student_email': inv.student.email,
+                'student_karma': inv.student.wallet_user.karma if inv.student.wallet_user else 0
+            }
+            for inv in invitations
+        ]
+        
+        return CustomResponse(
+            response={
+                'job_info': {
+                    'id': job.id,
+                    'title': job.title,
+                    'company_name': job.company.name if job.company else None
+                },
+                'invitation_summary': {
+                    'total_requested': len(student_ids),
+                    'successfully_invited': len(invitations),
+                    'already_invited': len(already_invited)
+                },
+                'invited_students': invited_students,
+                'already_invited_students': already_invited
+            },
+            general_message=f"Successfully sent {len(invitations)} job invitations"
+        ).get_success_response()
+    
+class StudentJobInvitationsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    
+    def get(self, request):
+        user_id = request.auth["id"]
+        status_filter = request.query_params.get('status', None)  
+        
+        invitations = LaunchpadJobApplications.objects.select_related(
+            'job', 'job__company', 'job__recruiter'
+        ).filter(student_id=user_id)
+        
+        if status_filter:
+            invitations = invitations.filter(status=status_filter)
+        
+      
+        invitations = invitations.order_by('-invited_at')
+    
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            invitations,
+            request,
+            ["job__title", "job__company__name", "status"],
+            {
+                "job_title": "job__title",
+                "company_name": "job__company__name",
+                "status": "status",
+                "invited_at": "invited_at",
+            },
+        )
+        
+        data = []
+        for invitation in paginated_queryset.get("queryset"):
+            invitation_data = {
+                'application_id': invitation.id,
+                'job_id': invitation.job.id,
+                'job_title': invitation.job.title,
+                'company_name': invitation.job.company.name,
+                'company_id': invitation.job.company.id,
+                'recruiter_name': invitation.job.recruiter.name,
+                'recruiter_email': invitation.job.recruiter.email,
+                'recruiter_phone': invitation.job.recruiter.phone,
+                'skills': invitation.job.skills,
+                'experience': invitation.job.experience,
+                'location': invitation.job.location,
+                'salary_range': invitation.job.salary_range,
+                'job_type': invitation.job.job_type,
+                'domain': invitation.job.domain,
+                'opening_type': invitation.job.opening_type,
+                'minimum_karma': invitation.job.minimum_karma,
+                'status': invitation.status,
+                'invited_at': invitation.invited_at,
+                'applied_at': invitation.applied_at,
+            }
+            
+            if invitation.status == 'interview_scheduled':
+                invitation_data['interview_details'] = {
+                    'interview_date': getattr(invitation, 'interview_date', None),
+                    'interview_time': getattr(invitation, 'interview_time', None),
+                    'interview_platform': getattr(invitation, 'interview_platform', None),
+                    'interview_link': getattr(invitation, 'interview_link', None),
+                    'interview_scheduled_at': invitation.updated_at
+                }
+            
+            if invitation.job.opening_type == "Task" and invitation.job.task:
+                invitation_data['task_info'] = {
+                    'task_id': invitation.job.task.id,
+                    'task_description': invitation.job.task.task_description,
+                    'task_verified': invitation.job.task.is_verified,
+                    'task_hashtag': invitation.job.task.hashtags
+                }
+
+            if invitation.status in ['applied', 'interview_scheduled', 'accepted', 'rejected']:
+                invitation_data['application_details'] = {
+                    'resume_link': invitation.resume_link,
+                    'linkedin_link': invitation.linkedin_link,
+                    'portfolio_link': invitation.portfolio_link,
+                    'cover_letter': invitation.cover_letter,
+                    'other_link': invitation.other_link
+                }
+            
+            data.append(invitation_data)
+        
+        return CustomResponse().paginated_response(
+            data=data, 
+            pagination=paginated_queryset.get("pagination")
+        )
+
+class StudentApplyToJobAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    
+    def post(self, request):
+        try:
+            user_id = request.auth["id"]
+            application_id = request.data.get('application_id')
+            application = LaunchpadJobApplications.objects.select_related(
+                'job', 'job__company', 'job__recruiter'
+            ).get(id=application_id, student_id=user_id)
+        except LaunchpadJobApplications.DoesNotExist:
+            return CustomResponse(general_message="Job invitation not found.").get_failure_response()
+        
+        # Check if already applied
+        if application.status != 'invited':
+            return CustomResponse(
+                general_message=f"Cannot apply to job. Current status: {application.status}"
+            ).get_failure_response()
+        
+        # Validate required fields
+        resume_link = request.data.get('resume_link')
+        if not resume_link:
+            return CustomResponse(
+                message={'resume_link': ['Resume link is required.']},
+                general_message="Application failed"
+            ).get_failure_response()
+        
+        # Update application with form data
+        application.resume_link = resume_link
+        application.linkedin_link = request.data.get('linkedin_link', '')
+        application.portfolio_link = request.data.get('portfolio_link', '')
+        application.cover_letter = request.data.get('cover_letter', '')
+        application.other_link = request.data.get('other_link', '')
+        application.status = 'applied'
+        application.applied_at = timezone.now()
+        application.save()
+        
+        # Prepare response
+        response_data = {
+            'application_id': application.id,
+            'job_info': {
+                'id': application.job.id,
+                'title': application.job.title,
+                'company_name': application.job.company.name,
+                'recruiter_name': application.job.recruiter.name,
+                'opening_type': application.job.opening_type
+            },
+            'application_details': {
+                'resume_link': application.resume_link,
+                'linkedin_link': application.linkedin_link,
+                'portfolio_link': application.portfolio_link,
+                'cover_letter': application.cover_letter,
+                'other_link': application.other_link
+            },
+            'status': application.status,
+            'applied_at': application.applied_at
+        }
+        
+        return CustomResponse(
+            response=response_data,
+            general_message="Application submitted successfully"
+        ).get_success_response()
+
+class AcceptedStudentsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    
+    def get(self, request, job_id=None):
+        if request.auth["user_type"] != "recruiter":
+            return CustomResponse(general_message="Only recruiters can view students.").get_failure_response()
+        
+        recruiter_id = request.auth["id"]
+        status_filter = request.query_params.get('status', None)  # Get status filter from query params
+        
+        # Base query for applications
+        applications = LaunchpadJobApplications.objects.select_related(
+            'job', 'job__company', 'student', 'student__wallet_user'
+        ).filter(
+            job__recruiter_id=recruiter_id
+        )
+        
+        # Apply status filter if provided
+        if status_filter:
+            if status_filter not in ['invited', 'applied', 'accepted', 'rejected', 'interview_scheduled']:
+                return CustomResponse(
+                    general_message="Invalid status. Valid statuses: invited, applied, accepted, rejected, interview_scheduled"
+                ).get_failure_response()
+            applications = applications.filter(status=status_filter)
+        
+        # Filter by specific job if provided
+        if job_id:
+            try:
+                job = LaunchpadJobs.objects.get(id=job_id, recruiter_id=recruiter_id)
+                applications = applications.filter(job_id=job_id)
+            except LaunchpadJobs.DoesNotExist:
+                return CustomResponse(general_message="Job not found or unauthorized.").get_failure_response()
+        
+        # Apply pagination
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            applications,
+            request,
+            ["student__full_name", "job__title", "job__company__name"],
+            {
+                "student_name": "student__full_name",
+                "job_title": "job__title",
+                "company_name": "job__company__name",
+                "applied_at": "applied_at",
+                "invited_at": "invited_at",
+                "status": "status",
+            },
+        )
+        
+        data = []
+        for application in paginated_queryset.get("queryset"):
+            student = application.student
+            job = application.job
+            
+            # Get student's college info
+            college_link = student.user_organization_link_user.filter(
+                org__org_type='College'
+            ).first()
+            
+            # Get student's interest groups
+            interest_groups = [
+                {
+                    'id': ig_link.ig.id,
+                    'name': ig_link.ig.name
+                }
+                for ig_link in student.user_ig_link_user.all()
+            ]
+            
+            application_data = {
+                'application_id': application.id,
+                'student_info': {
+                    'id': student.id,
+                    'full_name': student.full_name,
+                    'email': student.email,
+                    'muid': student.muid,
+                    'profile_pic': student.profile_pic,
+                    'karma': student.wallet_user.karma if student.wallet_user else 0,
+                    'college_name': college_link.org.title if college_link else None,
+                    'interest_groups': interest_groups
+                },
+                'job_info': {
+                    'id': job.id,
+                    'title': job.title,
+                    'company_name': job.company.name,
+                    'opening_type': job.opening_type,
+                    'domain': job.domain,
+                    'skills': job.skills,
+                    'location': job.location,
+                    'salary_range': job.salary_range
+                },
+                'application_details': {
+                    'resume_link': application.resume_link,
+                    'linkedin_link': application.linkedin_link,
+                    'portfolio_link': application.portfolio_link,
+                    'cover_letter': application.cover_letter,
+                    'other_link': application.other_link
+                } if application.status != 'invited' else None,  # Only show details if applied
+                'status': application.status,
+                'timeline': {
+                    'invited_at': application.invited_at,
+                    'applied_at': application.applied_at
+                }
+            }
+            
+            # Add task info if task-based job
+            if job.opening_type == "Task" and job.task:
+                application_data['task_info'] = {
+                    'task_id': job.task.id,
+                    'task_description': job.task.task_description,
+                    'task_verified': job.task.is_verified,
+                    'task_hashtag': job.task.hashtags
+                }
+            
+            data.append(application_data)
+        
+        # Prepare summary statistics
+        if job_id:
+            # Stats for specific job
+            job_stats = {
+                'job_id': job_id,
+                'job_title': job.title,
+                'company_name': job.company.name,
+                'total_invited': LaunchpadJobApplications.objects.filter(job_id=job_id, status='invited').count(),
+                'total_applied': LaunchpadJobApplications.objects.filter(job_id=job_id, status='applied').count(),
+                'total_accepted': LaunchpadJobApplications.objects.filter(job_id=job_id, status='accepted').count(),
+                'total_rejected': LaunchpadJobApplications.objects.filter(job_id=job_id, status='rejected').count(),
+                'filtered_count': len(data)
+            }
+        else:
+            # Overall stats for recruiter
+            job_stats = {
+                'total_invited': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='invited').count(),
+                'total_applied': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='applied').count(),
+                'total_accepted': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='accepted').count(),
+                'total_rejected': LaunchpadJobApplications.objects.filter(job__recruiter_id=recruiter_id, status='rejected').count(),
+                'total_jobs': LaunchpadJobs.objects.filter(recruiter_id=recruiter_id).count(),
+                'filtered_count': len(data)
+            }
+        
+        return CustomResponse().paginated_response(
+            data={
+                'applications': data,
+                'statistics': job_stats,
+                'current_filter': status_filter or 'all'
+            },
+            pagination=paginated_queryset.get("pagination")
+        )
+class ScheduleInterviewAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    def post(self, request):
+        user_id = request.auth["id"]
+        application_id = request.data.get('application_id')
+        interview_date = request.data.get('interview_date')
+        interview_platform = request.data.get('interview_platform')
+        interview_time = request.data.get('interview_time')
+        interview_link = request.data.get('interview_link')
+        if not application_id or not interview_date or not interview_time:
+            return CustomResponse(
+                message={
+                    'application_id': ['Application ID is required.'],
+                    'interview_date': ['Interview date is required.'],
+                    'interview_time': ['Interview time is required.'],
+                    'interview_platform': ['Interview platform is required.'],
+                    'interview_link': ['Interview link is required.']
+                },
+                general_message="Scheduling failed"
+            ).get_failure_response()
+        
+        try:
+            application = LaunchpadJobApplications.objects.get(id=application_id)
+            if application.status != 'applied':
+                return CustomResponse(
+                    general_message="Cannot schedule interview for this application."
+                ).get_failure_response()
+            
+            # Update application with interview details
+            application.interview_date = interview_date
+            application.interview_time = interview_time
+            application.interview_platform = interview_platform
+            application.interview_link = interview_link
+            application.updated_at = timezone.now()
+            application.status = 'interview_scheduled'
+            application.save()
+            
+            return CustomResponse(
+                response={
+                    'application_id': application.id,
+                    'interview_date': application.interview_date,
+                    'interview_platform': application.interview_platform,
+                    'interview_time': application.interview_time,
+                    'status': application.status
+                },
+                general_message="Interview scheduled successfully"
+            ).get_success_response()
+        
+        except LaunchpadJobApplications.DoesNotExist:
+            return CustomResponse(general_message="Application not found.").get_failure_response()
+        
+
+class ApplicationFinalDecisionAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    
+    def post(self, request):
+        user_type = request.auth["user_type"]
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(general_message="Only recruiters and companies can make application final decisions.").get_failure_response()
+        
+        user_id = request.auth["id"]
+        application_id = request.data.get('application_id')
+        decision = request.data.get('decision')  # 'accepted' or 'rejected'
+        
+        if not application_id or not decision:
+            return CustomResponse(
+                message={
+                    'application_id': ['Application ID is required.'],
+                    'decision': ['Decision is required (accepted/rejected).']
+                },
+                general_message="Application final decision failed"
+            ).get_failure_response()
+        
+        if decision not in ['accepted', 'rejected']:
+            return CustomResponse(
+                message={'decision': ['Decision must be either "accepted" or "rejected".']},
+                general_message="Invalid decision"
+            ).get_failure_response()
+        
+        try:
+            application = LaunchpadJobApplications.objects.select_related(
+                'job', 'job__company', 'job__recruiter', 'student', 'student__wallet_user'
+            ).get(id=application_id)
+            
+            if user_type == "recruiter" and application.job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only make decisions on applications for your own jobs."
+                ).get_failure_response()
+            elif user_type == "company" and application.job.recruiter.company_id != user_id:
+                return CustomResponse(
+                    general_message="You can only make decisions on applications for jobs posted by your company."
+                ).get_failure_response()
+            
+            valid_statuses = ['applied', 'interview_scheduled']
+            if application.status not in valid_statuses:
+                return CustomResponse(
+                    general_message=f"Cannot make final decision on this application. Current status: {application.status}. Valid statuses: {', '.join(valid_statuses)}"
+                ).get_failure_response()
+            
+            old_status = application.status
+            application.status = decision
+            application.updated_at = timezone.now()
+            application.save()
+            
+            college_link = application.student.user_organization_link_user.filter(
+                org__org_type='College'
+            ).first()
+            
+            response_data = {
+                'application_id': application.id,
+                'decision': decision,
+                'previous_status': old_status,
+                'decision_made_at': application.updated_at,
+                'decision_made_by': {
+                    'user_type': user_type,
+                    'user_id': user_id,
+                    'name': application.job.recruiter.name if user_type == "recruiter" else application.job.company.name
+                },
+                'student_info': {
+                    'id': application.student.id,
+                    'full_name': application.student.full_name,
+                    'email': application.student.email,
+                    'muid': application.student.muid,
+                    'karma': application.student.wallet_user.karma if application.student.wallet_user else 0,
+                    'college_name': college_link.org.title if college_link else None
+                },
+                'job_info': {
+                    'id': application.job.id,
+                    'title': application.job.title,
+                    'company_name': application.job.company.name,
+                    'recruiter_name': application.job.recruiter.name,
+                    'opening_type': application.job.opening_type,
+                    'domain': application.job.domain
+                },
+                'application_timeline': {
+                    'invited_at': application.invited_at,
+                    'applied_at': application.applied_at,
+                    'interview_date': getattr(application, 'interview_date', None),
+                    'interview_time': getattr(application, 'interview_time', None),
+                    'decision_made_at': application.updated_at
+                }
+            }
+            
+            success_message = f"Candidate {'accepted' if decision == 'accepted' else 'rejected'} successfully"
+            
+            return CustomResponse(
+                response=response_data,
+                general_message=success_message
+            ).get_success_response()
+            
+        except LaunchpadJobApplications.DoesNotExist:
+            return CustomResponse(
+                general_message="Application not found."
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(
+                message={'detail': [str(e)]},
+                general_message="Application final decision failed"
+            ).get_failure_response()
 
 
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
@@ -1213,6 +2080,7 @@ class BaseAPI(APIView):
             return (
                 None,
                 CustomResponse(
+                   
                     general_message="Invalid Launchpad ID"
                 ).get_failure_response(),
             )
