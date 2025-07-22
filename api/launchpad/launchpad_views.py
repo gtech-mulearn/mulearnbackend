@@ -12,7 +12,7 @@ from utils.types import RoleType
 from .serializers import (
     LaunchpadJobTaskSerializer, LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,
     CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer,
-    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer, TaskVerificationSerializer
+    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer, TaskVerificationSerializer, LaunchpadCompanyPublicSerializer
 )
 from api.dashboard.profile.profile_serializer import (
     UserProfileSerializer, LinkSocials, UserLevelSerializer, UserLogSerializer,
@@ -135,6 +135,22 @@ class CompanyListAPI(APIView):
       response=data,
       general_message="Company list fetched successfully"
     ).get_success_response()
+
+class CompanyListVerifiedAPI(APIView):
+    def get(self, request):
+        companies = LaunchpadCompanies.objects.filter(is_verified=True)
+
+        if not companies.exists():
+            return CustomResponse(
+                general_message="No verified companies found."
+            ).get_failure_response()
+
+        serializer = LaunchpadCompanyPublicSerializer(companies, many=True)
+        return CustomResponse(
+            response=serializer.data,
+            general_message="Verified company list fetched successfully"
+        ).get_success_response()
+
 
 class RegisterRecruiterAPI(APIView):
   authentication_classes = [LaunchpadJWTPermission]
