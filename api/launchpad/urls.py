@@ -5,13 +5,14 @@ from .launchpad_views import (
     LoginCompanyAPI, LoginRecruiterAPI, GetCompanyInfoAPI, GetRecruiterInfoAPI,
     RefreshTokenAPI, CompanyVerifyAPI, ListJobsAPI, VerifyTaskAPI, ListLaunchpadStudentsAPI,
     SendJobInvitationsAPI, StudentJobInvitationsAPI, StudentApplyToJobAPI, AcceptedStudentsAPI,
-    ScheduleInterviewAPI, ApplicationFinalDecisionAPI
+    ScheduleInterviewAPI, ApplicationFinalDecisionAPI, CompanyListVerifiedAPI
 )
 
 urlpatterns = [
     path('register-company/', RegisterCompanyAPI.as_view()),
     path('register-recruiter/', RegisterRecruiterAPI.as_view()),
     path('company-list/', CompanyListAPI.as_view()),
+    path('company-list-verifed/', CompanyListVerifiedAPI.as_view()),
     path("login-company/", LoginCompanyAPI.as_view()),
     path("login-recruiter/", LoginRecruiterAPI.as_view()),
     path('refresh-token/', RefreshTokenAPI.as_view()),
