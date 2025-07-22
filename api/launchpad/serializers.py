@@ -197,6 +197,11 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
         if obj.id in application_status_map:
             return application_status_map[obj.id].get('application_id')
         return None
+
+class LaunchpadCompanyPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchpadCompanies
+        fields = ['name', 'website']
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:
