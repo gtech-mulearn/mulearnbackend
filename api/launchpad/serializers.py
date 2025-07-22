@@ -91,13 +91,14 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
     application_status = serializers.SerializerMethodField()
     application_timeline = serializers.SerializerMethodField()
     candidate_links = serializers.SerializerMethodField()
+    application_id = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'full_name', 'email', 'muid', 'profile_pic',
             'karma', 'level', 'college_name', 'interest_groups', 
-            'roles', 'rank', 'karma_distribution', 'application_status',
+            'roles', 'rank', 'karma_distribution', 'application_id', 'application_status',
             'application_timeline', 'candidate_links'
         ]
     
@@ -190,6 +191,12 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             .annotate(karma=Sum('karma'))
             .order_by()
         )
+
+    def get_application_id(self, obj):
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return application_status_map[obj.id].get('application_id')
+        return None
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:
