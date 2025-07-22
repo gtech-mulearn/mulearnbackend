@@ -42,7 +42,7 @@ def get_current_utc_time():
     return timezone.now()
 
 def generate_launchpad_jwt(user, user_type):
-    access_expiry_time = get_current_utc_time() + timedelta(hours=9)
+    access_expiry_time = get_current_utc_time() + timedelta(hours=3)
     access_expiry = access_expiry_time.strftime("%Y-%m-%d %H:%M:%S%z")
     
     access_token = jwt.encode(
@@ -199,7 +199,6 @@ class AddJobAPI(APIView):
         recruiter_obj = LaunchpadRecruiters.objects.filter(id=request.auth["id"]).first()
 
         if request.data.get('opening_type') == "General":
-            print
             serializer = LaunchpadJobsSerializer(data={
                 'id': str(uuid.uuid4()),
                 'company': recruiter_obj.company_id,
@@ -653,7 +652,7 @@ class ListLaunchpadStudentsAPI(APIView):
         job_applications = LaunchpadJobApplications.objects.filter(
             job=job
         ).values(
-            'student_id', 'status', 'applied_at', 'invited_at',
+            'id', 'student_id', 'status', 'applied_at', 'invited_at',
             'resume_link', 'linkedin_link', 'portfolio_link', 
             'cover_letter', 'other_link'
         )
@@ -661,6 +660,7 @@ class ListLaunchpadStudentsAPI(APIView):
         # Create a dictionary for quick lookup of application status and links
         application_status_map = {
             app['student_id']: {
+                'application_id': app['id'],
                 'status': app['status'],
                 'applied_at': app['applied_at'],
                 'invited_at': app['invited_at'],
