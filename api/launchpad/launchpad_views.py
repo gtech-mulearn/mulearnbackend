@@ -1596,6 +1596,31 @@ class ApplicationFinalDecisionAPI(APIView):
             ).get_failure_response()
 
 
+class DeleteCompanyAPI(APIView):
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request):
+        company_id = request.data.get("id")
+
+        if not company_id:
+            return CustomResponse(
+                general_message="Company ID is required."
+            ).get_failure_response()
+
+        try:
+            company = LaunchpadCompanies.objects.get(id=company_id)
+        except LaunchpadCompanies.DoesNotExist:
+            return CustomResponse(
+                general_message="Company not found."
+            ).get_failure_response()
+
+        company.is_verified = False
+        company.save()
+
+        return CustomResponse(
+            general_message="Company unverified successfully."
+        ).get_success_response()
+
+
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class Leaderboard(APIView):
     def get(self, request):
