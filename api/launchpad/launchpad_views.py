@@ -669,7 +669,7 @@ class ListLaunchpadStudentsAPI(APIView):
             job=job
         ).values(
             'id', 'student_id', 'status', 'applied_at', 'invited_at',
-            'resume_link', 'linkedin_link', 'portfolio_link', 
+            'resume_link', 'linkedin_link', 'portfolio_link',
             'cover_letter', 'other_link'
         )
 
@@ -689,42 +689,102 @@ class ListLaunchpadStudentsAPI(APIView):
             for app in job_applications
         }
 
-        rank = (
-            Wallet.objects.filter(
-                user__interested_in_work=True,
-                karma__gte=job.minimum_karma
+        if job.opening_type == "Task":
+            try:
+                # Get the job task to fetch hashtag
+                job_task = LaunchpadJobTasks.objects.get(id=job.task_id)
+                hashtag = job_task.hashtag
+
+                # Get matching TaskList IDs with the same hashtag
+                matching_tasks = TaskList.objects.filter(hashtag=hashtag).values_list('id', flat=True)
+
+                if not matching_tasks:
+                    return CustomResponse(
+                        general_message="No matching tasks found for this job's hashtag."
+                    ).get_failure_response()
+
+                # Get users who completed any of the matching tasks
+                task_completers = KarmaActivityLog.objects.filter(
+                    task_id__in=matching_tasks
+                ).values('user_id').distinct()
+
+                # Calculate ranks based on total karma from all matching tasks
+                task_karma_ranks = (
+                    KarmaActivityLog.objects.filter(
+                        task_id__in=matching_tasks
+                    )
+                    .values('user_id')
+                    .annotate(total_karma=Sum('karma'))
+                    .order_by("-total_karma", "-created_at")
+                )
+
+                ranks = {user["user_id"]: i + 1 for i, user in enumerate(task_karma_ranks)}
+
+                eligible_students = User.objects.filter(
+                    id__in=[user['user_id'] for user in task_completers],
+                    interested_in_work=True
+                ).select_related(
+                    'wallet_user', 'user_lvl_link_user__level'
+                ).prefetch_related(
+                    'user_ig_link_user__ig',
+                    'user_organization_link_user__org',
+                    'user_role_link_user__role'
+                ).distinct().annotate(
+                    user_id=F("id"),
+                    karma=F("wallet_user__karma"),
+                    level=F("user_lvl_link_user__level__name"),
+                )
+
+                user_karma_map = {user['user_id']: user['total_karma'] for user in task_karma_ranks}
+                eligible_students = sorted(
+                    eligible_students,
+                    key=lambda x: (-user_karma_map.get(x.id, 0), x.id)
+                )
+
+            except LaunchpadJobTasks.DoesNotExist:
+                return CustomResponse(general_message="Job task not found.").get_failure_response()
+            except Exception as e:
+                return CustomResponse(general_message=str(e)).get_failure_response()
+
+        else:
+
+            rank = (
+                Wallet.objects.filter(
+                    user__interested_in_work=True,
+                    karma__gte=job.minimum_karma
+                )
+                .order_by("-karma", "-updated_at", "created_at")
+                .values(
+                    "user_id",
+                    "karma",
+                )
             )
-            .order_by("-karma", "-updated_at", "created_at")
-            .values(
-                "user_id",
-                "karma",
+
+            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+            eligible_students = User.objects.filter(
+                interested_in_work=True,
+                wallet_user__karma__gte=job.minimum_karma
+            ).select_related(
+                'wallet_user', 'user_lvl_link_user__level'
+            ).prefetch_related(
+                'user_ig_link_user__ig',
+                'user_organization_link_user__org',
+                'user_role_link_user__role'
+            ).distinct().annotate(
+                user_id=F("id"),
+                karma=F("wallet_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
             )
-        )
 
-        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+            if job.interest_groups:
+                interest_groups = [ig.strip() for ig in job.interest_groups.split(',')]
+                eligible_students = eligible_students.filter(
+                    user_ig_link_user__ig__name__in=interest_groups
+                ).distinct()
 
-        eligible_students = User.objects.filter(
-            interested_in_work=True,
-            wallet_user__karma__gte=job.minimum_karma
-        ).select_related(
-            'wallet_user', 'user_lvl_link_user__level'
-        ).prefetch_related(
-            'user_ig_link_user__ig',
-            'user_organization_link_user__org',
-            'user_role_link_user__role'
-        ).distinct().annotate(
-            user_id=F("id"),
-            karma=F("wallet_user__karma"),
-            level=F("user_lvl_link_user__level__name"),
-        )
-
-        if job.interest_groups:
-            interest_groups = [ig.strip() for ig in job.interest_groups.split(',')]
-            eligible_students = eligible_students.filter(
-                user_ig_link_user__ig__name__in=interest_groups
-            ).distinct()
-
-        eligible_students = eligible_students.order_by('-karma', '-wallet_user__updated_at', 'wallet_user__created_at')
+            eligible_students = eligible_students.order_by('-karma', '-wallet_user__updated_at',
+                                                           'wallet_user__created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             eligible_students,
@@ -755,7 +815,9 @@ class ListLaunchpadStudentsAPI(APIView):
                     'title': job.title,
                     'minimum_karma': job.minimum_karma,
                     'domain': job.domain,
-                    'interest_groups': job.interest_groups
+                    'interest_groups': job.interest_groups,
+                    'opening_type': job.opening_type,
+                    'task_id': job.task_id if job.opening_type == "Task" else None
                 },
                 'data': serializer.data,
                 'pagination': paginated_queryset.get("pagination"),
