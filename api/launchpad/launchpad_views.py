@@ -35,7 +35,48 @@ from django.db import IntegrityError
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from utils.launchpad_permission import LaunchpadJWTPermission
+from typing import List
+from django.core.mail import send_mail, EmailMessage
+from django.template.loader import render_to_string
+import decouple
 
+def send_template_mail(context: dict, subject: str, address: List[str], attachment: str = None):
+    """
+    Sends an email to a user with the provided context, subject, template address, and optional attachment.
+
+    :param context: Dictionary containing user data and other relevant information.
+    :param subject: Subject of the email.
+    :param address: List of strings representing the path to the email template file.
+    :param attachment: Optional attachment to send with the email.
+    """
+    from_mail = decouple.config("FROM_MAIL")
+    base_url = decouple.config("FR_DOMAIN_NAME")
+
+    email_content = render_to_string(
+        f"mails/{'/'.join(map(str, address))}", {"user": context, "base_url": base_url}
+    )
+    mail = context.get("mails") or context.get("email")
+
+    if attachment is None:
+        send_mail(
+            subject=subject,
+            message=email_content,
+            from_email=from_mail,
+            recipient_list=[mail],
+            html_message=email_content,
+            fail_silently=False,
+        )
+    else:
+        email = EmailMessage(
+            subject=subject,
+            body=email_content,
+            from_email=from_mail,
+            to=[mail],
+        )
+        email.attach(attachment)
+        email.content_subtype = "html"
+        email.send()
+        
 
 def get_current_utc_time():
     from django.utils import timezone
@@ -73,47 +114,60 @@ def generate_launchpad_jwt(user, user_type):
 
 
 class RegisterCompanyAPI(APIView):
-  def post(self, request):
-    required_fields = ['name', 'username']
-    for field in required_fields:
-      if not request.data.get(field):
+    def post(self, request):
+        required_fields = ['name', 'username']
+        for field in required_fields:
+            if not request.data.get(field):
+                return CustomResponse(
+                    message={field: [f'{field} is required']},
+                    general_message="Registration failed"
+                ).get_failure_response()
+
+        serializer = LaunchpadCompaniesSerializer(data={
+            'id': str(uuid.uuid4()),
+            'name': request.data.get('name'),
+            'poc_name': request.data.get('poc_name'),
+            'poc_role': request.data.get('poc_role'),
+            'poc_email': request.data.get('poc_email'),
+            'poc_phone': request.data.get('poc_phone') or None,
+            'website': request.data.get('website') or None,
+            'description': request.data.get('description') or None,
+            'address': request.data.get('address') or None,
+            'username': request.data.get('username'),
+            'password': make_password(request.data.get('password'))
+        })
+
+        if serializer.is_valid():
+            company = serializer.save()
+            # Send registration success mail
+            try:
+                send_template_mail(
+                    context={
+                        "email": company.poc_email,
+                        "full_name": company.name or company.poc_name,
+                    },
+                    subject="MuLearn Launchpad company registered successfully",
+                    address=["launchpad-REG.html"]
+                )
+            except Exception as e:
+                print(f"Error sending registration email: {e}")
+
+            return CustomResponse(
+                response={
+                    'id': company.id,
+                    'name': company.name,
+                    'username': company.username,
+                    'poc_name': company.poc_name,
+                    'poc_email': company.poc_email,
+                    'created_at': company.created_at
+                },
+                general_message="Company registered successfully"
+            ).get_success_response()
+
         return CustomResponse(
-          message={field: [f'{field} is required']},
-          general_message="Registration failed"
+            message=serializer.errors,
+            general_message="Registration failed"
         ).get_failure_response()
-
-    serializer = LaunchpadCompaniesSerializer(data={
-      'id': str(uuid.uuid4()),
-      'name': request.data.get('name'),
-      'poc_name': request.data.get('poc_name'),
-      'poc_role': request.data.get('poc_role'),
-      'poc_email': request.data.get('poc_email'),
-      'poc_phone': request.data.get('poc_phone') or None,
-      'website': request.data.get('website') or None,
-      'description': request.data.get('description') or None,
-      'address': request.data.get('address') or None,
-      'username': request.data.get('username'),
-      'password': make_password(request.data.get('password'))
-    })
-
-    if serializer.is_valid():
-      company = serializer.save()
-      return CustomResponse(
-        response={
-          'id': company.id,
-          'name': company.name,
-          'username': company.username,
-          'poc_name': company.poc_name,
-          'poc_email': company.poc_email,
-          'created_at': company.created_at
-        },
-        general_message="Company registered successfully"
-      ).get_success_response()
-
-    return CustomResponse(
-      message=serializer.errors,
-      general_message="Registration failed"
-    ).get_failure_response()
 
 class CompanyListAPI(APIView):
   def get(self, request):
@@ -630,9 +684,23 @@ class CompanyVerifyAPI(APIView):
             company.is_verified = True
             company.save()
 
+            # Send verification success mail
+            try:
+                send_template_mail(
+                    context={
+                        "email": company.poc_email,
+                        "full_name": company.poc_name or company.name,
+                    },
+                    subject="Company Verified - Launchpad",
+                    address=["launchpad-VFY.html"]
+                )
+            except Exception as e:
+                # Optionally log error, but don't fail verification
+                pass
+
             return CustomResponse(response={
                 "company_name": company.name,
-                "message": f"Company '{company.name}' verified successfully."
+                "message": f"{company.name} verified successfully."
             }).get_success_response()
 
         except LaunchpadCompanies.DoesNotExist:
@@ -1437,6 +1505,7 @@ class AcceptedStudentsAPI(APIView):
                     'opening_type': job.opening_type,
                     'domain': job.domain,
                     'skills': job.skills,
+                    'experience': job.experience,
                     'location': job.location,
                     'salary_range': job.salary_range
                 },
@@ -1450,7 +1519,10 @@ class AcceptedStudentsAPI(APIView):
                 'status': application.status,
                 'timeline': {
                     'invited_at': application.invited_at,
-                    'applied_at': application.applied_at
+                    'applied_at': application.applied_at,
+                    'interview_date': getattr(application, 'interview_date', None),
+                    'interview_time': getattr(application, 'interview_time', None),
+                    'decision_made_at': application.updated_at
                 }
             }
             
