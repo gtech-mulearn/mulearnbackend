@@ -640,24 +640,24 @@ class CompanyVerifyAPI(APIView):
 
 
 class ListLaunchpadStudentsAPI(APIView):
-    # authentication_classes = [LaunchpadJWTPermission]
+    authentication_classes = [LaunchpadJWTPermission]
 
     def get(self, request, job_id):
-        # user_type = request.auth["user_type"]
-        # if user_type not in ["recruiter", "company"]:
-        #     return CustomResponse(
-        #         general_message="Only recruiters and companies can view eligible students.").get_failure_response()
+        user_type = request.auth["user_type"]
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(
+                general_message="Only recruiters and companies can view eligible students.").get_failure_response()
 
         try:
             job = LaunchpadJobs.objects.get(id=job_id)
-            # user_id = request.auth["id"]
+            user_id = request.auth["id"]
 
-            # if user_type == "recruiter" and job.recruiter_id != user_id:
-            #     return CustomResponse(
-            #         general_message="You can only view students for your own jobs.").get_failure_response()
-            # elif user_type == "company" and job.recruiter.company_id != user_id:
-            #     return CustomResponse(
-            #         general_message="You can only view students for jobs posted by your company.").get_failure_response()
+            if user_type == "recruiter" and job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only view students for your own jobs.").get_failure_response()
+            elif user_type == "company" and job.recruiter.company_id != user_id:
+                return CustomResponse(
+                    general_message="You can only view students for jobs posted by your company.").get_failure_response()
 
         except LaunchpadJobs.DoesNotExist:
             return CustomResponse(general_message="Job not found.").get_failure_response()
