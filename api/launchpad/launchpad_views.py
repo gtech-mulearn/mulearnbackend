@@ -689,50 +689,62 @@ class ListLaunchpadStudentsAPI(APIView):
             for app in job_applications
         }
 
-
         if job.opening_type == "Task":
+            try:
+                # Get the job task to fetch hashtag
+                job_task = LaunchpadJobTasks.objects.get(id=job.task_id)
+                hashtag = job_task.hashtag
 
-            task_id = job.task_id
+                # Get matching TaskList IDs with the same hashtag
+                matching_tasks = TaskList.objects.filter(hashtag=hashtag).values_list('id', flat=True)
 
+                if not matching_tasks:
+                    return CustomResponse(
+                        general_message="No matching tasks found for this job's hashtag."
+                    ).get_failure_response()
 
-            task_completers = KarmaActivityLog.objects.filter(
-                task_id=task_id
-            ).values('user_id').distinct()
+                # Get users who completed any of the matching tasks
+                task_completers = KarmaActivityLog.objects.filter(
+                    task_id__in=matching_tasks
+                ).values('user_id').distinct()
 
-
-            task_karma_ranks = (
-                KarmaActivityLog.objects.filter(
-                    task_id=task_id
+                # Calculate ranks based on total karma from all matching tasks
+                task_karma_ranks = (
+                    KarmaActivityLog.objects.filter(
+                        task_id__in=matching_tasks
+                    )
+                    .values('user_id')
+                    .annotate(total_karma=Sum('karma'))
+                    .order_by("-total_karma", "-created_at")
                 )
-                .values('user_id')
-                .annotate(total_karma=Sum('karma'))
-                .order_by("-total_karma", "-created_at")
-            )
 
-            ranks = {user["user_id"]: i + 1 for i, user in enumerate(task_karma_ranks)}
+                ranks = {user["user_id"]: i + 1 for i, user in enumerate(task_karma_ranks)}
 
+                eligible_students = User.objects.filter(
+                    id__in=[user['user_id'] for user in task_completers],
+                    interested_in_work=True
+                ).select_related(
+                    'wallet_user', 'user_lvl_link_user__level'
+                ).prefetch_related(
+                    'user_ig_link_user__ig',
+                    'user_organization_link_user__org',
+                    'user_role_link_user__role'
+                ).distinct().annotate(
+                    user_id=F("id"),
+                    karma=F("wallet_user__karma"),
+                    level=F("user_lvl_link_user__level__name"),
+                )
 
-            eligible_students = User.objects.filter(
-                id__in=[user['user_id'] for user in task_completers],
-                interested_in_work=True
-            ).select_related(
-                'wallet_user', 'user_lvl_link_user__level'
-            ).prefetch_related(
-                'user_ig_link_user__ig',
-                'user_organization_link_user__org',
-                'user_role_link_user__role'
-            ).distinct().annotate(
-                user_id=F("id"),
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name"),
-            )
+                user_karma_map = {user['user_id']: user['total_karma'] for user in task_karma_ranks}
+                eligible_students = sorted(
+                    eligible_students,
+                    key=lambda x: (-user_karma_map.get(x.id, 0), x.id)
+                )
 
-
-            user_karma_map = {user['user_id']: user['total_karma'] for user in task_karma_ranks}
-            eligible_students = sorted(
-                eligible_students,
-                key=lambda x: (-user_karma_map.get(x.id, 0), x.id)
-            )
+            except LaunchpadJobTasks.DoesNotExist:
+                return CustomResponse(general_message="Job task not found.").get_failure_response()
+            except Exception as e:
+                return CustomResponse(general_message=str(e)).get_failure_response()
 
         else:
 
