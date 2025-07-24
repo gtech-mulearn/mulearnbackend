@@ -672,8 +672,8 @@ class RefreshTokenAPI(APIView):
 
 
 class CompanyVerifyAPI(APIView):
-#    authentication_classes = [CustomizePermission]
-#    @role_required([RoleType.ADMIN.value])
+    authentication_classes = [CustomizePermission]
+    @role_required([RoleType.ADMIN.value])
     def post(self, request):
         company_id = request.data.get('company_id')
         if not company_id:
