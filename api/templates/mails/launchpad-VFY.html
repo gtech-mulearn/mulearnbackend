@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1.0">
+    <title>Company Verified - Launchpad Kerala</title>
+</head>
+<body style="margin:0;padding:0;background:#f8fafc;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">
+    <table width="100%" bgcolor="#f8fafc" cellpadding="0" cellspacing="0" style="padding:40px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" bgcolor="#fff" cellpadding="0" cellspacing="0" style="border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,0.06);overflow:hidden;border:1px solid #e5e7eb;">
+                    
+                    <tr>
+                        <td style="background:linear-gradient(135deg, #1e3a8a 0%, #1e40af 100%);padding:48px 32px;text-align:center;">
+                            <div style="color:#fff;font-size:28px;font-weight:700;margin-bottom:8px;letter-spacing:-0.5px;">
+                                LAUNCHPAD
+                            </div>
+                            <div style="color:#bfdbfe;font-size:16px;font-weight:500;margin-bottom:20px;letter-spacing:1.5px;">
+                                KERALA
+                            </div>
+                            <h1 style="color:#fff;font-size:26px;margin:0;font-weight:600;letter-spacing:-0.3px;">
+                                Your Company is Verified!
+                            </h1>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding:48px 32px;">
+                            <h2 style="color:#1e3a8a;margin:0 0 24px 0;font-size:22px;font-weight:600;">
+                                Dear {{ user.full_name|default:user.email }},
+                            </h2>
+
+                            <p style="font-size:16px;line-height:1.7;color:#374151;margin:0 0 24px 0;">
+                                Congratulations! Your company has been <strong style="color:#1e3a8a;">successfully verified</strong> by the Launchpad Kerala team. You now have full access to our platform and its services.
+                            </p>
+
+                            <p style="font-size:16px;line-height:1.7;color:#374151;margin:0 0 32px 0;">
+                                We’re excited to support your growth and connect you with Kerala’s vibrant startup ecosystem. Log in to your dashboard to get started!
+                            </p>
+                            
+                            <!-- Next Steps Section -->
+                            <div style="background:#f8fafc;border:1px solid #e5e7eb;padding:24px;margin:32px 0;border-radius:8px;">
+                                <h3 style="color:#1e3a8a;margin:0 0 16px 0;font-size:18px;font-weight:600;">
+                                    What can you do next?
+                                </h3>
+                                <ul style="margin:0;padding-left:20px;color:#4b5563;">
+                                    <li style="margin-bottom:8px;line-height:1.6;">Explore your dashboard and update your company profile</li>
+                                    <li style="margin-bottom:8px;line-height:1.6;">Access exclusive resources and opportunities</li>
+                                </ul>
+                            </div>
+                            
+                            <div style="text-align:center;margin:40px 0;">
+                                <a href="https://launchpadkerala.org/" style="display:inline-block;background:linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%);color:#fff;text-decoration:none;padding:16px 32px;border-radius:8px;font-weight:600;font-size:16px;box-shadow:0 4px 14px rgba(30,58,138,0.15);transition:all 0.3s ease;">
+                                    Visit Our Platform
+                                </a>
+                            </div>
+                            
+                            <p style="font-size:14px;line-height:1.6;color:#6b7280;margin:32px 0 0 0;text-align:center;">
+                                If you have any questions, please don't hesitate to contact our support team.
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <tr>
+                        <td style="background:#f8fafc;padding:32px;text-align:center;border-top:1px solid #e5e7eb;">
+                            <p style="font-size:14px;color:#4b5563;margin:0 0 12px 0;line-height:1.5;">
+                                Empowering Kerala's startup ecosystem
+                            </p>
+                            <p style="font-size:13px;color:#6b7280;margin:0 0 20px 0;">
+                                &copy; {{ now|date:"Y" }} Launchpad Kerala. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                
+                <div style="max-width:600px;margin:20px auto 0;padding:0 20px;">
+                    <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;line-height:1.4;">
+                        This email was sent to {{ user.email }}. You received this because you registered with Launchpad Kerala.
+                    </p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
