@@ -761,7 +761,7 @@ class ListLaunchpadStudentsAPI(APIView):
             try:
                 # Get the job task to fetch hashtag
                 job_task = LaunchpadJobTasks.objects.get(id=job.task_id)
-                hashtag = job_task.hashtag
+                hashtag = job_task.hashtags
 
                 # Get matching TaskList IDs with the same hashtag
                 matching_tasks = TaskList.objects.filter(hashtag=hashtag).values_list('id', flat=True)
