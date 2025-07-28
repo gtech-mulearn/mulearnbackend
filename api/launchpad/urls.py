@@ -1,17 +1,18 @@
 from django.urls import path
 from . import launchpad_views
 from .launchpad_views import (
-    RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, 
+    HireRequestsAPI, RegisterCompanyAPI, RegisterRecruiterAPI, CompanyListAPI, AddJobAPI, 
     LoginCompanyAPI, LoginRecruiterAPI, GetCompanyInfoAPI, GetRecruiterInfoAPI,
     RefreshTokenAPI, CompanyVerifyAPI, ListJobsAPI, VerifyTaskAPI, ListLaunchpadStudentsAPI,
     SendJobInvitationsAPI, StudentJobInvitationsAPI, StudentApplyToJobAPI, AcceptedStudentsAPI,
-    ScheduleInterviewAPI, ApplicationFinalDecisionAPI
+    ScheduleInterviewAPI, ApplicationFinalDecisionAPI, CompanyListVerifiedAPI, DeleteCompanyAPI
 )
 
 urlpatterns = [
     path('register-company/', RegisterCompanyAPI.as_view()),
     path('register-recruiter/', RegisterRecruiterAPI.as_view()),
     path('company-list/', CompanyListAPI.as_view()),
+    path('company-list-verifed/', CompanyListVerifiedAPI.as_view()),
     path("login-company/", LoginCompanyAPI.as_view()),
     path("login-recruiter/", LoginRecruiterAPI.as_view()),
     path('refresh-token/', RefreshTokenAPI.as_view()),
@@ -22,6 +23,7 @@ urlpatterns = [
     path('list-jobs/', ListJobsAPI.as_view()),
     path('verify-task/', VerifyTaskAPI.as_view()),
     path('list-launchpad-students/<str:job_id>/', ListLaunchpadStudentsAPI.as_view()),
+    path('hire-requests/', HireRequestsAPI.as_view(), name='hire-requests'),
     path('send-job-invitations/', SendJobInvitationsAPI.as_view()),
     path('student/job-invitations/', StudentJobInvitationsAPI.as_view(), name='student-job-invitations'),
     path('student/apply-to-job/', StudentApplyToJobAPI.as_view(), name='student-apply-to-job'),
@@ -29,6 +31,7 @@ urlpatterns = [
     path('accepted-students/<str:job_id>/', AcceptedStudentsAPI.as_view(), name='accepted-students'),
     path('schedule-interview/', ScheduleInterviewAPI.as_view(), name='schedule-interview'),
     path('application-final-decision/', ApplicationFinalDecisionAPI.as_view(), name='application-final-decision'),
+    path('delete-company/', DeleteCompanyAPI.as_view()),
     #<----------------------- old launchpad -------------------------->
     path("leaderboard/", launchpad_views.Leaderboard.as_view()),
     path(
