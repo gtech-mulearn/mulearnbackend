@@ -689,7 +689,7 @@ class CompanyVerifyAPI(APIView):
                 send_template_mail(
                     context={
                         "email": company.poc_email,
-                        "full_name": company.poc_name or company.name,
+                        "full_name": company.name or company.poc_name,
                     },
                     subject="Company Verified - Launchpad",
                     address=["launchpad-VFY.html"]
