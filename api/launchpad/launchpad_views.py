@@ -170,9 +170,12 @@ class RegisterCompanyAPI(APIView):
         ).get_failure_response()
 
 class CompanyListAPI(APIView):
-  def get(self, request):
-    companies = LaunchpadCompanies.objects.all()
-    data = [
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+      companies = LaunchpadCompanies.objects.all()
+      data = [
       {
         'id': company.id,
         'name': company.name,
@@ -185,7 +188,7 @@ class CompanyListAPI(APIView):
         'is_verified': company.is_verified,
       } for company in companies
     ]
-    return CustomResponse(
+      return CustomResponse(
       response=data,
       general_message="Company list fetched successfully"
     ).get_success_response()
