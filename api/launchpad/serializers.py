@@ -92,6 +92,7 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
     application_timeline = serializers.SerializerMethodField()
     candidate_links = serializers.SerializerMethodField()
     application_id = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
     
     class Meta:
         model = User
@@ -101,6 +102,16 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             'roles', 'rank', 'karma_distribution', 'application_id', 'application_status',
             'application_timeline', 'candidate_links'
         ]
+    
+    def get_email(self, obj):
+        
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            status = application_status_map[obj.id]['status']
+            allowed_statuses = ['applied', 'interview_scheduled', 'accepted']
+            if status in allowed_statuses:
+                return obj.email
+        return None 
     
     def get_college_name(self, obj):
         college_link = obj.user_organization_link_user.filter(
