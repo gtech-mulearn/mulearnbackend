@@ -8,7 +8,7 @@ from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad, La
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
 from utils.types import  OrganizationType
-from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs
+from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs , LaunchpadJobApplications
 from db.task import (
     KarmaActivityLog,
     Wallet
@@ -90,15 +90,28 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
     karma_distribution = serializers.SerializerMethodField()
     application_status = serializers.SerializerMethodField()
     application_timeline = serializers.SerializerMethodField()
+    candidate_links = serializers.SerializerMethodField()
+    application_id = serializers.SerializerMethodField()
+    email = serializers.SerializerMethodField()
     
     class Meta:
         model = User
         fields = [
             'id', 'full_name', 'email', 'muid', 'profile_pic',
             'karma', 'level', 'college_name', 'interest_groups', 
-            'roles', 'rank', 'karma_distribution', 'application_status',
-            'application_timeline'
+            'roles', 'rank', 'karma_distribution', 'application_id', 'application_status',
+            'application_timeline', 'candidate_links'
         ]
+    
+    def get_email(self, obj):
+        
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            status = application_status_map[obj.id]['status']
+            allowed_statuses = ['applied', 'interview_scheduled', 'accepted']
+            if status in allowed_statuses:
+                return obj.email
+        return None 
     
     def get_college_name(self, obj):
         college_link = obj.user_organization_link_user.filter(
@@ -140,6 +153,48 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             }
         return None
     
+    def get_candidate_links(self, obj):
+        # Get candidate links from context if they've applied
+        application_status_map = self.context.get('application_status_map', {})
+        
+        if obj.id in application_status_map:
+            status = application_status_map[obj.id]['status']
+            # Only return links if student has applied (not just invited)
+            if status in ['applied', 'interview_scheduled', 'accepted', 'rejected']:
+                # Get the full application details
+                job = self.context.get('job')
+                if job:
+                    try:
+                        application = LaunchpadJobApplications.objects.get(
+                            job=job, 
+                            student_id=obj.id
+                        )
+                        return {
+                            'resume_link': application.resume_link,
+                            'linkedin_link': application.linkedin_link,
+                            'portfolio_link': application.portfolio_link,
+                            'cover_letter': application.cover_letter,
+                            'other_link': application.other_link,
+                            'links_available': bool(
+                                application.resume_link or 
+                                application.linkedin_link or 
+                                application.portfolio_link or 
+                                application.cover_letter or 
+                                application.other_link
+                            )
+                        }
+                    except LaunchpadJobApplications.DoesNotExist:
+                        pass
+        
+        return {
+            'resume_link': None,
+            'linkedin_link': None,
+            'portfolio_link': None,
+            'cover_letter': None,
+            'other_link': None,
+            'links_available': False
+        }
+    
     def get_karma_distribution(self, obj):
         return (
             KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
@@ -147,6 +202,17 @@ class EligibleStudentSerializer(serializers.ModelSerializer):
             .annotate(karma=Sum('karma'))
             .order_by()
         )
+
+    def get_application_id(self, obj):
+        application_status_map = self.context.get('application_status_map', {})
+        if obj.id in application_status_map:
+            return application_status_map[obj.id].get('application_id')
+        return None
+
+class LaunchpadCompanyPublicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = LaunchpadCompanies
+        fields = ['name', 'website']
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class LaunchPadIDSerializer(serializers.ModelSerializer):
     class Meta:

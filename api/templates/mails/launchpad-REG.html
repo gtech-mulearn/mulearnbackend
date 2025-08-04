@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Thank You for Registering with Launchpad!</title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; padding: 40px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <!-- Banner Image -->
+                    <tr>
+                        <td style="padding: 0; text-align: center;">
+                            <img src="https://v5.airtableusercontent.com/v3/u/43/43/1754222400000/przaIINp0BzlkJDHFgRzAw/yRGHxgMiBu6DNOeCK5jsUv-hgSKK5hiyIJJY7MoYonIsz8LOsKU6lWBNTEPL3fQ5iMRSrxVUXWUCQYXE3F18zABgv0SV_16a_80wNFLS5SgtdqoCQSDusXIrjv7GgcDJLZhZXGGsz3GYtS9ICOAebbr-J23p3jaeRh4_StY3W2Mo2qfzMAbWWG4doieEwT9_/i0fBjKpP5e5Ji2FQ_cjKiBPsrYHFpF8JxYSrOvQ0fHw" alt="Launchpad 2025 Banner" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
+                        </td>
+                    </tr>
+                    <!-- Logo -->
+                    <tr>
+                        <td style="padding: 20px 32px; text-align: center;">
+                            <img src="https://v5.airtableusercontent.com/v3/u/43/43/1754222400000/W59Zij2JQfQSzhucS72jww/7DwNSU6qOV_E_8KXqb7eGAHzyeGB4zfdSot2avJ4BSi54I-399d31KsQnP2wkFXUOK0nBT3xFbHdAYf7qk5TM7rWd2kiV35P6og78g19ALAnviwgwzwDPHTF3mFVch4OP0dzl_mBmTxP3CjM5thFrlKy3UlpJaxnqD5IxjQWz30/w2r2MK5WzLxIfBOGSEMev6e7ythVsdHlep6lFEGabaA" alt="Launchpad Logo" style="width: auto; max-width: 150px; height: auto;" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 32px 32px;">
+                            <h2 style="margin-top:0; color: #ff6b35; text-align: center;"><strong>Thank You for Registering with Launchpad!</strong></h2>
+                            <p><strong>Dear {{ user.full_name|default:user.email }} Team,</strong></p>
+                            <p><em>Greetings from the <strong>µLearn Foundation</strong>!</em></p>
+                            <p>
+                                We’re excited to have you on board for <strong>Launchpad 2025</strong>, Kerala’s largest <em>skill-first hiring fair</em>, organized by <strong>µLearn</strong> in collaboration with <strong>IEEE Kerala Section</strong>, <strong>GTech</strong>, <strong>KKEM</strong> and <strong>KDISC</strong>. Thank you for joining us in this mission to discover and empower the next generation of hands-on talent.
+                            </p>
+                            <p>
+                                We’ve received your registration and our team is currently <strong>verifying your details</strong>. Once your registration is verified, you’ll receive a confirmation email along with the resources to help you get started on our hiring portal.
+                            </p>
+                            <p><strong>Here’s what you can look forward to once your account is verified:</strong></p>
+                            <ul style="padding-left: 20px; margin: 0;">
+                                <li style="margin-bottom: 8px;">Explore and shortlist candidates from a dynamic pool across <em>Tech, Design, Creative, Hardware, Management</em>, and more</li>
+                                <li style="margin-bottom: 8px;">View <strong>skill-based leaderboards</strong> and project portfolios</li>
+                                <li style="margin-bottom: 8px;">Filter candidates according to your hiring roles</li>
+                                <li style="margin-bottom: 8px;">Post <em>custom challenges</em> to attract candidates aligned with your needs</li>
+                            </ul>
+                            <p>
+                                If you have any questions or need assistance in the meantime, our team is here to support you <strong>at every step</strong>.
+                            </p>
+                            <p>
+                                Thank you once again for your participation. We look forward to <em>building a skill-first hiring ecosystem for Kerala, together</em>!
+                            </p>
+                            <p style="margin-top:32px; color: #ff6b35; font-weight: 600;">Warm regards,<br><strong>Team Launchpad</strong></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="background: #ff6b35; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="font-size: 13px; color: #fff; margin: 0;">
+                                &copy; <strong>{{ now|date:"Y" }}</strong> <em>Launchpad Kerala</em>. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+                <div style="max-width:600px;margin:20px auto 0;padding:0 20px;">
+                    <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;">
+                        This email was sent to <strong>{{ user.email }}</strong>. You received this because you registered with <strong>Launchpad Kerala</strong>.
+                    </p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
