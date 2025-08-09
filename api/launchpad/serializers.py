@@ -7,6 +7,7 @@ from db.task import KarmaActivityLog
 from db.launchpad import LaunchPadUsers, LaunchPadUserCollegeLink, LaunchPad, LaunchpadJobTasks
 from utils.types import LaunchPadRoles
 from utils.utils import DateTimeUtils
+from django.utils import timezone
 from utils.types import  OrganizationType
 from db.launchpad import LaunchpadCompanies, LaunchpadRecruiters, LaunchpadJobs , LaunchpadJobApplications
 from db.task import (
@@ -44,6 +45,87 @@ class LaunchpadJobsSerializer(serializers.ModelSerializer):
             'id', 'company', 'recruiter', 'title', 'skills', 'experience', 'domain', 'opening_type','location','salary_range','job_type', 'minimum_karma',
             'interest_groups', 'task', 'created_at', 'updated_at'
         ]
+
+class LaunchpadJobUpdateSerializer(serializers.ModelSerializer):
+    opening_type = serializers.ChoiceField(
+        choices=[('General', 'General'), ('Task', 'Task')], 
+        required=False
+    )
+    task_description = serializers.CharField(required=False, allow_blank=True)
+    hashtags = serializers.CharField(required=False, allow_blank=True)
+    
+    class Meta:
+        model = LaunchpadJobs
+        fields = [
+            'title', 'skills', 'experience', 'location', 
+            'salary_range', 'job_type', 'interest_groups', 'opening_type',
+            'task_description', 'hashtags'
+        ]
+        extra_kwargs = {
+            'title': {'required': False},
+            'skills': {'required': False},
+            'experience': {'required': False},
+            'location': {'required': False},
+            'salary_range': {'required': False},
+            'job_type': {'required': False},
+            'interest_groups': {'required': False},
+        }
+    
+    def validate(self, data):
+        """Custom validation for opening type changes"""
+        instance = self.instance
+        new_opening_type = data.get('opening_type', instance.opening_type)
+        # If changing to Task type, require task_description
+        if new_opening_type == 'Task' and not data.get('task_description'):
+            if not instance.task or not instance.task.task_description:
+                raise serializers.ValidationError({
+                    'task_description': 'Task description is required when opening type is Task.'
+                })
+        return data
+    
+    def update(self, instance, validated_data):
+        # Extract task-related fields
+        task_description = validated_data.pop('task_description', None)
+        hashtags = validated_data.pop('hashtags', None)
+        new_opening_type = validated_data.get('opening_type', instance.opening_type)
+        old_opening_type = instance.opening_type
+        
+        # Handle opening type changes
+        if old_opening_type != new_opening_type:
+            if new_opening_type == 'General' and old_opening_type == 'Task':
+                # Changing from Task to General - remove task
+                if instance.task:
+                    task_to_delete = instance.task
+                    instance.task = None
+                    instance.save()
+                    task_to_delete.delete()
+                
+            elif new_opening_type == 'Task' and old_opening_type == 'General':
+                # Changing from General to Task - create new task
+                if task_description:
+                    new_task = LaunchpadJobTasks.objects.create(
+                        id=str(uuid.uuid4()),
+                        task_description=task_description,
+                        hashtags=hashtags or '',
+                        is_verified=False
+                    )
+                    instance.task = new_task
+        
+        # Handle task updates for existing Task jobs
+        elif new_opening_type == 'Task' and instance.task:
+            if task_description is not None:
+                instance.task.task_description = task_description
+            if hashtags is not None:
+                instance.task.hashtags = hashtags
+            instance.task.save()
+        
+        # Update other job fields
+        for field, value in validated_data.items():
+            setattr(instance, field, value)
+        
+        instance.updated_at = timezone.now()
+        instance.save()
+        return instance
 
 class TaskVerificationSerializer(serializers.Serializer):
     task_id = serializers.CharField(required=True)
