@@ -11,7 +11,7 @@ from utils.permission import role_required
 from utils.types import RoleType
 from .serializers import (
     LaunchpadJobTaskSerializer, LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,
-    CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer,
+    CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer,LaunchpadJobUpdateSerializer,
     LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer, TaskVerificationSerializer, LaunchpadCompanyPublicSerializer
 )
 from api.dashboard.profile.profile_serializer import (
@@ -376,6 +376,173 @@ class AddJobAPI(APIView):
             general_message="Job creation failed"
         ).get_failure_response()
 
+class JobAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    def get(self, request, job_id):
+        user_type = request.auth["user_type"]
+        user_id = request.auth["id"]
+        
+        try:
+            job = LaunchpadJobs.objects.prefetch_related(
+                Prefetch('task', queryset=LaunchpadJobTasks.objects.all())
+            ).select_related('company', 'recruiter').get(id=job_id)
+            if user_type == "recruiter" and job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only view your own jobs."
+                ).get_failure_response()
+            elif user_type == "company" and job.company_id != user_id:
+                return CustomResponse(
+                    general_message="You can only view jobs posted by your company."
+                ).get_failure_response()
+            
+            response_data = {
+                'id': job.id,
+                'company_id': job.company_id,
+                'recruiter_id': job.recruiter_id,
+                'title': job.title,
+                'skills': job.skills or None,
+                'experience': job.experience or None,
+                'domain': job.domain,
+                'interest_groups': job.interest_groups,
+                'opening_type': job.opening_type,
+                'location': job.location or None,
+                'salary_range': job.salary_range or None,
+                'job_type': job.job_type or None,
+                'minimum_karma': job.minimum_karma,
+                'created_at': job.created_at,
+                'updated_at': job.updated_at
+            }
+            
+            if job.opening_type == "Task":
+                response_data['task'] = {
+                    'id': job.task.id if job.task else None,
+                    'task_description': job.task.task_description if job.task else None,
+                    'hashtags': job.task.hashtags if job.task else None,
+                    'is_verified': job.task.is_verified if job.task else False
+                }
+            else:
+                response_data['task'] = None
+            
+            return CustomResponse(
+                response=response_data,
+                general_message="Job details fetched successfully"
+            ).get_success_response()
+        
+        except LaunchpadJobs.DoesNotExist:
+            return CustomResponse(
+                general_message="Job not found."
+            ).get_failure_response()
+        
+    def put(self, request, job_id):
+        user_type = request.auth["user_type"]
+        user_id = request.auth["id"]
+        
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(
+                general_message="Only recruiters and companies can update jobs."
+            ).get_failure_response()
+        
+        try:
+            job = LaunchpadJobs.objects.prefetch_related(
+                Prefetch('task', queryset=LaunchpadJobTasks.objects.all())
+            ).select_related('company', 'recruiter').get(id=job_id)
+            # Check permissions
+            if user_type == "recruiter" and job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only update your own jobs."
+                ).get_failure_response()
+            elif user_type == "company" and job.company_id != user_id:
+                return CustomResponse(
+                    general_message="You can only update jobs posted by your company."
+                ).get_failure_response()
+            
+            # Update job using serializer
+            serializer = LaunchpadJobUpdateSerializer(job, data=request.data, partial=True)
+            
+            if serializer.is_valid():
+                updated_job = serializer.save()
+                
+                # Prepare response
+                response_data = {
+                    'id': updated_job.id,
+                    'title': updated_job.title,
+                    'company_id': updated_job.company_id,
+                    'recruiter_id': updated_job.recruiter_id,
+                    'skills': updated_job.skills,
+                    'experience': updated_job.experience,
+                    'minimum_karma': updated_job.minimum_karma,
+                    'opening_type': updated_job.opening_type,
+                    'location': updated_job.location,
+                    'salary_range': updated_job.salary_range,
+                    'job_type': updated_job.job_type,
+                    'domain': updated_job.domain,
+                    'interest_groups': updated_job.interest_groups,
+                    'updated_at': updated_job.updated_at
+                }
+                
+                # Add task info if it's a task job
+                if updated_job.opening_type == "Task" and updated_job.task:
+                    response_data['task'] = {
+                        'id': updated_job.task.id,
+                        'task_description': updated_job.task.task_description,
+                        'hashtags': updated_job.task.hashtags,
+                        'is_verified': updated_job.task.is_verified
+                    }
+                else:
+                    response_data['task'] = None
+                
+                return CustomResponse(
+                    response=response_data,
+                    general_message="Job updated successfully"
+                ).get_success_response()
+            
+            return CustomResponse(
+                message=serializer.errors,
+                general_message="Job update failed"
+            ).get_failure_response()
+            
+        except LaunchpadJobs.DoesNotExist:
+            return CustomResponse(
+                general_message="Job not found."
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(
+                message={'detail': [str(e)]},
+                general_message="Job update failed"
+            ).get_failure_response()
+        
+    def delete(self, request, job_id):
+        user_type = request.auth["user_type"]
+        user_id = request.auth["id"]
+        
+        if user_type not in ["recruiter", "company"]:
+            return CustomResponse(
+                general_message="Only recruiters and companies can delete jobs."
+            ).get_failure_response()
+        
+        try:
+            job = LaunchpadJobs.objects.get(id=job_id)
+            
+            # Check permissions
+            if user_type == "recruiter" and job.recruiter_id != user_id:
+                return CustomResponse(
+                    general_message="You can only delete your own jobs."
+                ).get_failure_response()
+            elif user_type == "company" and job.company_id != user_id:
+                return CustomResponse(
+                    general_message="You can only delete jobs posted by your company."
+                ).get_failure_response()
+            
+            job.delete()
+            return CustomResponse(
+                general_message="Job deleted successfully"
+            ).get_success_response()
+        
+        except LaunchpadJobs.DoesNotExist:
+            return CustomResponse(
+                general_message="Job not found."
+            ).get_failure_response()
+        
 class ListJobsAPI(APIView):
     authentication_classes = [CustomizePermission, LaunchpadJWTPermission]
     
