@@ -106,7 +106,7 @@ class TaskList(models.Model):
     hashtag = models.CharField(max_length=75)
     discord_link = models.CharField(max_length=200, blank=True, null=True)
     title = models.CharField(max_length=75)
-    description = models.CharField(max_length=200, null=True)
+    description = models.CharField(max_length=65535, null=True)
     karma = models.IntegerField(null=True)
     channel = models.ForeignKey(Channel, on_delete=models.CASCADE, null=True)
     type = models.ForeignKey(TaskType, on_delete=models.CASCADE)
