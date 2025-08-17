@@ -1,25 +1,27 @@
 from datetime import datetime, timedelta, timezone
 
 import pytz
-from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees
+from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink
 from rest_framework import serializers
 
 from db.organization import Organization
-from db.task import InterestGroup
 from db.user import User
 from utils.types import LearningCircleRecurrenceType
 from utils.utils import DateTimeUtils
 
-from django.db import models
 from db.task import (
     InterestGroup,
     KarmaActivityLog,
-    Level,
-    TaskList,
-    Wallet,
-    UserIgLink,
-    UserLvlLink,
+    # Level,
+    # TaskList,
+    # Wallet,
+    # UserIgLink,
+    # UserLvlLink,
 )
+
+import collections
+from django.db.models import Sum
+
 
 class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     ig = serializers.PrimaryKeyRelatedField(
@@ -33,13 +35,6 @@ class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         instance.ig_id = validated_data.get("ig_id", instance.ig_id)
         instance.org_id = validated_data.get("org_id", instance.org_id)
-        instance.is_recurring = validated_data.get(
-            "is_recurring", instance.is_recurring
-        )
-        instance.recurrence_type = validated_data.get(
-            "recurrence_type", instance.recurrence_type
-        )
-        instance.recurrence = validated_data.get("recurrence", instance.recurrence)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
@@ -50,29 +45,6 @@ class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
         return LearningCircle.objects.create(**validated_data)
 
     def validate(self, attrs):
-        is_recurring = attrs.get("is_recurring")
-        recurrence_type = attrs.get("recurrence_type")
-        recurrence = attrs.get("recurrence")
-        if not is_recurring:
-            attrs["recurrence_type"] = None
-            attrs["recurrence"] = None
-        else:
-            if not recurrence_type or not recurrence:
-                raise serializers.ValidationError(
-                    "Recurrence type and recurrence are required for recurring learning circles"
-                )
-            if recurrence_type not in LearningCircleRecurrenceType.get_all_values():
-                raise serializers.ValidationError("Invalid recurrence type.")
-            if recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
-                if recurrence < 1 or recurrence > 7:
-                    raise serializers.ValidationError(
-                        "Recurrence should be between 1 and 7 for weekly learning circles"
-                    )
-            elif recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
-                if recurrence < 1 or recurrence > 28:
-                    raise serializers.ValidationError(
-                        "Recurrence should be between 1 and 28 for monthly learning circles"
-                    )
         return super().validate(attrs)
 
     class Meta:
@@ -80,9 +52,6 @@ class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
         fields = [
             "ig",
             "org",
-            "is_recurring",
-            "recurrence_type",
-            "recurrence",
             "title",
             "description",
         ]
@@ -101,19 +70,99 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "org",
-            "is_recurring",
-            "recurrence_type",
-            "recurrence",
             "created_by",
         ]
 
+    def to_representation(self, instance):
+        # Override to add calculated fields that don't exist on the model
+        data = super().to_representation(instance)
+        
+        data['rank'] = self.get_rank(instance)
+        data['total_karma'] = self.get_total_karma(instance)
+        data['total_members'] = self.get_total_members(instance)
+        
+        return data
+
     def get_created_by(self, obj):
+        # Using select_related on the initial queryset (if fetching multiple LearningCircles)
+        # would make this access more efficient by avoiding a separate query for each obj.created_by.
         return {
+            "id": obj.created_by.id,
             "full_name": obj.created_by.full_name,
             "profile_pic": obj.created_by.profile_pic,
             "muid": obj.created_by.muid,
         }
 
+    def get_total_members(self, obj):
+        """Calculate total number of accepted members in this circle"""
+        return UserCircleLink.objects.filter(
+            circle=obj.id,
+            accepted=True,
+            accepted__isnull=False
+        ).count()
+
+    @property
+    def _all_circle_rankings_data(self):
+        """
+        Calculates and caches the rankings for all circles.
+        This method will only run once per serializer instance.
+        """
+        if not hasattr(self, '_cached_circle_rankings'):
+            user_circle_links = UserCircleLink.objects.filter(accepted=True).values('circle_id', 'user_id')
+
+            circle_to_users = collections.defaultdict(list)
+            for link in user_circle_links:
+                circle_to_users[link['circle_id']].append(link['user_id'])
+
+            circle_igs = dict(LearningCircle.objects.values_list('id', 'ig_id'))
+
+            user_karma = (
+                KarmaActivityLog.objects
+                .values('user_id', 'task__ig')
+                .annotate(total_karma=Sum('karma'))
+            )
+
+            user_ig_karma = collections.defaultdict(int)
+            for entry in user_karma:
+                user_ig_karma[(entry['user_id'], entry['task__ig'])] += entry['total_karma']
+
+            circle_data = []
+            for circle_id, user_ids in circle_to_users.items():
+                ig_id = circle_igs.get(circle_id)
+                total = sum(user_ig_karma.get((uid, ig_id), 0) for uid in user_ids)
+                circle_data.append({
+                    'id': circle_id,
+                    'total_karma': total
+                })
+
+            all_circle_ids = set(circle_igs.keys())
+            existing_ids = {c['id'] for c in circle_data}
+            for missing_id in all_circle_ids - existing_ids:
+                circle_data.append({
+                    'id': missing_id,
+                    'total_karma': 0
+                })
+
+            circle_data.sort(key=lambda x: x['total_karma'], reverse=True)
+
+            # Assign ranks efficiently, handling ties if necessary (though current logic doesn't)
+            for i, c in enumerate(circle_data):
+                c['rank'] = i + 1
+
+            # Store as a dictionary for quick lookup by circle ID
+            self._cached_circle_rankings = {item['id']: item for item in circle_data}
+        return self._cached_circle_rankings
+
+    def get_total_karma(self, obj):
+        # Get total karma of learning circle
+        karma_data = self._all_circle_rankings_data.get(obj.id)
+        return karma_data['total_karma'] if karma_data else 0
+
+    def get_rank(self, obj):
+        # Get the rank of the current circle from pre-calculated rankings
+        karma_data = self._all_circle_rankings_data.get(obj.id)
+        return karma_data['rank'] if karma_data else None
+    
     # next_meetup = serializers.SerializerMethodField()
 
     # def _get_next_weekday(self, target_day: int):
@@ -170,9 +219,28 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
 class LearningCircleListMinSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(source="ig.name", read_only=True)
     org = serializers.CharField(source="org.title", read_only=True, allow_null=True)
-    attendees = serializers.SerializerMethodField()
+    total_members = serializers.IntegerField(read_only=True)
+    # attendees = serializers.SerializerMethodField()
+    class Meta:
+        model = LearningCircle
+        # The 'attendees' field is removed as 'total_members' is used instead.
+        fields = ["id", "ig", "title", "org", "total_members"]
+    def to_representation(self, instance):
+        # Override to add calculated fields that don't exist on the model
+        data = super().to_representation(instance)
+        data['total_members'] = self.get_total_members(instance)
+        
+        return data
+    
+    def get_total_members(self, obj):
+        """Calculate total number of accepted members in this circle"""
+        return UserCircleLink.objects.filter(
+            circle=obj.id,
+            accepted=True,
+            accepted__isnull=False
+        ).count()
 
-    def get_attendees(self, obj):
+    # def get_attendees(self, obj):
         # query = (
         #     obj.circle_meeting_log_circle_id.prefetch_related(
         #         "circle_meeting_attendance_meet_id"
@@ -204,27 +272,26 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         #         }
         #     )
         # return data
-        return []
+        # return []
 
     class Meta:
         model = LearningCircle
-        fields = ["id", "ig", "title", "org", "attendees"]
+        fields = ["id", "ig", "title", "org", "total_members"]
+
 
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
     ONLINE_MEET_PLACE_CHOICES = ("Zoom", "Google Meet", "Microsoft Teams", "Other")
-    
     circle_id = serializers.PrimaryKeyRelatedField(
         queryset=LearningCircle.objects.all(), required=True
     )
-    meet_link = serializers.URLField(required=False, allow_null=True, allow_blank=True)
-    meet_place = serializers.CharField(required=False, allow_null=True, allow_blank=True)
-    coord_x = serializers.FloatField(required=False, allow_null=True)
-    coord_y = serializers.FloatField(required=False, allow_null=True)
-    mode = serializers.ChoiceField(choices=[('online', 'Online'), ('offline', 'Offline')], required=True)
-    
+    meet_link = serializers.URLField(required=False, allow_null=True)
+    meet_place = serializers.CharField(required=True)
+
     def update(self, instance, validated_data):
         instance.title = validated_data.get("title", instance.title)
-        instance.description = validated_data.get("description", instance.description)
+        instance.is_recurring = validated_data.get("is_recurring", instance.is_recurring)
+        instance.recurrence_type = validated_data.get("recurrence_type", instance.recurrence_type)
+        instance.recurrence = validated_data.get("recurrence", instance.recurrence)
         instance.is_report_needed = validated_data.get(
             "is_report_needed", instance.is_report_needed
         )
@@ -235,7 +302,6 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         instance.coord_x = validated_data.get("coord_x", instance.coord_x)
         instance.coord_y = validated_data.get("coord_y", instance.coord_y)
         instance.meet_place = validated_data.get("meet_place", instance.meet_place)
-        instance.meet_link = validated_data.get("meet_link", instance.meet_link)
         instance.meet_time = validated_data.get("meet_time", instance.meet_time)
         instance.duration = validated_data.get("duration", instance.duration)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
@@ -258,27 +324,15 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         report_description = attrs.get("report_description")
         mode = attrs.get("mode")
         meet_place = attrs.get("meet_place")
-        meet_link = attrs.get("meet_link")
-        coord_x = attrs.get("coord_x")
-        coord_y = attrs.get("coord_y")
-        
-        # Handle report validation
         if not is_report_needed:
             attrs["report_description"] = None
         else:
             if not report_description:
                 raise serializers.ValidationError("Report description is required")
-        
-        # Mode-specific validation
         if mode == "online":
-            # Validate online requirements
-            if not meet_link:
+            if not attrs.get("meet_link"):
                 raise serializers.ValidationError(
                     "Meeting link is required for online mode"
-                )
-            if not meet_place:
-                raise serializers.ValidationError(
-                    "Meeting place is required for online mode"
                 )
             if meet_place not in self.ONLINE_MEET_PLACE_CHOICES:
                 raise serializers.ValidationError(
@@ -286,23 +340,30 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
                         self.ONLINE_MEET_PLACE_CHOICES
                     )
                 )
-            # Clear offline fields for online mode
-            attrs["coord_x"] = None
-            attrs["coord_y"] = None
-            
-        elif mode == "offline":
-            # Validate offline requirements
-            if coord_x is None or coord_y is None:
+        is_recurring = attrs.get("is_recurring")
+        recurrence_type = attrs.get("recurrence_type")
+        recurrence = attrs.get("recurrence")
+        if not is_recurring:
+            attrs["recurrence_type"] = None
+            attrs["recurrence"] = None
+        else:
+            if not recurrence_type or not recurrence:
                 raise serializers.ValidationError(
-                    "Coordinates (coord_x and coord_y) are required for offline mode"
+                    "Recurrence type and recurrence are required for recurring meetings"
                 )
-            if not meet_place:
-                raise serializers.ValidationError(
-                    "Meeting place is required for offline mode"
-                )
-            # Clear online fields for offline mode
-            attrs["meet_link"] = None
-            
+            if recurrence_type not in LearningCircleRecurrenceType.get_all_values():
+                raise serializers.ValidationError("Invalid recurrence type.")
+            if recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
+                if recurrence < 1 or recurrence > 7:
+                    raise serializers.ValidationError(
+                        "Recurrence should be between 1 and 7 for weekly meetings"
+                    )
+            elif recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
+                if recurrence < 1 or recurrence > 28:
+                    raise serializers.ValidationError(
+                        "Recurrence should be between 1 and 28 for monthly meetings"
+                    )
+                    
         return super().validate(attrs)
 
     def validate_circle_id(self, value):
@@ -319,6 +380,9 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         fields = [
             "circle_id",
             "title",
+            "is_recurring",
+            "recurrence_type",
+            "recurrence",
             "is_report_needed",
             "report_description",
             "coord_x",
@@ -330,6 +394,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
             "description",
             "mode",
         ]
+
 
 class CircleMeetingLogListSerializer(serializers.ModelSerializer):
     circle = serializers.CharField(source="circle_id.id", read_only=True)
@@ -356,6 +421,9 @@ class CircleMeetingLogListSerializer(serializers.ModelSerializer):
             "title",
             "description",
             "mode",
+            "is_recurring",
+            "recurrence_type",
+            "recurrence",
             "is_report_needed",
             "report_description",
             "coord_x",
@@ -482,7 +550,7 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
         return data
 
 
-class CircleMeeupPublicSerializer(serializers.ModelSerializer):
+class CircleMeetupPublicSerializer(serializers.ModelSerializer):
     title = serializers.CharField(read_only=True)
     org = serializers.CharField(source="circle_id.org.title", read_only=True)
     meet_place = serializers.CharField(read_only=True)
@@ -493,7 +561,7 @@ class CircleMeeupPublicSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
 
-    def get_is_started(self, obj):
+    def get_is_started(self, obj):  
         return (
             obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
         )
@@ -513,6 +581,9 @@ class CircleMeeupPublicSerializer(serializers.ModelSerializer):
             "ig_id",
             "ig_name",
             "mode",
+            "is_recurring",
+            "recurrence_type",
+            "recurrence",
             "meet_place",
             "circle_id",
             "meet_time",
@@ -581,6 +652,9 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "ig_id",
             "ig_name",
             "mode",
+            "is_recurring",
+            "recurrence_type",
+            "recurrence",
             "meet_place",
             "is_rsvp",
             # "meet_code",

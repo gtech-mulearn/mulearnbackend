@@ -6,6 +6,7 @@ urlpatterns = [
     path("create/", learningcircle_views.LearningCircleView.as_view()),
     path("list/", learningcircle_views.LearningCircleView.as_view()),
     path("info/<str:circle_id>/", learningcircle_views.LearningCircleView.as_view()),
+    path("members/<str:circle_id>/",learningcircle_views.LearningCircleMemberDetailsView.as_view()), 
     path("edit/<str:circle_id>/", learningcircle_views.LearningCircleView.as_view()),
     path("delete/<str:circle_id>/", learningcircle_views.LearningCircleView.as_view()),
     path("meeting/create/", learningcircle_views.LearningCircleMeetingView.as_view()),
@@ -47,20 +48,4 @@ urlpatterns = [
         "meeting/report/<str:meet_id>/",
         learningcircle_views.LearningCircleReportAPI.as_view(),
     ),
-    path(
-        "details/<str:circle_id>/",
-        learningcircle_views.LearningCircleBasicDetailsView.as_view(),
-    ),
-    path(
-        "members/<str:circle_id>/",
-        learningcircle_views.LearningCircleMemberDetailsView.as_view(),
-    ),
-    path(
-        "<str:circle_id>/manage_requests/",
-        learningcircle_views.LearningCircleManageRequestsView.as_view(),
-    ),
-    path(
-        "meeting/create/<str:circle_id>/",
-        learningcircle_views.LearningCircleCreateMeetingView.as_view(),
-    )
 ]
