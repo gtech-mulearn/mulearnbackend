@@ -236,6 +236,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
                 "discord_link": task.discord_link,
                 "hashtag": task.hashtag,
                 "completed": is_completed,
+                "active" : task.active,
                 "karma": task.karma,
                 "task_description": task.description
             }
