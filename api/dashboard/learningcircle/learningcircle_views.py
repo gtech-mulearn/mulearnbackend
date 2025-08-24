@@ -78,7 +78,12 @@ class LearningCircleView(APIView):
 
     def put(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        learning_circle = LearningCircle.objects.get(id=circle_id)
+        try:
+            learning_circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+            general_message="Learning Circle not found"
+        ).get_failure_response()
         if learning_circle.created_by_id != user_id:
             return CustomResponse(
                 general_message="You do not have permission to edit this Learning Circle"
@@ -94,7 +99,9 @@ class LearningCircleView(APIView):
                 general_message="Learning Circle update failed",
                 response=serializer.errors,
             ).get_failure_response()
-        serializer.update(learning_circle, serializer.validated_data)
+            
+        serializer.save()
+    
         return CustomResponse(
             general_message="Learning Circle updated successfully"
         ).get_success_response()
@@ -139,11 +146,13 @@ class LearningCircleMeetingListView(APIView):
 class LearningCircleMeetingView(APIView):
     permission_classes = [CustomizePermission]
 
-    def post(self, request):
+    def post(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         meet_code = generate_code()
+        request_data = request.data.copy()
+        request_data['circle_id'] = circle_id
         serializer = CircleMeetingLogCreateEditSerializer(
-            data=request.data, context={"user_id": user_id, "meet_code": meet_code}
+            data=request_data, context={"user_id": user_id, "meet_code": meet_code}
         )
         if not serializer.is_valid():
             return CustomResponse(
