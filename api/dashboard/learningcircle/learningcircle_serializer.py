@@ -373,14 +373,14 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
                     
         return super().validate(attrs)
 
-    def validate_circle_id(self, value):
-        if CircleMeetingLog.objects.filter(
-            circle_id=value, is_report_submitted=False
-        ).exists():
-            raise serializers.ValidationError(
-                "There is already an ongoing meeting for this learning circle"
-            )
-        return value
+    # def validate_circle_id(self, value):
+    #     if CircleMeetingLog.objects.filter(
+    #         circle_id=value, is_report_submitted=False
+    #     ).exists():
+    #         raise serializers.ValidationError(
+    #             "There is already an ongoing meeting for this learning circle"
+    #         )
+    #     return value
 
     class Meta:
         model = CircleMeetingLog

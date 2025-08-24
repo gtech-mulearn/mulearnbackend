@@ -146,11 +146,13 @@ class LearningCircleMeetingListView(APIView):
 class LearningCircleMeetingView(APIView):
     permission_classes = [CustomizePermission]
 
-    def post(self, request):
+    def post(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         meet_code = generate_code()
+        request_data = request.data.copy()
+        request_data['circle_id'] = circle_id
         serializer = CircleMeetingLogCreateEditSerializer(
-            data=request.data, context={"user_id": user_id, "meet_code": meet_code}
+            data=request_data, context={"user_id": user_id, "meet_code": meet_code}
         )
         if not serializer.is_valid():
             return CustomResponse(
