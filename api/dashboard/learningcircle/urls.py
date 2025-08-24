@@ -9,7 +9,7 @@ urlpatterns = [
     path("members/<str:circle_id>/",learningcircle_views.LearningCircleMemberDetailsView.as_view()), 
     path("edit/<str:circle_id>/", learningcircle_views.LearningCircleView.as_view()),
     path("delete/<str:circle_id>/", learningcircle_views.LearningCircleView.as_view()),
-    path("meeting/create/", learningcircle_views.LearningCircleMeetingView.as_view()),
+    path("meeting/create/<str:circle_id>/", learningcircle_views.LearningCircleMeetingView.as_view()),
     path("meeting/list-public/", learningcircle_views.LearningCircleMeetingPublicListView.as_view()),
     path("meeting/list/", learningcircle_views.LearningCircleMeetingListAPI.as_view()),
     path(

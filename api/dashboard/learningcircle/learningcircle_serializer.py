@@ -33,8 +33,15 @@ class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     description = serializers.CharField(required=True)
 
     def update(self, instance, validated_data):
-        instance.ig_id = validated_data.get("ig_id", instance.ig_id)
-        instance.org_id = validated_data.get("org_id", instance.org_id)
+        if 'ig' in validated_data:
+            instance.ig = validated_data['ig']
+        if 'org' in validated_data:
+            instance.org = validated_data['org']
+        if 'title' in validated_data:
+            instance.title = validated_data['title']
+        if 'description' in validated_data:
+            instance.description = validated_data['description']
+        
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
@@ -366,14 +373,14 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
                     
         return super().validate(attrs)
 
-    def validate_circle_id(self, value):
-        if CircleMeetingLog.objects.filter(
-            circle_id=value, is_report_submitted=False
-        ).exists():
-            raise serializers.ValidationError(
-                "There is already an ongoing meeting for this learning circle"
-            )
-        return value
+    # def validate_circle_id(self, value):
+    #     if CircleMeetingLog.objects.filter(
+    #         circle_id=value, is_report_submitted=False
+    #     ).exists():
+    #         raise serializers.ValidationError(
+    #             "There is already an ongoing meeting for this learning circle"
+    #         )
+    #     return value
 
     class Meta:
         model = CircleMeetingLog
