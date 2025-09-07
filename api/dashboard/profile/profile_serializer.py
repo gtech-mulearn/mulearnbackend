@@ -224,7 +224,7 @@ class UserLevelSerializer(serializers.ModelSerializer):
             .select_related("ig")
             .values_list("ig__name", flat=True)
         )
-        tasks = TaskList.objects.filter(level=obj).select_related("ig")
+        tasks = TaskList.objects.filter(level=obj).select_related("ig","channel")
 
         if obj.level_order > 4:
             tasks = tasks.filter(ig__name__in=user_igs)
@@ -235,10 +235,21 @@ class UserLevelSerializer(serializers.ModelSerializer):
                 "task_name": task.title,
                 "discord_link": task.discord_link,
                 "hashtag": task.hashtag,
+                "active": task.active,
                 "completed": is_completed,
-                "active" : task.active,
                 "karma": task.karma,
-                "task_description": task.description
+                "task_description": task.description,
+                 # ig details
+                 "interest_group": {
+                    "id": task.ig.id if task.ig else None,
+                    "name": task.ig.name if task.ig else None
+                },
+                # Submission Channel details
+                "submission_channel": {
+                    "id": task.channel.id if task.channel else None,
+                    "name": task.channel.name if task.channel else None,
+                    "discord_id": task.channel.discord_id if task.channel else None
+                }
             }
             for task in tasks
             if (is_completed := (task.id in completed_tasks)) or task.active
