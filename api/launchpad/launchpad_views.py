@@ -12,7 +12,7 @@ from utils.types import RoleType
 from .serializers import (
     LaunchpadJobTaskSerializer, LaunchpadLeaderBoardSerializer, LaunchpadParticipantsSerializer, LaunchpadUserListSerializer,
     CollegeDataSerializer, LaunchpadUserSerializer, UserProfileUpdateSerializer,LaunchpadJobUpdateSerializer,
-    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer, TaskVerificationSerializer, LaunchpadCompanyPublicSerializer
+    LaunchpadUpdateUserSerializer, LaunchPadRankSerializer, TaskCompletedLeaderBoardSerializer, TaskVerificationSerializer, LaunchpadCompanyPublicSerializer,ForgotPasswordSerializer, ResetPasswordSerializer, ChangePasswordSerializer
 )
 from api.dashboard.profile.profile_serializer import (
     UserProfileSerializer, LinkSocials, UserLevelSerializer, UserLogSerializer,
@@ -39,6 +39,8 @@ from typing import List
 from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 import decouple
+import secrets
+
 
 def send_template_mail(context: dict, subject: str, address: List[str], attachment: str = None):
     """
@@ -716,6 +718,11 @@ class LoginRecruiterAPI(APIView):
         
         if not check_password(password, recruiter.password):
             return CustomResponse(general_message="Invalid credentials.").get_failure_response()
+        
+        if not recruiter.company.is_verified:
+            return CustomResponse(
+                general_message="Account does not exist"
+            ).get_failure_response()
         
         access_token, refresh_token = generate_launchpad_jwt(recruiter, "recruiter")
         
@@ -2875,3 +2882,176 @@ class IGLeaderboardView(APIView):
         return CustomResponse().paginated_response(
             data=data, pagination=paginated_queryset.get("pagination")
         )
+
+class ForgotPasswordAPI(APIView):
+    def post(self, request):
+        serializer = ForgotPasswordSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return CustomResponse(
+                message=serializer.errors,
+                general_message="Invalid request"
+            ).get_failure_response()
+
+        email = serializer.validated_data['email']
+        user_type = serializer.validated_data['user_type']
+        
+        # Generate reset token
+        reset_token = secrets.token_urlsafe(32)
+        expires_at = timezone.now() + timedelta(hours=1)  # Token expires in 1 hour
+        
+        try:
+            if user_type == 'company':
+                user = LaunchpadCompanies.objects.get(poc_email=email)
+                user.reset_token = reset_token
+                user.reset_token_expires = expires_at
+                user.save()
+                
+                user_name = user.name or user.poc_name
+                user_email = user.poc_email
+                
+            else:  # recruiter
+                user = LaunchpadRecruiters.objects.get(email=email)
+                user.reset_token = reset_token
+                user.reset_token_expires = expires_at
+                user.save()
+                
+                user_name = user.name
+                user_email = user.email
+            
+            # Send reset email
+            try:
+                reset_link = f"{decouple.config('FR_DOMAIN_NAME')}/reset-password?token={reset_token}&type={user_type}"
+                send_template_mail(
+                    context={
+                        "email": user_email,
+                        "full_name": user_name,
+                        "reset_link": reset_link,
+                        "expires_in": "1 hour"
+                    },
+                    subject="Password Reset - MuLearn Launchpad",
+                    address=["launchpad-password-reset.html"]
+                )
+            except Exception as e:
+                return CustomResponse(
+                    general_message="Failed to send reset email. Please try again."
+                ).get_failure_response()
+            
+            return CustomResponse(
+                general_message="Password reset link has been sent to your email."
+            ).get_success_response()
+            
+        except (LaunchpadCompanies.DoesNotExist, LaunchpadRecruiters.DoesNotExist):
+            # Don't reveal if user exists or not for security
+            return CustomResponse(
+                general_message="If an account with this email exists, a password reset link has been sent."
+            ).get_success_response()
+
+class ResetPasswordAPI(APIView):
+    def post(self, request):
+        serializer = ResetPasswordSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return CustomResponse(
+                message=serializer.errors,
+                general_message="Invalid request"
+            ).get_failure_response()
+
+        user = serializer.validated_data['user']
+        new_password = serializer.validated_data['new_password']
+        
+        # Reset password
+        user.password = make_password(new_password)
+        user.reset_token = None
+        user.reset_token_expires = None
+        user.save()
+        
+        return CustomResponse(
+            general_message="Password has been reset successfully. You can now login with your new password."
+        ).get_success_response()
+
+class VerifyResetTokenAPI(APIView):
+    def post(self, request):
+        token = request.data.get('token')
+        user_type = request.data.get('user_type')
+        
+        if not token or not user_type:
+            return CustomResponse(
+                general_message="Token and user type are required."
+            ).get_failure_response()
+        
+        now = timezone.now()
+        
+        try:
+            if user_type == 'company':
+                user = LaunchpadCompanies.objects.get(
+                    reset_token=token,
+                    reset_token_expires__gt=now
+                )
+                user_name = user.name or user.poc_name
+            else:
+                user = LaunchpadRecruiters.objects.get(
+                    reset_token=token,
+                    reset_token_expires__gt=now
+                )
+                user_name = user.name
+            
+            return CustomResponse(
+                response={
+                    'valid': True,
+                    'user_name': user_name,
+                    'expires_at': user.reset_token_expires
+                },
+                general_message="Token is valid"
+            ).get_success_response()
+            
+        except (LaunchpadCompanies.DoesNotExist, LaunchpadRecruiters.DoesNotExist):
+            return CustomResponse(
+                response={'valid': False},
+                general_message="Invalid or expired token"
+            ).get_failure_response()
+
+class ChangePasswordAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+    
+    def post(self, request):
+        user_type = request.auth["user_type"]
+        user_id = request.auth["id"]
+        
+        serializer = ChangePasswordSerializer(data=request.data)
+        
+        if not serializer.is_valid():
+            return CustomResponse(
+                message=serializer.errors,
+                general_message="Invalid request"
+            ).get_failure_response()
+
+        current_password = serializer.validated_data['current_password']
+        new_password = serializer.validated_data['new_password']
+        
+        try:
+            if user_type == 'company':
+                user = LaunchpadCompanies.objects.get(id=user_id)
+            else:
+                user = LaunchpadRecruiters.objects.get(id=user_id)
+            
+            # Verify current password
+            if not check_password(current_password, user.password):
+                return CustomResponse(
+                    message={'current_password': ['Current password is incorrect.']},
+                    general_message="Password change failed"
+                ).get_failure_response()
+            
+            # Update password
+            user.password = make_password(new_password)
+            user.save()
+            
+            return CustomResponse(
+                general_message="Password changed successfully."
+            ).get_success_response()
+            
+        except (LaunchpadCompanies.DoesNotExist, LaunchpadRecruiters.DoesNotExist):
+            return CustomResponse(
+                general_message="User not found."
+            ).get_failure_response()
+
