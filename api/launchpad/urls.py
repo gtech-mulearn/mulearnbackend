@@ -5,7 +5,8 @@ from .launchpad_views import (
     LoginCompanyAPI, LoginRecruiterAPI, GetCompanyInfoAPI, GetRecruiterInfoAPI,
     RefreshTokenAPI, CompanyVerifyAPI, ListJobsAPI, VerifyTaskAPI, ListLaunchpadStudentsAPI,
     SendJobInvitationsAPI, StudentJobInvitationsAPI, StudentApplyToJobAPI, AcceptedStudentsAPI,
-    ScheduleInterviewAPI, ApplicationFinalDecisionAPI, CompanyListVerifiedAPI, DeleteCompanyAPI,JobAPI
+    ScheduleInterviewAPI, ApplicationFinalDecisionAPI, CompanyListVerifiedAPI, DeleteCompanyAPI,JobAPI,ForgotPasswordAPI, ResetPasswordAPI, VerifyResetTokenAPI, ChangePasswordAPI,
+    DeleteCompanyAPI,
 )
 
 urlpatterns = [
@@ -59,4 +60,10 @@ urlpatterns = [
         "get-user-levels/<str:launchpad_id>/", launchpad_views.UserLevelsAPI.as_view()
     ),
     path("ig-leaderboard/", launchpad_views.IGLeaderboardView.as_view()),
+    
+    path('forgot-password/', ForgotPasswordAPI.as_view(), name='forgot-password'),
+    path('reset-password/', ResetPasswordAPI.as_view(), name='reset-password'),
+    path('verify-reset-token/', VerifyResetTokenAPI.as_view(), name='verify-reset-token'),
+    path('change-password/', ChangePasswordAPI.as_view(), name='change-password'),
+    
 ]

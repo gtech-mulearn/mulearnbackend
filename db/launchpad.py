@@ -16,6 +16,8 @@ class LaunchpadCompanies(models.Model):
     username = models.CharField(max_length=50, unique=True)
     password = models.CharField(max_length=255)
     is_verified = models.BooleanField(default=False)
+    reset_token = models.CharField(max_length=100, null=True, blank=True)
+    reset_token_expires = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -37,6 +39,8 @@ class LaunchpadRecruiters(models.Model):
     phone = models.CharField(max_length=20)
     password = models.CharField(max_length=255)
     role = models.CharField(max_length=50, null=True)
+    reset_token = models.CharField(max_length=100, null=True, blank=True)
+    reset_token_expires = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
