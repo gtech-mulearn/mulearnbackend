@@ -2921,7 +2921,7 @@ class ForgotPasswordAPI(APIView):
             
             # Send reset email
             try:
-                reset_link = f"{decouple.config('FR_DOMAIN_NAME')}/reset-password?token={reset_token}&type={user_type}"
+                reset_link = f"{decouple.config('LAUNCHPAD_FR_DOMAIN_NAME')}/reset-password?token={reset_token}&type={user_type}"
                 send_template_mail(
                     context={
                         "email": user_email,
