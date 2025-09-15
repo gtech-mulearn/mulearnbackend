@@ -10,7 +10,7 @@ from rest_framework.views import APIView
 from db.learning_circle import LearningCircle
 from db.learning_circle import UserCircleLink
 from db.organization import Organization,Department,District,State,Country
-from db.task import InterestGroup, KarmaActivityLog, UserIgLink
+from db.task import InterestGroup, KarmaActivityLog, Level, TaskList, UserIgLink
 from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import IntegrationType, OrganizationType, RoleType
@@ -575,7 +575,38 @@ class ListIGAPI(APIView):
 
     def get(self, request):
         return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
+class ListAllLevelInfo(APIView):
+    def get(self, request):
 
+        levels = Level.objects.all().order_by("level_order")
+        response = []
+        for level in levels:
+            tasks = TaskList.objects.filter(level=level).select_related("ig", "channel")
+            task_list = []
+            for task in tasks:
+                task_list.append({
+                    "task_name": task.title,
+                    "discord_link": getattr(task, "discord_link", ""),
+                    "hashtag": getattr(task, "hashtag", ""),
+                    "active": getattr(task, "active", False),
+                    "completed": False,  # You can update this logic as needed
+                    "karma": getattr(task, "karma", 0),
+                    "task_description": getattr(task, "description", None),
+                    "interest_group": {
+                        "id": getattr(task.ig, "id", None) if task.ig else None,
+                        "name": getattr(task.ig, "name", None) if task.ig else None
+                    },
+                    "submission_channel": {
+                        "id": str(getattr(task.channel, "id", "")) if task.channel else None,
+                        "name": getattr(task.channel, "name", None) if task.channel else None,
+                        "discord_id": getattr(task.channel, "discord_id", None) if task.channel else None
+                    }
+                })
+            response.append({
+                "name": level.name,
+                "tasks": task_list
+            })
+        return CustomResponse(response=response).get_success_response()
 
 class ListTopIgUsersAPI(APIView):
 
