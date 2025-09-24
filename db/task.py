@@ -41,6 +41,17 @@ class InterestGroup(models.Model):
     code = models.CharField(max_length=10, unique=True)
     icon = models.CharField(max_length=10)
     category =models.CharField(max_length=20,default="others",blank=False,null=False)
+    # Editable IG page fields
+    about = models.TextField(blank=True, null=True)
+    prerequisites = models.TextField(blank=True, null=True)
+    career_opportunities = models.TextField(blank=True, null=True)
+    foundation_deck_link = models.CharField(max_length=500, blank=True, null=True)
+    top_blogs = models.TextField(blank=True, null=True)
+    people_to_follow = models.TextField(blank=True, null=True)
+    leads = models.TextField(blank=True, null=True)
+    mentors = models.TextField(blank=True, null=True)
+    thinktank = models.TextField(blank=True, null=True)
+    office_hours = models.CharField(max_length=200, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="interest_group_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
