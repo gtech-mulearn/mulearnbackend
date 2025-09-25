@@ -11,6 +11,7 @@ from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
 )
+import json
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
@@ -58,6 +59,21 @@ class InterestGroupAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         request_data = request.data
+
+        # serialize JSON-able fields to strings for DB storage
+        for fld in [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+        ]:
+            if fld in request_data and not isinstance(request_data.get(fld), str):
+                try:
+                    request_data[fld] = json.dumps(request_data.get(fld))
+                except Exception:
+                    pass
 
         request_data["created_by"] = request_data["updated_by"] = user_id
 
@@ -142,6 +158,19 @@ class InterestGroupAPI(APIView):
         ig_old_code = ig.code
 
         request_data = request.data
+        for fld in [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+        ]:
+            if fld in request_data and not isinstance(request_data.get(fld), str):
+                try:
+                    request_data[fld] = json.dumps(request_data.get(fld))
+                except Exception:
+                    pass
         request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(
@@ -263,7 +292,6 @@ class InterestGroupGetAPI(APIView):
         """Allow IG Lead or Admin to update IG editable fields."""
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-
         ig = InterestGroup.objects.filter(id=pk).first()
         if not ig:
             return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
@@ -274,6 +302,19 @@ class InterestGroupGetAPI(APIView):
             return CustomResponse(general_message="You do not have permission to update this Interest Group").get_failure_response()
 
         request_data = request.data
+        for fld in [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+        ]:
+            if fld in request_data and not isinstance(request_data.get(fld), str):
+                try:
+                    request_data[fld] = json.dumps(request_data.get(fld))
+                except Exception:
+                    pass
         request_data["updated_by"] = user_id
 
         serializer = InterestGroupCreateUpdateSerializer(data=request_data, instance=ig, partial=True)
