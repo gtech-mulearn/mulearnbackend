@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>New Job Opportunity - {{ user.job_title }} at {{ user.company_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; padding: 40px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <!-- Banner Image -->
+                    <tr>
+                        <td style="padding: 0; text-align: center;">
+                            <img src="https://v5.airtableusercontent.com/v3/u/43/43/1754222400000/przaIINp0BzlkJDHFgRzAw/yRGHxgMiBu6DNOeCK5jsUv-hgSKK5hiyIJJY7MoYonIsz8LOsKU6lWBNTEPL3fQ5iMRSrxVUXWUCQYXE3F18zABgv0SV_16a_80wNFLS5SgtdqoCQSDusXIrjv7GgcDJLZhZXGGsz3GYtS9ICOAebbr-J23p3jaeRh4_StY3W2Mo2qfzMAbWWG4doieEwT9_/i0fBjKpP5e5Ji2FQ_cjKiBPsrYHFpF8JxYSrOvQ0fHw" alt="Launchpad 2025 Banner" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
+                        </td>
+                    </tr>
+                    <!-- Logo -->
+                    <tr>
+                        <td style="padding: 20px 32px; text-align: center;">
+                            <img src="https://v5.airtableusercontent.com/v3/u/43/43/1754222400000/W59Zij2JQfQSzhucS72jww/7DwNSU6qOV_E_8KXqb7eGAHzyeGB4zfdSot2avJ4BSi54I-399d31KsQnP2wkFXUOK0nBT3xFbHdAYf7qk5TM7rWd2kiV35P6og78g19ALAnviwgwzwDPHTF3mFVch4OP0dzl_mBmTxP3CjM5thFrlKy3UlpJaxnqD5IxjQWz30/w2r2MK5WzLxIfBOGSEMev6e7ythVsdHlep6lFEGabaA" alt="Launchpad Logo" style="width: auto; max-width: 150px; height: auto;" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 32px 32px;">
+                            <h2 style="margin-top:0; color: #ff6b35; text-align: center;"><strong>Job Application Invitation</strong></h2>
+                            <p><strong>Dear {{ user.full_name }},</strong></p>
+                            <p>We are pleased to inform you that <strong>{{ user.company_name }}</strong> has invited you to apply for the <strong>{{ user.job_title }}</strong> position based on your qualifications and achievements within the µLearn community.</p>
+                            
+                            <p><strong>Position Details:</strong></p>
+                            <ul style="padding-left: 20px; margin: 0;">
+                                <li style="margin-bottom: 8px;"><strong>Company:</strong> {{ user.company_name }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Position:</strong> {{ user.job_title }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Domain:</strong> {{ user.job_domain }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Location:</strong> {{ user.job_location }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Job Type:</strong> {{ user.job_type }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Salary Range:</strong> {{ user.salary_range }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Required Skills:</strong> {{ user.skills }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Minimum Karma Required:</strong> {{ user.minimum_karma }} points</li>
+                                {% if user.opening_type == "Task" %}
+                                <li style="margin-bottom: 8px;"><strong>Opening Type:</strong> <em>Task-based Position</em></li>
+                                {% endif %}
+                            </ul>
+                            
+                            <p>
+                                Your profile meets the required qualifications, including the minimum karma requirement of <strong>{{ user.minimum_karma }} points</strong>, and your skills align with the position requirements.
+                            </p>
+                            
+                            <p style="text-align: center; margin: 32px 0;">
+                                <a href="{{ base_url }}/dashboard/launchpad/jobs" 
+                                   style="display: inline-block; 
+                                          background: #ff6b35; 
+                                          color: #fff; 
+                                          padding: 12px 24px; 
+                                          text-decoration: none; 
+                                          border-radius: 6px; 
+                                          font-weight: bold;">
+                                    View Job Details & Apply
+                                </a>
+                            </p>
+                            
+                            <p>To proceed with your application, please log in to your µLearn dashboard to review the complete job description and submit your application materials.</p>
+                            
+                            <p>If you have any questions regarding this opportunity, please contact our support team.</p>
+                            
+                            <p style="margin-top:32px; color: #ff6b35; font-weight: 600;">
+                                Warm regards,<br>
+                                <strong>Team Launchpad</strong>
+                            </p>
+                            
+                            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 32px 0;">
+                            
+                            <p style="font-size: 12px; color: #6b7280; text-align: center;">
+                                This email was sent because you are registered on the µLearn platform and have been specifically invited by {{ user.company_name }} for this job opportunity.
+                                <br>
+                                <a href="{{ base_url }}" style="color: #ff6b35;">Visit µLearn Platform</a>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #f8fafc; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+                                &copy; <strong>{{ now|date:"Y" }}</strong> <em>Launchpad Kerala</em>. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Legal note -->
+                <div style="max-width:600px;margin:20px auto 0;padding:0 20px;">
+                    <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;">
+                        This email was sent to <strong>{{ user.email }}</strong>. You received this because you are registered with <strong>Launchpad Kerala</strong> and have been specifically invited by {{ user.company_name }} for this job opportunity.
+                    </p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>

@@ -1,0 +1,99 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Congratulations! Job Offer - {{ user.job_title }} at {{ user.company_name }}</title>
+</head>
+<body style="font-family: Arial, sans-serif; background: #f8fafc; margin: 0; padding: 0;">
+    <table width="100%" cellpadding="0" cellspacing="0" style="background: #f8fafc; padding: 40px 0;">
+        <tr>
+            <td align="center">
+                <table width="600" cellpadding="0" cellspacing="0" style="background: #fff; border-radius: 8px; border: 1px solid #e5e7eb;">
+                    <!-- Banner Image -->
+                    <tr>
+                        <td style="padding: 0; text-align: center;">
+                            <img src="https://v5.airtableusercontent.com/v3/u/43/43/1754222400000/przaIINp0BzlkJDHFgRzAw/yRGHxgMiBu6DNOeCK5jsUv-hgSKK5hiyIJJY7MoYonIsz8LOsKU6lWBNTEPL3fQ5iMRSrxVUXWUCQYXE3F18zABgv0SV_16a_80wNFLS5SgtdqoCQSDusXIrjv7GgcDJLZhZXGGsz3GYtS9ICOAebbr-J23p3jaeRh4_StY3W2Mo2qfzMAbWWG4doieEwT9_/i0fBjKpP5e5Ji2FQ_cjKiBPsrYHFpF8JxYSrOvQ0fHw" alt="Launchpad 2025 Banner" style="width: 100%; max-width: 600px; height: auto; display: block; border-radius: 8px 8px 0 0;" />
+                        </td>
+                    </tr>
+                    <!-- Logo -->
+                    <tr>
+                        <td style="padding: 20px 32px; text-align: center;">
+                            <img src="https://v5.airtableusercontent.com/v3/u/43/43/1754222400000/W59Zij2JQfQSzhucS72jww/7DwNSU6qOV_E_8KXqb7eGAHzyeGB4zfdSot2avJ4BSi54I-399d31KsQnP2wkFXUOK0nBT3xFbHdAYf7qk5TM7rWd2kiV35P6og78g19ALAnviwgwzwDPHTF3mFVch4OP0dzl_mBmTxP3CjM5thFrlKy3UlpJaxnqD5IxjQWz30/w2r2MK5WzLxIfBOGSEMev6e7ythVsdHlep6lFEGabaA" alt="Launchpad Logo" style="width: auto; max-width: 150px; height: auto;" />
+                        </td>
+                    </tr>
+                    <tr>
+                        <td style="padding: 0 32px 32px;">
+                            <h2 style="margin-top:0; color: #ff6b35; text-align: center;"><strong>Job Offer - You've Been Selected</strong></h2>
+                            <p><strong>Dear {{ user.full_name }},</strong></p>
+                            <p>µLearn Foundation</p>
+                            
+                            <p style="margin: 24px 0; padding: 20px; background: #f0fdf4; border-radius: 8px; color: #166534; text-align: center;">
+                                We are pleased to inform you that <strong>{{ user.company_name }}</strong> has selected you for the <strong>{{ user.job_title }}</strong> position.
+                            </p>
+                            
+                            <p><strong>Job Offer Details:</strong></p>
+                            <ul style="padding-left: 20px; margin: 0;">
+                                <li style="margin-bottom: 8px;"><strong>Position:</strong> {{ user.job_title }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Company:</strong> {{ user.company_name }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Hiring Manager:</strong> {{ user.recruiter_name }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Domain:</strong> {{ user.job_domain }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Location:</strong> {{ user.job_location }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Application Date:</strong> {{ user.application_date }}</li>
+                                <li style="margin-bottom: 8px;"><strong>Decision Date:</strong> {{ user.decision_date }}</li>
+                            </ul>
+                            
+                            <p>
+                                After careful consideration of your application submitted on <strong>{{ user.application_date }}</strong>, {{ user.company_name }} has decided to move forward with your candidacy.
+                            </p>
+                            
+                            <p>
+                                The recruiter will contact you directly with further details regarding the position.
+                            </p>
+                            
+                            <div style="text-align: center; margin: 32px 0;">
+                                <a href="{{ base_url }}/dashboard/launchpad/jobs" 
+                                   style="display: inline-block; 
+                                          background: linear-gradient(135deg, #16a34a, #15803d); 
+                                          color: #fff; 
+                                          padding: 16px 32px; 
+                                          text-decoration: none; 
+                                          border-radius: 8px; 
+                                          font-weight: bold; 
+                                          font-size: 16px; 
+                                          box-shadow: 0 4px 12px rgba(22, 163, 74, 0.3);">
+                                    View Application Status
+                                </a>
+                            </div>
+                            
+                            <p>
+                                Please monitor your email and phone for further communication from {{ user.company_name }}. If you have any questions, you may contact {{ user.recruiter_name }} directly.
+                            </p>
+                            
+                            <p style="margin-top:32px; color: #ff6b35; font-weight: 600;">
+                                Best regards,<br>
+                                <strong>Team Launchpad</strong>
+                            </p>
+                        </td>
+                    </tr>
+                    
+                    <!-- Footer -->
+                    <tr>
+                        <td style="background: #f8fafc; padding: 16px; text-align: center; border-top: 1px solid #e5e7eb;">
+                            <p style="font-size: 13px; color: #6b7280; margin: 0;">
+                                &copy; <strong>{{ now|date:"Y" }}</strong> <em>Launchpad Kerala</em>. All rights reserved.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <!-- Legal note -->
+                <div style="max-width:600px;margin:20px auto 0;padding:0 20px;">
+                    <p style="font-size:12px;color:#9ca3af;text-align:center;margin:0;">
+                        You were selected by <strong>{{ user.recruiter_name }}</strong> from <strong>{{ user.company_name }}</strong> through <strong>Launchpad Kerala</strong>.
+                    </p>
+                </div>
+            </td>
+        </tr>
+    </table>
+</body>
+</html>
