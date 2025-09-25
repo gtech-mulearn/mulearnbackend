@@ -608,3 +608,63 @@ class UserProfileUpdateSerializer(serializers.ModelSerializer):
         return LaunchPadUserCollegeLink.objects.filter(user=obj).values_list(
             "college_id", "college__title"
         )
+
+
+class ForgotPasswordSerializer(serializers.Serializer):
+    email = serializers.EmailField(required=True)
+    user_type = serializers.ChoiceField(choices=[('company', 'Company'), ('recruiter', 'Recruiter')])
+
+    def validate(self, data):
+        email = data.get('email')
+        user_type = data.get('user_type')
+        
+        if user_type == 'company':
+            if not LaunchpadCompanies.objects.filter(poc_email=email).exists():
+                raise serializers.ValidationError("No company found with this email.")
+        else:
+            if not LaunchpadRecruiters.objects.filter(email=email).exists():
+                raise serializers.ValidationError("No recruiter found with this email.")
+        
+        return data
+
+class ResetPasswordSerializer(serializers.Serializer):
+    token = serializers.CharField(required=True)
+    new_password = serializers.CharField(min_length=8, required=True)
+    confirm_password = serializers.CharField(min_length=8, required=True)
+    user_type = serializers.ChoiceField(choices=[('company', 'Company'), ('recruiter', 'Recruiter')])
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("Passwords don't match.")
+        
+        token = data.get('token')
+        user_type = data.get('user_type')
+        
+        now = timezone.now()
+        
+        if user_type == 'company':
+            user = LaunchpadCompanies.objects.filter(
+                reset_token=token,
+                reset_token_expires__gt=now
+            ).first()
+        else:
+            user = LaunchpadRecruiters.objects.filter(
+                reset_token=token,
+                reset_token_expires__gt=now
+            ).first()
+        
+        if not user:
+            raise serializers.ValidationError("Invalid or expired reset token.")
+        
+        data['user'] = user
+        return data
+
+class ChangePasswordSerializer(serializers.Serializer):
+    current_password = serializers.CharField(required=True)
+    new_password = serializers.CharField(min_length=8, required=True)
+    confirm_password = serializers.CharField(min_length=8, required=True)
+
+    def validate(self, data):
+        if data['new_password'] != data['confirm_password']:
+            raise serializers.ValidationError("New passwords don't match.")
+        return data
