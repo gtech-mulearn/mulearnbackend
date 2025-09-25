@@ -44,7 +44,6 @@ class InterestGroup(models.Model):
     about = models.TextField(blank=True, null=True)
     prerequisites = models.TextField(blank=True, null=True)
     career_opportunities = models.TextField(blank=True, null=True)
-    foundation_deck_link = models.CharField(max_length=500, blank=True, null=True)
     top_blogs = models.TextField(blank=True, null=True)
     people_to_follow = models.TextField(blank=True, null=True)
     resource = models.TextField(blank=True, null=True)
