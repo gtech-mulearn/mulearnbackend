@@ -61,6 +61,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
     percentile = serializers.SerializerMethodField()
+    
+    # Enhanced profile fields
+    bio = serializers.CharField(required=False, allow_blank=True)
+    projects = serializers.JSONField(default=list, required=False)
+    experience = serializers.JSONField(default=list, required=False)
+    projects_count = serializers.SerializerMethodField()
+    experience_count = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -82,6 +89,11 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
             "percentile",
+            "bio",
+            "projects",
+            "experience",
+            "projects_count",
+            "experience_count",
         )
 
     def _get_user_org_link(self, obj, org_type):
@@ -198,6 +210,14 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
             )
         return interest_groups
+
+    def get_projects_count(self, obj):
+        """Return the number of projects"""
+        return len(obj.projects) if obj.projects else 0
+
+    def get_experience_count(self, obj):
+        """Return the number of experience entries"""
+        return len(obj.experience) if obj.experience else 0
 
 
 class UserLevelSerializer(serializers.ModelSerializer):
@@ -372,6 +392,36 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
             return super().update(instance, validated_data)
 
+    def validate_projects(self, value):
+        """Validate projects JSON structure"""
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Projects must be a list.")
+        
+        for project in value:
+            if not isinstance(project, dict):
+                raise serializers.ValidationError("Each project must be an object.")
+            
+            if 'title' not in project or not isinstance(project['title'], str):
+                raise serializers.ValidationError("Each project must have a 'title' field.")
+        
+        return value
+
+    def validate_experience(self, value):
+        """Validate experience JSON structure"""
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Experience must be a list.")
+        
+        for exp in value:
+            if not isinstance(exp, dict):
+                raise serializers.ValidationError("Each experience entry must be an object.")
+            
+            required_fields = ['role', 'company']
+            for field in required_fields:
+                if field not in exp or not isinstance(exp[field], str):
+                    raise serializers.ValidationError(f"Each experience entry must have a '{field}' field.")
+        
+        return value
+
     class Meta:
         model = User
         fields = [
@@ -382,6 +432,9 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "gender",
             "dob",
             "district",
+            "bio",
+            "projects",
+            "experience",
         ]
 
 
