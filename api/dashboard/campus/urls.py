@@ -58,6 +58,27 @@ urlpatterns = [
         campus_views.TransferIGRoleAPI.as_view(),
         name="transfer-lead-role",
     ),
+    # Campus Execom Management endpoints
+    path(
+        "<str:college_id>/execom/",
+        campus_views.view_campus_execom,
+        name="view-campus-execom",
+    ),
+    path(
+        "<str:college_id>/execom/add/",
+        campus_views.add_execom_member,
+        name="add-execom-member",
+    ),
+    path(
+        "<str:college_id>/execom/remove/<str:uid>/",
+        campus_views.remove_execom_member,
+        name="remove-execom-member",
+    ),
+    path(
+        "users/search/",
+        campus_views.search_users_for_execom,
+        name="search-users-for-execom",
+    ),
     path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),

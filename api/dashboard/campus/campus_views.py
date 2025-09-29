@@ -1,8 +1,13 @@
 from django.db.models import Count, F
 from django.db.models import Q
 from rest_framework.views import APIView
+from rest_framework.decorators import api_view, permission_classes
+from rest_framework.permissions import IsAuthenticated
+from rest_framework.response import Response
+from rest_framework import status
+from django.shortcuts import get_object_or_404
 
-from db.organization import Organization, UserOrganizationLink
+from db.organization import Organization, UserOrganizationLink, College, CampusExecom
 from db.task import Level, Wallet, InterestGroup
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -629,3 +634,201 @@ class TransferIGRoleAPI(APIView):
                 general_message="Assigned new Ig lead successfully"
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+
+# Campus Execom Management APIs
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def view_campus_execom(request, college_id):
+    """
+    GET /api/campus/:id/execom
+    View all executive committee members for a specific college
+    """
+    try:
+        college = get_object_or_404(College, id=college_id)
+        
+        # Get all execom members for this college
+        execom_members = CampusExecom.objects.filter(college=college).select_related('user', 'college__org')
+        
+        # Format the response
+        members_data = []
+        for member in execom_members:
+            members_data.append({
+                'uid': member.user.id,
+                'name': member.user.full_name,
+                'email': member.user.email,
+                'role': member.role,
+                'added_at': member.created_at.isoformat(),
+            })
+        
+        return CustomResponse(
+            response={
+                'college': {
+                    'id': college.id,
+                    'name': college.org.title,
+                    'code': college.org.code,
+                },
+                'execom_members': members_data,
+                'total_members': len(members_data)
+            }
+        ).get_success_response()
+        
+    except Exception as e:
+        return CustomResponse(
+            general_message=f'Error fetching execom members: {str(e)}'
+        ).get_failure_response()
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def add_execom_member(request, college_id):
+    """
+    POST /api/campus/:id/execom
+    Add a new member to the executive committee
+    
+    Expected payload:
+    {
+        "user_id": "uuid",
+        "role": "President"
+    }
+    """
+    try:
+        college = get_object_or_404(College, id=college_id)
+        
+        # Get data from request
+        user_id = request.data.get('user_id')
+        role = request.data.get('role')
+        
+        # Validate required fields
+        if not user_id or not role:
+            return CustomResponse(
+                general_message='user_id and role are required fields'
+            ).get_failure_response()
+        
+        # Validate user exists
+        try:
+            user = User.objects.get(id=user_id)
+        except User.DoesNotExist:
+            return CustomResponse(
+                general_message='User not found'
+            ).get_failure_response()
+        
+        # Validate role length
+        if len(role) > 100:
+            return CustomResponse(
+                general_message='Role name too long (max 100 characters)'
+            ).get_failure_response()
+        
+        # Check if this combination already exists
+        if CampusExecom.objects.filter(college=college, user=user, role=role).exists():
+            return CustomResponse(
+                general_message='This user already has this role in this college execom'
+            ).get_failure_response()
+        
+        # Create execom member
+        execom_member = CampusExecom.objects.create(
+            college=college,
+            user=user,
+            role=role,
+            created_by=request.user,
+            updated_by=request.user
+        )
+        
+        return CustomResponse(
+            general_message='Execom member added successfully',
+            response={
+                'id': execom_member.id,
+                'user': {
+                    'id': user.id,
+                    'name': user.full_name,
+                    'email': user.email,
+                },
+                'role': execom_member.role,
+                'added_at': execom_member.created_at.isoformat(),
+            }
+        ).get_success_response()
+        
+    except Exception as e:
+        return CustomResponse(
+            general_message=f'Error adding execom member: {str(e)}'
+        ).get_failure_response()
+
+
+@api_view(['DELETE'])
+@permission_classes([IsAuthenticated])
+def remove_execom_member(request, college_id, uid):
+    """
+    DELETE /api/campus/:id/execom/:uid
+    Remove a member from the executive committee
+    """
+    try:
+        college = get_object_or_404(College, id=college_id)
+        
+        # Find the execom member
+        try:
+            execom_member = CampusExecom.objects.get(
+                college=college,
+                user__id=uid
+            )
+        except CampusExecom.DoesNotExist:
+            return CustomResponse(
+                general_message='Execom member not found'
+            ).get_failure_response()
+        
+        # Store member info before deletion
+        member_name = execom_member.user.full_name
+        member_role = execom_member.role
+        
+        # Delete the member
+        execom_member.delete()
+        
+        return CustomResponse(
+            general_message=f'Successfully removed {member_name} from {member_role} position'
+        ).get_success_response()
+        
+    except Exception as e:
+        return CustomResponse(
+            general_message=f'Error removing execom member: {str(e)}'
+        ).get_failure_response()
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def search_users_for_execom(request):
+    """
+    GET /api/users/search?q=query
+    Search for users to add to execom
+    """
+    try:
+        query = request.GET.get('q', '')
+        
+        if len(query) < 2:
+            return CustomResponse(
+                general_message='Query must be at least 2 characters long'
+            ).get_failure_response()
+        
+        # Search users by email, full_name, or muid
+        users = User.objects.filter(
+            Q(email__icontains=query) |
+            Q(full_name__icontains=query) |
+            Q(muid__icontains=query)
+        )[:50]  # Limit to 50 results
+        
+        users_data = []
+        for user in users:
+            users_data.append({
+                'id': user.id,
+                'name': user.full_name,
+                'email': user.email,
+                'muid': user.muid,
+            })
+        
+        return CustomResponse(
+            response=users_data
+        ).get_success_response()
+        
+    except Exception as e:
+        return CustomResponse(
+            general_message=f'Error searching users: {str(e)}'
+        ).get_failure_response()

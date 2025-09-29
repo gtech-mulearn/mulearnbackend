@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.db.models import Sum
 from rest_framework import serializers
 
-from db.organization import Organization, UserOrganizationLink, College
+from db.organization import Organization, UserOrganizationLink, College, CampusExecom
 from db.task import KarmaActivityLog
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
@@ -296,3 +296,125 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
         user_role_link = UserRoleLink.objects.create(**validated_data)
         return user_role_link
+
+
+# Campus Execom Management Serializers
+
+class UserBasicSerializer(serializers.ModelSerializer):
+    """Basic user serializer for execom responses"""
+    name = serializers.CharField(source='full_name', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'muid']
+        read_only_fields = ['id', 'name', 'email', 'muid']
+
+
+class CollegeBasicSerializer(serializers.ModelSerializer):
+    """Basic college serializer for execom responses"""
+    name = serializers.CharField(source='org.title', read_only=True)
+    code = serializers.CharField(source='org.code', read_only=True)
+    
+    class Meta:
+        model = College
+        fields = ['id', 'name', 'code']
+        read_only_fields = ['id', 'name', 'code']
+
+
+class CampusExecomSerializer(serializers.ModelSerializer):
+    """Serializer for CampusExecom model"""
+    user = UserBasicSerializer(read_only=True)
+    college = CollegeBasicSerializer(read_only=True)
+    user_id = serializers.CharField(write_only=True)
+    college_id = serializers.CharField(write_only=True)
+    added_at = serializers.DateTimeField(source='created_at', read_only=True)
+    
+    class Meta:
+        model = CampusExecom
+        fields = [
+            'id', 'college', 'user', 'role', 'added_at', 
+            'college_id', 'user_id'
+        ]
+        read_only_fields = ['id', 'added_at']
+    
+    def validate_role(self, value):
+        """Validate role field"""
+        if not value or not value.strip():
+            raise serializers.ValidationError("Role cannot be empty")
+        
+        if len(value) > 100:
+            raise serializers.ValidationError("Role name too long (max 100 characters)")
+        
+        return value.strip()
+    
+    def validate_user_id(self, value):
+        """Validate that user exists"""
+        try:
+            User.objects.get(id=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError("User not found")
+        return value
+    
+    def validate_college_id(self, value):
+        """Validate that college exists"""
+        try:
+            College.objects.get(id=value)
+        except College.DoesNotExist:
+            raise serializers.ValidationError("College not found")
+        return value
+    
+    def validate(self, attrs):
+        """Validate unique constraint"""
+        college_id = attrs.get('college_id')
+        user_id = attrs.get('user_id')
+        role = attrs.get('role')
+        
+        # Check if this combination already exists
+        if CampusExecom.objects.filter(
+            college_id=college_id,
+            user_id=user_id,
+            role=role
+        ).exists():
+            raise serializers.ValidationError(
+                "This user already has this role in this college execom"
+            )
+        
+        return attrs
+    
+    def create(self, validated_data):
+        """Create new execom member"""
+        college = College.objects.get(id=validated_data['college_id'])
+        user = User.objects.get(id=validated_data['user_id'])
+        current_user = self.context.get('request').user if self.context.get('request') else None
+        
+        return CampusExecom.objects.create(
+            college=college,
+            user=user,
+            role=validated_data['role'],
+            created_by=current_user,
+            updated_by=current_user,
+            id=str(uuid.uuid4())
+        )
+
+
+class CampusExecomListSerializer(serializers.ModelSerializer):
+    """Simplified serializer for listing execom members"""
+    user_id = serializers.CharField(source='user.id', read_only=True)
+    user_name = serializers.CharField(source='user.full_name', read_only=True)
+    user_email = serializers.CharField(source='user.email', read_only=True)
+    added_at = serializers.DateTimeField(source='created_at', read_only=True)
+    
+    class Meta:
+        model = CampusExecom
+        fields = ['id', 'user_id', 'user_name', 'user_email', 'role', 'added_at']
+        read_only_fields = ['id', 'added_at']
+
+
+class UserSearchSerializer(serializers.ModelSerializer):
+    """Simplified user serializer for search results"""
+    name = serializers.CharField(source='full_name', read_only=True)
+    
+    class Meta:
+        model = User
+        fields = ['id', 'name', 'email', 'muid']
+        read_only_fields = ['id', 'name', 'email', 'muid']

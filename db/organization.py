@@ -236,3 +236,38 @@ class UnverifiedOrganization(models.Model):
     class Meta:
         managed = False
         db_table = 'unverified_organization'
+
+
+class CampusExecom(models.Model):
+    """
+    Campus Executive Committee Management Model
+    Tracks members of the executive committee for each campus/college
+    """
+    id = models.CharField(primary_key=True, max_length=36, default=lambda: str(uuid.uuid4()))
+    college = models.ForeignKey(College, on_delete=models.CASCADE, related_name='execom_members', 
+                               help_text='The college this execom member belongs to')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='campus_execom_roles',
+                            help_text='The user who is part of the executive committee')
+    role = models.CharField(max_length=100, help_text='Role of the user in the executive committee')
+    
+    # Audit fields following the existing pattern
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), 
+                                  db_column='updated_by', related_name='campus_execom_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), 
+                                  db_column='created_by', related_name='campus_execom_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'campus_execom'
+        # Unique constraint to prevent same user having same role in same college
+        constraints = [
+            models.UniqueConstraint(
+                fields=['college', 'user', 'role'],
+                name='unique_college_user_role'
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.user.full_name} - {self.role} at {self.college.org.title}"
