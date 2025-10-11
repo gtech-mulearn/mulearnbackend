@@ -1,0 +1,724 @@
+from datetime import datetime, timedelta
+from io import BytesIO
+
+import qrcode
+import requests
+from django.conf import settings
+from django.contrib.auth.hashers import make_password
+from django.core.files.base import ContentFile
+from django.core.files.storage import FileSystemStorage
+from django.db.models import Prefetch
+from PIL import Image
+from rest_framework.views import APIView
+from django.db.models import Sum
+from django.core.cache import cache
+from django.utils.timezone import now
+
+from db.organization import UserOrganizationLink
+from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink, UserLvlLink
+from db.user import (
+    Role,
+    Socials,
+    User,
+    UserDomains,
+    UserEndgoals,
+    UserRoleLink,
+    UserSettings,
+)
+from utils.permission import CustomizePermission, JWTUtils
+from utils.response import CustomResponse
+from utils.types import (
+    OrganizationType,
+    WebHookActions,
+    WebHookCategory,
+    TFPTasksHashtags,
+)
+from utils.utils import DiscordWebhooks
+from django.contrib.auth.hashers import check_password
+
+from . import profile_serializer
+from .profile_serializer import LinkSocials, ResetPasswordSerialzier
+from .profile_serializer import UserTermSerializer
+
+
+class UserProfileEditView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User Not Exists"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserProfileEditSerializer(user, many=False)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    def patch(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id)
+
+        serializer = profile_serializer.UserProfileEditSerializer(
+            user, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_NAME.value,
+                WebHookActions.UPDATE.value,
+                user_id,
+            )
+
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    def delete(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id).delete()
+
+        return CustomResponse(
+            general_message="User deleted successfully"
+        ).get_success_response()
+
+
+class UserIgEditView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        user_ig = InterestGroup.objects.filter(user_ig_link_ig__user_id=user_id).all()
+
+        serializer = profile_serializer.UserIgListSerializer(user_ig, many=True)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    def patch(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id)
+
+        serializer = profile_serializer.UserIgEditSerializer(
+            user, data=request.data, partial=True
+        )
+
+        if not serializer.is_valid():
+            return CustomResponse(response=serializer.errors).get_failure_response()
+
+        serializer.save()
+        DiscordWebhooks.general_updates(
+            WebHookCategory.USER.value,
+            WebHookActions.UPDATE.value,
+            user_id,
+        )
+        return CustomResponse(
+            general_message="Interest Group edited successfully"
+        ).get_success_response()
+
+
+class UserProfileAPI(APIView):
+    def get(self, request, muid=None):
+        user = (
+            User.objects.prefetch_related(
+                Prefetch(
+                    "user_organization_link_user",
+                    queryset=UserOrganizationLink.objects.select_related(
+                        "org", "department"
+                    ),
+                ),
+                Prefetch(
+                    "user_role_link_user",
+                    queryset=UserRoleLink.objects.select_related("role").filter(
+                        verified=True
+                    ),
+                    to_attr="verified_roles",
+                ),
+                Prefetch(
+                    "user_ig_link_user",
+                    queryset=UserIgLink.objects.select_related("ig"),
+                ),
+            )
+            .select_related("wallet_user")
+            .get(muid=muid or JWTUtils.fetch_muid(request))
+        )
+
+        if muid:
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+
+        serializer = profile_serializer.UserProfileSerializer(user, many=False)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class UserLogAPI(APIView):
+    def get(self, request, muid=None):
+        if muid is not None:
+            user = User.objects.filter(muid=muid).first()
+
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+            user_id = user.id
+
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+            user_id = JWTUtils.fetch_user_id(request)
+
+        karma_activity_log = (
+            KarmaActivityLog.objects.filter(user=user_id, appraiser_approved=True)
+            .select_related("task")
+            .order_by("-created_at")
+        )
+
+        if karma_activity_log is None:
+            return CustomResponse(
+                general_message="No karma details available for user"
+            ).get_success_response()
+
+        serializer = profile_serializer.UserLogSerializer(karma_activity_log, many=True)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class ShareUserProfileAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def put(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
+
+        if user_settings is None:
+            return CustomResponse(
+                general_message="No data available"
+            ).get_failure_response()
+
+        serializer = profile_serializer.ShareUserProfileUpdateSerializer(
+            user_settings, data=request.data, context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            general_message = (
+                "Unleash your vibe, share your profile!"
+                if user_settings.is_public
+                else "Embrace privacy, safeguard your profile."
+            )
+
+            return CustomResponse(
+                general_message=general_message
+            ).get_success_response()
+
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    # function for generating profile qr code
+
+    def get(self, request, uuid=None):
+        fs = FileSystemStorage()
+        if uuid is not None:
+            user = User.objects.filter(id=uuid).first()
+
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+            user_uuid = JWTUtils.fetch_user_id(request)
+            data = f"{settings.FR_DOMAIN_NAME}/profile/{user_uuid}"
+
+            qr = qrcode.QRCode(
+                version=1,
+                error_correction=qrcode.constants.ERROR_CORRECT_H,
+                box_size=10,
+                border=4,
+            )
+            qr.add_data(data)
+            qr.make(fit=True)
+
+            img = qr.make_image(fill_color="black", back_color="white")
+
+            logo_url = (
+                f"{settings.FR_DOMAIN_NAME}/favicon.ico/"  # Replace with your logo URL
+            )
+            logo_response = requests.get(logo_url)
+
+            if logo_response.status_code == 200:
+                logo_image = Image.open(BytesIO(logo_response.content))
+            else:
+                return CustomResponse(
+                    general_message="Failed to download the logo from the URL"
+                ).get_failure_response()
+
+            logo_width, logo_height = logo_image.size
+            basewidth = 100
+            wpercent = basewidth / float(logo_width)
+            hsize = int((float(logo_height) * float(wpercent)))
+            resized_logo = logo_image.resize((basewidth, hsize))
+
+            QRcode = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_H)
+
+            QRcode.add_data(data)
+            QRcolor = "black"
+            QRimg = QRcode.make_image(fill_color=QRcolor, back_color="white").convert(
+                "RGB"
+            )
+
+            pos = (
+                (QRimg.size[0] - resized_logo.size[0]) // 2,
+                (QRimg.size[1] - resized_logo.size[1]) // 2,
+            )
+            # image = Image.open(BytesIO("image_response.content"))
+            QRimg.paste(resized_logo, pos)
+            image_io = BytesIO()
+            QRimg.save(image_io, format="PNG")
+            image_io.seek(0)
+            image_data: bytes = image_io.getvalue()
+            file_path = f"user/qr/{user_uuid}.png"
+            fs.exists(file_path) and fs.delete(file_path)
+            file = fs.save(file_path, ContentFile(image_io.read()))
+
+            return CustomResponse(
+                general_message="QR code image with logo saved locally"
+            ).get_success_response()
+
+
+class UserLevelsAPI(APIView):
+    def get(self, request, muid=None):
+        if muid is not None:
+            user = User.objects.filter(muid=muid).first()
+
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+
+            user_id = user.id
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+            user_id = JWTUtils.fetch_user_id(request)
+
+        user_levels_link_query = Level.objects.all().order_by("level_order")
+        serializer = profile_serializer.UserLevelSerializer(
+            user_levels_link_query, many=True, context={"user_id": user_id}
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class UserRankAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.filter(muid=muid).first()
+
+        if user is None:
+            return CustomResponse(general_message="Invalid muid").get_failure_response()
+
+        roles = [role.role.title for role in UserRoleLink.objects.filter(user=user)]
+
+        serializer = profile_serializer.UserRankSerializer(
+            user, many=False, context={"roles": roles}
+        )
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class GetSocialsAPI(APIView):
+    def get(self, request, muid=None):
+        if muid is not None:
+            user = User.objects.filter(muid=muid).first()
+            if user is None:
+                return CustomResponse(
+                    general_message="Invalid muid"
+                ).get_failure_response()
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+
+            user_id = user.id
+        else:
+            JWTUtils.is_jwt_authenticated(request)
+            user_id = JWTUtils.fetch_user_id(request)
+
+        social_instance = Socials.objects.filter(user_id=user_id).first()
+
+        serializer = LinkSocials(instance=social_instance)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class SocialsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def put(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        social_instance = Socials.objects.filter(user_id=user_id).first()
+
+        serializer = LinkSocials(
+            instance=social_instance, data=request.data, context={"request": request}
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                general_message="Socials Updated"
+            ).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+
+class ResetPasswordAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def post(self, request):
+        user_muid = JWTUtils.fetch_muid(request)
+        user = User.objects.filter(muid=user_muid).first()
+
+        if user is None:
+            return CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        serializer = ResetPasswordSerialzier(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(response=serializer.errors).get_failure_response()
+
+        current_password = serializer.validated_data.get("current_password")
+        new_password = serializer.validated_data.get("password")
+
+        if not check_password(current_password, user.password):
+            return CustomResponse(
+                general_message="Current Password is incorrect"
+            ).get_failure_response()
+
+        hashed_pwd = make_password(new_password)
+
+        user.password = hashed_pwd
+        user.save()
+        return CustomResponse(
+            general_message="New Password Saved Successfully"
+        ).get_success_response()
+
+
+class QrcodeRetrieveAPI(APIView):
+    def get(self, request, uuid):
+        try:
+            user = User.objects.prefetch_related().get(
+                id=uuid or JWTUtils.fetch_user_id(request)
+            )
+
+            user_settings = UserSettings.objects.filter(user_id=user).first()
+
+            if not user_settings.is_public:
+                return CustomResponse(
+                    general_message="Private Profile"
+                ).get_failure_response()
+
+            serializer = profile_serializer.UserShareQrcode(
+                user, many=False, context={"request": request}
+            )
+
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given UUID seems to be invalid"
+            ).get_failure_response()
+
+
+class BadgesAPI(APIView):
+    def get(self, request, muid):
+        try:
+            user = User.objects.get(muid=muid)
+            hastags = TFPTasksHashtags.get_all_values()
+            response_data = {"full_name": user.full_name, "completed_tasks": []}
+            for tag in hastags:
+                if log := KarmaActivityLog.objects.filter(
+                    user=user, task__hashtag=tag
+                ).first():
+                    response_data["completed_tasks"].append(log.task.title)
+            return CustomResponse(response=response_data).get_success_response()
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The given muid seems to be invalid"
+            ).get_failure_response()
+
+
+class UsertermAPI(APIView):
+    def post(self, request, muid):
+        try:
+            user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The user does not exist"
+            ).get_failure_response()
+
+        try:
+            settings = UserSettings.objects.get(user=user)
+        except UserSettings.DoesNotExist:
+            return CustomResponse(
+                response="The user settings don't exist"
+            ).get_failure_response()
+
+        serializer = UserTermSerializer(
+            settings, data={"is_userterms_approved": True}, partial=True
+        )
+        if serializer.is_valid():
+            settings = serializer.save()
+            if settings.is_userterms_approved:
+                response_data = {
+                    "message": "User terms have been successfully approved."
+                }
+                return CustomResponse(response=response_data).get_success_response()
+            else:
+                response_data = {
+                    "message": "The user terms have not been successfully approved."
+                }
+                return CustomResponse(response=response_data).get_failure_response()
+        return CustomResponse(response="Invalid data provided").get_failure_response()
+
+    def get(self, request, muid):
+        try:
+            user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                response="The user does not exist"
+            ).get_failure_response()
+
+        try:
+            settings = UserSettings.objects.get(user=user)
+        except UserSettings.DoesNotExist:
+            return CustomResponse(
+                response="The user settings don't exist"
+            ).get_failure_response()
+
+        if settings.is_userterms_approved:
+            response_data = {"message": "User terms are approved."}
+            return CustomResponse(response=response_data).get_success_response()
+        else:
+            response_data = {"message": "User terms are not approved."}
+            return CustomResponse(response=response_data).get_failure_response()
+
+
+from datetime import datetime, timedelta
+from django.db.models import Sum
+from rest_framework.views import APIView
+
+
+class KarmaFeedAPI(APIView):
+    def get(self, request):
+        today = datetime.now().date()
+
+        cache_key = f"karma_feed_{today}"
+        cached_response = cache.get(cache_key)
+        if cached_response:
+            return CustomResponse(response=cached_response).get_success_response()
+
+        first_day_of_last_month = (today.replace(day=1) - timedelta(days=1)).replace(
+            day=1
+        )
+        last_day_of_last_month = today.replace(day=1) - timedelta(days=1)
+
+        top_user = (
+            KarmaActivityLog.objects.filter(
+                appraiser_approved=True,
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
+            )
+            .values("user_id", "user__full_name", "user__muid")
+            .annotate(total_karma=Sum("karma"))
+            .order_by("-total_karma")  # Sort by highest total_karma
+            .first()  # Get the first entry (highest total_karma)
+        )
+
+        top_user = {
+            "karma": top_user["total_karma"] if top_user else 0,
+            "full_name": top_user["user__full_name"] if top_user else None,
+            "muid": top_user["user__muid"] if top_user else None,
+        }
+
+        # Fetch the top college based on last month's karma
+        top_org = (
+            KarmaActivityLog.objects.select_related("user")
+            .prefetch_related("user__user_organization_link_user__org")
+            .filter(
+                appraiser_approved=True,
+                created_at__date__range=(
+                    first_day_of_last_month,
+                    last_day_of_last_month,
+                ),
+            )
+            .values(
+                "user__user_organization_link_user__org__id",
+                "user__user_organization_link_user__org__title",
+            )
+            .annotate(total_karma=Sum("karma"))
+            .order_by("-total_karma")  # Sort by highest total_karma
+            .first()  # Get the first entry (highest total_karma)
+        )
+
+        top_college = {
+            "karma": top_org["total_karma"] if top_org else 0,
+            "name": (
+                top_org["user__user_organization_link_user__org__title"]
+                if top_org
+                else None
+            ),
+        }
+
+        response = {
+            "top_user": top_user,
+            "top_college": top_college,
+        }
+        try:
+            midnight = now().replace(hour=23, minute=59, second=59)
+            cache_timeout = (midnight - now()).seconds
+            cache.set(cache_key, response, cache_timeout)
+        except Exception as e:
+            print(e)
+            pass
+
+        return CustomResponse(response=response).get_success_response()
+
+
+
+class UserLevelFeedAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request):
+        if not JWTUtils.is_jwt_authenticated(request):
+            return CustomResponse(general_message="Unauthorized").get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        user_level = (
+            UserLvlLink.objects.select_related("level")
+            .filter(user_id=user_id)
+            .values("level_id", "level__level_order", "level__name", "level__karma")
+            .order_by("-created_at")
+            .first()
+        )
+        user_karma = (
+            KarmaActivityLog.objects.select_related("task")
+            .filter(
+                user_id=user_id,
+                appraiser_approved=True,
+                task__level_id=user_level.get("level_id"),
+            )
+            .annotate(total_karma=Sum("karma"))
+            .values("total_karma")
+            .first()
+        )
+        return CustomResponse(
+            response={
+                "level_order": user_level.get("level__level_order"),
+                "level_name": user_level.get("level__name"),
+                "level_karma": user_level.get("level__karma"),
+                "user_karma": user_karma.get("total_karma", 0) if user_karma else 0,
+            }
+        ).get_success_response()
+
+
+class UserPreferencesAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        domains = UserDomains.objects.filter(user_id=user_id).values_list(
+            "domain_name", flat=True
+        )
+        endgoals = UserEndgoals.objects.filter(user_id=user_id).values_list(
+            "endgoal_name", flat=True
+        )
+        orgs = (
+            UserOrganizationLink.objects.select_related("org")
+            .filter(
+                user_id=user_id,
+                org__org_type__in=[
+                    OrganizationType.COLLEGE.value,
+                    OrganizationType.COMPANY.value,
+                    OrganizationType.SCHOOL.value,
+                ],
+            )
+            .values("org_id", "org__title")
+        )
+        return CustomResponse(
+            response={
+                "domains": domains,
+                "endgoals": endgoals,
+                "orgs": [
+                    {"id": org.get("org_id"), "name": org.get("org__title")}
+                    for org in orgs
+                ],
+            }
+        ).get_success_response()
+
+    def patch(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user_settings = UserSettings.objects.filter(user_id=user_id).first()
+
+        if not user_settings:
+            return CustomResponse(
+                general_message="User settings not found"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPreferencesSerializer(
+            user_settings, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            return CustomResponse(
+                general_message="User settings updated successfully"
+            ).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
+    
+class UserPermuteAPI(APIView):
+    def get(self, request, muid):
+        user = User.objects.prefetch_related("user_domains", "user_organization_link_user__org").filter(muid=muid).first()
+        if user is None:
+            return  CustomResponse(
+                general_message="No user data available"
+            ).get_failure_response()
+
+        serializer = profile_serializer.UserPermuteSerializer(user, many=False)
+        return CustomResponse(response=serializer.data).get_success_response()

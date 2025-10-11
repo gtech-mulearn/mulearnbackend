@@ -1,0 +1,41 @@
+{% extends "mails/KKEM/base_kkem.html" %} {% block content %}
+<div style="background: transparent; width: 100%; height: 350px">
+  <center>
+    <h1
+      style="color: black; font-weight: 600; font-size: 30px; line-height: 1.1"
+    >
+      CONFIRMATION MAIL INCOMING!
+    </h1>
+    <p>
+      Hey {{ user.full_name }}, <br />
+      We got your request to link your μID with your DWMS ID. So here's an email
+      to seal the deal! Please cross check your μID and click the verify button
+      to lock in your request.
+    </p>
+    <div>
+      <a
+        href="https://mulearn.org/"
+        style="
+          text-decoration: none;
+          color: rgb(120, 84, 241);
+          line-height: 1.2;
+          font-size: 14px;
+        "
+      >
+        {{ user.muid }}
+      </a>
+    </div>
+    <div style="background: transparent; width: 100%; height: 17px"></div>
+
+    <a
+      href="{{ base_url }}/kkem/authorization/{{ user.token }}/"
+      style="width: 160px; height: 40px"
+    >
+      <img
+        style="width: 100px; height: 40px"
+        src="https://iili.io/HQKeAzP.png"
+        alt=""
+    /></a>
+  </center>
+</div>
+{% endblock %}

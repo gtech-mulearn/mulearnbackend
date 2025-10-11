@@ -1,0 +1,28 @@
+{% extends "mails/base_mail.html" %} {% block content %}
+    <div style="background: transparent; width: 100%; height: auto">
+        <div style="text-align: center;">
+            <h1 style="
+                color: black;
+                font-family: 'Poppins';
+                font-weight: 600;
+                font-size: 30px;">
+                Learning Circle Invitation
+            </h1>
+            <p
+            >
+                Hey there! You have been invited to join the {{ user.circle_name }} by {{ user.inviter_name }}.
+            </p>
+            <div style="width: 320px; padding: 20px; border: 2px solid #ccc; text-align: center;">
+                <div style="width: 100%; height: 10px; background: transparent"></div>
+                <a href="{{ base_url }}/api/v1/dashboard/lc/member/invite/status/{{ user.circle_id }}/{{ user.muid }}/accepted/"
+                   style="width: 160px; height: 40px; display: inline-block; margin: 10px;">
+                    Accept
+                </a>
+                <a href="{{ base_url }}/api/v1/dashboard/lc/member/invite/status/{{ user.circle_id }}/{{ user.muid }}/rejected/"
+                   style="width: 160px; height: 40px; display: inline-block; margin: 10px;">
+                    Decline
+                </a>
+            </div>
+        </div>
+    </div>
+{% endblock %}
