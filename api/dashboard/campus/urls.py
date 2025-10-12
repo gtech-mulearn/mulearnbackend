@@ -3,6 +3,17 @@ from django.urls import path
 from . import campus_views
 
 urlpatterns = [
+    # Campus Execom Management Routes
+    path(
+        "<str:campus_id>/execom/",
+        campus_views.CampusExecomAPI.as_view(),
+        name="campus-execom",
+    ),
+    path(
+        "<str:campus_id>/execom/<str:user_id>/",
+        campus_views.CampusExecomMemberAPI.as_view(),
+        name="campus-execom-member",
+    ),
     path(
         "campus-details/",
         campus_views.CampusDetailsAPI.as_view(),

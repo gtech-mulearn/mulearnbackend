@@ -10,6 +10,23 @@ from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
+from .models import CampusExecom
+
+class CampusExecomSerializer(serializers.ModelSerializer):
+    user_id = serializers.UUIDField(write_only=True)
+    user_name = serializers.SerializerMethodField(read_only=True)
+    user_email = serializers.SerializerMethodField(read_only=True)
+    
+    class Meta:
+        model = CampusExecom
+        fields = ['id', 'user_id', 'user_name', 'user_email', 'role', 'created_at']
+        read_only_fields = ['id', 'created_at']
+    
+    def get_user_name(self, obj):
+        return obj.user.name if obj.user else None
+    
+    def get_user_email(self, obj):
+        return obj.user.email if obj.user else None
 
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):

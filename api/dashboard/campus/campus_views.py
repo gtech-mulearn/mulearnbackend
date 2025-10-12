@@ -11,6 +11,150 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
 from .dash_campus_helper import get_user_college_link
+from .models import CampusExecom
+
+
+class CampusExecomAPI(APIView):
+    """
+    Campus Execom API
+    
+    This API view handles operations for campus executive committee members:
+    - GET: List all execom members for a specific campus
+    - POST: Add a new member to the execom (Admin only)
+    - DELETE: Remove a member from the execom (Admin only)
+    """
+    authentication_classes = [CustomizePermission]
+    
+    def get(self, request, campus_id):
+        """Get all execom members for a specific campus"""
+        try:
+            # Check if campus exists
+            campus = Organization.objects.filter(
+                id=campus_id, 
+                org_type=OrganizationType.COLLEGE.value
+            ).first()
+            
+            if not campus:
+                return CustomResponse(
+                    general_message="Campus not found"
+                ).get_failure_response()
+            
+            # Get all execom members for this campus
+            execom_members = CampusExecom.objects.filter(campus=campus)
+            serializer = serializers.CampusExecomSerializer(execom_members, many=True)
+            
+            return CustomResponse(
+                general_message="Campus execom members retrieved successfully",
+                data=serializer.data
+            ).get_success_response()
+            
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"Error retrieving campus execom members: {str(e)}"
+            ).get_failure_response()
+    
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request, campus_id):
+        """Add a new member to the execom (Admin only)"""
+        try:
+            # Check if campus exists
+            campus = Organization.objects.filter(
+                id=campus_id, 
+                org_type=OrganizationType.COLLEGE.value
+            ).first()
+            
+            if not campus:
+                return CustomResponse(
+                    general_message="Campus not found"
+                ).get_failure_response()
+            
+            # Validate request data
+            user_id = request.data.get('user_id')
+            role = request.data.get('role')
+            
+            if not user_id or not role:
+                return CustomResponse(
+                    general_message="User ID and role are required"
+                ).get_failure_response()
+            
+            # Check if user exists
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response()
+            
+            # Check if user is already in execom
+            existing_member = CampusExecom.objects.filter(campus=campus, user=user).first()
+            if existing_member:
+                return CustomResponse(
+                    general_message="User is already a member of this campus execom"
+                ).get_failure_response()
+            
+            # Create new execom member
+            execom_member = CampusExecom.objects.create(
+                campus=campus,
+                user=user,
+                role=role
+            )
+            
+            serializer = serializers.CampusExecomSerializer(execom_member)
+            
+            return CustomResponse(
+                general_message="Member added to campus execom successfully",
+                data=serializer.data
+            ).get_success_response()
+            
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"Error adding member to campus execom: {str(e)}"
+            ).get_failure_response()
+
+
+class CampusExecomMemberAPI(APIView):
+    """API for managing individual execom members"""
+    authentication_classes = [CustomizePermission]
+    
+    @role_required([RoleType.ADMIN.value])
+    def delete(self, request, campus_id, user_id):
+        """Remove a member from the execom (Admin only)"""
+        try:
+            # Check if campus exists
+            campus = Organization.objects.filter(
+                id=campus_id, 
+                org_type=OrganizationType.COLLEGE.value
+            ).first()
+            
+            if not campus:
+                return CustomResponse(
+                    general_message="Campus not found"
+                ).get_failure_response()
+            
+            # Check if user exists
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response()
+            
+            # Check if user is in execom
+            execom_member = CampusExecom.objects.filter(campus=campus, user=user).first()
+            if not execom_member:
+                return CustomResponse(
+                    general_message="User is not a member of this campus execom"
+                ).get_failure_response()
+            
+            # Delete execom member
+            execom_member.delete()
+            
+            return CustomResponse(
+                general_message="Member removed from campus execom successfully"
+            ).get_success_response()
+            
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"Error removing member from campus execom: {str(e)}"
+            ).get_failure_response()
 
 
 class CampusDetailsPublicAPI(APIView):
