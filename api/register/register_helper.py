@@ -13,7 +13,8 @@ def generate_muid(full_name):
     muid = f"{full_name}@mulearn"
 
     counter = 0
-    while User.objects.filter(muid=muid).exists():
+
+    while User.every.filter(muid=muid).exists():
         counter += 1
         muid = f"{full_name}-{counter}@mulearn"
 
