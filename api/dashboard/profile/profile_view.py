@@ -12,6 +12,8 @@ from PIL import Image
 from rest_framework.views import APIView
 from django.db.models import Sum
 from django.core.cache import cache
+from db.user import Role, UserRoleLink
+
 from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
@@ -103,6 +105,11 @@ class UserIgEditView(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
 
+        old_ig_links = list(user.user_ig_link_user.all())
+        old_ig_ids = set(link.ig_id for link in old_ig_links)
+        old_role_links = list(user.user_role_link_user.all())
+        old_role_ids = set(link.role_id for link in old_role_links)
+
         serializer = profile_serializer.UserIgEditSerializer(
             user, data=request.data, partial=True
         )
@@ -111,6 +118,36 @@ class UserIgEditView(APIView):
             return CustomResponse(response=serializer.errors).get_failure_response()
 
         serializer.save()
+        new_ig_links = list(user.user_ig_link_user.all())
+        new_ig_ids = set(link.ig_id for link in new_ig_links)
+
+        old_ig_roles = set()
+        for ig_id in old_ig_ids:
+            ig = InterestGroup.objects.filter(id=ig_id).first()
+            if ig:
+                role = Role.objects.filter(title=ig.name).first()
+                if role:
+                    old_ig_roles.add(role.id)
+        UserRoleLink.objects.filter(user=user, role_id__in=old_ig_roles).delete()
+
+
+        new_ig_roles = set()
+        for ig_id in new_ig_ids:
+            ig = InterestGroup.objects.filter(id=ig_id).first()
+            if ig:
+                role = Role.objects.filter(title=ig.name).first()
+                if role:
+                    new_ig_roles.add(role.id)
+
+        for role_id in new_ig_roles:
+            if not UserRoleLink.objects.filter(user=user, role_id=role_id).exists():
+                UserRoleLink.objects.create(
+                    user=user,
+                    role_id=role_id,
+                    created_by=user,
+                    verified=True,
+                )
+
         DiscordWebhooks.general_updates(
             WebHookCategory.USER.value,
             WebHookActions.UPDATE.value,
