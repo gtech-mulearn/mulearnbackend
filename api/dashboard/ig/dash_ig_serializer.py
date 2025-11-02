@@ -1,4 +1,5 @@
 from rest_framework import serializers
+import json
 
 from db.task import InterestGroup
 
@@ -17,6 +18,16 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         fields = [
             "id",
             "name",
+            "resource",
+            "about",
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+            "thinktank",
+            "office_hours",
             "icon",
             "code",
             "category",
@@ -30,9 +41,50 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     def get_members(self, obj):
         return obj.user_ig_link_ig.all().count()
 
+    def to_representation(self, instance):
+        """Convert JSON-serialized text fields back to Python objects for API output."""
+        data = super().to_representation(instance)
+        json_fields = [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "mentors",
+            "leads",
+        ]
+
+        for field in json_fields:
+            val = data.get(field)
+            if isinstance(val, str) and val:
+                try:
+                    parsed = json.loads(val)
+                    data[field] = parsed
+                except Exception:
+                    # leave as-is (plain string)
+                    pass
+
+        return data
+
 
 class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = InterestGroup
-        fields = ["name", "code", "category", "icon", "created_by", "updated_by"]
+        fields = [
+            "name",
+            "code",
+            "category",
+            "icon",
+            "about",
+            "prerequisites",
+            "career_opportunities",
+            "resource",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+            "thinktank",
+            "office_hours",
+            "created_by",
+            "updated_by",
+        ]
