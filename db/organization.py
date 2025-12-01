@@ -236,3 +236,14 @@ class UnverifiedOrganization(models.Model):
     class Meta:
         managed = False
         db_table = 'unverified_organization'
+
+
+class CampusExecom(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='campus_execom_roles')
+    campus = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='execom_members')
+    role = models.CharField(max_length=100)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        db_table = 'campus_execom'

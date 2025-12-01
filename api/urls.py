@@ -1,6 +1,6 @@
 import debug_toolbar
 from django.urls import path, include
-
+from.campus_execom_views import CampusExecomView
 # app_name will help us do a reverse look-up  latter.
 urlpatterns = [
     path('register/', include('api.register.urls')),
@@ -16,4 +16,6 @@ urlpatterns = [
     path('launchpad/', include('api.launchpad.urls')),
     path('donate/', include('api.donate.urls')),
     path("__debug__/", include(debug_toolbar.urls)),
+    path('campus/<str:campus_id>/execom/',CampusExecomView.as_view()),
+    path('campus/<str:campus_id>/execom/<str:uid>/',CampusExecomView.as_view()),
 ]
