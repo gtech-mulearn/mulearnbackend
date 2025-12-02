@@ -1,5 +1,5 @@
 from django.urls import path, include
-
+from.profile_views import UserProfileView
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
     path("user/", include("api.dashboard.user.urls")),
@@ -26,4 +26,5 @@ urlpatterns = [
     path("coupon/", include("api.dashboard.coupon.urls")),
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
+    path('profile/user-profile/',UserProfileView.as_view()),
 ]
