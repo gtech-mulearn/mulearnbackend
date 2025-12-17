@@ -3,6 +3,7 @@ from django.urls import path, include
 
 # app_name will help us do a reverse look-up  latter.
 urlpatterns = [
+    path('auth/', include('api.auth.urls')),
     path('register/', include('api.register.urls')),
     path('leaderboard/', include('api.leaderboard.urls')),
     path('dashboard/', include('api.dashboard.urls')),
