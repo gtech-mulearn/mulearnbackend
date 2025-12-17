@@ -340,11 +340,28 @@ class DistrictAPI(APIView):
 
 
 class CollegeAPI(APIView):
+    MAX_RESULTS = 20
+
     def post(self, request):
+        district_id = request.data.get("district")
+        search_query = request.data.get("search", "").strip()
+
+        # Build base query for colleges in the specified district
         org_queryset = Organization.objects.filter(
-            Q(org_type=OrganizationType.COLLEGE.value),
-            Q(district_id=request.data.get("district")),
+            org_type=OrganizationType.COLLEGE.value,
         )
+
+        # Filter by district if provided
+        if district_id:
+            org_queryset = org_queryset.filter(district_id=district_id)
+
+        # Apply search filter if search query is provided
+        if search_query:
+            org_queryset = org_queryset.filter(title__icontains=search_query)
+
+        # Limit results to prevent memory issues
+        org_queryset = org_queryset[:self.MAX_RESULTS]
+
         department_queryset = Department.objects.all()
 
         college_serializer_data = serializers.OrgSerializer(
