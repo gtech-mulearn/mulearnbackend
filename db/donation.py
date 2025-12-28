@@ -11,6 +11,7 @@ class Donation(models.Model):
     donor = models.ForeignKey(Donor, on_delete=models.CASCADE, db_column='donor_id', related_name='donations')
     order_id = models.CharField(max_length=100, null=True, blank=True)  # Razorpay order_id or subscription_id
     payment_id = models.CharField(max_length=100, null=True, blank=True)
+    donation_name = models.CharField(max_length=100, null=True, blank=True)
     payment_method = models.CharField(max_length=50, null=True, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
     currency = models.CharField(max_length=10, default='INR')
