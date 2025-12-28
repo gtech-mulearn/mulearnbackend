@@ -426,7 +426,7 @@ class RazorPayOrderAPI(APIView):
         try:
             serializer = OrderSerializer(data=request.data)
             if not serializer.is_valid():
-                return CustomResponse(general_message=serializer.errors).get_failure_response()
+                return CustomResponse(message=serializer.errors).get_failure_response()
             validated_data = serializer.validated_data
 
             data = {
@@ -448,7 +448,7 @@ class RazorPayOrderAPI(APIView):
             order = razorpay_client.order.create(data)
             return CustomResponse(response=order).get_success_response()
         except razorpay.errors.BadRequestError as e:
-            return CustomResponse(message=str(e)).get_failure_response()
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class RazorPayVerification(APIView):
@@ -582,7 +582,7 @@ class RazorPaySubscriptionAPI(APIView):
         try:
             serializer = SubscriptionSerializer(data=request.data)
             if not serializer.is_valid():
-                return CustomResponse(general_message=serializer.errors).get_failure_response()
+                return CustomResponse(message=serializer.errors).get_failure_response()
             
             validated_data = serializer.validated_data
             amount = int(float(validated_data.get("amount")) * 100)  # Convert to paise
