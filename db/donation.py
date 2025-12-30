@@ -17,6 +17,10 @@ class Donation(models.Model):
     currency = models.CharField(max_length=10, default='INR')
     donation_type = models.CharField(max_length=20)  # 'one-time', 'monthly', 'yearly'
     is_paid = models.BooleanField(default=False)
+    # Bank transfer fields
+    payment_status = models.CharField(max_length=30, default='COMPLETED')  # 'COMPLETED', 'PENDING_VERIFICATION', 'REJECTED'
+    reference_code = models.CharField(max_length=50, null=True, blank=True)
+    proof_url = models.TextField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

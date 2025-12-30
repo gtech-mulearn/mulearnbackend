@@ -3,7 +3,8 @@ from .views import (
     RazorPayOrderAPI,
     RazorPayVerification,
     RazorPaySubscriptionAPI,
-    RazorPaySubscriptionVerification
+    RazorPaySubscriptionVerification,
+    BankTransferAPI
 )
 
 urlpatterns = [
@@ -14,4 +15,7 @@ urlpatterns = [
     # Recurring payments (subscriptions)
     path('subscription/create/', RazorPaySubscriptionAPI.as_view(), name='donate-subscription-create'),
     path('subscription/verify/', RazorPaySubscriptionVerification.as_view(), name='donate-subscription-verify'),
+    
+    # Bank transfer (for donations >= 5L)
+    path('bank-transfer/', BankTransferAPI.as_view(), name='donate-bank-transfer'),
 ]
