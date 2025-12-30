@@ -1,0 +1,80 @@
+{% extends "mails/base_mail.html" %} {% block content %}
+<div style="background: transparent; width: 100%; height: auto">
+    <center>
+        <h1 style="
+        color: black;
+        font-family: 'Poppins';
+        font-weight: 600;
+        font-size: 28px;
+        margin-bottom: 10px;
+      ">
+            THANK YOU FOR YOUR DONATION!
+        </h1>
+        <p style="
+        color: rgb(65, 64, 64);
+        font-family: 'Poppins';
+        line-height: 1.5;
+        font-size: 14px;
+        margin: 0 0 20px 0;
+      ">
+            Your generous contribution helps us continue our mission of empowering learners across the country.
+        </p>
+
+        <!-- Thank You Card -->
+        <div style="
+        background: linear-gradient(135deg, #f8f9ff 0%, #f0f4ff 100%);
+        border-radius: 12px;
+        padding: 25px;
+        margin: 20px 0;
+        text-align: center;
+        border: 1px solid #e0e6f7;
+        max-width: 350px;
+      ">
+            <!-- Donation Icon -->
+            <div style="
+          background: linear-gradient(to right, #2E85FE, #AF2EE6);
+          border-radius: 50%;
+          width: 60px;
+          height: 60px;
+          margin: 0 auto 15px auto;
+          line-height: 60px;
+        ">
+                <span style="font-size: 28px;">💝</span>
+            </div>
+
+            <p style="
+          color: #333;
+          font-family: 'Poppins';
+          font-size: 14px;
+          line-height: 1.6;
+          margin: 0;
+        ">
+                We have attached your donation receipt to this email. Please keep it for your records.
+            </p>
+        </div>
+
+        <div style="width: 100%; height: 10px; background: transparent"></div>
+
+        <p style="
+        color: rgb(65, 64, 64);
+        font-family: 'Poppins';
+        line-height: 1.5;
+        font-size: 13px;
+        margin: 10px 0;
+      ">
+            If you require an 80G certificate for tax exemption purposes, please reply to this email.
+        </p>
+
+        <div style="width: 100%; height: 10px; background: transparent"></div>
+
+        <p style="
+        color: #666;
+        font-family: 'Poppins';
+        font-size: 12px;
+        line-height: 1.4;
+      ">
+            Together, we're building a stronger learning community. Thank you for being a part of this journey!
+        </p>
+    </center>
+</div>
+{% endblock %}
