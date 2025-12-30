@@ -68,3 +68,25 @@ class OrderSerializer(serializers.Serializer):
     donation_type = serializers.ChoiceField(choices=['one-time', 'monthly', 'yearly'], default='one-time')
     is_organisation = serializers.BooleanField(default=False)
 
+
+class BankTransferSerializer(serializers.Serializer):
+    """Serializer for bank transfer donation requests (amount >= 5L)"""
+    amount = serializers.DecimalField(max_digits=12, decimal_places=2)
+    name = serializers.CharField(max_length=255)
+    donation_name = serializers.CharField(max_length=100, required=False, allow_blank=True)
+    email = serializers.EmailField()
+    phone_number = serializers.CharField(max_length=20, required=False, allow_blank=True)
+    pan_number = serializers.CharField(max_length=10, required=False, allow_blank=True)
+    address = serializers.CharField(required=False, allow_blank=True)
+    company = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    donation_type = serializers.ChoiceField(choices=['one-time', 'monthly', 'yearly'], default='one-time')
+    is_organisation = serializers.BooleanField(default=False)
+    proof_url = serializers.URLField(max_length=2000)
+    reference_code = serializers.CharField(max_length=50)
+
+    def validate_amount(self, value):
+        """Ensure amount is >= 5,00,000"""
+        if value < 500000:
+            raise serializers.ValidationError("Bank transfer is only available for amounts >= ₹5,00,000")
+        return value
+
