@@ -255,3 +255,21 @@ class Events(models.Model):
     class Meta:
         managed = False
         db_table = "events"
+
+
+class TaskReport(models.Model):
+    id = models.CharField(primary_key=True, max_length=36)
+    reporter = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_report_reporter")
+    offender = models.ForeignKey(User, on_delete=models.CASCADE, related_name="task_report_offender")
+    message_id = models.CharField(max_length=100)
+    reason = models.CharField(max_length=500)
+    proof_link = models.CharField(max_length=255, blank=True, null=True)
+    status = models.CharField(max_length=20, default="PENDING")
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="task_report_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by", related_name="task_report_updated_by")
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = "task_report"
