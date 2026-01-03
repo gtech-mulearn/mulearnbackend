@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime
 from django.db.models import Q
 from rest_framework import serializers
 from db.task import VoucherLog, TaskList
@@ -6,6 +7,14 @@ from db.user import User
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils
 from utils.karma_voucher import generate_ordered_id
+
+
+ALLOWED_MONTHS = [
+    'January', 'February', 'March', 'April', 'May', 'June',
+    'July', 'August', 'September', 'October', 'November', 'December'
+]
+
+ALLOWED_WEEKS = ['W1', 'W2', 'W3', 'W4', 'W5']
 
 
 class VoucherLogCSVSerializer(serializers.ModelSerializer):
@@ -38,9 +47,29 @@ class VoucherLogCSVSerializer(serializers.ModelSerializer):
         response_data = {}
         response_data["code"] = data.get('code')
         week = data.get('week')
-        if week and len(str(week)) > 2:
-            response_data["error"] = "Week must not exceed 2 characters in length and should be of the format 'W1'"
+        if week and week not in ALLOWED_WEEKS:
+            response_data["error"] = f"Week must be one of {ALLOWED_WEEKS}"
             raise serializers.ValidationError(response_data)
+        
+        month = data.get('month')
+        if month and month not in ALLOWED_MONTHS:
+             response_data["error"] = f"Month must be one of {ALLOWED_MONTHS}"
+             raise serializers.ValidationError(response_data)
+
+        user_id = data.get('user_id')
+        task_id = data.get('task_id')
+        current_year = DateTimeUtils.get_current_utc_time().year
+
+        if VoucherLog.objects.filter(
+            user_id=user_id,
+            task_id=task_id,
+            month=month,
+            week=week,
+            created_at__year=current_year
+        ).exists():
+            response_data["error"] = "Voucher already exists for this user, task, month, and week."
+            raise serializers.ValidationError(response_data)
+
         return data
 
     def to_representation(self, instance):
@@ -151,10 +180,35 @@ class VoucherLogCreateSerializer(serializers.ModelSerializer):
         return value
 
     def validate_week(self, value):
-        if len(value) != 2:
+        if value not in ALLOWED_WEEKS:
             raise serializers.ValidationError(
-                "Week must have exactly two characters.")
+                f"Week must be one of {ALLOWED_WEEKS}")
         return value
+    
+    def validate_month(self, value):
+        if value not in ALLOWED_MONTHS:
+            raise serializers.ValidationError(
+                f"Month must be one of {ALLOWED_MONTHS}")
+        return value
+    
+    def validate(self, data):
+        user_id = data.get('user')
+        task_id = data.get('task')
+        month = data.get('month')
+        week = data.get('week')
+        current_year = DateTimeUtils.get_current_utc_time().year
+
+        if VoucherLog.objects.filter(
+            user_id=user_id,
+            task_id=task_id,
+            month=month,
+            week=week,
+            created_at__year=current_year
+        ).exists():
+            raise serializers.ValidationError(
+                "Voucher already exists for this user, task, month, and week."
+            )
+        return data
 
 
 class VoucherLogUpdateSerializer(serializers.ModelSerializer):
@@ -175,8 +229,8 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
         ]
 
     def update(self, instance, validated_data):
-        instance.user_id = validated_data.get('new_user', instance.user)
-        instance.task_id = validated_data.get('new_task', instance.task)
+        instance.user_id = validated_data.get('new_user', instance.user_id)
+        instance.task_id = validated_data.get('new_task', instance.task_id)
         instance.karma = validated_data.get('new_karma', instance.karma)
         instance.month = validated_data.get('new_month', instance.month)
         instance.week = validated_data.get('new_week', instance.week)
@@ -191,6 +245,48 @@ class VoucherLogUpdateSerializer(serializers.ModelSerializer):
         if not user:
             raise serializers.ValidationError("Enter a valid user")
         return user.id
+    
+    def validate_new_task(self, value):
+        if not TaskList.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Enter a valid task")
+        return value
+    
+    def validate_new_karma(self, value):
+        if value <= 0:
+            raise serializers.ValidationError("Enter a valid karma")
+        return value
+    
+    def validate_new_week(self, value):
+        if value not in ALLOWED_WEEKS:
+            raise serializers.ValidationError(
+                f"Week must be one of {ALLOWED_WEEKS}")
+        return value
+
+    def validate_new_month(self, value):
+        if value not in ALLOWED_MONTHS:
+             raise serializers.ValidationError(
+                f"Month must be one of {ALLOWED_MONTHS}")
+        return value
+    
+    def validate(self, data):
+        # Use existing instance values if new ones are not provided
+        user_id = data.get('new_user', self.instance.user_id)
+        task_id = data.get('new_task', self.instance.task_id)
+        month = data.get('new_month', self.instance.month)
+        week = data.get('new_week', self.instance.week)
+        current_year = DateTimeUtils.get_current_utc_time().year
+
+        if VoucherLog.objects.filter(
+            user_id=user_id,
+            task_id=task_id,
+            month=month,
+            week=week,
+            created_at__year=current_year
+        ).exclude(id=self.instance.id).exists():
+             raise serializers.ValidationError(
+                "Voucher already exists for this user, task, month, and week."
+            )
+        return data
 
     def destroy(self, obj):
         obj.delete()
