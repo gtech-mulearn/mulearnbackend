@@ -1,10 +1,10 @@
-# Protected
+# Dashboard / Referral
 
 
-Base path: `/api/protected/`
+Base path: `/api/dashboard/referral/`
 
 
-## Endpoint: `organisation/`
+## Endpoint: `send-referral/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

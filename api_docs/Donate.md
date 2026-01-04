@@ -1,60 +1,135 @@
-# Donate API Reference
+# Donate
 
-## One-Time Payment (Razorpay)
 
-### Create Order
-**Endpoint:** `/api/v1/donate/order/create/`
-**Method:** `POST`
-**Brief:** Create a Razorpay order for donation.
+Base path: `/api/donate/`
 
-**Request Body:**
+
+## Endpoint: `order/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
 ```json
 {
-  "amount": "decimal",
-  "currency": "INR",
-  "name": "string",
-  "email": "string",
-  "phone_number": "string (optional)",
-  "company": "string (optional)",
-  "pan_number": "string (optional)",
-  "address": "string (optional)",
-  "donation_type": "one-time/monthly/yearly",
-  "is_organisation": boolean
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-### Verify Payment
-**Endpoint:** `/api/v1/donate/payment/verify/`
-**Method:** `POST`
-**Brief:** Verify Razorpay payment and generate receipt.
 
-**Request Body:**
+## Endpoint: `verify/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
 ```json
 {
-  "razorpay_payment_id": "string",
-  "razorpay_order_id": "string",
-  "razorpay_signature": "string"
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-## Subscription Payment (Recurring)
 
-### Create Subscription
-**Endpoint:** `/api/v1/donate/subscription/create/`
-**Method:** `POST`
-**Brief:** Create a Razorpay subscription for recurring donation.
-**Request Body:** Same as Create Order.
-
-### Verify Subscription
-**Endpoint:** `/api/v1/donate/subscription/verify/`
-**Method:** `POST`
-**Brief:** Verify Razorpay subscription payment.
-
-**Request Body:**
+## Endpoint: `subscription/create/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
 ```json
 {
-  "razorpay_subscription_id": "string",
-  "razorpay_payment_id": "string",
-  "razorpay_signature": "string"
+  "field1": "value1",
+  "field2": "value2"
 }
 ```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `subscription/verify/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `bank-transfer/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+

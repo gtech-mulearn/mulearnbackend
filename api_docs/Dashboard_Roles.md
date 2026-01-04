@@ -1,10 +1,39 @@
-# Leaderboard
+# Dashboard / Roles
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/dashboard/roles/`
 
 
-## Endpoint: `students/`
+## Endpoint: `user-role/<str:role_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:role_id`
+- Request body example (JSON):
+```json
+{
+  "role_id": "<str:role_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `base-template/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +59,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `bulk-assign/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +85,36 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
+## Endpoint: `bulk-assign/<str:role_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:role_id`
+- Request body example (JSON):
+```json
+{
+  "role_id": "<str:role_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `bulk-assign-excel/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,7 +140,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
+## Endpoint: `user-role/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -108,7 +166,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-college/`
+## Endpoint: `csv/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -134,11 +192,43 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-zonal/`
-- Brief: Collection endpoint.
+## Endpoint: `<str:roles_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:roles_id`
 - Request body example (JSON):
 ```json
 {
+  "roles_id": "<str:roles_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `<str:roles_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:roles_id`
+- Request body example (JSON):
+```json
+{
+  "roles_id": "<str:roles_id>",
   "field1": "value1",
   "field2": "value2"
 }

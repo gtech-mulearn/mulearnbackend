@@ -1,10 +1,39 @@
-# Leaderboard
+# Dashboard / Projects
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/dashboard/projects/`
 
 
-## Endpoint: `students/`
+## Endpoint: `<uuid:pk>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `uuid:pk`
+- Request body example (JSON):
+```json
+{
+  "pk": "<uuid:pk>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `vote/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +59,36 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `vote/<uuid:pk>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `uuid:pk`
+- Request body example (JSON):
+```json
+{
+  "pk": "<uuid:pk>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `comment/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,89 +114,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
-- Brief: Collection endpoint.
+## Endpoint: `comment/<uuid:pk>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `uuid:pk`
 - Request body example (JSON):
 ```json
 {
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `college-monthly/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-zonal/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
+  "pk": "<uuid:pk>",
   "field1": "value1",
   "field2": "value2"
 }

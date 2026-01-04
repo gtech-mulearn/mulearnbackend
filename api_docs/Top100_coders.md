@@ -1,10 +1,10 @@
-# Protected
+# Top100_Coders
 
 
-Base path: `/api/protected/`
+Base path: `/api/top100_coders/`
 
 
-## Endpoint: `organisation/`
+## Endpoint: `leaderboard/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

@@ -1,10 +1,10 @@
-# Protected
+# Dashboard / Coupon
 
 
-Base path: `/api/protected/`
+Base path: `/api/dashboard/coupon/`
 
 
-## Endpoint: `organisation/`
+## Endpoint: `verify-coupon/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

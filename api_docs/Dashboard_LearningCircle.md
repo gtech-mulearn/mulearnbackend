@@ -1,10 +1,10 @@
-# Register
+# Dashboard / Learningcircle
 
 
-Base path: `/api/register/`
+Base path: `/api/dashboard/learningcircle/`
 
 
-## Endpoint: `validate/`
+## Endpoint: `create/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `role/list/`
+## Endpoint: `list/`
 - Brief: Retrieval/list endpoint.
 - Request body example (JSON):
 ```json
@@ -56,11 +56,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `colleges/`
-- Brief: Collection endpoint.
+## Endpoint: `info/<str:circle_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:circle_id`
 - Request body example (JSON):
 ```json
 {
+  "circle_id": "<str:circle_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -82,7 +85,123 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `department/list/`
+## Endpoint: `members/<str:circle_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:circle_id`
+- Request body example (JSON):
+```json
+{
+  "circle_id": "<str:circle_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `edit/<str:circle_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:circle_id`
+- Request body example (JSON):
+```json
+{
+  "circle_id": "<str:circle_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `delete/<str:circle_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:circle_id`
+- Request body example (JSON):
+```json
+{
+  "circle_id": "<str:circle_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `meeting/create/<str:circle_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:circle_id`
+- Request body example (JSON):
+```json
+{
+  "circle_id": "<str:circle_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `meeting/list-public/`
 - Brief: Retrieval/list endpoint.
 - Request body example (JSON):
 ```json
@@ -108,33 +227,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `location/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `country/list/`
+## Endpoint: `meeting/list/`
 - Brief: Retrieval/list endpoint.
 - Request body example (JSON):
 ```json
@@ -160,11 +253,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `state/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/list/<str:circle_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:circle_id`
 - Request body example (JSON):
 ```json
 {
+  "circle_id": "<str:circle_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -186,11 +282,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `district/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/edit/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -212,11 +311,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `college/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/info/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -238,11 +340,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `company/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/delete/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -264,11 +369,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `community/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/join/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -290,11 +398,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `schools/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/rsvp/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -316,11 +427,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `area-of-interest/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `meeting/leave/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -342,11 +456,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `lc/user-validation/`
-- Brief: Collection endpoint.
+## Endpoint: `meeting/attendee-report/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -368,219 +485,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `email-verification/`
-- Brief: Collection endpoint.
+## Endpoint: `meeting/report/<str:meet_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:meet_id`
 - Request body example (JSON):
 ```json
 {
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `user-country/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `user-state/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `user-zone/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `interests/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `select-domains/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `select-endgoals/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `connect-discord/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `organization/create/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
+  "meet_id": "<str:meet_id>",
   "field1": "value1",
   "field2": "value2"
 }

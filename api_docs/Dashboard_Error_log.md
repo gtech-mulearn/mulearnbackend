@@ -1,10 +1,10 @@
-# Leaderboard
+# Dashboard / Error_Log
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/dashboard/error_log/`
 
 
-## Endpoint: `students/`
+## Endpoint: `graph/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `tab/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,11 +56,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
-- Brief: Collection endpoint.
+## Endpoint: `patch/<str:error_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:error_id`
 - Request body example (JSON):
 ```json
 {
+  "error_id": "<str:error_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -82,11 +85,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
-- Brief: Collection endpoint.
+## Endpoint: `<str:log_name>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:log_name`
 - Request body example (JSON):
 ```json
 {
+  "log_name": "<str:log_name>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -108,11 +114,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
+## Endpoint: `view/<str:log_name>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:log_name`
 - Request body example (JSON):
 ```json
 {
+  "log_name": "<str:log_name>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -134,11 +143,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-zonal/`
-- Brief: Collection endpoint.
+## Endpoint: `clear/<str:log_name>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:log_name`
 - Request body example (JSON):
 ```json
 {
+  "log_name": "<str:log_name>",
   "field1": "value1",
   "field2": "value2"
 }
