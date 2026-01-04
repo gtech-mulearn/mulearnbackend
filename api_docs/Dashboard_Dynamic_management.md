@@ -1,10 +1,10 @@
-# Dashboard / User
+# Dashboard / Dynamic_Management
 
 
-Base path: `/api/dashboard/user/`
+Base path: `/api/dashboard/dynamic_management/`
 
 
-## Endpoint: `preferences/`
+## Endpoint: `dynamic-role/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `search/`
+## Endpoint: `dynamic-role/create/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,66 +56,14 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `verification/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `verification/csv/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `verification/<str:link_id>/`
+## Endpoint: `dynamic-role/delete/<str:type_id>/`
 - Brief: Resource-specific endpoint (path param).
 - Path params:
-  - `str:link_id`
+  - `str:type_id`
 - Request body example (JSON):
 ```json
 {
-  "link_id": "<str:link_id>",
+  "type_id": "<str:type_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -137,14 +85,14 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `verification/<str:link_id>/`
+## Endpoint: `dynamic-role/update/<str:type_id>/`
 - Brief: Resource-specific endpoint (path param).
 - Path params:
-  - `str:link_id`
+  - `str:type_id`
 - Request body example (JSON):
 ```json
 {
-  "link_id": "<str:link_id>",
+  "type_id": "<str:type_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -166,7 +114,7 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `organization/`
+## Endpoint: `dynamic-user/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -192,33 +140,7 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `organization/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `info/`
+## Endpoint: `dynamic-user/create/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -244,7 +166,65 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `forgot-password/`
+## Endpoint: `dynamic-user/delete/<str:type_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:type_id`
+- Request body example (JSON):
+```json
+{
+  "type_id": "<str:type_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `dynamic-user/update/<str:type_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:type_id`
+- Request body example (JSON):
+```json
+{
+  "type_id": "<str:type_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `types/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -270,182 +250,11 @@ Base path: `/api/dashboard/user/`
 ```
 
 
-## Endpoint: `reset-password/verify-token/<str:token>/`
-- Brief: Resource-specific endpoint (path param).
-- Path params:
-  - `str:token`
-- Request body example (JSON):
-```json
-{
-  "token": "<str:token>",
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `reset-password/<str:token>/`
-- Brief: Resource-specific endpoint (path param).
-- Path params:
-  - `str:token`
-- Request body example (JSON):
-```json
-{
-  "token": "<str:token>",
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `profile/update/`
+## Endpoint: `roles/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
 {
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `csv/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `<str:user_id>/`
-- Brief: Resource-specific endpoint (path param).
-- Path params:
-  - `str:user_id`
-- Request body example (JSON):
-```json
-{
-  "user_id": "<str:user_id>",
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `<str:user_id>/`
-- Brief: Resource-specific endpoint (path param).
-- Path params:
-  - `str:user_id`
-- Request body example (JSON):
-```json
-{
-  "user_id": "<str:user_id>",
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `<str:user_id>/`
-- Brief: Resource-specific endpoint (path param).
-- Path params:
-  - `str:user_id`
-- Request body example (JSON):
-```json
-{
-  "user_id": "<str:user_id>",
   "field1": "value1",
   "field2": "value2"
 }

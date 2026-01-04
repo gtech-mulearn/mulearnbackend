@@ -1,14 +1,17 @@
-# Protected
+# Dashboard / Events
 
 
-Base path: `/api/protected/`
+Base path: `/api/dashboard/events/`
 
 
-## Endpoint: `organisation/`
-- Brief: Collection endpoint.
+## Endpoint: `<str:event_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:event_id`
 - Request body example (JSON):
 ```json
 {
+  "event_id": "<str:event_id>",
   "field1": "value1",
   "field2": "value2"
 }

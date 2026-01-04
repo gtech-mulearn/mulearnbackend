@@ -1,11 +1,11 @@
-# Common
+# Dashboard / Campus
 
 
-Base path: `/api/common/`
+Base path: `/api/dashboard/campus/`
 
 
-## Endpoint: `lc-list`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `campus-details/`
+- Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
 {
@@ -30,14 +30,40 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `<str:circle_id>/lc-details/`
+## Endpoint: `student-level/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `student-level/<str:org_id>/`
 - Brief: Resource-specific endpoint (path param).
 - Path params:
-  - `str:circle_id`
+  - `str:org_id`
 - Request body example (JSON):
 ```json
 {
-  "circle_id": "<str:circle_id>",
+  "org_id": "<str:org_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -59,7 +85,7 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `lc-dashboard/`
+## Endpoint: `student-details/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -85,7 +111,7 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `lc-report/`
+## Endpoint: `student-details/csv/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -111,7 +137,7 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `college-wise-lc-report/`
+## Endpoint: `weekly-karma/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -137,170 +163,14 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `college-wise-lc-report/csv/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `lc-report/csv/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `lc-enrollment/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `lc-enrollment/csv/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `global-count/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `gta-sandshore/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `profile-pic/<str:muid>/`
+## Endpoint: `weekly-karma/<str:org_id>/`
 - Brief: Resource-specific endpoint (path param).
 - Path params:
-  - `str:muid`
+  - `str:org_id`
 - Request body example (JSON):
 ```json
 {
-  "muid": "<str:muid>",
+  "org_id": "<str:org_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -322,11 +192,14 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `list-ig/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `change-student-type/<str:member_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:member_id`
 - Request body example (JSON):
 ```json
 {
+  "member_id": "<str:member_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -348,59 +221,7 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `list-ig-top100/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `list/levels/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `leaderboard/top-100/`
+## Endpoint: `transfer-lead-role/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -426,8 +247,8 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `list/college/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `transfer-enabler-role/`
+- Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
 {
@@ -452,8 +273,8 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `list/district/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `transfer-ig-role/`
+- Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
 {
@@ -478,37 +299,14 @@ Base path: `/api/common/`
 ```
 
 
-## Endpoint: `list/state/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `<str:org_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:org_id`
 - Request body example (JSON):
 ```json
 {
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `list/country/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
+  "org_id": "<str:org_id>",
   "field1": "value1",
   "field2": "value2"
 }

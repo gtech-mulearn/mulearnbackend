@@ -1,10 +1,10 @@
-# Leaderboard
+# Url_Shortener
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/url_shortener/`
 
 
-## Endpoint: `students/`
+## Endpoint: `create/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,8 +30,37 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
-- Brief: Collection endpoint.
+## Endpoint: `edit/<str:url_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:url_id`
+- Request body example (JSON):
+```json
+{
+  "url_id": "<str:url_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list/`
+- Brief: Retrieval/list endpoint.
 - Request body example (JSON):
 ```json
 {
@@ -56,11 +85,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
-- Brief: Collection endpoint.
+## Endpoint: `delete/<str:url_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:url_id`
 - Request body example (JSON):
 ```json
 {
+  "url_id": "<str:url_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -82,63 +114,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
-- Brief: Collection endpoint.
+## Endpoint: `get-analytics/<str:url_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:url_id`
 - Request body example (JSON):
 ```json
 {
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-zonal/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
+  "url_id": "<str:url_id>",
   "field1": "value1",
   "field2": "value2"
 }

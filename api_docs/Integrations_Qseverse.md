@@ -1,10 +1,10 @@
-# Leaderboard
+# Integrations / Qseverse
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/integrations/qseverse/`
 
 
-## Endpoint: `students/`
+## Endpoint: `issue-vc/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `connected-users/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +56,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
+## Endpoint: `connected-users/search`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,59 +82,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-zonal/`
+## Endpoint: `qs-credentials/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

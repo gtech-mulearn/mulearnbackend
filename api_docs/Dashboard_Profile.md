@@ -1,10 +1,39 @@
-# Register
+# Dashboard / Profile
 
 
-Base path: `/api/register/`
+Base path: `/api/dashboard/profile/`
 
 
-## Endpoint: `validate/`
+## Endpoint: `badges/<str:muid>`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
+- Request body example (JSON):
+```json
+{
+  "muid": "<str:muid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `user-profile/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +59,227 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `role/list/`
+## Endpoint: `ig-edit/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `user-profile/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
+- Request body example (JSON):
+```json
+{
+  "muid": "<str:muid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `edit-user-profile/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `user-log/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `user-log/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
+- Request body example (JSON):
+```json
+{
+  "muid": "<str:muid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `share-user-profile/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `share-user-profile/<str:uuid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:uuid`
+- Request body example (JSON):
+```json
+{
+  "uuid": "<str:uuid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `rank/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
+- Request body example (JSON):
+```json
+{
+  "muid": "<str:muid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `get-user-levels/`
 - Brief: Retrieval/list endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +305,36 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `colleges/`
+## Endpoint: `get-user-levels/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
+- Request body example (JSON):
+```json
+{
+  "muid": "<str:muid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `socials/edit/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,33 +360,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `department/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `location/`
+## Endpoint: `socials/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -134,11 +386,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `country/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `socials/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
 - Request body example (JSON):
 ```json
 {
+  "muid": "<str:muid>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -160,11 +415,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `state/list/`
-- Brief: Retrieval/list endpoint.
+## Endpoint: `qrcode-get/<str:uuid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:uuid`
 - Request body example (JSON):
 ```json
 {
+  "uuid": "<str:uuid>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -186,163 +444,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `district/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `college/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `company/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `community/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `schools/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `area-of-interest/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `lc/user-validation/`
+## Endpoint: `change-password/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -368,7 +470,36 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `email-verification/`
+## Endpoint: `userterm-approved/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
+- Request body example (JSON):
+```json
+{
+  "muid": "<str:muid>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `karma-feed/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -394,7 +525,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `user-country/`
+## Endpoint: `user-level-feed/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -420,7 +551,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `user-state/`
+## Endpoint: `user-preferences/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -446,141 +577,14 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `user-zone/`
-- Brief: Collection endpoint.
+## Endpoint: `permute/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
 - Request body example (JSON):
 ```json
 {
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `interests/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `select-domains/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `select-endgoals/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `connect-discord/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `organization/create/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
+  "muid": "<str:muid>",
   "field1": "value1",
   "field2": "value2"
 }

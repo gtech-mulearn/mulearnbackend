@@ -1,10 +1,10 @@
-# Leaderboard
+# Dashboard / Karma_Voucher
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/dashboard/karma_voucher/`
 
 
-## Endpoint: `students/`
+## Endpoint: `import/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `export/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +56,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
+## Endpoint: `create/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,11 +82,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
-- Brief: Collection endpoint.
+## Endpoint: `update/<str:voucher_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:voucher_id`
 - Request body example (JSON):
 ```json
 {
+  "voucher_id": "<str:voucher_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -108,11 +111,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
+## Endpoint: `delete/<str:voucher_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:voucher_id`
 - Request body example (JSON):
 ```json
 {
+  "voucher_id": "<str:voucher_id>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -134,7 +140,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-zonal/`
+## Endpoint: `base-template/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

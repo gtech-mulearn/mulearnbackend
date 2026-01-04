@@ -1,10 +1,10 @@
-# Leaderboard
+# Integrations / Kkem
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/integrations/kkem/`
 
 
-## Endpoint: `students/`
+## Endpoint: `login/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `authorization/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +56,94 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
+## Endpoint: `authorization/<str:token>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:token`
+- Request body example (JSON):
+```json
+{
+  "token": "<str:token>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `user/status/<str:encrypted_data>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:encrypted_data`
+- Request body example (JSON):
+```json
+{
+  "encrypted_data": "<str:encrypted_data>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `user/<str:encrypted_data>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:encrypted_data`
+- Request body example (JSON):
+```json
+{
+  "encrypted_data": "<str:encrypted_data>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `users/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,11 +169,14 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
-- Brief: Collection endpoint.
+## Endpoint: `users/<str:muid>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:muid`
 - Request body example (JSON):
 ```json
 {
+  "muid": "<str:muid>",
   "field1": "value1",
   "field2": "value2"
 }
@@ -108,33 +198,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-zonal/`
+## Endpoint: `hackathon-stats/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

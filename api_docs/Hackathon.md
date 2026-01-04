@@ -1,133 +1,503 @@
-# Hackathon API Reference
+# Hackathon
 
-## List Hackathons
-**Endpoint:** `/api/v1/hackathon/list-hackathons/`
-**Method:** `GET`
-**Brief:** List all hackathons (published or owned by user).
 
-**Response Body:**
+Base path: `/api/hackathon/`
+
+
+## Endpoint: `list-hackathons/`
+- Brief: Retrieval/list endpoint.
+- Request body example (JSON):
 ```json
 {
-  "response": [
-    {
-       "id": "uuid",
-       "title": "string",
-       "tagline": "string",
-       "description": "string",
-       "status": "string (Draft/Published/Completed/Deleted)"
-    }
-  ]
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-## List Upcoming Hackathons
-**Endpoint:** `/api/v1/hackathon/list-hackathons/upcoming/`
-**Method:** `GET`
-**Brief:** List upcoming hackathons.
 
-## Create Hackathon
-**Endpoint:** `/api/v1/hackathon/create-hackathon/`
-**Method:** `POST`
-**Brief:** Create a new hackathon.
-
-**Request Body:**
+## Endpoint: `list-hackathons/upcoming/`
+- Brief: Retrieval/list endpoint.
+- Request body example (JSON):
 ```json
 {
-  "title": "string",
-  "tagline": "string (optional)",
-  "description": "string (optional)",
-  "participant_count": 0,
-  "org_id": "uuid (optional)",
-  "district_id": "uuid (optional)",
-  "place": "string (optional)",
-  "is_open_to_all": false,
-  "application_start": "datetime",
-  "application_ends": "datetime",
-  "event_start": "datetime",
-  "event_end": "datetime",
-  "status": "string (Draft)",
-  "form_fields": { "field_name": "field_type" },
-  "type": "offline/online",
-  "website": "string",
-  "event_logo": "file",
-  "banner": "file"
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-## Edit Hackathon
-**Endpoint:** `/api/v1/hackathon/edit-hackathon/<str:hackathon_id>/`
-**Method:** `PUT`
-**Brief:** Update hackathon details.
-**Request Body:** Same as Create Hackathon.
 
-## Delete Hackathon
-**Endpoint:** `/api/v1/hackathon/delete-hackathon/<str:hackathon_id>/`
-**Method:** `DELETE`
-**Brief:** Delete a hackathon (soft delete usually).
-
-## Publish Hackathon
-**Endpoint:** `/api/v1/hackathon/publish-hackathon/<str:hackathon_id>/`
-**Method:** `PUT`
-**Brief:** Change hackathon status to Published.
-
-**Request Body:**
+## Endpoint: `list-hackathons/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
 ```json
 {
-  "status": "Published"
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-## Hackathon Info
-**Endpoint:** `/api/v1/hackathon/info/<str:hackathon_id>/`
-**Method:** `GET`
-**Brief:** Get detailed info about a hackathon.
 
-## Submit Hackathon Application
-**Endpoint:** `/api/v1/hackathon/submit-hackathon/`
-**Method:** `POST`
-**Brief:** User submission for a hackathon.
-
-**Request Body:**
+## Endpoint: `info/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
 ```json
 {
-  "hackathon_id": "uuid",
-  "data": { "custom_field": "value" }
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-## List Applicants
-**Endpoint:** `/api/v1/hackathon/list-applicants/<str:hackathon_id>/`
-**Method:** `GET`
-**Brief:** List all applicants for a hackathon.
 
-## Add Organiser
-**Endpoint:** `/api/v1/hackathon/add-organiser/<str:hackathon_id>/`
-**Method:** `POST`
-**Brief:** Add an organizer to a hackathon.
-
-**Request Body:**
+## Endpoint: `create-hackathon/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
 ```json
 {
-  "muid": "string"
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
 }
 ```
 
-## Delete Organiser
-**Endpoint:** `/api/v1/hackathon/delete-organiser/<str:organiser_link_id>/`
-**Method:** `DELETE`
-**Brief:** Remove an organizer from a hackathon.
 
-## List Organisations
-**Endpoint:** `/api/v1/hackathon/list-organisations/`
-**Method:** `GET`
-**Brief:** List simplified organizations for dropdowns.
+## Endpoint: `edit-hackathon/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
 
-## List Districts
-**Endpoint:** `/api/v1/hackathon/list-districts/`
-**Method:** `GET`
-**Brief:** List simplified districts for dropdowns.
 
-## List Form Fields
-**Endpoint:** `/api/v1/hackathon/list-form/<str:hackathon_id>/`
-**Method:** `GET`
-**Brief:** Get form fields for a specific hackathon.
+## Endpoint: `delete-hackathon/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `publish-hackathon/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `submit-hackathon/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-organiser-hackathons/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `add-organiser/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `delete-organiser/<str:organiser_link_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:organiser_link_id`
+- Request body example (JSON):
+```json
+{
+  "organiser_link_id": "<str:organiser_link_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-applicants/`
+- Brief: Retrieval/list endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-applicants/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-form/<str:hackathon_id>/`
+- Brief: Resource-specific endpoint (path param).
+- Path params:
+  - `str:hackathon_id`
+- Request body example (JSON):
+```json
+{
+  "hackathon_id": "<str:hackathon_id>",
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-organisations/`
+- Brief: Retrieval/list endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-districts/`
+- Brief: Retrieval/list endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `list-default-form-fields/`
+- Brief: Retrieval/list endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
