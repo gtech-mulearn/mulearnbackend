@@ -1,10 +1,10 @@
-# Leaderboard
+# Dashboard / District
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/dashboard/district/`
 
 
-## Endpoint: `students/`
+## Endpoint: `district-details/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `top-campus/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +56,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
+## Endpoint: `student-level/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,7 +82,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
+## Endpoint: `student-details/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -108,7 +108,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-college/`
+## Endpoint: `student-details/csv/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -134,7 +134,33 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-zonal/`
+## Endpoint: `college-details/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `college-details/csv/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

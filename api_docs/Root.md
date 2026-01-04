@@ -1,10 +1,10 @@
-# Register
+# API
 
 
-Base path: `/api/register/`
+Base path: `/api/`
 
 
-## Endpoint: `validate/`
+## Endpoint: `auth/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,33 +30,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `role/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `colleges/`
+## Endpoint: `register/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,33 +56,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `department/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `location/`
+## Endpoint: `leaderboard/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -134,215 +82,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `country/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `state/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `district/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `college/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `company/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `community/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `schools/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `area-of-interest/list/`
-- Brief: Retrieval/list endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `lc/user-validation/`
+## Endpoint: `dashboard/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -368,7 +108,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `email-verification/`
+## Endpoint: `integrations/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -394,7 +134,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `user-country/`
+## Endpoint: `url-shortener/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -420,7 +160,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `user-state/`
+## Endpoint: `protected/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -446,7 +186,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `user-zone/`
+## Endpoint: `hackathon/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -472,7 +212,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `interests/`
+## Endpoint: `notification/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -498,7 +238,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `select-domains/`
+## Endpoint: `public/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -524,7 +264,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `select-endgoals/`
+## Endpoint: `top100/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -550,7 +290,7 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `connect-discord/`
+## Endpoint: `launchpad/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -576,7 +316,33 @@ Base path: `/api/register/`
 ```
 
 
-## Endpoint: `organization/create/`
+## Endpoint: `donate/`
+- Brief: Collection endpoint.
+- Request body example (JSON):
+```json
+{
+  "field1": "value1",
+  "field2": "value2"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Success"
+    ]
+  },
+  "response": {
+    "data": "..."
+  }
+}
+```
+
+
+## Endpoint: `__debug__/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json

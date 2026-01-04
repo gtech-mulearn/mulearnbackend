@@ -1,10 +1,10 @@
-# Leaderboard
+# Integrations / Wadhwani
 
 
-Base path: `/api/leaderboard/`
+Base path: `/api/integrations/wadhwani/`
 
 
-## Endpoint: `students/`
+## Endpoint: `auth-token/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -30,7 +30,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `students-monthly/`
+## Endpoint: `user-login/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -56,7 +56,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college/`
+## Endpoint: `course-details/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -82,7 +82,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `college-monthly/`
+## Endpoint: `course-enroll-status/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
@@ -108,33 +108,7 @@ Base path: `/api/leaderboard/`
 ```
 
 
-## Endpoint: `wadhwani-college/`
-- Brief: Collection endpoint.
-- Request body example (JSON):
-```json
-{
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
-```json
-{
-  "hasError": false,
-  "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
-  "response": {
-    "data": "..."
-  }
-}
-```
-
-
-## Endpoint: `wadhwani-zonal/`
+## Endpoint: `course-quiz-data/`
 - Brief: Collection endpoint.
 - Request body example (JSON):
 ```json
