@@ -432,13 +432,12 @@ class AchievementLogListAPIView(APIView):
         if search_query:
             queryset = queryset.filter(
                 Q(user_id__muid__icontains=search_query) |
-                Q(user_id__first_name__icontains=search_query) |
-                Q(user_id__last_name__icontains=search_query) |
+                Q(user_id__full_name__icontains=search_query) |
                 Q(achievement_id__name__icontains=search_query)
             )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            queryset, request, ['user_id__first_name', 'created_at']
+            queryset, request, ['user_id__full_name', 'created_at']
         )
 
         data = []
@@ -446,9 +445,9 @@ class AchievementLogListAPIView(APIView):
             data.append({
                 "id": log.id,
                 "muid": log.user_id.muid,
-                "user_name": f"{log.user_id.first_name} {log.user_id.last_name if log.user_id.last_name else ''}",
+                "user_name": log.user_id.full_name,
                 "achievement": log.achievement_id.name,
-                "issued_by": f"{log.created_by.first_name} {log.created_by.last_name if log.created_by.last_name else ''}",
+                "issued_by": log.created_by.full_name,
                 "issued_on": log.created_at.strftime("%Y-%m-%d %H:%M:%S")
             })
 
