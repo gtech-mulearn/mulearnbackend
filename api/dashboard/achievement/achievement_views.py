@@ -1,5 +1,13 @@
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
+from django.http import FileResponse
+from io import BytesIO
+import openpyxl
+from db.achievement import Achievement, UserAchievementsLog
+from db.user import User
+from django.db.models import Q
+from utils.types import RoleType
+from utils.utils import CommonUtils
 from . import achievement_serializer
 from db.achievement import Achievement, UserAchievementsLog
 from utils.response import CustomResponse
@@ -9,6 +17,7 @@ from db.task import Level
 import uuid
 from django.utils.timezone import now
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from utils.utils import ImportCSV
 
 
 class AchievementListAPIView(APIView):
@@ -267,4 +276,185 @@ class UserAchievementsIssueAPIView(APIView):
 
         return CustomResponse(
             general_message="Achievement issued successfully"
+        ).get_success_response()
+
+
+class AchievementIssueBulkAPIView(APIView):
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        user = User.objects.filter(id=user_id).first()
+        if not user:
+            return CustomResponse(
+                general_message="User Not Exists"
+            ).get_failure_response()
+
+        achievement_id = request.data.get("achievement_id")
+        if not achievement_id:
+            return CustomResponse(
+                general_message="Achievement ID is required"
+            ).get_failure_response()
+
+        try:
+            achievement = Achievement.objects.get(id=achievement_id)
+        except Achievement.DoesNotExist:
+            return CustomResponse(
+                general_message="Achievement not found"
+            ).get_failure_response()
+
+        try:
+            file_obj = request.FILES["file"]
+        except KeyError:
+            return CustomResponse(
+                general_message="File not found"
+            ).get_failure_response()
+
+        excel_data = ImportCSV()
+        try:
+            excel_data = excel_data.read_excel_file(file_obj)
+        except Exception as e:
+            return CustomResponse(
+                general_message="Error reading Excel file", response=str(e)
+            ).get_failure_response()
+
+        if not excel_data:
+            return CustomResponse(
+                general_message="Empty Excel file"
+            ).get_failure_response()
+
+        # Assuming the first row is header and contains 'muid'
+        # ImportCSV.read_excel_file returns a list of dictionaries where keys are headers
+        
+        # Validate headers
+        header_keys = excel_data[0].keys()
+        if "muid" not in [key.lower() for key in header_keys if key]:
+             return CustomResponse(
+                general_message="Excel file must contain 'muid' column"
+            ).get_failure_response()
+
+        created_count = 0
+        updated_count = 0
+        failed_muids = []
+
+        for row in excel_data:
+            # Find the key that corresponds to 'muid' (case-insensitive)
+            muid_key = next((k for k in row.keys() if k and k.lower() == 'muid'), None)
+            muid = row.get(muid_key)
+
+            if not muid:
+                continue
+
+            muid = str(muid).strip()
+            
+            try:
+                user_to_issue = User.objects.get(muid=muid)
+                
+                # Check if already exists
+                user_achievement, created = UserAchievementsLog.objects.get_or_create(
+                    user_id=user_to_issue,
+                    achievement_id=achievement,
+                    defaults={
+                        "id": str(uuid.uuid4()),
+                        "created_by": user,
+                        "updated_by": user,
+                        "is_issued": False, # Setting to False initially as per discussion logic (claimable)
+                        "vc_url": "" # No VC URL in bulk issuance
+                    }
+                )
+
+                if created:
+                    created_count += 1
+                else:
+                    # Optional: Update metadata if needed, for now just counting
+                    updated_count += 1
+            
+            except User.DoesNotExist:
+                failed_muids.append(f"{muid}: User not found")
+            except Exception as e:
+                 failed_muids.append(f"{muid}: {str(e)}")
+
+        return CustomResponse(
+            general_message="Bulk issuance processed",
+            response={
+                "created": created_count,
+                "updated": updated_count,
+                "failed_count": len(failed_muids),
+                "failed_muids": failed_muids
+            }
+        ).get_success_response()
+
+
+class AchievementBulkImportTemplateAPIView(APIView):
+    def get(self, request):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Bulk Import Template"
+        ws.append(["muid"])
+        
+        # Add sample data or just leave it with header
+        # ws.append(["user@mulearn"]) 
+
+        with BytesIO() as f:
+            wb.save(f)
+            f.seek(0)
+            data = f.read()
+
+        response = FileResponse(
+            BytesIO(data),
+            as_attachment=True,
+            filename="achievement_bulk_import_template.xlsx"
+        )
+        return response
+
+
+class AchievementLogListAPIView(APIView):
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        # You might want to restrict this to admins
+        # if not User.objects.filter(id=user_id, user_role_link_user__role__title=RoleType.ADMIN.value).exists():
+        #     return CustomResponse(general_message="You do not have permission").get_failure_response()
+
+        queryset = UserAchievementsLog.objects.select_related(
+            'user_id', 'achievement_id', 'created_by'
+        ).all().order_by('-created_at')
+
+        # Search functionality
+        search_query = request.query_params.get('search')
+        if search_query:
+            queryset = queryset.filter(
+                Q(user_id__muid__icontains=search_query) |
+                Q(user_id__first_name__icontains=search_query) |
+                Q(user_id__last_name__icontains=search_query) |
+                Q(achievement_id__name__icontains=search_query)
+            )
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            queryset, request, ['user_id__first_name', 'created_at']
+        )
+
+        data = []
+        for log in paginated_queryset.get('queryset'):
+            data.append({
+                "id": log.id,
+                "muid": log.user_id.muid,
+                "user_name": f"{log.user_id.first_name} {log.user_id.last_name if log.user_id.last_name else ''}",
+                "achievement": log.achievement_id.name,
+                "issued_by": f"{log.created_by.first_name} {log.created_by.last_name if log.created_by.last_name else ''}",
+                "issued_on": log.created_at.strftime("%Y-%m-%d %H:%M:%S")
+            })
+
+        return CustomResponse(
+            response={
+                "data": data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
         ).get_success_response()
