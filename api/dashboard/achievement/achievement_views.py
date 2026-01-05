@@ -1,14 +1,7 @@
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
-from django.http import FileResponse
-from io import BytesIO
-import openpyxl
-from db.achievement import Achievement, UserAchievementsLog
-from db.user import User
-from django.db.models import Q
-from utils.types import RoleType
-from utils.utils import CommonUtils
 from . import achievement_serializer
+from db.achievement import Achievement, UserAchievementsLog, AchievementRule, AchievementAuditLog
 from utils.response import CustomResponse
 from utils.permission import JWTUtils
 from db.user import User
@@ -397,224 +390,72 @@ class UserAchievementsIssueAPIView(APIView):
         ).get_success_response()
 
 
-class AchievementIssueBulkAPIView(APIView):
-    """
-    Bulk issue achievements for multiple users using an uploaded file.
+# ============================================================================
+# NEW ACHIEVEMENT SYSTEM VIEWS
+# ============================================================================
 
-    This endpoint allows an authorized admin or super admin to mark a given
-    achievement as issued for multiple users in a single request. The client
-    must upload a tabular file (for example, a CSV or Excel spreadsheet) that
-    is compatible with the :class:`ImportCSV` utility. Each row in the file
-    should represent one user for whom the specified achievement should be
-    issued.
 
-    Authentication/Authorization
-    ----------------------------
-    - The request must include a valid JWT token; the user ID is extracted
-      via :func:`JWTUtils.fetch_user_id`.
-    - Only users with roles corresponding to ``RoleType.ADMIN`` or
-      ``RoleType.SUPER_ADMIN`` are allowed to perform this operation.
+class EligibleAchievementsAPIView(APIView):
+    """Get achievements the current user is eligible to claim"""
 
-    Request
-    -------
-    Method: ``POST``
-
-    Body (form-data or multipart/form-data):
-      - ``achievement_id`` (str or int, required):
-          The ID of the :class:`Achievement` to be issued to users listed in
-          the uploaded file.
-
-    Files:
-      - ``file`` (required):
-          A tabular data file supported by :class:`ImportCSV` (for example,
-          CSV or Excel). Each row must contain the user-identifying data and
-          any additional fields required by ``ImportCSV`` to locate the user
-          and mark the achievement as issued (for example, a user ID or email,
-          and optionally an associated VC URL or related metadata).
-
-    Behavior
-    --------
-    - Validates that the caller is authenticated and has sufficient privileges.
-    - Validates that the target achievement exists.
-    - Reads and parses the uploaded file via :class:`ImportCSV`.
-    - For each valid row, updates or creates the corresponding
-      :class:`UserAchievementsLog` entry to mark the achievement as issued,
-      following whatever rules are implemented in ``ImportCSV`` and the
-      underlying business logic.
-
-    Responses
-    ---------
-    On success:
-      - Returns a :class:`CustomResponse` success payload, typically with a
-        general success message indicating that the bulk issue operation
-        completed. The precise structure follows the project's standard
-        response format used by ``CustomResponse.get_success_response()``.
-
-    On failure:
-      - Returns a :class:`CustomResponse` failure payload with an explanatory
-        ``general_message``. Examples include:
-          * ``"Invalid or missing token"`` if authentication fails.
-          * ``"User Not Exists"`` if the requesting user cannot be found.
-          * ``"You do not have permission to perform this action"`` if the
-            user lacks the required role.
-          * ``"Achievement ID is required"`` if the ID is missing.
-          * ``"Achievement not found"`` if the specified achievement does not
-            exist.
-          * ``"File not found"`` if the upload is missing.
-    """
-    from rest_framework.parsers import MultiPartParser, FormParser
-    parser_classes = [MultiPartParser, FormParser]
-    
-    def post(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            if not user_id:
-                return CustomResponse(
-                    general_message="Invalid or missing token"
-                ).get_failure_response()
-
-            user = User.objects.filter(id=user_id).first()
-            if not user:
-                return CustomResponse(
-                    general_message="User Not Exists"
-                ).get_failure_response()
-
-            if not User.objects.filter(id=user_id, user_role_link_user__role__title=RoleType.ADMIN.value).exists():
-                return CustomResponse(
-                    general_message="You do not have permission to perform this action"
-                ).get_failure_response()
-
-            achievement_id = request.data.get("achievement_id")
-            if not achievement_id:
-                return CustomResponse(
-                    general_message="Achievement ID is required"
-                ).get_failure_response()
-
-            try:
-                achievement = Achievement.objects.get(id=achievement_id)
-            except Achievement.DoesNotExist:
-                return CustomResponse(
-                    general_message="Achievement not found"
-                ).get_failure_response()
-
-            try:
-                file_obj = request.FILES["file"]
-            except KeyError:
-                return CustomResponse(
-                    general_message="File not found"
-                ).get_failure_response()
-
-            excel_data = ImportCSV()
-            try:
-                excel_data = excel_data.read_excel_file(file_obj)
-            except Exception as e:
-                return CustomResponse(
-                    general_message="Error reading Excel file", response=str(e)
-                ).get_failure_response()
-
-            if not excel_data:
-                return CustomResponse(
-                    general_message="Empty Excel file"
-                ).get_failure_response()
-
-            if len(excel_data) <= 1:
-                return CustomResponse(
-                    general_message="Excel file contains no data rows"
-                ).get_failure_response()
-
-            # Assuming the first row is header and contains 'muid'
-            # ImportCSV.read_excel_file returns a list of dictionaries where keys are headers
-            
-            # Validate headers
-            header_keys = excel_data[0].keys()
-            if "muid" not in [key.lower() for key in header_keys if key]:
-                return CustomResponse(
-                    general_message="Excel file must contain 'muid' column"
-                ).get_failure_response()
-
-            created_count = 0
-            updated_count = 0
-            failed_muids = []
-
-            # Bulk fetch users
-            # Pre-process rows to find muids
-            processed_rows = []
-            
-            target_muids = set()
-            for row in excel_data:
-                 # Find the key that corresponds to 'muid' (case-insensitive)
-                muid_key = next((k for k in row.keys() if k and k.lower() == 'muid'), None)
-                val = row.get(muid_key)
-                if val:
-                    muid_str = str(val).strip()
-                    if muid_str.lower() != 'muid':
-                        target_muids.add(muid_str)
-                        processed_rows.append(muid_str)
-            
-            users_map = {user.muid: user for user in User.objects.filter(muid__in=target_muids)}
-
-            for muid in processed_rows:
-                if muid not in users_map:
-                    failed_muids.append(f"{muid}: User not found")
-                    continue
-
-                user_to_issue = users_map[muid]
-
-                try:
-                    # Check if already exists
-                    user_achievement, created = UserAchievementsLog.objects.get_or_create(
-                        user_id=user_to_issue,
-                        achievement_id=achievement,
-                        defaults={
-                            "id": str(uuid.uuid4()),
-                            "created_by": user,
-                            "updated_by": user,
-                            "is_issued": False, # Setting to False to allow users to claim the achievement later
-                            "vc_url": "" # No VC URL in bulk issuance
-                        }
-                    )
-
-                    if created:
-                        created_count += 1
-                    else:
-                        # Update metadata for existing achievement record
-                        user_achievement.updated_by = user
-                        user_achievement.save(update_fields=["updated_by"])
-                        updated_count += 1
-                
-                except Exception as e:
-                    failed_muids.append(f"{muid}: {str(e)}")
-
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
             return CustomResponse(
-                general_message="Bulk issuance processed",
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        from api.dashboard.achievement.rule_engine import RuleEvaluator
+
+        evaluator = RuleEvaluator(user_id)
+        eligible = evaluator.get_eligible_achievements()
+
+        response_data = [
+            {
+                "achievement_id": result.achievement_id,
+                "achievement_name": result.achievement_name,
+                "eligible": result.eligible,
+                "reason": result.reason,
+                "progress": result.progress,
+            }
+            for result in eligible
+        ]
+
+        return CustomResponse(response=response_data).get_success_response()
+
+
+class ClaimAchievementAPIView(APIView):
+    """Claim an achievement (user action)"""
+
+    def post(self, request, achievement_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        from mu_celery.achievement_tasks import claim_achievement
+
+        result = claim_achievement(user_id, achievement_id)
+
+        if result["success"]:
+            return CustomResponse(
+                general_message=result["message"],
                 response={
-                    "created": created_count,
-                    "updated": updated_count,
-                    "failed_count": len(failed_muids),
-                    "failed_muids": failed_muids
-                }
+                    "achievement_name": result.get("achievement_name"),
+                    "vc_pending": result.get("vc_pending", False),
+                },
             ).get_success_response()
-        except Exception as e:
-            import traceback
+        else:
             return CustomResponse(
-                general_message=f"Server error: {str(e)}",
-                response={"traceback": traceback.format_exc()}
-            ).get_failure_response(status_code=500)
+                general_message=result["message"],
+                response={"progress": result.get("progress")},
+            ).get_failure_response()
 
 
-class AchievementBulkImportTemplateAPIView(APIView):
-    """
-    Provides an authenticated endpoint to download an Excel template for
-    bulk importing user achievement issuances.
+class UserProgressAPIView(APIView):
+    """Get progress towards all achievements"""
 
-    On a successful request with a valid JWT, this view returns a
-    `FileResponse` containing a single-sheet `.xlsx` workbook titled
-    "Bulk Import Template" with a header row for `muid`. Clients can
-    populate this template and use it with the bulk import endpoint.
-
-    If the request does not include a valid token, a failure response
-    with an appropriate error message is returned instead of a file.
-    """
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -622,28 +463,28 @@ class AchievementBulkImportTemplateAPIView(APIView):
                 general_message="Invalid or missing token"
             ).get_failure_response()
 
-        wb = openpyxl.Workbook()
-        ws = wb.active
-        ws.title = "Bulk Import Template"
-        ws.append(["muid"])
-        
-        # Add sample data or just leave it with header
-        # ws.append(["user@mulearn"]) 
+        from api.dashboard.achievement.rule_engine import RuleEvaluator
 
-        with BytesIO() as f:
-            wb.save(f)
-            f.seek(0)
-            data = f.read()
+        evaluator = RuleEvaluator(user_id)
+        all_progress = evaluator.get_all_progress()
 
-        response = FileResponse(
-            BytesIO(data),
-            as_attachment=True,
-            filename="achievement_bulk_import_template.xlsx"
-        )
-        return response
+        response_data = [
+            {
+                "achievement_id": result.achievement_id,
+                "achievement_name": result.achievement_name,
+                "eligible": result.eligible,
+                "reason": result.reason,
+                "progress": result.progress,
+            }
+            for result in all_progress
+        ]
+
+        return CustomResponse(response=response_data).get_success_response()
 
 
-class AchievementLogListAPIView(APIView):
+class AchievementRuleListAPIView(APIView):
+    """List all achievement rules (admin)"""
+
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -651,42 +492,350 @@ class AchievementLogListAPIView(APIView):
                 general_message="Invalid or missing token"
             ).get_failure_response()
 
-        # You might want to restrict this to admins
-        # if not User.objects.filter(id=user_id, user_role_link_user__role__title=RoleType.ADMIN.value).exists():
-        #     return CustomResponse(general_message="You do not have permission").get_failure_response()
+        rules = AchievementRule.objects.all().select_related("achievement")
+        data = [
+            {
+                "id": str(rule.id),
+                "achievement_id": str(rule.achievement_id),
+                "achievement_name": rule.achievement.name,
+                "version": rule.version,
+                "rule_type": rule.rule_type,
+                "conditions": rule.conditions,
+                "is_active": rule.is_active,
+                "created_at": rule.created_at.isoformat() if rule.created_at else None,
+            }
+            for rule in rules
+        ]
 
-        queryset = UserAchievementsLog.objects.select_related(
-            'user_id', 'achievement_id', 'created_by'
-        ).all().order_by('-created_at')
+        return CustomResponse(response=data).get_success_response()
 
-        # Search functionality
-        search_query = request.query_params.get('search')
-        if search_query:
-            queryset = queryset.filter(
-                Q(user_id__muid__icontains=search_query) |
-                Q(user_id__full_name__icontains=search_query) |
-                Q(achievement_id__name__icontains=search_query)
-            )
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(
-            queryset, request, ['user_id__full_name', 'created_at']
+class AchievementRuleCreateAPIView(APIView):
+    """Create a new achievement rule (admin)"""
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        data = request.data
+        required_fields = ["achievement_id", "rule_type", "conditions"]
+        missing_fields = [field for field in required_fields if field not in data]
+        if missing_fields:
+            return CustomResponse(
+                general_message=f"Missing required fields: {', '.join(missing_fields)}"
+            ).get_failure_response()
+
+        # Get next version number
+        existing_versions = AchievementRule.objects.filter(
+            achievement_id=data["achievement_id"]
+        ).values_list("version", flat=True)
+        next_version = max(existing_versions) + 1 if existing_versions else 1
+
+        # Deactivate existing rules for this achievement
+        AchievementRule.objects.filter(
+            achievement_id=data["achievement_id"], is_active=True
+        ).update(is_active=False)
+
+        rule = AchievementRule.objects.create(
+            id=str(uuid.uuid4()),
+            achievement_id=data["achievement_id"],
+            version=next_version,
+            rule_type=data["rule_type"],
+            conditions=data["conditions"],
+            is_active=True,
+            created_by_id=user_id,
+            created_at=now(),
+            updated_at=now(),
         )
-
-        data = []
-        for log in paginated_queryset.get('queryset'):
-            issued_by = log.created_by.full_name if log.created_by else None
-            data.append({
-                "id": log.id,
-                "muid": log.user_id.muid,
-                "user_name": log.user_id.full_name,
-                "achievement": log.achievement_id.name,
-                "issued_by": issued_by,
-                "issued_on": log.created_at.strftime("%Y-%m-%d %H:%M:%S")
-            })
 
         return CustomResponse(
-            response={
-                "data": data,
-                "pagination": paginated_queryset.get("pagination"),
-            }
+            general_message=f"Rule v{next_version} created successfully",
+            response={"rule_id": str(rule.id), "version": next_version},
         ).get_success_response()
+
+
+class AchievementRuleDetailAPIView(APIView):
+    """Get details of a specific rule (admin)"""
+
+    def get(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.select_related("achievement").get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        data = {
+            "id": str(rule.id),
+            "achievement_id": str(rule.achievement_id),
+            "achievement_name": rule.achievement.name,
+            "version": rule.version,
+            "rule_type": rule.rule_type,
+            "conditions": rule.conditions,
+            "is_active": rule.is_active,
+            "created_at": rule.created_at.isoformat() if rule.created_at else None,
+        }
+
+        return CustomResponse(response=data).get_success_response()
+
+
+class AchievementRuleDeactivateAPIView(APIView):
+    """Deactivate a rule (admin)"""
+
+    def post(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        rule.is_active = False
+        rule.save()
+
+        return CustomResponse(
+            general_message=f"Rule v{rule.version} deactivated"
+        ).get_success_response()
+
+
+class SimulateRulesAPIView(APIView):
+    """Simulate rule evaluation for a user (admin/debug)"""
+
+    def get(self, request, muid):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        from api.dashboard.achievement.rule_engine import RuleEvaluator
+
+        evaluator = RuleEvaluator(str(target_user.id))
+        all_progress = evaluator.get_all_progress()
+
+        response_data = [
+            {
+                "achievement_id": result.achievement_id,
+                "achievement_name": result.achievement_name,
+                "eligible": result.eligible,
+                "reason": result.reason,
+                "progress": result.progress,
+            }
+            for result in all_progress
+        ]
+
+        return CustomResponse(response=response_data).get_success_response()
+
+
+class DebugAchievementAPIView(APIView):
+    """Debug a specific achievement for a user (admin)"""
+
+    def get(self, request, muid, achievement_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        from api.dashboard.achievement.rule_engine import RuleEvaluator
+        from db.achievement import UserIgKarma, UserStreak, UserSkillProgress
+
+        evaluator = RuleEvaluator(str(target_user.id))
+        result = evaluator.evaluate_achievement(achievement_id)
+
+        if not result:
+            return CustomResponse(
+                general_message="No active rule found for this achievement"
+            ).get_failure_response()
+
+        # Get additional debug data
+        ig_karma = list(
+            UserIgKarma.objects.filter(user_id=target_user.id).values(
+                "ig_id", "total_karma", "task_count"
+            )
+        )
+        streaks = list(
+            UserStreak.objects.filter(user_id=target_user.id).values(
+                "streak_type", "current_streak", "longest_streak"
+            )
+        )
+        skill_progress = list(
+            UserSkillProgress.objects.filter(user_id=target_user.id).values(
+                "skill_id", "completed_task_count", "total_karma"
+            )
+        )
+
+        response_data = {
+            "evaluation": {
+                "achievement_id": result.achievement_id,
+                "achievement_name": result.achievement_name,
+                "eligible": result.eligible,
+                "reason": result.reason,
+                "progress": result.progress,
+            },
+            "user_data": {
+                "ig_karma": ig_karma,
+                "streaks": streaks,
+                "skill_progress": skill_progress,
+            },
+        }
+
+        return CustomResponse(response=response_data).get_success_response()
+
+
+class ManualIssueAPIView(APIView):
+    """Manually issue an achievement (admin)"""
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        muid = request.data.get("muid")
+        achievement_id = request.data.get("achievement_id")
+
+        if not muid or not achievement_id:
+            return CustomResponse(
+                general_message="muid and achievement_id are required"
+            ).get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        from mu_celery.achievement_tasks import manual_issue_achievement
+
+        result = manual_issue_achievement(
+            user_id=str(target_user.id),
+            achievement_id=achievement_id,
+            performed_by=user_id,
+        )
+
+        if result["success"]:
+            return CustomResponse(
+                general_message=result["message"]
+            ).get_success_response()
+        else:
+            return CustomResponse(
+                general_message=result["message"]
+            ).get_failure_response()
+
+
+class RevokeAchievementAPIView(APIView):
+    """Revoke an achievement (admin)"""
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        muid = request.data.get("muid")
+        achievement_id = request.data.get("achievement_id")
+        reason = request.data.get("reason")
+
+        if not muid or not achievement_id:
+            return CustomResponse(
+                general_message="muid and achievement_id are required"
+            ).get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        from mu_celery.achievement_tasks import revoke_achievement
+
+        result = revoke_achievement(
+            user_id=str(target_user.id),
+            achievement_id=achievement_id,
+            performed_by=user_id,
+            reason=reason,
+        )
+
+        if result["success"]:
+            return CustomResponse(
+                general_message=result["message"]
+            ).get_success_response()
+        else:
+            return CustomResponse(
+                general_message=result["message"]
+            ).get_failure_response()
+
+
+class AuditLogAPIView(APIView):
+    """View audit logs for a user (admin)"""
+
+    def get(self, request, muid):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=muid)
+        except User.DoesNotExist:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        audit_logs = (
+            AchievementAuditLog.objects.filter(user_id=target_user.id)
+            .select_related("achievement")
+            .order_by("-created_at")[:100]
+        )
+
+        data = [
+            {
+                "id": str(log.id),
+                "achievement_id": str(log.achievement_id),
+                "achievement_name": log.achievement.name,
+                "action": log.action,
+                "rule_version": log.rule_version,
+                "metadata": log.metadata,
+                "performed_by": str(log.performed_by_id) if log.performed_by_id else None,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+            }
+            for log in audit_logs
+        ]
+
+        return CustomResponse(response=data).get_success_response()
+
