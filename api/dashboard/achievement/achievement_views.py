@@ -349,6 +349,9 @@ class AchievementIssueBulkAPIView(APIView):
                 continue
 
             muid = str(muid).strip()
+
+            if muid.lower() == 'muid':
+                continue
             
             try:
                 user_to_issue = User.objects.get(muid=muid)
