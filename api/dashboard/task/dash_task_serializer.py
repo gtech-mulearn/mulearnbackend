@@ -39,6 +39,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
     total_karma_gainers = serializers.SerializerMethodField()
+    skills = serializers.SerializerMethodField()
 
     created_by = serializers.CharField(source="created_by.full_name")
     updated_by = serializers.CharField(source="updated_by.full_name")
@@ -67,10 +68,20 @@ class TaskListSerializer(serializers.ModelSerializer):
             "created_at",
             "bonus_time",
             "bonus_karma",
+            "skills",
         ]
 
     def get_total_karma_gainers(self, obj):
         return obj.karma_activity_log_task.filter(appraiser_approved=True).count()
+
+    def get_skills(self, obj):
+        """Get all skills linked to this task"""
+        from db.skill import TaskSkillLink
+        skill_links = TaskSkillLink.objects.filter(task_id=obj.id).select_related('skill')
+        return [
+            {'id': link.skill.id, 'name': link.skill.name, 'code': link.skill.code}
+            for link in skill_links
+        ]
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
