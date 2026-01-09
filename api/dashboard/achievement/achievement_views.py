@@ -336,6 +336,21 @@ class AchievementIssueBulkAPIView(APIView):
                 general_message="Excel file must contain 'muid' column"
             ).get_failure_response()
 
+        # Validate that there's at least one data row after the header
+        # Count non-empty, non-header rows
+        data_row_count = 0
+        for row in excel_data:
+            muid_key = next((k for k in row.keys() if k and k.lower() == 'muid'), None)
+            muid = row.get(muid_key)
+            if muid and str(muid).strip().lower() != 'muid':
+                data_row_count += 1
+                break  # We just need to confirm at least one exists
+        
+        if data_row_count == 0:
+            return CustomResponse(
+                general_message="Excel file must contain at least one data row with a valid muid"
+            ).get_failure_response()
+
         created_count = 0
         updated_count = 0
         failed_muids = []
