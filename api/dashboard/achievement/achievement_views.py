@@ -279,6 +279,70 @@ class UserAchievementsIssueAPIView(APIView):
 
 
 class AchievementIssueBulkAPIView(APIView):
+    """
+    Bulk issue achievements for multiple users using an uploaded file.
+
+    This endpoint allows an authorized admin or super admin to mark a given
+    achievement as issued for multiple users in a single request. The client
+    must upload a tabular file (for example, a CSV or Excel spreadsheet) that
+    is compatible with the :class:`ImportCSV` utility. Each row in the file
+    should represent one user for whom the specified achievement should be
+    issued.
+
+    Authentication/Authorization
+    ----------------------------
+    - The request must include a valid JWT token; the user ID is extracted
+      via :func:`JWTUtils.fetch_user_id`.
+    - Only users with roles corresponding to ``RoleType.ADMIN`` or
+      ``RoleType.SUPER_ADMIN`` are allowed to perform this operation.
+
+    Request
+    -------
+    Method: ``POST``
+
+    Body (form-data or multipart/form-data):
+      - ``achievement_id`` (str or int, required):
+          The ID of the :class:`Achievement` to be issued to users listed in
+          the uploaded file.
+
+    Files:
+      - ``file`` (required):
+          A tabular data file supported by :class:`ImportCSV` (for example,
+          CSV or Excel). Each row must contain the user-identifying data and
+          any additional fields required by ``ImportCSV`` to locate the user
+          and mark the achievement as issued (for example, a user ID or email,
+          and optionally an associated VC URL or related metadata).
+
+    Behavior
+    --------
+    - Validates that the caller is authenticated and has sufficient privileges.
+    - Validates that the target achievement exists.
+    - Reads and parses the uploaded file via :class:`ImportCSV`.
+    - For each valid row, updates or creates the corresponding
+      :class:`UserAchievementsLog` entry to mark the achievement as issued,
+      following whatever rules are implemented in ``ImportCSV`` and the
+      underlying business logic.
+
+    Responses
+    ---------
+    On success:
+      - Returns a :class:`CustomResponse` success payload, typically with a
+        general success message indicating that the bulk issue operation
+        completed. The precise structure follows the project's standard
+        response format used by ``CustomResponse.get_success_response()``.
+
+    On failure:
+      - Returns a :class:`CustomResponse` failure payload with an explanatory
+        ``general_message``. Examples include:
+          * ``"Invalid or missing token"`` if authentication fails.
+          * ``"User Not Exists"`` if the requesting user cannot be found.
+          * ``"You do not have permission to perform this action"`` if the
+            user lacks the required role.
+          * ``"Achievement ID is required"`` if the ID is missing.
+          * ``"Achievement not found"`` if the specified achievement does not
+            exist.
+          * ``"File not found"`` if the upload is missing.
+    """
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
