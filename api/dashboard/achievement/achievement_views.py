@@ -410,6 +410,18 @@ class AchievementIssueBulkAPIView(APIView):
 
 
 class AchievementBulkImportTemplateAPIView(APIView):
+    """
+    Provides an authenticated endpoint to download an Excel template for
+    bulk importing user achievement issuances.
+
+    On a successful request with a valid JWT, this view returns a
+    `FileResponse` containing a single-sheet `.xlsx` workbook titled
+    "Bulk Import Template" with a header row for `muid`. Clients can
+    populate this template and use it with the bulk import endpoint.
+
+    If the request does not include a valid token, a failure response
+    with an appropriate error message is returned instead of a file.
+    """
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
