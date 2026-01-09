@@ -9,7 +9,6 @@ from django.db.models import Q
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from . import achievement_serializer
-from db.achievement import Achievement, UserAchievementsLog
 from utils.response import CustomResponse
 from utils.permission import JWTUtils
 from db.user import User
@@ -293,6 +292,11 @@ class AchievementIssueBulkAPIView(APIView):
                 general_message="User Not Exists"
             ).get_failure_response()
 
+        if not User.objects.filter(id=user_id, user_role_link_user__role__title__in=[RoleType.ADMIN.value, RoleType.SUPER_ADMIN.value]).exists():
+             return CustomResponse(
+                general_message="You do not have permission to perform this action"
+            ).get_failure_response()
+
         achievement_id = request.data.get("achievement_id")
         if not achievement_id:
             return CustomResponse(
@@ -326,13 +330,18 @@ class AchievementIssueBulkAPIView(APIView):
                 general_message="Empty Excel file"
             ).get_failure_response()
 
+        if len(excel_data) <= 1:
+            return CustomResponse(
+                general_message="Excel file contains no data rows"
+            ).get_failure_response()
+
         # Assuming the first row is header and contains 'muid'
         # ImportCSV.read_excel_file returns a list of dictionaries where keys are headers
         
         # Validate headers
         header_keys = excel_data[0].keys()
         if "muid" not in [key.lower() for key in header_keys if key]:
-             return CustomResponse(
+            return CustomResponse(
                 general_message="Excel file must contain 'muid' column"
             ).get_failure_response()
 
@@ -340,22 +349,32 @@ class AchievementIssueBulkAPIView(APIView):
         updated_count = 0
         failed_muids = []
 
+        # Bulk fetch users
+        muid_key_map = {}
+        # Pre-process rows to find muids
+        processed_rows = []
+        
+        target_muids = set()
         for row in excel_data:
-            # Find the key that corresponds to 'muid' (case-insensitive)
+             # Find the key that corresponds to 'muid' (case-insensitive)
             muid_key = next((k for k in row.keys() if k and k.lower() == 'muid'), None)
-            muid = row.get(muid_key)
+            val = row.get(muid_key)
+            if val:
+                muid_str = str(val).strip()
+                if muid_str.lower() != 'muid':
+                    target_muids.add(muid_str)
+                    processed_rows.append(muid_str)
+        
+        users_map = {user.muid: user for user in User.objects.filter(muid__in=target_muids)}
 
-            if not muid:
+        for muid in processed_rows:
+            if muid not in users_map:
+                failed_muids.append(f"{muid}: User not found")
                 continue
 
-            muid = str(muid).strip()
+            user_to_issue = users_map[muid]
 
-            if muid.lower() == 'muid':
-                continue
-            
             try:
-                user_to_issue = User.objects.get(muid=muid)
-                
                 # Check if already exists
                 user_achievement, created = UserAchievementsLog.objects.get_or_create(
                     user_id=user_to_issue,
@@ -364,7 +383,7 @@ class AchievementIssueBulkAPIView(APIView):
                         "id": str(uuid.uuid4()),
                         "created_by": user,
                         "updated_by": user,
-                        "is_issued": False, # Setting to False initially as per discussion logic (claimable)
+                        "is_issued": False, # Setting to False to allow users to claim the achievement later
                         "vc_url": "" # No VC URL in bulk issuance
                     }
                 )
@@ -372,13 +391,13 @@ class AchievementIssueBulkAPIView(APIView):
                 if created:
                     created_count += 1
                 else:
-                    # Optional: Update metadata if needed, for now just counting
+                    # Update metadata for existing achievement record
+                    user_achievement.updated_by = user
+                    user_achievement.save(update_fields=["updated_by"])
                     updated_count += 1
             
-            except User.DoesNotExist:
-                failed_muids.append(f"{muid}: User not found")
             except Exception as e:
-                 failed_muids.append(f"{muid}: {str(e)}")
+                failed_muids.append(f"{muid}: {str(e)}")
 
         return CustomResponse(
             general_message="Bulk issuance processed",
@@ -393,6 +412,12 @@ class AchievementIssueBulkAPIView(APIView):
 
 class AchievementBulkImportTemplateAPIView(APIView):
     def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
         wb = openpyxl.Workbook()
         ws = wb.active
         ws.title = "Bulk Import Template"
@@ -445,12 +470,13 @@ class AchievementLogListAPIView(APIView):
 
         data = []
         for log in paginated_queryset.get('queryset'):
+            issued_by = log.created_by.full_name if log.created_by else None
             data.append({
                 "id": log.id,
                 "muid": log.user_id.muid,
                 "user_name": log.user_id.full_name,
                 "achievement": log.achievement_id.name,
-                "issued_by": log.created_by.full_name,
+                "issued_by": issued_by,
                 "issued_on": log.created_at.strftime("%Y-%m-%d %H:%M:%S")
             })
 
