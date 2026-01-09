@@ -350,7 +350,6 @@ class AchievementIssueBulkAPIView(APIView):
         failed_muids = []
 
         # Bulk fetch users
-        muid_key_map = {}
         # Pre-process rows to find muids
         processed_rows = []
         
