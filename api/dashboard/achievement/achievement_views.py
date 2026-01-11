@@ -1,23 +1,30 @@
-from rest_framework.generics import get_object_or_404
-from rest_framework.views import APIView
-from django.http import FileResponse
+import json
+import os
+import uuid
 from io import BytesIO
+
 import openpyxl
-from db.achievement import Achievement, UserAchievementsLog
-from db.user import User
+from django.conf import settings
+from django.core.exceptions import ValidationError
 from django.db.models import Q
-from utils.types import RoleType
+from django.http import FileResponse
+from django.utils.timezone import now
+from rest_framework.generics import get_object_or_404
+from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.views import APIView
+
+from db.achievement import (
+    Achievement,
+    AchievementAuditLog,
+    AchievementRule,
+    UserAchievementsLog,
+)
+from db.task import Level
+from db.user import User
+from utils.permission import JWTUtils
+from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from . import achievement_serializer
-from db.achievement import Achievement, UserAchievementsLog, AchievementRule, AchievementAuditLog
-from utils.response import CustomResponse
-from utils.permission import JWTUtils
-from db.user import User
-from db.task import Level
-import uuid
-from django.utils.timezone import now
-from django.core.exceptions import ObjectDoesNotExist, ValidationError
-from utils.utils import ImportCSV
 
 
 class AchievementListAPIView(APIView):
@@ -47,9 +54,8 @@ class AchievementListAPIView(APIView):
 
 
 class AchievementCreateAPIView(APIView):
-    from rest_framework.parsers import MultiPartParser, FormParser
     parser_classes = [MultiPartParser, FormParser]
-    
+
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -81,10 +87,8 @@ class AchievementCreateAPIView(APIView):
         if isinstance(has_vc_value, str):
             has_vc_value = has_vc_value.lower() in ("true", "1", "yes")
         
-        # Parse tags from JSON string to list (FormData sends strings)
         tags_value = data.get("tags", [])
         if isinstance(tags_value, str):
-            import json
             try:
                 tags_value = json.loads(tags_value)
             except json.JSONDecodeError:
@@ -107,9 +111,6 @@ class AchievementCreateAPIView(APIView):
         # Handle icon file upload
         icon_path = icon_url  # Default to URL if provided
         if icon_file:
-            import os
-            from django.conf import settings
-            
             # Validate file type
             allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
             file_ext = icon_file.name.split('.')[-1].lower()
@@ -162,9 +163,8 @@ class AchievementCreateAPIView(APIView):
 
 
 class AchievementUpdateAPIView(APIView):
-    from rest_framework.parsers import MultiPartParser, FormParser
     parser_classes = [MultiPartParser, FormParser]
-    
+
     def put(self, request, achievement_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -202,9 +202,6 @@ class AchievementUpdateAPIView(APIView):
         # Handle icon file upload
         icon_file = request.FILES.get("icon")
         if icon_file:
-            import os
-            from django.conf import settings
-            
             # Validate file type
             allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
             file_ext = icon_file.name.split('.')[-1].lower()
@@ -260,7 +257,6 @@ class AchievementUpdateAPIView(APIView):
         if "tags" in data:
             tags_value = data.get("tags", [])
             if isinstance(tags_value, str):
-                import json
                 try:
                     data["tags"] = json.loads(tags_value)
                 except json.JSONDecodeError:
@@ -290,8 +286,7 @@ class AchievementDeleteAPIView(APIView):
                 general_message="Invalid or missing token"
             ).get_failure_response()
 
-        user = User.objects.filter(id=user_id).first()
-        if not user:
+        if not User.objects.filter(id=user_id).exists():
             return CustomResponse(
                 general_message="User Not Exists"
             ).get_failure_response()
@@ -522,12 +517,11 @@ class AchievementRuleCreateAPIView(APIView):
     """Create a new achievement rule (admin)"""
 
     def post(self, request):
-        try:
-            user_id = JWTUtils.fetch_user_id(request)
-            if not user_id:
-                return CustomResponse(
-                    general_message="Invalid or missing token"
-                ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
 
         data = request.data
         required_fields = ["achievement_id", "rule_type", "conditions"]
@@ -875,7 +869,7 @@ class AchievementIssueBulkAPIView(APIView):
             required_headers = ['muid', 'achievement_id']
             
             if not all(h in headers for h in required_headers):
-                 return CustomResponse(
+                return CustomResponse(
                     general_message=f"Missing required headers. Required: {required_headers}"
                 ).get_failure_response()
             
@@ -892,14 +886,14 @@ class AchievementIssueBulkAPIView(APIView):
                 achievement_id = row[ach_idx]
                 
                 if not muid or not achievement_id:
-                     continue
+                    continue
                      
                 try:
                     user = User.objects.filter(muid=muid).first()
                     if not user:
-                         failed_rows.append({"row": i, "muid": muid, "reason": "User not found"})
-                         continue
-                         
+                        failed_rows.append({"row": i, "muid": muid, "reason": "User not found"})
+                        continue
+
                     result = manual_issue_achievement(
                         user_id=str(user.id),
                         achievement_id=str(achievement_id),
@@ -948,7 +942,7 @@ class AchievementLogListAPIView(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
-             return CustomResponse(
+            return CustomResponse(
                 general_message="Invalid or missing token"
             ).get_failure_response()
             
@@ -963,15 +957,15 @@ class AchievementLogListAPIView(APIView):
         
         data = []
         for log in paginated_queryset.get('queryset'):
-             data.append({
-                 "id": str(log.id),
-                 "muid": log.user.muid,
-                 "user_name": log.user.full_name,
-                 "achievement_name": log.achievement_id.name,
-                 "is_issued": log.is_issued,
-                 "created_at": log.created_at.isoformat() if log.created_at else None,
-                 "issued_by": log.updated_by.full_name if log.updated_by else None 
-             })
+            data.append({
+                "id": str(log.id),
+                "muid": log.user.muid,
+                "user_name": log.user.full_name,
+                "achievement_name": log.achievement_id.name,
+                "is_issued": log.is_issued,
+                "created_at": log.created_at.isoformat() if log.created_at else None,
+                "issued_by": log.updated_by.full_name if log.updated_by else None
+            })
              
         return CustomResponse().paginated_response(
             data=data,
