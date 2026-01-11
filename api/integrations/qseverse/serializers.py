@@ -3,6 +3,8 @@
 from rest_framework import serializers
 
 class SubjectInfoSerializer(serializers.Serializer):
+    type = serializers.CharField()
+    did = serializers.CharField()
     full_name = serializers.CharField()
     email = serializers.EmailField()
     phone = serializers.CharField(required=False)
