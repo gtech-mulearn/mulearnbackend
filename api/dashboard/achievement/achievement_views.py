@@ -522,11 +522,12 @@ class AchievementRuleCreateAPIView(APIView):
     """Create a new achievement rule (admin)"""
 
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not user_id:
-            return CustomResponse(
-                general_message="Invalid or missing token"
-            ).get_failure_response()
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            if not user_id:
+                return CustomResponse(
+                    general_message="Invalid or missing token"
+                ).get_failure_response()
 
         data = request.data
         required_fields = ["achievement_id", "rule_type", "conditions"]
