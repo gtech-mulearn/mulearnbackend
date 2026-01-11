@@ -101,6 +101,51 @@ class AppleMobileAuthProxyAPI(APIView):
             ).get_failure_response()
 
 
+class UserAuthenticationProxyAPI(APIView):
+    """
+    Proxy endpoint for email/password user authentication.
+    Forwards requests to the auth server and returns the response.
+    """
+
+    def post(self, request):
+        email = request.data.get("emailOrMuid")
+        password = request.data.get("password")
+
+        if not email or not password:
+            return CustomResponse(
+                general_message="Email and password are required"
+            ).get_failure_response()
+
+        try:
+            response = requests.post(
+                f"{AUTH_DOMAIN}/api/v1/auth/user-authentication/",
+                json={"emailOrMuid": email, "password": password},
+                headers={"Content-Type": "application/json"},
+                timeout=30,
+            )
+
+            data = response.json()
+
+            if data.get("hasError"):
+                return CustomResponse(
+                    general_message=data.get("message", {}).get("general", ["Authentication failed"])[0]
+                ).get_failure_response()
+
+            return CustomResponse(
+                general_message="Access Granted",
+                response=data.get("response"),
+            ).get_success_response()
+
+        except requests.exceptions.Timeout:
+            return CustomResponse(
+                general_message="Authentication server timeout"
+            ).get_failure_response()
+        except requests.exceptions.RequestException as e:
+            return CustomResponse(
+                general_message=f"Authentication server error: {str(e)}"
+            ).get_failure_response()
+
+
 class RefreshTokenProxyAPI(APIView):
     """
     Proxy endpoint for token refresh.

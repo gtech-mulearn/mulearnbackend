@@ -4,6 +4,7 @@ from rest_framework.views import APIView
 
 from db.organization import Organization
 from db.task import Channel, InterestGroup, Level, TaskList, TaskType
+from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import Events, RoleType
@@ -162,16 +163,45 @@ class TaskListAPI(APIView):
         mutable_data = request.data.copy()  # Create a mutable copy of request.data
         mutable_data["created_by"] = user_id
         mutable_data["updated_by"] = user_id
+        
+        # Extract skill_ids before serializer processing
+        skill_ids = mutable_data.pop("skill_ids", None)
+        if isinstance(skill_ids, str):
+            import json
+            try:
+                skill_ids = json.loads(skill_ids)
+            except:
+                skill_ids = []
 
         serializer = TaskModifySerializer(data=mutable_data)
 
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
 
-        serializer.save()
+        task = serializer.save()
+        
+        # Handle skill links
+        if skill_ids:
+            self._save_task_skills(task.id, skill_ids, user_id)
+        
         return CustomResponse(
             general_message="Task Created Successfully"
         ).get_success_response()
+    
+    def _save_task_skills(self, task_id, skill_ids, user_id):
+        """Save skill links for a task"""
+        # Clear existing links
+        TaskSkillLink.objects.filter(task_id=task_id).delete()
+        
+        # Create new links
+        for skill_id in skill_ids:
+            if Skill.objects.filter(id=skill_id, is_active=True).exists():
+                TaskSkillLink.objects.create(
+                    id=str(uuid.uuid4()),
+                    task_id=task_id,
+                    skill_id=skill_id,
+                    created_by_id=user_id,
+                )
 
 
 class TaskAPI(APIView):
@@ -201,6 +231,15 @@ class TaskAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         mutable_data = request.data.copy()  # Create a mutable copy of request.data
         mutable_data["updated_by"] = user_id
+        
+        # Extract skill_ids before serializer processing
+        skill_ids = mutable_data.pop("skill_ids", None)
+        if isinstance(skill_ids, str):
+            import json
+            try:
+                skill_ids = json.loads(skill_ids)
+            except:
+                skill_ids = None
 
         task = TaskList.objects.get(pk=task_id)
 
@@ -210,8 +249,27 @@ class TaskAPI(APIView):
             return CustomResponse(message=serializer.errors).get_failure_response()
 
         serializer.save()
+        
+        # Handle skill links if provided
+        if skill_ids is not None:
+            self._save_task_skills(task_id, skill_ids, user_id)
 
         return CustomResponse(general_message=serializer.data).get_success_response()
+    
+    def _save_task_skills(self, task_id, skill_ids, user_id):
+        """Save skill links for a task"""
+        # Clear existing links
+        TaskSkillLink.objects.filter(task_id=task_id).delete()
+        
+        # Create new links
+        for skill_id in skill_ids:
+            if Skill.objects.filter(id=skill_id, is_active=True).exists():
+                TaskSkillLink.objects.create(
+                    id=str(uuid.uuid4()),
+                    task_id=task_id,
+                    skill_id=skill_id,
+                    created_by_id=user_id,
+                )
 
     @role_required(
         [
