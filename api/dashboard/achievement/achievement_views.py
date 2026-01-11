@@ -190,7 +190,12 @@ class AchievementUpdateAPIView(APIView):
                 general_message="Achievement not found"
             ).get_failure_response()
 
-        data = request.data.copy()
+        # Convert QueryDict to regular dict to properly handle list/boolean assignments
+        data = dict(request.data)
+        # QueryDict wraps values in lists, so unwrap single values
+        for key in data:
+            if isinstance(data[key], list) and len(data[key]) == 1:
+                data[key] = data[key][0]
         data["updated_by"] = user_id
 
         # Handle icon file upload
