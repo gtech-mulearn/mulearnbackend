@@ -847,3 +847,133 @@ class AuditLogAPIView(APIView):
 
         return CustomResponse(response=data).get_success_response()
 
+
+
+class AchievementIssueBulkAPIView(APIView):
+    from rest_framework.parsers import MultiPartParser, FormParser
+    parser_classes = [MultiPartParser, FormParser]
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        excel_file = request.FILES.get('excel_file')
+        if not excel_file:
+            return CustomResponse(
+                general_message="No file uploaded"
+            ).get_failure_response()
+
+        try:
+            wb = openpyxl.load_workbook(excel_file)
+            sheet = wb.active
+            
+            headers = [cell.value for cell in sheet[1]]
+            required_headers = ['muid', 'achievement_id']
+            
+            if not all(h in headers for h in required_headers):
+                 return CustomResponse(
+                    general_message=f"Missing required headers. Required: {required_headers}"
+                ).get_failure_response()
+            
+            muid_idx = headers.index('muid')
+            ach_idx = headers.index('achievement_id')
+            
+            success_count = 0
+            failed_rows = []
+            
+            from mu_celery.achievement_tasks import manual_issue_achievement
+
+            for i, row in enumerate(sheet.iter_rows(min_row=2, values_only=True), start=2):
+                muid = row[muid_idx]
+                achievement_id = row[ach_idx]
+                
+                if not muid or not achievement_id:
+                     continue
+                     
+                try:
+                    user = User.objects.filter(muid=muid).first()
+                    if not user:
+                         failed_rows.append({"row": i, "muid": muid, "reason": "User not found"})
+                         continue
+                         
+                    result = manual_issue_achievement(
+                        user_id=str(user.id),
+                        achievement_id=str(achievement_id),
+                        performed_by=user_id
+                    )
+                    
+                    if result['success']:
+                        success_count += 1
+                    else:
+                        failed_rows.append({"row": i, "muid": muid, "reason": result['message']})
+                        
+                except Exception as e:
+                    failed_rows.append({"row": i, "muid": muid, "reason": str(e)})
+
+            return CustomResponse(
+                response={
+                    "success_count": success_count,
+                    "failed_count": len(failed_rows),
+                    "failed_rows": failed_rows
+                },
+                general_message="Bulk issue processing completed"
+            ).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"Error processing file: {str(e)}"
+            ).get_failure_response()
+
+
+class AchievementBulkImportTemplateAPIView(APIView):
+    def get(self, request):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.append(['muid', 'achievement_id'])
+        
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+        
+        response = FileResponse(output, content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+        response['Content-Disposition'] = 'attachment; filename=achievement_bulk_import_template.xlsx'
+        return response
+
+
+class AchievementLogListAPIView(APIView):
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+             return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+            
+        logs = UserAchievementsLog.objects.select_related('user', 'achievement_id').order_by('-created_at')
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            logs, 
+            request, 
+            search_fields=['user__muid', 'user__first_name', 'achievement_id__name'],
+            sort_fields={'created_at': 'created_at'}
+        )
+        
+        data = []
+        for log in paginated_queryset.get('queryset'):
+             data.append({
+                 "id": str(log.id),
+                 "muid": log.user.muid,
+                 "user_name": log.user.full_name,
+                 "achievement_name": log.achievement_id.name,
+                 "is_issued": log.is_issued,
+                 "created_at": log.created_at.isoformat() if log.created_at else None,
+                 "issued_by": log.updated_by.full_name if log.updated_by else None 
+             })
+             
+        return CustomResponse().paginated_response(
+            data=data,
+            pagination=paginated_queryset.get('pagination')
+        )
+
