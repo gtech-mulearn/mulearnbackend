@@ -360,7 +360,7 @@ class AchievementIssueBulkAPIView(APIView):
                     general_message="User Not Exists"
                 ).get_failure_response()
 
-            if not User.objects.filter(id=user_id, user_role_link_user__role__title__in=[RoleType.ADMIN.value, RoleType.SUPER_ADMIN.value]).exists():
+            if not User.objects.filter(id=user_id, user_role_link_user__role__title=RoleType.ADMIN.value).exists():
                 return CustomResponse(
                     general_message="You do not have permission to perform this action"
                 ).get_failure_response()
