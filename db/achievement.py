@@ -9,7 +9,7 @@ class Achievement(models.Model):
     name = models.CharField(max_length=75, unique=True)
     level_id = models.ForeignKey(Level, on_delete=models.CASCADE, db_column="level_id", null=True, blank=True)
     description = models.CharField(max_length=300)
-    icon = models.CharField(max_length=100)
+    icon = models.CharField(max_length=100, blank=True, default="")
     has_vc = models.BooleanField()
     tags = models.JSONField()
     type = models.CharField(max_length=36)

@@ -15,7 +15,11 @@ class AchievementSerializer(serializers.ModelSerializer):
             # Check if it's already a full URL
             if obj.icon.startswith('http://') or obj.icon.startswith('https://'):
                 return obj.icon
-            # Return full media URL for uploaded files
+            # Build full URL with domain
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(f"{settings.MEDIA_URL}{obj.icon}")
+            # Fallback: return media path (frontend will need to prepend backend URL)
             return f"{settings.MEDIA_URL}{obj.icon}"
         return None
 
