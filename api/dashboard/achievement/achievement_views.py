@@ -971,4 +971,3 @@ class AchievementLogListAPIView(APIView):
             data=data,
             pagination=paginated_queryset.get('pagination')
         )
-

@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 
 from utils.response import CustomResponse
 from utils.utils import send_template_mail
-from .donate_serializer import DonorSerializer, DonationSerializer, SubscriptionSerializer, OrderSerializer
+from .donate_serializer import DonorSerializer, DonationSerializer, SubscriptionSerializer, OrderSerializer, BankTransferSerializer
 from db.donor import Donor
 from db.donation import Donation
 from mulearnbackend.settings import RAZORPAY_ID, RAZORPAY_SECRET
@@ -426,7 +426,7 @@ class RazorPayOrderAPI(APIView):
         try:
             serializer = OrderSerializer(data=request.data)
             if not serializer.is_valid():
-                return CustomResponse(general_message=serializer.errors).get_failure_response()
+                return CustomResponse(message=serializer.errors).get_failure_response()
             validated_data = serializer.validated_data
 
             data = {
@@ -448,7 +448,7 @@ class RazorPayOrderAPI(APIView):
             order = razorpay_client.order.create(data)
             return CustomResponse(response=order).get_success_response()
         except razorpay.errors.BadRequestError as e:
-            return CustomResponse(message=str(e)).get_failure_response()
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
 
 class RazorPayVerification(APIView):
@@ -582,7 +582,7 @@ class RazorPaySubscriptionAPI(APIView):
         try:
             serializer = SubscriptionSerializer(data=request.data)
             if not serializer.is_valid():
-                return CustomResponse(general_message=serializer.errors).get_failure_response()
+                return CustomResponse(message=serializer.errors).get_failure_response()
             
             validated_data = serializer.validated_data
             amount = int(float(validated_data.get("amount")) * 100)  # Convert to paise
@@ -802,3 +802,75 @@ class RazorPaySubscriptionVerification(APIView):
         except Exception as e:
             return CustomResponse(general_message=f"Error verifying subscription: {str(e)}").get_failure_response()
 
+
+# ============================================
+# BANK TRANSFER API (for donations >= 5L)
+# ============================================
+
+class BankTransferAPI(APIView):
+    """
+    Handle bank transfer donations for amounts >= ₹5,00,000.
+    Creates a pending verification record without triggering Razorpay or emails.
+    """
+    
+    def post(self, request):
+        try:
+            serializer = BankTransferSerializer(data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(message=serializer.errors).get_failure_response()
+            
+            validated_data = serializer.validated_data
+            
+            # Prepare donor data
+            donor_data = {
+                'name': validated_data.get('name', ''),
+                'email': validated_data.get('email', ''),
+                'phone_number': validated_data.get('phone_number', ''),
+                'pan_number': validated_data.get('pan_number', ''),
+                'address': validated_data.get('address', ''),
+                'company': validated_data.get('company', ''),
+                'is_organisation': validated_data.get('is_organisation', False),
+            }
+            
+            # Get or create donor
+            donor = get_or_create_donor(donor_data['email'], donor_data)
+            
+            # Create donation record with pending verification status
+            donation_data = {
+                'donor': donor.id,
+                'order_id': None,
+                'payment_id': None,
+                'donation_name': validated_data.get('donation_name', ''),
+                'payment_method': 'bank_transfer',
+                'amount': float(validated_data.get('amount')),
+                'currency': 'INR',
+                'donation_type': validated_data.get('donation_type', 'one-time'),
+                'is_paid': False,  # Not paid until verified
+            }
+            
+            donation_serializer = DonationSerializer(data=donation_data)
+            if donation_serializer.is_valid():
+                donation = donation_serializer.save()
+                # Update additional fields that aren't in serializer
+                donation.payment_status = 'PENDING_VERIFICATION'
+                donation.reference_code = validated_data.get('reference_code')
+                donation.proof_url = validated_data.get('proof_url')
+                donation.save()
+            else:
+                return CustomResponse(message=donation_serializer.errors).get_failure_response()
+            
+            # Return success response
+            # NO EMAIL - as per requirements
+            return CustomResponse(
+                response={
+                    'reference_code': validated_data.get('reference_code'),
+                    'amount': float(validated_data.get('amount')),
+                    'status': 'PENDING_VERIFICATION',
+                    'message': 'Bank transfer donation submitted for verification.',
+                }
+            ).get_success_response()
+            
+        except ValueError as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=f"Error processing bank transfer: {str(e)}").get_failure_response()
