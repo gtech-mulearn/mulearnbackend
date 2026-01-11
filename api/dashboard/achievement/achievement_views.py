@@ -11,7 +11,7 @@ from utils.utils import CommonUtils
 from . import achievement_serializer
 from db.achievement import Achievement, UserAchievementsLog, AchievementRule, AchievementAuditLog
 from utils.response import CustomResponse
-from utils.permission import JWTUtils
+from utils.permission import JWTUtils, role_required
 from db.user import User
 from db.task import Level
 import uuid
@@ -568,6 +568,7 @@ class AchievementRuleCreateAPIView(APIView):
 class AchievementRuleDetailAPIView(APIView):
     """Get details of a specific rule (admin)"""
 
+    @role_required([RoleType.ADMIN.value])
     def get(self, request, rule_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
