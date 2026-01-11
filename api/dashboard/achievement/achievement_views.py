@@ -1,5 +1,13 @@
 from rest_framework.generics import get_object_or_404
 from rest_framework.views import APIView
+from django.http import FileResponse
+from io import BytesIO
+import openpyxl
+from db.achievement import Achievement, UserAchievementsLog
+from db.user import User
+from django.db.models import Q
+from utils.types import RoleType
+from utils.utils import CommonUtils
 from . import achievement_serializer
 from db.achievement import Achievement, UserAchievementsLog, AchievementRule, AchievementAuditLog
 from utils.response import CustomResponse
@@ -9,6 +17,7 @@ from db.task import Level
 import uuid
 from django.utils.timezone import now
 from django.core.exceptions import ObjectDoesNotExist, ValidationError
+from utils.utils import ImportCSV
 
 
 class AchievementListAPIView(APIView):
@@ -38,6 +47,9 @@ class AchievementListAPIView(APIView):
 
 
 class AchievementCreateAPIView(APIView):
+    from rest_framework.parsers import MultiPartParser, FormParser
+    parser_classes = [MultiPartParser, FormParser]
+    
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -53,13 +65,30 @@ class AchievementCreateAPIView(APIView):
             ).get_failure_response()
 
         data = request.data
-        required_fields = ["name", "description", "icon", "tags", "type", "has_vc"]
-
+        # Icon can be either a file upload or a text URL
+        icon_file = request.FILES.get("icon")
+        icon_url = data.get("icon", "") if not icon_file else ""
+        
+        required_fields = ["name", "description", "tags", "type", "has_vc"]
         missing_fields = [field for field in required_fields if field not in data]
         if missing_fields:
             return CustomResponse(
                 general_message=f"Missing required fields: {', '.join(missing_fields)}"
             ).get_failure_response()
+
+        # Parse has_vc from string to boolean (FormData sends strings)
+        has_vc_value = data.get("has_vc")
+        if isinstance(has_vc_value, str):
+            has_vc_value = has_vc_value.lower() in ("true", "1", "yes")
+        
+        # Parse tags from JSON string to list (FormData sends strings)
+        tags_value = data.get("tags", [])
+        if isinstance(tags_value, str):
+            import json
+            try:
+                tags_value = json.loads(tags_value)
+            except json.JSONDecodeError:
+                tags_value = []
 
         if Achievement.objects.filter(name=data["name"]).exists():
             return CustomResponse(
@@ -75,15 +104,51 @@ class AchievementCreateAPIView(APIView):
                     general_message="Invalid level_id"
                 ).get_failure_response()
 
+        # Handle icon file upload
+        icon_path = icon_url  # Default to URL if provided
+        if icon_file:
+            import os
+            from django.conf import settings
+            
+            # Validate file type
+            allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
+            file_ext = icon_file.name.split('.')[-1].lower()
+            if file_ext not in allowed_extensions:
+                return CustomResponse(
+                    general_message=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                ).get_failure_response()
+            
+            # Validate file size (max 5MB)
+            if icon_file.size > 5 * 1024 * 1024:
+                return CustomResponse(
+                    general_message="File size exceeds 5MB limit"
+                ).get_failure_response()
+            
+            # Create directory if it doesn't exist
+            upload_dir = os.path.join(settings.MEDIA_ROOT, 'achievements', 'icons')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Generate unique filename
+            unique_filename = f"{uuid.uuid4()}.{file_ext}"
+            file_path = os.path.join(upload_dir, unique_filename)
+            
+            # Save file
+            with open(file_path, 'wb+') as destination:
+                for chunk in icon_file.chunks():
+                    destination.write(chunk)
+            
+            # Store relative path for database
+            icon_path = f"achievements/icons/{unique_filename}"
+
         achievement = Achievement.objects.create(
             id=str(uuid.uuid4()),
             name=data["name"],
             description=data["description"],
-            icon=data["icon"],
-            tags=data["tags"],
+            icon=icon_path,
+            tags=tags_value,
             type=data["type"],
             level_id=level,
-            has_vc=data["has_vc"],
+            has_vc=has_vc_value,
             template_id=data.get("template_id"),
             created_by=user,
             updated_by=user,
@@ -97,6 +162,9 @@ class AchievementCreateAPIView(APIView):
 
 
 class AchievementUpdateAPIView(APIView):
+    from rest_framework.parsers import MultiPartParser, FormParser
+    parser_classes = [MultiPartParser, FormParser]
+    
     def put(self, request, achievement_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -123,8 +191,52 @@ class AchievementUpdateAPIView(APIView):
                 general_message="Achievement not found"
             ).get_failure_response()
 
-        data = request.data.copy()
+        # Convert QueryDict to regular dict to properly handle list/boolean assignments
+        data = dict(request.data)
+        # QueryDict wraps values in lists, so unwrap single values
+        for key in data:
+            if isinstance(data[key], list) and len(data[key]) == 1:
+                data[key] = data[key][0]
         data["updated_by"] = user_id
+
+        # Handle icon file upload
+        icon_file = request.FILES.get("icon")
+        if icon_file:
+            import os
+            from django.conf import settings
+            
+            # Validate file type
+            allowed_extensions = ['jpg', 'jpeg', 'png', 'gif', 'webp', 'svg']
+            file_ext = icon_file.name.split('.')[-1].lower()
+            if file_ext not in allowed_extensions:
+                return CustomResponse(
+                    general_message=f"Invalid file type. Allowed: {', '.join(allowed_extensions)}"
+                ).get_failure_response()
+            
+            # Validate file size (max 5MB)
+            if icon_file.size > 5 * 1024 * 1024:
+                return CustomResponse(
+                    general_message="File size exceeds 5MB limit"
+                ).get_failure_response()
+            
+            # Create directory if it doesn't exist
+            upload_dir = os.path.join(settings.MEDIA_ROOT, 'achievements', 'icons')
+            os.makedirs(upload_dir, exist_ok=True)
+            
+            # Generate unique filename
+            unique_filename = f"{uuid.uuid4()}.{file_ext}"
+            file_path = os.path.join(upload_dir, unique_filename)
+            
+            # Save file
+            with open(file_path, 'wb+') as destination:
+                for chunk in icon_file.chunks():
+                    destination.write(chunk)
+            
+            # Store relative path for database
+            data["icon"] = f"achievements/icons/{unique_filename}"
+        elif "icon" not in data or not data["icon"]:
+            # Keep existing icon if no new file or URL provided
+            data["icon"] = achievement.icon
 
         if "level_id" in data:
             if data["level_id"]:
@@ -137,6 +249,22 @@ class AchievementUpdateAPIView(APIView):
                     ).get_failure_response()
             else:
                 data["level_id"] = None
+
+        # Parse has_vc from string to boolean (FormData sends strings)
+        if "has_vc" in data:
+            has_vc_value = data.get("has_vc")
+            if isinstance(has_vc_value, str):
+                data["has_vc"] = has_vc_value.lower() in ("true", "1", "yes")
+        
+        # Parse tags from JSON string to list (FormData sends strings)
+        if "tags" in data:
+            tags_value = data.get("tags", [])
+            if isinstance(tags_value, str):
+                import json
+                try:
+                    data["tags"] = json.loads(tags_value)
+                except json.JSONDecodeError:
+                    data["tags"] = []
 
         serializer = achievement_serializer.AchievementSerializer(
             achievement, data=data, partial=True

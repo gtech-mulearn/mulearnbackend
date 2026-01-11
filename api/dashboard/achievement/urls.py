@@ -39,4 +39,8 @@ urlpatterns = [
 
     # Legacy endpoint (for VC issuance)
     path('issue-vc/', achievement_views.UserAchievementsIssueAPIView.as_view(), name='achievements-issue'),
+    path('bulk-issue/', achievement_views.AchievementIssueBulkAPIView.as_view(), name='achievements-bulk-issue'),
+    path('bulk-issue/template/', achievement_views.AchievementBulkImportTemplateAPIView.as_view(), name='achievements-bulk-issue-template'),
+    path('issued-log/', achievement_views.AchievementLogListAPIView.as_view(), name='achievements-issued-log'),
 ]
+

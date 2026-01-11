@@ -21,7 +21,7 @@ from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from utils.utils import ImportCSV, CommonUtils
 from .karma_voucher_serializer import VoucherLogCSVSerializer, VoucherLogSerializer, VoucherLogCreateSerializer, \
-    VoucherLogUpdateSerializer
+    VoucherLogUpdateSerializer, ALLOWED_MONTHS, ALLOWED_WEEKS
 
 
 class ImportVoucherLogAPI(APIView):
@@ -95,6 +95,12 @@ class ImportVoucherLogAPI(APIView):
                     error_rows.append(row)
                 elif month is None:
                     row['error'] = "Month cannot be empty"
+                    error_rows.append(row)
+                elif month not in ALLOWED_MONTHS:
+                    row['error'] = f"Month must be one of {ALLOWED_MONTHS}"
+                    error_rows.append(row)
+                elif week and week not in ALLOWED_WEEKS:
+                    row['error'] = f"Week must be one of {ALLOWED_WEEKS}"
                     error_rows.append(row)
                 else:
                     existing_codes = set(
@@ -340,12 +346,16 @@ class VoucherLogAPI(APIView):
     @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
     def delete(self, request, voucher_id):
         if voucher_log := VoucherLog.objects.filter(id=voucher_id).first():
+            if voucher_log.claimed:
+                return CustomResponse(
+                    general_message='Cannot delete a voucher that has already been claimed.'
+                ).get_failure_response()
             voucher_log.delete()
             return CustomResponse(
-                general_message=f'Voucher successfully deleted'
+                general_message='Voucher successfully deleted'
             ).get_success_response()
         return CustomResponse(
-            general_message=f'Invalid Voucher'
+            general_message='Invalid Voucher'
         ).get_failure_response()
 
 

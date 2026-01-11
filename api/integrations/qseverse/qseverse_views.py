@@ -78,10 +78,10 @@ class GetConnectedUserView(APIView):
             response.raise_for_status()
             data = response.json()
             matching_users = data.get("matching_users", [])
-            did = matching_users[0].get("did") if matching_users else None
+            dids = [user.get("did") for user in matching_users if user.get("did")]
 
             return CustomResponse(
-                response={"did": did}
+                response={"dids": dids}
             ).get_success_response()
         except requests.exceptions.RequestException as e:
             return CustomResponse(
