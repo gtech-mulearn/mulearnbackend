@@ -570,12 +570,6 @@ class AchievementRuleDetailAPIView(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request, rule_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not user_id:
-            return CustomResponse(
-                general_message="Invalid or missing token"
-            ).get_failure_response()
-
         try:
             rule = AchievementRule.objects.select_related("achievement").get(id=rule_id)
         except AchievementRule.DoesNotExist:
