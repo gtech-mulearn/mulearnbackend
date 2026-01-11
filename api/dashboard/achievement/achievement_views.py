@@ -280,115 +280,125 @@ class UserAchievementsIssueAPIView(APIView):
 
 
 class AchievementIssueBulkAPIView(APIView):
+    from rest_framework.parsers import MultiPartParser, FormParser
+    parser_classes = [MultiPartParser, FormParser]
+    
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not user_id:
-            return CustomResponse(
-                general_message="Invalid or missing token"
-            ).get_failure_response()
-
-        user = User.objects.filter(id=user_id).first()
-        if not user:
-            return CustomResponse(
-                general_message="User Not Exists"
-            ).get_failure_response()
-
-        achievement_id = request.data.get("achievement_id")
-        if not achievement_id:
-            return CustomResponse(
-                general_message="Achievement ID is required"
-            ).get_failure_response()
-
         try:
-            achievement = Achievement.objects.get(id=achievement_id)
-        except Achievement.DoesNotExist:
-            return CustomResponse(
-                general_message="Achievement not found"
-            ).get_failure_response()
+            user_id = JWTUtils.fetch_user_id(request)
+            if not user_id:
+                return CustomResponse(
+                    general_message="Invalid or missing token"
+                ).get_failure_response()
 
-        try:
-            file_obj = request.FILES["file"]
-        except KeyError:
-            return CustomResponse(
-                general_message="File not found"
-            ).get_failure_response()
+            user = User.objects.filter(id=user_id).first()
+            if not user:
+                return CustomResponse(
+                    general_message="User Not Exists"
+                ).get_failure_response()
 
-        excel_data = ImportCSV()
-        try:
-            excel_data = excel_data.read_excel_file(file_obj)
-        except Exception as e:
-            return CustomResponse(
-                general_message="Error reading Excel file", response=str(e)
-            ).get_failure_response()
+            achievement_id = request.data.get("achievement_id")
+            if not achievement_id:
+                return CustomResponse(
+                    general_message="Achievement ID is required"
+                ).get_failure_response()
 
-        if not excel_data:
-            return CustomResponse(
-                general_message="Empty Excel file"
-            ).get_failure_response()
-
-        # Assuming the first row is header and contains 'muid'
-        # ImportCSV.read_excel_file returns a list of dictionaries where keys are headers
-        
-        # Validate headers
-        header_keys = excel_data[0].keys()
-        if "muid" not in [key.lower() for key in header_keys if key]:
-             return CustomResponse(
-                general_message="Excel file must contain 'muid' column"
-            ).get_failure_response()
-
-        created_count = 0
-        updated_count = 0
-        failed_muids = []
-
-        for row in excel_data:
-            # Find the key that corresponds to 'muid' (case-insensitive)
-            muid_key = next((k for k in row.keys() if k and k.lower() == 'muid'), None)
-            muid = row.get(muid_key)
-
-            if not muid:
-                continue
-
-            muid = str(muid).strip()
-
-            if muid.lower() == 'muid':
-                continue
-            
             try:
-                user_to_issue = User.objects.get(muid=muid)
-                
-                # Check if already exists
-                user_achievement, created = UserAchievementsLog.objects.get_or_create(
-                    user_id=user_to_issue,
-                    achievement_id=achievement,
-                    defaults={
-                        "id": str(uuid.uuid4()),
-                        "created_by": user,
-                        "updated_by": user,
-                        "is_issued": False, # Setting to False initially as per discussion logic (claimable)
-                        "vc_url": "" # No VC URL in bulk issuance
-                    }
-                )
+                achievement = Achievement.objects.get(id=achievement_id)
+            except Achievement.DoesNotExist:
+                return CustomResponse(
+                    general_message="Achievement not found"
+                ).get_failure_response()
 
-                if created:
-                    created_count += 1
-                else:
-                    # Optional: Update metadata if needed, for now just counting
-                    updated_count += 1
-            
-            except User.DoesNotExist:
-                failed_muids.append(f"{muid}: User not found")
+            try:
+                file_obj = request.FILES["file"]
+            except KeyError:
+                return CustomResponse(
+                    general_message="File not found"
+                ).get_failure_response()
+
+            excel_data = ImportCSV()
+            try:
+                excel_data = excel_data.read_excel_file(file_obj)
             except Exception as e:
-                 failed_muids.append(f"{muid}: {str(e)}")
+                return CustomResponse(
+                    general_message="Error reading Excel file", response=str(e)
+                ).get_failure_response()
 
-        return CustomResponse(
-            general_message="Bulk issuance processed",
-            response={
-                "created": created_count,
-                "updated": updated_count,
-                "failed_count": len(failed_muids),
-                "failed_muids": failed_muids
-            }
-        ).get_success_response()
+            if not excel_data:
+                return CustomResponse(
+                    general_message="Empty Excel file"
+                ).get_failure_response()
+
+            # Assuming the first row is header and contains 'muid'
+            # ImportCSV.read_excel_file returns a list of dictionaries where keys are headers
+            
+            # Validate headers
+            header_keys = excel_data[0].keys()
+            if "muid" not in [key.lower() for key in header_keys if key]:
+                 return CustomResponse(
+                    general_message="Excel file must contain 'muid' column"
+                ).get_failure_response()
+
+            created_count = 0
+            updated_count = 0
+            failed_muids = []
+
+            for row in excel_data:
+                # Find the key that corresponds to 'muid' (case-insensitive)
+                muid_key = next((k for k in row.keys() if k and k.lower() == 'muid'), None)
+                muid = row.get(muid_key)
+
+                if not muid:
+                    continue
+
+                muid = str(muid).strip()
+
+                if muid.lower() == 'muid':
+                    continue
+                
+                try:
+                    user_to_issue = User.objects.get(muid=muid)
+                    
+                    # Check if already exists
+                    user_achievement, created = UserAchievementsLog.objects.get_or_create(
+                        user_id=user_to_issue,
+                        achievement_id=achievement,
+                        defaults={
+                            "id": str(uuid.uuid4()),
+                            "created_by": user,
+                            "updated_by": user,
+                            "is_issued": False, # Setting to False initially as per discussion logic (claimable)
+                            "vc_url": "" # No VC URL in bulk issuance
+                        }
+                    )
+
+                    if created:
+                        created_count += 1
+                    else:
+                        # Optional: Update metadata if needed, for now just counting
+                        updated_count += 1
+                
+                except User.DoesNotExist:
+                    failed_muids.append(f"{muid}: User not found")
+                except Exception as e:
+                     failed_muids.append(f"{muid}: {str(e)}")
+
+            return CustomResponse(
+                general_message="Bulk issuance processed",
+                response={
+                    "created": created_count,
+                    "updated": updated_count,
+                    "failed_count": len(failed_muids),
+                    "failed_muids": failed_muids
+                }
+            ).get_success_response()
+        except Exception as e:
+            import traceback
+            return CustomResponse(
+                general_message=f"Server error: {str(e)}",
+                response={"traceback": traceback.format_exc()}
+            ).get_failure_response(status_code=500)
 
 
 class AchievementBulkImportTemplateAPIView(APIView):
