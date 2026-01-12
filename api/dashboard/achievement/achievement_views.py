@@ -47,8 +47,8 @@ class AchievementListAPIView(APIView):
 
 
 class AchievementCreateAPIView(APIView):
-    from rest_framework.parsers import MultiPartParser, FormParser
-    parser_classes = [MultiPartParser, FormParser]
+    from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
