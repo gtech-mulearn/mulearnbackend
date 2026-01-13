@@ -234,7 +234,15 @@ def send_template_mail(
         to=[context["email"]],
     )
 
-    email.attach(attachment)
+    # Handle different attachment formats
+    if isinstance(attachment, tuple) and len(attachment) == 3:
+        # Tuple format: (filename, content, mimetype) for binary attachments
+        filename, content, mimetype = attachment
+        email.attach(filename, content, mimetype)
+    else:
+        # Legacy format: file path or string
+        email.attach(attachment)
+    
     email.content_subtype = "html"
     return email.send()
 
