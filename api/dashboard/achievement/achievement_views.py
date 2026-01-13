@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.http import FileResponse
 from django.utils.timezone import now
 from rest_framework.generics import get_object_or_404
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.views import APIView
 
 from db.achievement import (
@@ -54,7 +54,6 @@ class AchievementListAPIView(APIView):
 
 
 class AchievementCreateAPIView(APIView):
-    from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def post(self, request):
