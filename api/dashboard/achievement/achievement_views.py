@@ -981,10 +981,15 @@ class BulkClaimTaskAchievementAPIView(APIView):
             date_from_str = request.data.get("date_from", yesterday.isoformat())
             date_to_str = request.data.get("date_to", yesterday.isoformat())
 
-            # Simple validation to check format
-            datetime.fromisoformat(date_from_str)
-            datetime.fromisoformat(date_to_str)
+            # Validate date format and convert to date objects
+            date_from = datetime.fromisoformat(date_from_str).date()
+            date_to = datetime.fromisoformat(date_to_str).date()
 
+            # Validate that the date range is logically correct
+            if date_from > date_to:
+                return CustomResponse(
+                    general_message="Invalid date range: date_from cannot be after date_to."
+                ).get_failure_response()
             bulk_check_and_issue_achievements.delay(
                 date_from_str=date_from_str,
                 date_to_str=date_to_str,
