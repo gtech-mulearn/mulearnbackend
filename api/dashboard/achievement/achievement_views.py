@@ -380,7 +380,7 @@ class UserAchievementsIssueAPIView(APIView):
                 general_message="Achievement record not found"
             ).get_failure_response()
 
-        if user_achievement.is_issued:
+        if user_achievement.vc_url:
             return CustomResponse(
                 general_message="This achievement has already been issued"
             ).get_failure_response()
