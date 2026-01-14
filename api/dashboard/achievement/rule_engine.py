@@ -133,8 +133,37 @@ class RuleEvaluator:
             "streak": self._evaluate_streak,
             "milestone": self._evaluate_milestone,
             "event": self._evaluate_event,
+            "task_completion": self._evaluate_task_completion,
         }
         return evaluators.get(rule_type, self._evaluate_unknown)
+
+    def _evaluate_task_completion(self, rule) -> EligibilityResult:
+        """Evaluate task completion rule"""
+        conditions = rule.conditions
+        task_hashtag = conditions.get("task_hashtag")
+        
+        # Check if user has completed the task
+        from db.task import KarmaActivityLog
+        
+        has_completed = KarmaActivityLog.objects.filter(
+            user_id=self.user_id,
+            task__hashtag=task_hashtag,
+            appraiser_approved=True
+        ).exists()
+
+        return EligibilityResult(
+            eligible=has_completed,
+            achievement_id=str(rule.achievement_id),
+            achievement_name=rule.achievement.name,
+            rule_version=rule.version,
+            reason=f"Task Completion: {task_hashtag}",
+            progress={
+                "current": 1 if has_completed else 0,
+                "required": 1,
+                "percentage": 100 if has_completed else 0,
+                "task_hashtag": task_hashtag,
+            },
+        )
 
     def _evaluate_ig_karma(self, rule) -> EligibilityResult:
         """Evaluate IG karma threshold rule"""

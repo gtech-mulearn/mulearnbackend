@@ -417,3 +417,66 @@ def revoke_achievement(
 
     logger.info(f"Achievement {achievement_id} revoked from user {user_id}")
     return {"success": True, "message": "Achievement revoked successfully"}
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60)
+def bulk_check_and_issue_achievements(
+    self, date_from_str: str, date_to_str: str, performed_by_id: str = None
+):
+    """
+    Check and issue all eligible achievements for users active within the given date range.
+    """
+    from db.task import KarmaActivityLog
+    from api.dashboard.achievement.rule_engine import RuleEvaluator
+
+    try:
+        date_from = date.fromisoformat(date_from_str)
+        date_to = date.fromisoformat(date_to_str)
+
+        # 1. Get unique users active in the range
+        user_ids = list(
+            KarmaActivityLog.objects.filter(
+                updated_at__date__range=[date_from, date_to],
+                appraiser_approved=True,
+            )
+            .values_list("user_id", flat=True)
+            .distinct()
+        )
+
+        logger.info(
+            f"Bulk sync: Processing {len(user_ids)} users active between {date_from} and {date_to}"
+        )
+
+        issued_count = 0
+
+        for user_id in user_ids:
+            try:
+                evaluator = RuleEvaluator(str(user_id))
+                eligible_results = evaluator.get_eligible_achievements()
+
+                for result in eligible_results:
+                    if result.eligible:
+                        success = _issue_achievement(
+                            user_id=str(user_id),
+                            achievement_id=result.achievement_id,
+                            rule_version=result.rule_version,
+                            source="bulk_sync",
+                            performed_by=performed_by_id,
+                        )
+                        if success:
+                            issued_count += 1
+            except Exception as e:
+                logger.error(f"Error processing user {user_id} in bulk sync: {e}")
+
+        logger.info(
+            f"Bulk sync complete. Users: {len(user_ids)}, Issued: {issued_count}"
+        )
+        return {
+            "status": "success",
+            "users_processed": len(user_ids),
+            "achievements_issued": issued_count,
+        }
+
+    except Exception as e:
+        logger.exception(f"Bulk sync failed: {e}")
+        raise self.retry(exc=e)
