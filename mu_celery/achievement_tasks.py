@@ -261,10 +261,9 @@ def _issue_achievement(
                 created_at=datetime.now(),
             )
 
-            # Queue VC issuance if applicable
-            achievement = Achievement.objects.get(id=achievement_id)
-            if achievement.has_vc and achievement.template_id:
-                issue_vc_async.delay(user_id, achievement_id, str(achievement_log.id))
+            # NOTE: VC issuance is NOT automatic. Users must claim VCs themselves
+            # from their profile dashboard by clicking "Issue VC".
+            # The frontend calls Qseverse directly and then updates vc_url via API.
 
             logger.info(f"Achievement issued: {achievement_id} to user {user_id}")
             return True
