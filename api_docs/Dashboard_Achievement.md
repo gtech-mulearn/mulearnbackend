@@ -168,3 +168,37 @@ Base path: `/api/dashboard/achievement/`
 }
 ```
 
+```
+
+
+## Endpoint: `bulk-claim/`
+- Brief: Bulk sync endpoint to check and issue all eligible achievements for users active within a date range. Requires API Key authentication.
+- Method: `POST`
+- Headers:
+  - `Api-Key: <BACKEND_API_KEY>`
+  - `Content-Type: application/json`
+- Request body example (JSON):
+```json
+{
+  "date_from": "2026-01-14",
+  "date_to": "2026-01-15"
+}
+```
+- Response example (success):
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": {
+    "general": [
+      "Bulk sync job scheduled successfully."
+    ]
+  },
+  "response": {}
+}
+```
+- Notes:
+  - Both `date_from` and `date_to` are optional and default to yesterday's date.
+  - The task runs asynchronously via Celery.
+  - Logs are written to `logs/root.log`.
+
