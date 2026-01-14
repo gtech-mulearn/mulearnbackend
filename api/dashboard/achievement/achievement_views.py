@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.http import FileResponse
 from django.utils.timezone import now
 from rest_framework.generics import get_object_or_404
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.views import APIView
 
 from datetime import datetime, timedelta
@@ -52,7 +52,6 @@ class AchievementListAPIView(APIView):
 
 
 class AchievementCreateAPIView(APIView):
-    from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
     def post(self, request):
@@ -378,7 +377,7 @@ class UserAchievementsIssueAPIView(APIView):
                 general_message="Achievement record not found"
             ).get_failure_response()
 
-        if user_achievement.is_issued:
+        if user_achievement.vc_url:
             return CustomResponse(
                 general_message="This achievement has already been issued"
             ).get_failure_response()
