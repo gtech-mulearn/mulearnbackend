@@ -13,18 +13,16 @@ from rest_framework.generics import get_object_or_404
 from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.views import APIView
 
-from db.achievement import (
-    Achievement,
-    AchievementAuditLog,
-    AchievementRule,
-    UserAchievementsLog,
-)
+from datetime import datetime, timedelta
+from api.dashboard.achievement import achievement_serializer
+from db.achievement import Achievement, AchievementRule, UserAchievementsLog, AchievementAuditLog
 from db.task import Level
 from db.user import User
-from utils.permission import JWTUtils
+from mu_celery.achievement_tasks import bulk_check_and_issue_achievements
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired, BackendApiKeyPermission
 from utils.response import CustomResponse
-from utils.utils import CommonUtils
-from . import achievement_serializer
+from utils.types import RoleType
+from utils.utils import DateTimeUtils
 
 
 class AchievementListAPIView(APIView):
@@ -971,3 +969,43 @@ class AchievementLogListAPIView(APIView):
             data=data,
             pagination=paginated_queryset.get('pagination')
         )
+
+class BulkClaimTaskAchievementAPIView(APIView):
+    permission_classes = [BackendApiKeyPermission]
+
+    def post(self, request):
+        try:
+            today = datetime.now().date()
+            yesterday = today - timedelta(days=1)
+
+            date_from_str = request.data.get("date_from", yesterday.isoformat())
+            date_to_str = request.data.get("date_to", yesterday.isoformat())
+
+            # Validate date format and convert to date objects
+            date_from = datetime.fromisoformat(date_from_str).date()
+            date_to = datetime.fromisoformat(date_to_str).date()
+
+            # Validate that the date range is logically correct
+            if date_from > date_to:
+                return CustomResponse(
+                    general_message="Invalid date range: date_from cannot be after date_to."
+                ).get_failure_response()
+            bulk_check_and_issue_achievements.delay(
+                date_from_str=date_from_str,
+                date_to_str=date_to_str,
+                performed_by_id=None,
+            )
+
+            return CustomResponse(
+                general_message="Bulk sync job scheduled successfully."
+            ).get_success_response()
+
+        except ValueError:
+            return CustomResponse(
+                general_message="Invalid date format. Use ISO format (YYYY-MM-DD)."
+            ).get_failure_response()
+
+        except Exception as e:
+            return CustomResponse(
+                general_message=f"An unexpected error occurred: {str(e)}"
+            ).get_failure_response()
