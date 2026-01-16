@@ -192,6 +192,16 @@ class LearningCircleRecurrenceType(Enum):
         return [member.value for member in cls]
 
 
+class UnitType(Enum):
+    LEVEL = "level"
+    KARMA = "karma"
+    TASK = "task"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
     "name": "system",
     "gender": "system",
