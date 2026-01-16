@@ -42,4 +42,5 @@ urlpatterns = [
     path('bulk-issue/', achievement_views.AchievementIssueBulkAPIView.as_view(), name='achievements-bulk-issue'),
     path('bulk-issue/template/', achievement_views.AchievementBulkImportTemplateAPIView.as_view(), name='achievements-bulk-issue-template'),
     path('issued-log/', achievement_views.AchievementLogListAPIView.as_view(), name='achievements-issued-log'),
+    path('bulk-claim/', achievement_views.BulkClaimTaskAchievementAPIView.as_view(), name='achievement-bulk-claim'),
 ]

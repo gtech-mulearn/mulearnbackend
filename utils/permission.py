@@ -235,3 +235,12 @@ class RoleRequired:
             ).get_failure_response()
 
         return wrapped_view_func
+
+
+class BackendApiKeyPermission(BasePermission):
+    """
+    Check for BACKEND_API_KEY in the headers.
+    """
+    def has_permission(self, request, view):
+        api_key = request.headers.get("Api-Key")
+        return api_key == settings.BACKEND_API_KEY
