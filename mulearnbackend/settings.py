@@ -265,6 +265,8 @@ RAZORPAY_SECRET = decouple_config("RAZORPAY_SECRET")
 QSEVERSE_BASE_URL = decouple_config("QSEVERSE_BASE_URL")
 QSEVERSE_API_KEY = decouple_config("QSEVERSE_API_KEY")
 
+BACKEND_API_KEY = decouple_config("BACKEND_API_KEY")
+
 DEFAULT_FILE_STORAGE = "django.core.files.storage.FileSystemStorage"
 
 import socket
