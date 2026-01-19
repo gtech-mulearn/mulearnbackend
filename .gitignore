@@ -9,6 +9,7 @@ logs
 migrations/*.py
 */migrations/*.py
 */*/migrations/*.py
+static/
 
 #!migrations/__init__.py
 #!*/migrations/__init__.py

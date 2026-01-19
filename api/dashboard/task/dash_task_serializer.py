@@ -13,6 +13,8 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
+    event = serializers.CharField(source="event.name", required=False, default=None, allow_null=True)
+    event_id = serializers.CharField(source="event.id", required=False, default=None, allow_null=True)
 
     class Meta:
         model = TaskList
@@ -29,6 +31,7 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "level",
             "ig",
             "event",
+            "event_id",
         ]
 
 
@@ -38,6 +41,8 @@ class TaskListSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
+    event = serializers.CharField(source="event.name", required=False, default=None, allow_null=True)
+    event_id = serializers.CharField(source="event.id", required=False, default=None, allow_null=True)
     total_karma_gainers = serializers.SerializerMethodField()
     skills = serializers.SerializerMethodField()
 
@@ -62,6 +67,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "org",
             "ig",
             "event",
+            "event_id",
             "updated_at",
             "updated_by",
             "created_by",
@@ -85,6 +91,8 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
+    event = serializers.CharField(required=False, allow_null=True)
+
     class Meta:
         model = TaskList
         fields = (
@@ -107,6 +115,20 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "bonus_karma",
             "bonus_time",
         )
+
+    def validate_event(self, value):
+        if value:
+            from db.task import Events
+            try:
+                Events.objects.get(id=value)
+            except Events.DoesNotExist:
+                raise serializers.ValidationError("Invalid event ID")
+        return value
+
+    def to_internal_value(self, data):
+        if 'event' in data and data['event']:
+            data['event_id'] = data.pop('event')
+        return super().to_internal_value(data)
 
 
 class TaskImportSerializer(serializers.ModelSerializer):
@@ -132,7 +154,7 @@ class TaskImportSerializer(serializers.ModelSerializer):
             "channel_id",
             "type_id",
             "org_id",
-            "event",
+            "event_id",
             "level_id",
             "ig_id",
             "active",
@@ -154,6 +176,7 @@ class TaskImportSerializer(serializers.ModelSerializer):
         representation["org_id"] = instance.org.code if instance.org else None
         representation["level_id"] = instance.level.name if instance.level else None
         representation["ig_id"] = instance.ig.name if instance.ig else None
+        representation["event_id"] = instance.event.name if instance.event else None
 
         return representation
 
