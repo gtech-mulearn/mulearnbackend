@@ -106,6 +106,7 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "created_by",
             "bonus_karma",
             "bonus_time",
+            "event_id",
         )
 
 
