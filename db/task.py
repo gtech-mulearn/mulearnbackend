@@ -282,11 +282,82 @@ class VoucherLog(models.Model):
         managed = False
         db_table = "voucher_log"
 
+class Category(models.Model):
 
+    class EntityType(models.TextChoices):
+        EVENT = 'event', 'Event'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    name = models.CharField(max_length=255)
+    description = models.TextField(null=True, blank=True)
+    entity_id = models.CharField(max_length=36)
+    entity_type = models.CharField(max_length=20, choices=EntityType.choices)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="category_created_by")
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by", related_name="category_updated_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    class Meta:
+        managed = False
+        db_table = "categories"
+
+        indexes = [
+            models.Index(fields=['entity_id', 'entity_type'], name='idx_categories_entity'),
+        ]
+
+    class Meta:
+        managed = False
+        db_table = "categories"
+
+
+        
 class Events(models.Model):
-    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    name        = models.CharField(max_length=75)
-    description = models.CharField(max_length=200, null=True)
+
+    class Status(models.TextChoices):
+        UPCOMING = 'upcoming', 'Upcoming'
+        ONGOING = 'ongoing', 'Ongoing'
+        COMPLETED = 'completed', 'Completed'
+        CANCELLED = 'cancelled', 'Cancelled'
+        REQUEST = 'request', 'Request'
+
+    class EventType(models.TextChoices):
+        ONLINE = 'online', 'Online'
+        OFFLINE = 'offline', 'Offline'
+        HYBRID = 'hybrid', 'Hybrid'
+
+    class TicketType(models.TextChoices):
+        KARMA = 'karma', 'Karma'
+        PAID = 'paid', 'Paid'
+        FREE = 'free', 'Free'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    name = models.CharField(max_length=75)
+    description = models.CharField(max_length=200, null=True, blank=True)
+    slug = models.CharField(max_length=255)
+    registration_start_date = models.DateTimeField()
+    registration_end_date = models.DateTimeField()
+    event_start_date = models.DateField()
+    event_end_date = models.DateField()
+    event_start_time = models.TimeField()
+    event_end_time = models.TimeField()
+    user_limit = models.IntegerField(default=0)
+    status = models.CharField(max_length=20, choices=Status.choices)
+    event_type = models.CharField(max_length=20, choices=EventType.choices)
+    ticket_type = models.CharField(max_length=20, choices=TicketType.choices)   
+    cover_image = models.CharField(max_length=512, null=True, blank=True)   
+    location_name = models.CharField(max_length=255, null=True, blank=True)
+    location_address = models.TextField(null=True, blank=True)
+    ticket_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
+    link = models.CharField(max_length=255, null=True, blank=True)
+    tags = models.JSONField(null=True, blank=True)
+    
+    category = models.ForeignKey(
+        'Category', 
+        on_delete=models.SET_NULL, 
+        null=True, 
+        db_column='category_id',
+        related_name='events'
+    )
+
     updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by", related_name="event_updated_by")
     updated_at  = models.DateTimeField(auto_now=True)
     created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="event_created_by")
@@ -295,7 +366,6 @@ class Events(models.Model):
     class Meta:
         managed = False
         db_table = "events"
-
 
 class TaskReport(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
