@@ -81,7 +81,7 @@ class BankTransferSerializer(serializers.Serializer):
     company = serializers.CharField(max_length=255, required=False, allow_blank=True)
     donation_type = serializers.ChoiceField(choices=['one-time', 'monthly', 'yearly'], default='one-time')
     is_organisation = serializers.BooleanField(default=False)
-    proof_url = serializers.URLField(max_length=2000)
+    proof_url = serializers.URLField(max_length=2000, required=False, allow_blank=True)
     reference_code = serializers.CharField(max_length=50)
 
     def validate_amount(self, value):
