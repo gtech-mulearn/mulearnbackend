@@ -13,8 +13,8 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
-    event = serializers.CharField(source="event.name", required=False, default=None, allow_null=True)
-    event_id = serializers.CharField(source="event.id", required=False, default=None, allow_null=True)
+    event = serializers.CharField(source="event_fk.name", required=False, default=None, allow_null=True)
+    event_id = serializers.CharField(source="event_fk.id", required=False, default=None, allow_null=True)
 
     class Meta:
         model = TaskList
@@ -41,8 +41,8 @@ class TaskListSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
-    event = serializers.CharField(source="event.name", required=False, default=None, allow_null=True)
-    event_id = serializers.CharField(source="event.id", required=False, default=None, allow_null=True)
+    event = serializers.CharField(source="event_fk.name", required=False, default=None, allow_null=True)
+    event_id = serializers.CharField(source="event_fk.id", required=False, default=None, allow_null=True)
     total_karma_gainers = serializers.SerializerMethodField()
     skills = serializers.SerializerMethodField()
 
@@ -92,6 +92,7 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 class TaskModifySerializer(serializers.ModelSerializer):
     event = serializers.CharField(required=False, allow_null=True)
+    event_fk = serializers.CharField(required=False, allow_null=True, source="event_fk.id")
 
     class Meta:
         model = TaskList
@@ -110,13 +111,14 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "org",
             "ig",
             "event",
+            "event_fk",
             "updated_by",
             "created_by",
             "bonus_karma",
             "bonus_time",
         )
 
-    def validate_event(self, value):
+    def validate_event_fk(self, value):
         if value:
             from db.task import Events
             try:
@@ -126,8 +128,11 @@ class TaskModifySerializer(serializers.ModelSerializer):
         return value
 
     def to_internal_value(self, data):
-        if 'event' in data and data['event']:
-            data['event_id'] = data.pop('event')
+        # Handle event_fk (FK to Events table)
+        if 'event_fk' in data and data['event_fk']:
+            data['event_id'] = data.pop('event_fk')
+        # Handle event (varchar field - legacy/string event name)
+        # Keep event as is for backward compatibility
         return super().to_internal_value(data)
 
 
@@ -154,7 +159,7 @@ class TaskImportSerializer(serializers.ModelSerializer):
             "channel_id",
             "type_id",
             "org_id",
-            "event_id",
+            "event_fk",
             "level_id",
             "ig_id",
             "active",
@@ -176,7 +181,9 @@ class TaskImportSerializer(serializers.ModelSerializer):
         representation["org_id"] = instance.org.code if instance.org else None
         representation["level_id"] = instance.level.name if instance.level else None
         representation["ig_id"] = instance.ig.name if instance.ig else None
-        representation["event_id"] = instance.event.name if instance.event else None
+        # Map event_fk to event_id in output for backward compatibility
+        event_fk_value = representation.pop("event_fk", None)
+        representation["event_id"] = instance.event_fk.name if instance.event_fk else None
 
         return representation
 

@@ -480,7 +480,7 @@ class ImportTaskListCSV(APIView):
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
                 row["org_id"] = org_id or None
-                row["event_id"] = event_id or None
+                row["event_fk"] = event_id or None
                 valid_rows.append(row)
 
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
