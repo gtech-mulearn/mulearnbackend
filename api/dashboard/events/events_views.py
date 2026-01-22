@@ -10,7 +10,22 @@ from .events_serializer import EventsCUDSerializer, EventsListSerializer
 class EventAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
+    def get(self, request, event_id=None):
+        # If event_id is provided, return single event
+        if event_id:
+            event = Events.objects.filter(id=event_id).first()
+            if not event:
+                return CustomResponse(
+                    general_message="Invalid Event id"
+                ).get_failure_response()
+            
+            serializer = EventsListSerializer(event)
+            return CustomResponse(
+                general_message="Event retrieved successfully",
+                response=serializer.data
+            ).get_success_response()
+        
+        # Otherwise, return paginated list of all events
         events = Events.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
             events,
