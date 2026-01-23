@@ -300,14 +300,9 @@ class Category(models.Model):
     class Meta:
         managed = False
         db_table = "categories"
-
         indexes = [
             models.Index(fields=['entity_id', 'entity_type'], name='idx_categories_entity'),
         ]
-
-    class Meta:
-        managed = False
-        db_table = "categories"
 
 
         

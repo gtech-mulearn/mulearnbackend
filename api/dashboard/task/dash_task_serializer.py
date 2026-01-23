@@ -29,6 +29,7 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "level",
             "ig",
             "event",
+            "event_id",
         ]
 
 
@@ -62,6 +63,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "org",
             "ig",
             "event",
+            "event_id",
             "updated_at",
             "updated_by",
             "created_by",

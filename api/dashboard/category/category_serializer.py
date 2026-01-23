@@ -14,11 +14,7 @@ class CategoryListSerializer(serializers.ModelSerializer):
 class CategoryCUDSerializer(serializers.ModelSerializer):
     class Meta:
         model= Category
-        fields= '__all__'
-        extra_kwargs = {
-            'created_by': {'required': False},
-            'updated_by': {'required': False},
-        }
+        fields= ['name', 'description', 'entity_id', 'entity_type']
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")

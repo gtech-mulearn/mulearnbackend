@@ -39,7 +39,7 @@ class EventsCUDSerializer(serializers.ModelSerializer):
         validated_data["created_by_id"] = user_id
         validated_data["updated_by_id"] = user_id
         validated_data['slug'] = slugify(validated_data.get('name'))
-        validated_data['status'] = 'request'
+        validated_data['status'] = Events.Status.REQUEST.value
         
         return Events.objects.create(**validated_data)
 

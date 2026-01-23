@@ -5,6 +5,7 @@ from utils.response import CustomResponse
 from .category_serializer import CategoryListSerializer, CategoryCUDSerializer
 from utils.types import RoleType
 from utils.permission import role_required
+from utils.utils import CommonUtils
 
 class CategoryAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -19,8 +20,16 @@ class CategoryAPI(APIView):
             return CustomResponse(response=serializer.data).get_success_response()
         
         category = Category.objects.all()
-        serializer = CategoryListSerializer(category, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            category,
+            request,
+            ['name']
+        )
+        serializer = CategoryListSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated_queryset.get("pagination")
+        )
 
     @role_required(
         [

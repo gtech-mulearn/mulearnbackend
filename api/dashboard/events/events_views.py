@@ -21,7 +21,7 @@ class EventAPI(APIView):
             serializer = EventsListSerializer(events)
             return CustomResponse(response=serializer.data).get_success_response()
         
-        events = Events.objects.all()
+        events = Events.objects.exclude(status=Events.Status.CANCELLED.value)
         paginated_queryset = CommonUtils.get_paginated_queryset(
             events,
             request,
@@ -147,7 +147,7 @@ class EventAPI(APIView):
                 general_message="Invalid event id"
             ).get_failure_response()
 
-        events.status = 'cancelled'
+        events.status = Events.Status.CANCELLED.value
         events.save()
 
         return CustomResponse(
