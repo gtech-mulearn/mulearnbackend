@@ -1,10 +1,13 @@
 from db.task import Category
 from rest_framework.views import APIView
-from utils.permission import JWTUtils
+from utils.permission import JWTUtils, CustomizePermission
 from utils.response import CustomResponse
 from .category_serializer import CategoryListSerializer, CategoryCUDSerializer
+from utils.types import RoleType
+from utils.permission import role_required
 
 class CategoryAPI(APIView):
+    authentication_classes = [CustomizePermission]
     def get(self, request, category_id=None):
         if category_id:
             category = Category.objects.filter(id=category_id).first()
@@ -19,6 +22,11 @@ class CategoryAPI(APIView):
         serializer = CategoryListSerializer(category, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = CategoryCUDSerializer(
@@ -35,6 +43,11 @@ class CategoryAPI(APIView):
             general_message=serializer.errors,
         ).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def put(self, request, category_id):
         user_id = JWTUtils.fetch_user_id(request)
         category = Category.objects.filter(id=category_id).first()
@@ -57,6 +70,11 @@ class CategoryAPI(APIView):
             general_message=serializer.errors,
         ).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def patch(self, request, category_id):
         user_id = JWTUtils.fetch_user_id(request)
         category = Category.objects.filter(id=category_id).first()
@@ -80,6 +98,11 @@ class CategoryAPI(APIView):
             general_message=serializer.errors,
         ).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def delete(self, request, category_id):
         category = Category.objects.filter(id=category_id).first()
         if not category:

@@ -5,7 +5,8 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from .events_serializer import EventsCUDSerializer, EventsListSerializer
-
+from utils.types import RoleType
+from utils.permission import role_required
 
 class EventAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -38,6 +39,12 @@ class EventAPI(APIView):
                 "pagination"
             )
         )
+    
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
 
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -61,6 +68,11 @@ class EventAPI(APIView):
             general_message=serializer.errors,
         ).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def put(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -88,6 +100,11 @@ class EventAPI(APIView):
             message=serializer.errors
         ).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def patch(self,request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -116,6 +133,11 @@ class EventAPI(APIView):
             message=serializer.errors
         ).get_failure_response()
 
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+        ]
+    )
     def delete(self, request, event_id):
 
         events = Events.objects.filter(id=event_id).first()
