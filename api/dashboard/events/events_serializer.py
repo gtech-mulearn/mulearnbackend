@@ -31,6 +31,9 @@ class EventsCUDSerializer(serializers.ModelSerializer):
             'link': {'required': False, 'allow_null': True},
             'category': {'required': False, 'allow_null': True},
         }
+        read_only_fields = [
+            'id', 'slug', 'created_by', 'updated_by', 'created_at', 'updated_at'
+        ]
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")

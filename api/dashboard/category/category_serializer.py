@@ -13,8 +13,9 @@ class CategoryListSerializer(serializers.ModelSerializer):
 
 class CategoryCUDSerializer(serializers.ModelSerializer):
     class Meta:
-        model= Category
-        fields= ['name', 'description', 'entity_id', 'entity_type']
+        model = Category
+        fields = ["name", "description", "entity_id", "entity_type"]
+        read_only_fields = ["id", "created_by", "updated_by", "created_at", "updated_at"]
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
