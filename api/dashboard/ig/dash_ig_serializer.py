@@ -12,6 +12,9 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     category = serializers.ChoiceField(
         choices=["maker", "coder", "creative", "manager", "others"]
     )
+    status = serializers.ChoiceField(
+        choices=["active", "requested", "cancelled", "rejected"]
+    )
 
     class Meta:
         model = InterestGroup
@@ -31,6 +34,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "icon",
             "code",
             "category",
+            "status",
             "members",
             "updated_by",
             "updated_at",
@@ -74,6 +78,7 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
             "name",
             "code",
             "category",
+            "status",
             "icon",
             "about",
             "prerequisites",
@@ -88,3 +93,32 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
         ]
+
+
+class InterestGroupRequestSerializer(serializers.ModelSerializer):
+    """Serializer for user-submitted IG creation requests."""
+    
+    class Meta:
+        model = InterestGroup
+        fields = [
+            "name",
+            "code",
+            "category",
+            "icon",
+            "about",
+            "prerequisites",
+            "career_opportunities",
+            "resource",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+            "thinktank",
+            "office_hours",
+        ]
+        extra_kwargs = {
+            "name": {"required": True},
+            "code": {"required": True},
+            "category": {"required": True},
+            "icon": {"required": True},
+        }
