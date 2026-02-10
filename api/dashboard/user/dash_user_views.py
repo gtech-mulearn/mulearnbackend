@@ -160,6 +160,7 @@ class UserAPI(APIView):
             {
                 "full_name": "full_name",
                 "karma": "wallet_user__karma",
+                "level": "user_lvl_link_user__level__name", 
                 "created_at": "created_at",
             },
         )
