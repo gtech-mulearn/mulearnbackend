@@ -101,6 +101,52 @@ class UserAPI(APIView):
             "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
         ).all()
 
+        # New Filters
+
+        # karma filter
+        minimum_karma = request.GET.get("minKarma")
+        if minimum_karma is not None:
+            user_queryset = user_queryset.filter(
+                wallet_user__karma__gte=int(minimum_karma)
+            )
+
+        # level filter
+        level = request.GET.get("level")
+        if level:
+            user_queryset = user_queryset.filter(
+                user_lvl_link_user__level__name=level
+            )
+
+        # skill filter
+        skills = request.GET.getlist("skillIds")
+        if len(skills) == 1 and "," in skills[0]:
+            skills = skills[0].split(",")
+
+        if skills:
+            user_queryset = user_queryset.filter(
+                skill_progress__skill_id__in=skills
+            ).distinct()
+        
+        # interest group filter
+        interest_group_ids = request.GET.getlist("interestGroupIds")
+        if len(interest_group_ids) == 1 and "," in interest_group_ids[0]:
+            interest_group_ids = interest_group_ids[0].split(",")
+
+        if interest_group_ids:
+            user_queryset = user_queryset.filter(
+                user_ig_link_user__ig_id__in=interest_group_ids
+            ).distinct()
+
+        # achievement filter
+        achievement_ids = request.GET.getlist("achievementIds")
+        if len(achievement_ids) == 1 and "," in achievement_ids[0]:
+            achievement_ids = achievement_ids[0].split(",")
+
+        if achievement_ids:
+            user_queryset = user_queryset.filter(
+                achievements__achievement_id__in=achievement_ids
+            ).distinct()
+
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
             request,
