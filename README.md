@@ -1,40 +1,125 @@
-# µLearn Backend Project  
 
-## Project Setup:
+# µLearn Backend Project
 
-### Clone the Project
-Clone the repository to your local machine using the following command:
+Backend service for the µLearn platform.
 
-```commandline
+---
+
+## 🧰 Requirements (Install these first)
+
+Make sure these tools are installed before setting up the project.
+
+### 1️⃣ Install Git  
+Download: https://git-scm.com/downloads
+
+Verify installation:
+```bash
+git --version
+````
+
+---
+
+### 2️⃣ Install Python 3.10
+
+Download Python 3.10 from:
+[https://www.python.org/downloads/release/python-3100/](https://www.python.org/downloads/release/python-3100/)
+
+During installation, make sure you tick:
+
+```
+✅ Add Python to PATH
+```
+
+Verify installation:
+
+```bash
+python --version
+```
+
+---
+
+## 🚀 Project Setup
+
+### 1️⃣ Clone the Repository
+
+```bash
 git clone <repo-url>
+cd <project-folder>
 ```
 
-### Create the virtual environment
-Create a virtual environment in a venv folder and activate it:
+---
+
+### 2️⃣ Create Virtual Environment
+
+#### Windows (PowerShell)
+
 ```bash
 python -m venv venv
-source venv/bin/activate
+.\venv\Scripts\Activate.ps1
 ```
-for windows:
+
+
+If activation is successful, you will see:
+
+```
+(venv)
+```
+
+in the terminal.
+
+---
+
+### 3️⃣ Install Dependencies
+
 ```bash
-python -m venv venv
-venv\Scripts\activate.bat  
-```
-### Install Dependencies
-Install the required dependencies using the following command:
-```commandline
 pip install -r requirements.txt
 ```
 
-### Set environment variables
-Create a .env file in the project root directory by copying .env.sample and replace with your values.
+---
 
-> [!NOTE]
-> Apply [this migration script](https://gist.github.com/e3ob/9e1116996e1daec8df8701548eeaa528) before running the project
+### 4️⃣ Set Environment Variables
 
-### Run the Project
-```commandline
+Create a `.env` file in the project root directory.
+
+Copy the contents from:
+
+```
+.env.sample
+```
+
+Then replace the values with your own configuration.
+
+---
+
+### 5️⃣ Apply Required Migration Script
+
+Apply the migration before running the project:
+
+👉 [https://gist.github.com/e3ob/9e1116996e1daec8df8701548eeaa528](https://gist.github.com/e3ob/9e1116996e1daec8df8701548eeaa528)
+
+---
+
+### 6️⃣ Create Required Folders
+
+Before starting the server, create the logs directory.
+
+#### Windows
+
+```bash
+mkdir logs
+```
+
+---
+
+### 7️⃣ Run the Server
+
+```bash
 python manage.py runserver
 ```
 
-Now the project is up and running on http://localhost:8000/.
+The project will start at:
+
+```
+http://localhost:8000/
+```
+
