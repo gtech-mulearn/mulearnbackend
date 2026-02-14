@@ -67,50 +67,103 @@ class BaseCompanyJobView(APIView):
 class ListCompanyJobsAPIView(BaseCompanyJobView):
     """API to list jobs for a specific company."""
     
-    def get(self, request, company_id):
+    def get(self, request):
         try:
             # 1. Get authenticated user
             user = self.get_authenticated_user(request)
+            # print(user)
+            company = Company.objects.get(company_user_id=user.id)
             if not user:
                 return CustomResponse(
                     general_message="User not found",
-                    status_code=status.HTTP_401_UNAUTHORIZED
-                ).get_failure_response()
+                    # status_code=status.HTTP_401_UNAUTHORIZED
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
             
-            # 2. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
-            if not authorized:
-                return error_response
-            
+            # # 2. Check company authorization
+            # authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
+            # if not authorized:
+            #     return error_response
+           ## Check user is linked to a company
+            # if not hasattr(user, "company") or not user.company:
+            #     return CustomResponse(
+            #     general_message="User is not associated with any company",
+            #     # status=status.HTTP_403_FORBIDDEN
+            # ).get_failure_response(
+            #         status_code=403,
+            #         http_status_code=status.HTTP_403_FORBIDDEN
+            #     )
+
+            # company = user.company
             # 3. Get all active jobs for the company
+            # jobs = CompanyJob.objects.filter(
+            #     company_id=company,
+            #     is_deleted=False
+            # ).order_by('-created_at')
             jobs = CompanyJob.objects.filter(
-                company_id=company,
-                is_deleted=False
-            ).order_by('-created_at')
+            company_id=company,
+            is_deleted=False)
+
+            paginated_data = CommonUtils.get_paginated_queryset(
+            queryset=jobs,
+            request=request,
+            search_fields=["title", "location", "job_type"],
+            sort_fields={
+                "title": "title",
+                "createdAt": "created_at",
+                "salary": "salary_range",
+            },
+            is_pagination=True)
+
+            jobs_queryset = paginated_data["queryset"]
+            pagination_info = paginated_data["pagination"]
+
+            serializer = CompanyJobListSerializer(jobs_queryset, many=True)
+
             
             # 4. Prepare response with serializer
             jobs_serializer = CompanyJobListSerializer(jobs, many=True)
             
+            # response_data = {
+            #     "company_id": str(company.id),
+            #     "company_name": company.name,
+            #     "total_jobs": len(jobs_serializer.data),
+            #     "jobs": jobs_serializer.data
+            # }
             response_data = {
-                "company_id": str(company.id),
-                "company_name": company.title,
-                "total_jobs": len(jobs_serializer.data),
-                "jobs": jobs_serializer.data
-            }
+            "company_id": str(company.id),
+            "company_name": company.name,
+            "jobs": serializer.data,
+            "pagination": pagination_info
+        }
+
             
             return CustomResponse(
                 response=response_data,
                 general_message="Jobs retrieved successfully",
-                status=status.HTTP_200_OK
+                # status=status.HTTP_200_OK
             ).get_success_response()
             
         except Exception as e:
             print(f"Error listing company jobs: {str(e)}")
+            # return CustomResponse(
+            #     general_message="Something went wrong",
+            #     # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+              
+            # ).get_failure_response(
+            #         status_code=500,
+            #         http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            #     )
             return CustomResponse(
-                general_message="Something went wrong",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                error_code="SERVER_ERROR"
-            ).get_failure_response()
+                general_message="Something went wrong in listing company jobs",
+                message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+    
 
 
 class CreateCompanyJobAPIView(BaseCompanyJobView):
