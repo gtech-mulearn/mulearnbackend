@@ -1,12 +1,12 @@
 from rest_framework.views import APIView
 from rest_framework import status
 from db.user import User
-from db.company import Company, CompanyJob
+from db.company import Company, CompanyJob,CompanyJobRule
 from utils.permission import JWTUtils, CustomizePermission
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import CommonUtils
-from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer
+from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer 
 
 
 class BaseCompanyJobView(APIView):
@@ -440,3 +440,100 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
                 status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 error_code="SERVER_ERROR"
             ).get_failure_response()
+
+
+class CreateJobRuleAPIView(BaseCompanyJobView):
+    """API to create eligibility rules for a job."""
+    
+    def post(self, request, job_id):
+        try:
+            # 1. Get authenticated user
+            user = self.get_authenticated_user(request)
+            if not user:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get the job
+            try:
+                job = CompanyJob.objects.get(id=job_id)
+            except CompanyJob.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job does not exist",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 3. Check company authorization
+            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            if not authorized:
+                return error_response
+
+            # 4. Validate request data
+            serializer = JobRuleCreateSerializer(data=request.data)
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message="Invalid input data",
+                    message={"validation_errors": serializer.errors}
+                ).get_failure_response(
+                    status_code=400,
+                    http_status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            rule_type = serializer.validated_data['rule_type']
+            rule_type_id = serializer.validated_data['rule_type_id']
+
+            # 5. Check for duplicate rule
+            existing_rule = CompanyJobRule.objects.filter(
+                job_id=job,
+                rule_type=rule_type,
+                rule_type_id=rule_type_id,
+            
+            ).first()
+            
+            if existing_rule:
+                return CustomResponse(
+                    general_message="This rule already exists for the job",
+                    message={"error_code": "DUPLICATE_RULE"}
+                ).get_failure_response(
+                    status_code=400,
+                    http_status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            # 6. Create the job rule
+            job_rule = CompanyJobRule.objects.create(
+                job_id=job_id,
+                rule_type=rule_type,
+                rule_type_id=rule_type_id
+            )
+
+            # 7. Prepare response
+            response_data = {
+                "job_rule": {
+                    "id": str(job_rule.id),
+                    "job_id": str(job.id),
+                    "rule_type": job_rule.rule_type,
+                    "rule_type_id": job_rule.rule_type_id,
+                    "created_at": job_rule.created_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+                }
+            }
+
+            return CustomResponse(
+                general_message="Job rule added successfully",
+                response=response_data
+            ).get_success_response()
+
+        except Exception as e:
+            print(f"Error creating job rule: {str(e)}")
+            return CustomResponse(
+                general_message="Something went wrong",
+                message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )

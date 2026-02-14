@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from db.company import CompanyJob
+from db.company import CompanyJob, CompanyJobRule
 
 
 class CompanyJobListSerializer(serializers.ModelSerializer):
@@ -65,3 +65,37 @@ class CompanyJobUpdateSerializer(serializers.ModelSerializer):
         if not attrs:
             raise serializers.ValidationError("At least one valid field must be provided for update")
         return attrs
+
+class JobRuleCreateSerializer(serializers.ModelSerializer):
+    """Serializer for creating job rules."""
+    
+    RULE_TYPE_CHOICES = [
+        ('skill', 'Skill'),
+        ('interest_group', 'Interest Group'),
+        ('achievement', 'Achievement'),
+    ]
+    
+    rule_type = serializers.ChoiceField(choices=RULE_TYPE_CHOICES)
+    rule_type_id = serializers.CharField(max_length=255)
+    
+    class Meta:
+        model = CompanyJobRule
+        fields = ['rule_type', 'rule_type_id']
+    
+    def validate(self, data):
+        """Additional validation for rule data."""
+        rule_type = data.get('rule_type')
+        rule_type_id = data.get('rule_type_id')
+        
+        # Add validation based on rule_type if needed
+        if rule_type == 'skill':
+            # Validate that skill exists (if you have a Skill model)
+            pass
+        elif rule_type == 'interest_group':
+            # Validate that interest group exists
+            pass
+        elif rule_type == 'achievement':
+            # Validate that achievement exists
+            pass
+            
+        return data
