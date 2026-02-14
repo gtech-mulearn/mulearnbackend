@@ -40,17 +40,25 @@ class BaseCompanyJobView(APIView):
         except Company.DoesNotExist:
             error_response = CustomResponse(
                 general_message="Company does not exist",
-                status_code=status.HTTP_404_NOT_FOUND,
+            #     status_code=status.HTTP_404_NOT_FOUND,
                 error_code="COMPANY_NOT_FOUND"
-            ).get_failure_response()
+            # ).get_failure_response()
+            ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
             return False, None, error_response
         
         if company.company_user_id.id != user.id:
             error_response = CustomResponse(
                 general_message="You are not authorized to access this company",
-                status_code=status.HTTP_403_FORBIDDEN,
+                # status_code=status.HTTP_403_FORBIDDEN,
                 error_code="UNAUTHORIZED"
-            ).get_failure_response()
+            ).get_failure_response(
+                    status_code=403,
+                    http_status_code=status.HTTP_403_FORBIDDEN
+                )
+            
             return False, company, error_response
             
         return True, company, None
@@ -93,7 +101,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
             return CustomResponse(
                 response=response_data,
                 general_message="Jobs retrieved successfully",
-                status_code=status.HTTP_200_OK
+                status=status.HTTP_200_OK
             ).get_success_response()
             
         except Exception as e:
@@ -112,32 +120,72 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             # 1. Get authenticated user
             user = self.get_authenticated_user(request)
             if not user:
+                # return CustomResponse(
+                #     general_message="User not found",
+                #     status_code=status.HTTP_401_UNAUTHORIZED
+                # ).get_failure_response()
                 return CustomResponse(
-                    general_message="User not found",
-                    status_code=status.HTTP_401_UNAUTHORIZED
-                ).get_failure_response()
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+         
+            
+            try:
+                company = Company.objects.get(
+                    company_user_id=user, 
+                    deleted_at__isnull=True,
+                    status='active'
+                )
+              
+            except Company.DoesNotExist:
+                print(f"No company found for user: {user.id}")
+                # return CustomResponse(
+                #     general_message="No active company found for user",
+                #     status_code=status.HTTP_404_NOT_FOUND,
+                #     error_code="NO_COMPANY_FOUND"
+                # ).get_failure_response()
+
+                return CustomResponse(
+                    general_message="No active company found for user",
+                    message={"error_code": "NO_COMPANY_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
 
             # 2. Validate request data
+            print(f"Request data: {request.data}")
             serializer = CompanyJobCreateSerializer(data=request.data)
             if not serializer.is_valid():
+                # return CustomResponse(
+                #     message=serializer.errors,
+                #     status_code=status.HTTP_400_BAD_REQUEST,
+                #     error_code="INVALID_INPUT"
+                # ).get_failure_response()
                 return CustomResponse(
                     message=serializer.errors,
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_INPUT"
-                ).get_failure_response()
+                    general_message="Invalid input data"
+                ).get_failure_response(
+                    status_code=400,
+                    http_status_code=status.HTTP_400_BAD_REQUEST
+                )
+           
             
-            company_id = serializer.validated_data['company_id']
             
-            # 3. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
-            if not authorized:
-                return error_response
-            if company.status != 'active':
-                return CustomResponse(
-                    general_message="Company is not active",
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="COMPANY_INACTIVE"
-                ).get_failure_response()
+            # company_id = serializer.validated_data['company_id']
+            
+            # # 3. Check company authorization
+            # authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
+            # if not authorized:
+            #     return error_response
+            # if company.status != 'active':
+            #     return CustomResponse(
+            #         general_message="Company is not active",
+            #         status_code=status.HTTP_400_BAD_REQUEST,
+            #         error_code="COMPANY_INACTIVE"
+            #     ).get_failure_response()
             
             # 6. Create the job
             job_data = {
@@ -152,9 +200,9 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                 'min_level': serializer.validated_data.get('min_level', 0),
                 'status': 'Active'
             }
-            
+            print(f"Job data before creation: {job_data}")
             job = CompanyJob.objects.create(**job_data)
-            
+            print(f"Job created successfully: {job.id}")  # D
             # 6. Prepare response
             response_data = {
                 "job": {
@@ -169,17 +217,26 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             return CustomResponse(
                 response=response_data,
                 general_message="Job created successfully",
-                status_code=status.HTTP_201_CREATED
+                # status_code=status.HTTP_201_CREATED
             ).get_success_response()
             
         except Exception as e:
             # Log the actual error for debugging
-            print(f"Error creating company job: {str(e)}")
+            # print(f"Error creating company job: {str(e)}")
+  
+            
+            # return CustomResponse(
+            #     general_message="Something went wrong",
+            #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            #     error_code="SERVER_ERROR"
+            # ).get_failure_response()
             return CustomResponse(
                 general_message="Something went wrong",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                error_code="SERVER_ERROR"
-            ).get_failure_response()
+                message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class UpdateCompanyJobAPIView(BaseCompanyJobView):
@@ -190,19 +247,29 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             user = self.get_authenticated_user(request)
             if not user:
                 return CustomResponse(
-                    general_message="User not found",
-                    status_code=status.HTTP_401_UNAUTHORIZED
-                ).get_failure_response()
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
 
             # 2. Get the job to update
             try:
                 job = CompanyJob.objects.get(id=job_id, is_deleted=False)
             except CompanyJob.DoesNotExist:
+                # return CustomResponse(
+                #     general_message="Job does not exist",
+                #     status=status.HTTP_404_NOT_FOUND,
+                #     error_code="JOB_NOT_FOUND"
+                # ).get_failure_response()
+                
                 return CustomResponse(
                     general_message="Job does not exist",
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    error_code="JOB_NOT_FOUND"
-                ).get_failure_response()
+                    message={"error_code": "NO_JOB_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
             
             # 3. Check company authorization
             authorized, company, error_response = self.check_company_authorization(user, job=job)
@@ -212,11 +279,19 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             # 4. Validate request data (partial update)
             serializer = CompanyJobUpdateSerializer(data=request.data, partial=True)
             if not serializer.is_valid():
+                # return CustomResponse(
+                #     message=serializer.errors,
+                #     status=status.HTTP_400_BAD_REQUEST,
+                #     error_code="INVALID_INPUT"
+                # ).get_failure_response()
                 return CustomResponse(
                     message=serializer.errors,
-                    status_code=status.HTTP_400_BAD_REQUEST,
-                    error_code="INVALID_INPUT"
-                ).get_failure_response()
+                    general_message="Invalid input data"
+                ).get_failure_response(
+                    status_code=400,
+                    http_status_code=status.HTTP_400_BAD_REQUEST
+                )
+           
             
             # 5. Track which fields are being updated
             validated_data = serializer.validated_data
@@ -235,20 +310,32 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
                 "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
             
+            # return CustomResponse(
+            #     response=response_data,
+            #     general_message="Job updated successfully",
+            #     status=status.HTTP_200_OK
+            # ).get_success_response()
             return CustomResponse(
                 response=response_data,
                 general_message="Job updated successfully",
-                status_code=status.HTTP_200_OK
+                # status_code=status.HTTP_201_CREATED
             ).get_success_response()
             
         except Exception as e:
             # Log the actual error for debugging
             print(f"Error updating company job: {str(e)}")
+            # return CustomResponse(
+            #     general_message="Something went wrong",
+            #     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            #     error_code="SERVER_ERROR"
+            # ).get_failure_response()
             return CustomResponse(
-                general_message="Something went wrong",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                error_code="SERVER_ERROR"
-            ).get_failure_response()
+                general_message="Something went wrong in updating the job",
+                message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
     
     def delete(self, request, job_id):
         try:
@@ -257,7 +344,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             if not user:
                 return CustomResponse(
                     general_message="User not found",
-                    status_code=status.HTTP_401_UNAUTHORIZED
+                    status=status.HTTP_401_UNAUTHORIZED
                 ).get_failure_response()
 
             # 2. Get the job to delete
@@ -266,7 +353,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             except CompanyJob.DoesNotExist:
                 return CustomResponse(
                     general_message="Job does not exist",
-                    status_code=status.HTTP_404_NOT_FOUND,
+                    status=status.HTTP_404_NOT_FOUND,
                     error_code="JOB_NOT_FOUND"
                 ).get_failure_response()
             
@@ -288,7 +375,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             return CustomResponse(
                 response=response_data,
                 general_message="Job deleted successfully",
-                status_code=status.HTTP_200_OK
+                status=status.HTTP_200_OK
             ).get_success_response()
             
         except Exception as e:
@@ -296,6 +383,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             print(f"Error deleting company job: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
-                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
                 error_code="SERVER_ERROR"
             ).get_failure_response()

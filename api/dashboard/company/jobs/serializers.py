@@ -15,7 +15,7 @@ class CompanyJobListSerializer(serializers.ModelSerializer):
 
 
 class CompanyJobCreateSerializer(serializers.ModelSerializer):
-    company_id = serializers.CharField(max_length=36)
+    # company_id = serializers.CharField(max_length=36)
     
     class Meta:
         model = CompanyJob
