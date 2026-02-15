@@ -397,8 +397,11 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             if not user:
                 return CustomResponse(
                     general_message="User not found",
-                    status=status.HTTP_401_UNAUTHORIZED
-                ).get_failure_response()
+                    # status=status.HTTP_401_UNAUTHORIZED
+                ).get_failure_response(
+                status_code=401,
+                http_status_code=status.HTTP_401_UNAUTHORIZED
+            )
 
             # 2. Get the job to delete
             try:
@@ -406,9 +409,12 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             except CompanyJob.DoesNotExist:
                 return CustomResponse(
                     general_message="Job does not exist",
-                    status=status.HTTP_404_NOT_FOUND,
-                    error_code="JOB_NOT_FOUND"
-                ).get_failure_response()
+                    # status=status.HTTP_404_NOT_FOUND,
+                    # error_code="JOB_NOT_FOUND"
+                ).get_failure_response(
+                status_code=404,
+                http_status_code=status.HTTP_404_NOT_FOUND
+            )
             
             # 3. Check company authorization
             authorized, company, error_response = self.check_company_authorization(user, job=job)
@@ -428,7 +434,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             return CustomResponse(
                 response=response_data,
                 general_message="Job deleted successfully",
-                status=status.HTTP_200_OK
+          
             ).get_success_response()
             
         except Exception as e:
@@ -437,9 +443,12 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             return CustomResponse(
                 general_message="Something went wrong",
                 # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                error_code="SERVER_ERROR"
-            ).get_failure_response()
+                # status=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                # error_code="SERVER_ERROR"
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
 
 
 class CreateJobRuleAPIView(BaseCompanyJobView):
