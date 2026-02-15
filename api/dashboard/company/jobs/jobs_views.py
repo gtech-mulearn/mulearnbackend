@@ -4,9 +4,8 @@ from db.user import User
 from db.company import Company, CompanyJob,CompanyJobRule
 from utils.permission import JWTUtils, CustomizePermission
 from utils.response import CustomResponse
-from utils.types import OrganizationType
 from utils.utils import CommonUtils
-from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer 
+from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer,   JobRuleUpdateSerializer 
 
 
 class BaseCompanyJobView(APIView):
@@ -104,7 +103,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
             # ).order_by('-created_at')
             jobs = CompanyJob.objects.filter(
             company_id=company,
-            is_deleted=False)
+            is_deleted=False).prefetch_related("rules")
 
             paginated_data = CommonUtils.get_paginated_queryset(
             queryset=jobs,
@@ -136,6 +135,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
             "company_id": str(company.id),
             "company_name": company.name,
             "jobs": serializer.data,
+            
             "pagination": pagination_info
         }
 
@@ -360,7 +360,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             response_data = {
                 "job_id": str(job.id),
                 "updated_fields": updated_fields,
-                "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+                # "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
             
             # return CustomResponse(
@@ -533,6 +533,119 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+        
+class UpdateJobRuleAPIView(BaseCompanyJobView):
+    """API to update a specific job rule."""
+    
+    def patch(self, request, job_id, rule_id):
+        try:
+            # 1. Get authenticated user
+            user = self.get_authenticated_user(request)
+            if not user:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get the job
+            try:
+                job = CompanyJob.objects.get(id=job_id)
+            except CompanyJob.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job does not exist",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 3. Check company authorization
+            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            if not authorized:
+                return error_response
+
+            # 4. Get the job rule
+            try:
+                job_rule = CompanyJobRule.objects.get(
+                    id=rule_id,
+                    job_id=job,
+               
+                )
+            except CompanyJobRule.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job rule does not exist",
+                    message={"error_code": "RULE_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 5. Validate request data
+            serializer = JobRuleUpdateSerializer(job_rule, data=request.data, partial=True)
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message="Invalid input data",
+                    message={"validation_errors": serializer.errors, "error_code": "INVALID_INPUT"}
+                ).get_failure_response(
+                    status_code=400,
+                    http_status_code=status.HTTP_400_BAD_REQUEST
+                )
+
+            new_rule_type_id = serializer.validated_data.get('rule_type_id')
+            # new_rule_name = serializer.validated_data.get('rule_name')
+
+            # 6. Check for duplicate rule (if rule_type_id is being changed)
+            if new_rule_type_id and new_rule_type_id != job_rule.rule_type_id:
+                existing_rule = CompanyJobRule.objects.filter(
+                    job_id=job,
+                    rule_type=job_rule.rule_type,
+                    rule_type_id=new_rule_type_id,
+                    
+                ).exclude(id=job_rule.id).first()
+                
+                if existing_rule:
+                    return CustomResponse(
+                        general_message="A rule with this value already exists for the job",
+                        message={"error_code": "DUPLICATE_RULE"}
+                    ).get_failure_response(
+                        status_code=400,
+                        http_status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # 7. Update the job rule
+            old_value =job_rule.rule_type_id
+            
+            if new_rule_type_id:
+                job_rule.rule_type_id = new_rule_type_id
+       
+                
+            job_rule.save()
+
+            # 8. Prepare response
+            response_data = {
+                "rule_id": str(job_rule.id),
+                "updated_value": job_rule.rule_type_id,
+                # "updated_at": job_rule.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+
+            return CustomResponse(
+                general_message="Job rule updated successfully",
+                response=response_data
+            ).get_success_response()
+
+        except Exception as e:
+            import traceback
+            print(f"Error updating job rule: {str(e)}")
+            print(f"Full traceback: {traceback.format_exc()}")
+            return CustomResponse(
+                general_message="Something went wrong",
+                message={"error_code": "SERVER_ERROR", "details": str(e)}
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR

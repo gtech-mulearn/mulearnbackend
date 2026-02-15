@@ -1,15 +1,38 @@
 from rest_framework import serializers
 from db.company import CompanyJob, CompanyJobRule
+from db.skill import Skill
+from db.task import InterestGroup
+from db.achievement import Achievement
+class JobRuleListSerializer(serializers.ModelSerializer):
+    rule_name = serializers.SerializerMethodField()
+    class Meta:
+        model = CompanyJobRule
+        fields = ["id", "rule_type", "rule_type_id","rule_name"]
+    def get_rule_name(self, obj):
+        if obj.rule_type == "skill":
+            skill = Skill.objects.filter(id=obj.rule_type_id).first()
+            return skill.name if skill else None
 
+        elif obj.rule_type == "interest_group":
+            group = InterestGroup.objects.filter(id=obj.rule_type_id).first()
+            return group.name if group else None
+
+        elif obj.rule_type == "achievement":
+            achievement = Achievement.objects.filter(id=obj.rule_type_id).first()
+            return achievement.name if achievement else None
+
+        return None
 
 class CompanyJobListSerializer(serializers.ModelSerializer):
     """Serializer for listing company jobs."""
-    
+    rules = JobRuleListSerializer(many=True, read_only=True)
     class Meta:
         model = CompanyJob
         fields = [
             'id', 'title', 'job_type', 'location', 'salary_range', 
-            'min_karma', 'min_level', 'status', 'created_at', 'updated_at'
+            'min_karma', 'min_level', 'status', 'created_at', 'updated_at',
+              'rules'
+
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
@@ -99,3 +122,56 @@ class JobRuleCreateSerializer(serializers.ModelSerializer):
             pass
             
         return data
+
+
+class JobRuleUpdateSerializer(serializers.ModelSerializer):
+    """Serializer for updating job rules."""
+    
+    rule_type_id = serializers.CharField(max_length=255)
+    # rule_name = serializers.CharField(max_length=255, required=False, allow_blank=True)
+    
+    class Meta:
+        model = CompanyJobRule
+        fields = ['rule_type_id']
+    
+    def validate_rule_type_id(self, value):
+        """Validate that the rule_type_id exists."""
+        if not value or not value.strip():
+            raise serializers.ValidationError("rule_type_id cannot be empty")
+        return value.strip()
+    
+    def validate(self, data):
+        """Additional validation and auto-fetch rule_name if not provided."""
+        rule_type_id = data.get('rule_type_id')
+        # rule_name = data.get('rule_name')
+        
+        # Get the rule_type from the instance being updated
+        if hasattr(self, 'instance') and self.instance:
+            rule_type = self.instance.rule_type
+            
+            # If rule_name is not provided, try to fetch it
+            # if not rule_name:
+            #     data['rule_name'] = self.get_rule_name(rule_type, rule_type_id)
+        
+        return data
+    
+    # def get_rule_name(self, rule_type, rule_type_id):
+    #     """Fetch the rule name based on rule_type and rule_type_id."""
+    #     try:
+    #         if rule_type == 'skill':
+    #             # Replace with actual skill model lookup
+    #             return f"Skill_{rule_type_id}"
+                
+    #         elif rule_type == 'interest_group':
+    #             # Replace with actual interest group model lookup
+    #             return f"InterestGroup_{rule_type_id}"
+                
+    #         elif rule_type == 'achievement':
+    #             # Replace with actual achievement model lookup
+    #             return f"Achievement_{rule_type_id}"
+                
+    #     except Exception as e:
+    #         print(f"Error fetching rule name: {str(e)}")
+    #         return f"Unknown {rule_type}"
+        
+    #     return rule_type_id

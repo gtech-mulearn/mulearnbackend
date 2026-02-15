@@ -78,7 +78,7 @@ class CompanyJobRule(models.Model):
         ('achievement', 'Achievement')
     ]
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    job = models.ForeignKey(CompanyJob, on_delete=models.CASCADE)
+    job = models.ForeignKey(CompanyJob,  related_name="rules",  on_delete=models.CASCADE)
     rule_type = models.CharField(max_length=20, choices=RULE_CHOICES)
     rule_type_id = models.CharField(max_length=36)  # generic FK
     created_at = models.DateTimeField(auto_now_add=True)
