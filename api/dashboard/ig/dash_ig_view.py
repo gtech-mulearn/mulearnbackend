@@ -10,6 +10,7 @@ from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
+    InterestGroupRequestSerializer,
 )
 import json
 from django.utils.decorators import method_decorator
@@ -324,6 +325,159 @@ class InterestGroupGetAPI(APIView):
             return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+
+class InterestGroupRequestAPI(APIView):
+    """API endpoint for users to submit and retrieve IG creation requests."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    def get(self, request):
+        """Retrieve Interest Group requests created by a company user.
+        
+        Query Parameters:
+            - user_id (optional): Filter by specific company user ID. 
+              If not provided, defaults to the authenticated user's ID.
+              Only admins can query other users' requests.
+            - status (optional): Filter by IG status (requested, active, rejected, cancelled)
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        target_user_id = request.query_params.get('user_id')
+        status_filter = request.query_params.get('status')
+        is_admin = RoleType.ADMIN.value in roles
+
+        ig_queryset = InterestGroup.objects.select_related(
+            "created_by", "updated_by"
+        ).prefetch_related(
+            "user_ig_link_ig"
+        )
+        
+        if target_user_id:
+            if target_user_id != user_id and not is_admin:
+                return CustomResponse(
+                    general_message="You can only view your own IG requests"
+                ).get_failure_response()
+            ig_queryset = ig_queryset.filter(created_by_id=target_user_id)
+        else:
+            if not is_admin:
+                ig_queryset = ig_queryset.filter(created_by_id=user_id)
+
+        if status_filter:
+            valid_statuses = ['active', 'requested', 'cancelled', 'rejected']
+            if status_filter not in valid_statuses:
+                return CustomResponse(
+                    general_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+                ).get_failure_response()
+            ig_queryset = ig_queryset.filter(status=status_filter)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            ig_queryset,
+            request,
+            ["name", "code", "category"],
+            {
+                "name": "name",
+                "status": "status",
+                "created_on": "created_at",
+                "updated_on": "updated_at",
+            },
+        )
+
+        ig_serializer_data = InterestGroupSerializer(
+            paginated_queryset.get("queryset"), many=True
+        ).data
+        
+        return CustomResponse().paginated_response(
+            data=ig_serializer_data, 
+            pagination=paginated_queryset.get("pagination")
+        )
+
+    @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    def post(self, request):
+        """Submit a new Interest Group creation request."""
+        user_id = JWTUtils.fetch_user_id(request)
+
+        request_data = request.data.copy()
+
+        for fld in [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+        ]:
+            if fld in request_data and not isinstance(request_data.get(fld), str):
+                try:
+                    request_data[fld] = json.dumps(request_data.get(fld))
+                except Exception:
+                    pass
+
+        request_data["created_by"] = request_data["updated_by"] = user_id
+        request_data["status"] = "requested"
+
+        serializer = InterestGroupRequestSerializer(data=request_data)
+
+        if serializer.is_valid():
+            ig_instance = serializer.save(
+                created_by_id=user_id,
+                updated_by_id=user_id,
+                status="requested"
+            )
+            response_serializer = InterestGroupSerializer(ig_instance)
+            
+            return CustomResponse(
+                response={"interestGroup": response_serializer.data},
+                general_message="Interest Group request submitted successfully. It will be reviewed by admins."
+            ).get_success_response()
+
+        return CustomResponse(
+            general_message=serializer.errors
+        ).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        """Update Interest Group request status (Admin only).
+        
+        Allowed status transitions:
+            - requested → active
+            - requested → rejected
+            - requested → cancelled
+            - any status → any status (admin override)
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        
+        try:
+            ig = InterestGroup.objects.get(id=pk)
+        except InterestGroup.DoesNotExist:
+            return CustomResponse(
+                general_message="Interest Group not found"
+            ).get_failure_response()
+
+        new_status = request.data.get('status')
+
+        valid_statuses = ['active', 'requested', 'cancelled', 'rejected']
+        if not new_status:
+            return CustomResponse(
+                general_message="Status field is required"
+            ).get_failure_response()
+        
+        if new_status not in valid_statuses:
+            return CustomResponse(
+                general_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            ).get_failure_response()
+
+        ig.status = new_status
+        ig.updated_by_id = user_id
+        ig.save()
+
+        response_serializer = InterestGroupSerializer(ig)
+        
+        return CustomResponse(
+            response={"interestGroup": response_serializer.data},
+            general_message=f"Interest Group status updated to '{new_status}'"
+        ).get_success_response()
+
 
 
 class InterestGroupListApi(APIView):
