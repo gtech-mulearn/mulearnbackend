@@ -292,6 +292,70 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             )
 
 
+class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
+    """API view for retrieving specific job posting details."""
+    
+    def get(self, request, job_id):
+        try:
+            # 1. Get authenticated user
+            user = self.get_authenticated_user(request)
+            if not user:
+                return CustomResponse(
+                    general_message="Authentication required"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get the job details
+            try:
+                job = CompanyJob.objects.get(id=job_id, is_deleted=False)
+            except CompanyJob.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job does not exist",
+                 
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 3. Prepare job response data
+            job_data = {
+                "id": str(job.id),
+                "company_id": str(job.company_id.id),
+                "title": job.title,
+                "experience": job.experience,
+                "job_description": job.job_description,
+                "location": job.location,
+                "salary_range": job.salary_range,
+                "job_type": job.job_type,
+                "min_karma": job.min_karma,
+                "min_level": job.min_level,
+                "created_at": job.created_at.strftime('%Y-%m-%dT%H:%M:%SZ'),
+                "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+
+            response_data = {
+                "job": job_data
+            }
+
+            return CustomResponse(
+                response=response_data,
+                general_message="Job details fetched successfully"
+            ).get_success_response( )
+
+        except Exception as e:
+            # Log the actual error for debugging
+            print(f"Error fetching job details: {str(e)}")
+            return CustomResponse(
+                general_message="Something went wrong",
+             
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
 class UpdateCompanyJobAPIView(BaseCompanyJobView):
     
     def patch(self, request, job_id):
