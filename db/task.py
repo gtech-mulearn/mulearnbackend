@@ -41,6 +41,18 @@ class InterestGroup(models.Model):
     code = models.CharField(max_length=10, unique=True)
     icon = models.CharField(max_length=10)
     category =models.CharField(max_length=20,default="others",blank=False,null=False)
+    status = models.CharField(
+        max_length=20,
+        choices=[
+            ('active', 'Active'),
+            ('requested', 'Requested'),
+            ('cancelled', 'Cancelled'),
+            ('rejected', 'Rejected'),
+        ],
+        default='requested',
+        blank=False,
+        null=False
+    )
     about = models.TextField(blank=True, null=True)
     prerequisites = models.TextField(blank=True, null=True)
     career_opportunities = models.TextField(blank=True, null=True)
