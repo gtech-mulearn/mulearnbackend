@@ -3,7 +3,6 @@ from django.core.cache import cache
 from rest_framework.views import APIView
 
 from db.user import User
-from utils.permission import BackendApiKeyPermission
 from utils.response import CustomResponse
 from .external_api_serializer import ExternalUserDetailsSerializer
 
@@ -50,11 +49,10 @@ class ExternalUserDetailsAPI(APIView):
     External API endpoint for fetching basic user details.
     
     This endpoint is designed for external website integration.
-    Requires API key authentication and only returns public user profiles.
+    Public endpoint (no authentication required) that only returns public user profiles.
     
     Rate limited to 100 requests per minute per IP address.
     """
-    permission_classes = [BackendApiKeyPermission]
 
     @rate_limit(max_requests=100, time_window=60)
     def get(self, request):
