@@ -44,6 +44,7 @@ class RoleType(Enum):
     IG_LEAD = "IG Lead"
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
+    MULEARNER = "Mulearner"
     COMPANY = "Company"
 
     @classmethod
