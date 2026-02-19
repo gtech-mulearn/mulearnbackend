@@ -323,12 +323,18 @@ class UserSerializer(serializers.ModelSerializer):
         if level := Level.objects.filter(level_order="1").first():
             UserLvlLink.objects.create(level=level, **additional_values)
 
-        if role:
-            additional_values.pop("updated_by")
+        additional_values.pop("updated_by")
 
+        if not role:
+            role = Role.objects.filter(title=RoleType.MULEARNER.value).first()
+
+        if role:
             UserRoleLink.objects.create(
                 role=role,
-                verified=role.title == RoleType.STUDENT.value,
+                verified=role.title in (
+                    RoleType.STUDENT.value,
+                    RoleType.MULEARNER.value,
+                ),
                 **additional_values,
             )
 
