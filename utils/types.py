@@ -44,6 +44,8 @@ class RoleType(Enum):
     IG_LEAD = "IG Lead"
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
+    MULEARNER = "Mulearner"
+    COMPANY = "Company"
 
     @classmethod
     def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):
@@ -186,6 +188,16 @@ class TFPTasksHashtags(Enum):
 class LearningCircleRecurrenceType(Enum):
     WEEKLY = "weekly"
     MONTHLY = "monthly"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+
+class UnitType(Enum):
+    LEVEL = "level"
+    KARMA = "karma"
+    TASK = "task"
 
     @classmethod
     def get_all_values(cls):
