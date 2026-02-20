@@ -17,6 +17,7 @@ Including another URLconf
 from django.conf import settings
 from django.urls import path, include, re_path
 from django.views.static import serve
+<<<<<<< HEAD
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -32,6 +33,17 @@ urlpatterns = [
     ),
     # OpenAPI Schema
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
+=======
+from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
+
+urlpatterns = [
+    # path('admin/', admin.site.urls),
+    path('api/v1/', include('api.urls')),
+    # Swagger/OpenAPI endpoints
+    path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
+    path('api/v1/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
+    re_path(r'^muback-media/(?P<path>.*)$',serve,{'document_root':settings.MEDIA_ROOT})
+>>>>>>> dda433f4 (feat(company): implement Company module with lifecycle workflow and admin approval)
 ]
 
 if decouple_config("ENABLE_SWAGGER", default=False, cast=bool):

@@ -1,4 +1,5 @@
 import uuid
+<<<<<<< HEAD
 from django.db import models
 from django.conf import settings
 from .user import User
@@ -15,25 +16,70 @@ class Company(models.Model):
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     company_user_id = models.ForeignKey(User, on_delete=models.CASCADE, db_column='company_user_id', related_name='company_user')
+=======
+
+from django.db import models
+
+from .user import User
+
+
+class Company(models.Model):
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('active', 'Active'),
+        ('inactive', 'Inactive'),
+    ]
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    company_user = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='company_user_id',
+        related_name='company_user'
+    )
+>>>>>>> dda433f4 (feat(company): implement Company module with lifecycle workflow and admin approval)
     name = models.CharField(max_length=75, unique=True)
     logo = models.TextField(blank=True, null=True)
     description = models.TextField()
     industry_sector = models.CharField(max_length=75, blank=True, null=True)
     website_link = models.TextField(blank=True, null=True)
+<<<<<<< HEAD
     email = models.EmailField(max_length=100, blank=True, null=True)
     slug = models.CharField(max_length=100, unique=True)
     status = models.CharField(max_length=10, choices=STATUS_CHOICES, blank=True, null=True)
+=======
+    email = models.CharField(max_length=100, blank=True, null=True)
+    slug = models.CharField(max_length=100, unique=True)
+    status = models.CharField(
+        max_length=10, choices=STATUS_CHOICES, default='pending'
+    )
+>>>>>>> dda433f4 (feat(company): implement Company module with lifecycle workflow and admin approval)
     location = models.CharField(max_length=150, blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)
+<<<<<<< HEAD
     updated_by = models.CharField(max_length=36, blank=True, null=True)
     deleted_by = models.CharField(max_length=36, blank=True, null=True)
+=======
+    updated_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        db_column='updated_by',
+        related_name='company_updated_by',
+        blank=True, null=True
+    )
+    deleted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        db_column='deleted_by',
+        related_name='company_deleted_by',
+        blank=True, null=True
+    )
+>>>>>>> dda433f4 (feat(company): implement Company module with lifecycle workflow and admin approval)
 
     class Meta:
         managed = False
         db_table = 'company'
 
+<<<<<<< HEAD
 
 class CompanyJob(models.Model):
     JOB_TYPE_CHOICES = [
@@ -96,3 +142,7 @@ class CompanyJobRule(models.Model):
             return InterestGroup.objects.get(id=self.rule_type_id)
         else:
             return Achievement.objects.get(id=self.rule_type_id)
+=======
+    def __str__(self):
+        return self.name
+>>>>>>> dda433f4 (feat(company): implement Company module with lifecycle workflow and admin approval)
