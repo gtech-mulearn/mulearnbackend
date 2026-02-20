@@ -1,5 +1,7 @@
 from django.urls import path
 
+from .common_views import *
+from .external_api_views import ExternalUserDetailsAPI
 from . import common_views
 
 urlpatterns = [
@@ -28,4 +30,5 @@ urlpatterns = [
     path("list/district/", common_views.LcDistrictAPI.as_view()),
     path("list/state/", common_views.LcStateAPI.as_view()),
     path("list/country/", common_views.LcCountryAPI.as_view()),
+    path("external/user/", ExternalUserDetailsAPI.as_view()),
 ]
