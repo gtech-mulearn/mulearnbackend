@@ -95,11 +95,68 @@ class UserGetPatchDeleteAPI(APIView):
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    def normalize_list_param(self, values):
+        """
+        Supports:
+        - repeated params: ?x=a&x=b
+        - csv params: ?x=a,b
+        - mixed: ?x=a&x=b,c
+        """
+        result = []
+        for value in values:
+            if value:
+                result.extend(v.strip() for v in value.split(",") if v.strip())
+        return result
     @role_required([RoleType.ADMIN.value])
+
     def get(self, request):
         user_queryset = User.objects.select_related(
             "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
         ).all()
+
+        # New Filters
+
+        # karma filter
+        minimum_karma = request.query_params.get("minKarma")
+        if minimum_karma:
+            try:
+                minimum_karma = int(minimum_karma)
+            except ValueError:
+                return CustomResponse(
+                    general_message="Invalid minKarma. It must be an integer."
+                ).get_failure_response()
+
+            user_queryset = user_queryset.filter(
+                wallet_user__karma__gte=minimum_karma
+            )
+
+        # level filter
+        level = request.query_params.get("level")
+        if level:
+            user_queryset = user_queryset.filter(
+                user_lvl_link_user__level__name=level
+            )
+
+        # skill filter
+        skills = self.normalize_list_param(request.query_params.getlist("skillIds"))
+        if skills:
+            user_queryset = user_queryset.filter(
+                skill_progress__skill_id__in=skills
+            ).distinct()
+        
+        # interest group filter
+        interest_group_ids = self.normalize_list_param(request.query_params.getlist("interestGroupIds"))
+        if interest_group_ids:
+            user_queryset = user_queryset.filter(
+                user_ig_link_user__ig_id__in=interest_group_ids
+            ).distinct()
+
+        # achievement filter
+        achievement_ids = self.normalize_list_param(request.query_params.getlist("achievementIds"))
+        if achievement_ids:
+            user_queryset = user_queryset.filter(
+                achievements__achievement_id__in=achievement_ids
+            ).distinct()
 
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
@@ -114,6 +171,7 @@ class UserAPI(APIView):
             {
                 "full_name": "full_name",
                 "karma": "wallet_user__karma",
+                "level": "user_lvl_link_user__level__name", 
                 "created_at": "created_at",
             },
         )

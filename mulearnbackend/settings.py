@@ -53,6 +53,7 @@ INSTALLED_APPS = [
     "api.apps.ApiConfig",
     "corsheaders",
     "db",
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
@@ -69,8 +70,45 @@ ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
-    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)
+    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "μLearn API",
+    "DESCRIPTION": "API documentation for the μLearn Platform backend.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_PATCH": True,
+    "COMPONENT_SPLIT_COMMAND": True,
+    "ENUM_NAME_POSTFIX": "_Enum",
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+    },
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"] if not decouple_config("ENABLE_SWAGGER", default=False, cast=bool) else ["rest_framework.permissions.AllowAny"],
+    "SECURITY": [
+        {
+            "jwtAuth": [],
+        }
+    ],
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "jwtAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": 'JWT Token Authentication. Enter **"Bearer \u003ctoken\u003e"**',
+            }
+        }
+    },
+    "SCHEMA_PATH_PREFIX": r"/api/v1/",
+    "POSTPROCESSING_HOOKS": ["utils.spectacular.custom_postprocessing_hook"],
+    "DEFAULT_FORMAT": "json",
+}
+
+
 # paginator settings
 PAGE_SIZE = 10
 TEMPLATES = [
