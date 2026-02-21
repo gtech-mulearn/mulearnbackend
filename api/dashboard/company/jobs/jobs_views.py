@@ -6,7 +6,9 @@ from utils.permission import JWTUtils, CustomizePermission
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer,   JobRuleUpdateSerializer 
-
+from db.skill import Skill  # Adjust these imports based on your project
+from db.task import InterestGroup  
+from db.achievement import Achievement
 
 class BaseCompanyJobView(APIView):
     """Base view for common functionality across company job views."""
@@ -35,7 +37,7 @@ class BaseCompanyJobView(APIView):
             if job:
                 company = job.company_id
             else:
-                company = Company.objects.get(id=company_id, deleted_at__isnull=True)
+                company = Company.objects.get(id=company_id, status='active')
         except Company.DoesNotExist:
             error_response = CustomResponse(
                 general_message="Company does not exist",
@@ -62,100 +64,128 @@ class BaseCompanyJobView(APIView):
             
         return True, company, None
 
+    @staticmethod
+    def get_optimized_jobs_with_rules(company, filters=None):
+        """Fetch jobs with optimized rule loading to prevent N+1 queries."""
+        # Base queryset
+        jobs_qs = CompanyJob.objects.filter(company_id=company, is_deleted=False)
+        
+        if filters:
+            jobs_qs = jobs_qs.filter(**filters)
+        
+        # Get all jobs with rules in 2 queries
+        jobs = list(jobs_qs.prefetch_related('rules').all())
+        
+        # Collect all rule type IDs by type
+        skill_ids = []
+        interest_ids = []
+        achievement_ids = []
+        
+        for job in jobs:
+            for rule in job.rules.all():
+                if rule.rule_type == 'skill':
+                    skill_ids.append(rule.rule_type_id)
+                elif rule.rule_type == 'interest':
+                    interest_ids.append(rule.rule_type_id)
+                elif rule.rule_type == 'achievement':
+                    achievement_ids.append(rule.rule_type_id)
+        
+        # Bulk fetch all related objects (3 queries max)
+        skills_map = {str(s.id): s.title for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
+        interests_map = {str(i.id): i.name for i in InterestGroup.objects.filter(id__in=interest_ids)} if interest_ids else {}
+        achievements_map = {str(a.id): a.name for a in Achievement.objects.filter(id__in=achievement_ids)} if achievement_ids else {}
+        
+        # Cache the names directly on rules
+        for job in jobs:
+            for rule in job.rules.all():
+                if rule.rule_type == 'skill':
+                    rule.cached_name = skills_map.get(str(rule.rule_type_id), 'Unknown Skill')
+                elif rule.rule_type == 'interest':
+                    rule.cached_name = interests_map.get(str(rule.rule_type_id), 'Unknown Interest')
+                elif rule.rule_type == 'achievement':
+                    rule.cached_name = achievements_map.get(str(rule.rule_type_id), 'Unknown Achievement')
+                else:
+                    rule.cached_name = 'Unknown Rule Type'
+        
+        return jobs
+
 
 class ListCompanyJobsAPIView(BaseCompanyJobView):
     """API to list jobs for a specific company."""
     
     def get(self, request):
         try:
-            # 1. Get authenticated user
+            # 1. Get authenticated user FIRST
             user = self.get_authenticated_user(request)
-            # print(user)
-            company = Company.objects.get(company_user_id=user.id)
             if not user:
                 return CustomResponse(
-                    general_message="User not found",
-                    # status_code=status.HTTP_401_UNAUTHORIZED
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,  # Should be 401, not 404
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get company AFTER user validation
+            try:
+                company = Company.objects.get(
+                    company_user_id=user,  # Use user object, not user.id
+                    status='active'  # Remove deleted_at filter based on our previous discussion
+                )
+            except Company.DoesNotExist:
+                return CustomResponse(
+                    general_message="No active company found for user",
+                    message={"error_code": "NO_COMPANY_FOUND"}
                 ).get_failure_response(
                     status_code=404,
                     http_status_code=status.HTTP_404_NOT_FOUND
                 )
-            
-            # # 2. Check company authorization
-            # authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
-            # if not authorized:
-            #     return error_response
-           ## Check user is linked to a company
-            # if not hasattr(user, "company") or not user.company:
-            #     return CustomResponse(
-            #     general_message="User is not associated with any company",
-            #     # status=status.HTTP_403_FORBIDDEN
-            # ).get_failure_response(
-            #         status_code=403,
-            #         http_status_code=status.HTTP_403_FORBIDDEN
-            #     )
 
-            # company = user.company
-            # 3. Get all active jobs for the company
-            # jobs = CompanyJob.objects.filter(
-            #     company_id=company,
-            #     is_deleted=False
-            # ).order_by('-created_at')
-            jobs = CompanyJob.objects.filter(
-            company_id=company,
-            is_deleted=False).prefetch_related("rules")
+            # 3. Get base queryset for pagination FIRST
+            jobs_qs = CompanyJob.objects.filter(
+                company_id=company,
+                is_deleted=False
+            ).order_by('-created_at')
 
+            # 4. Apply pagination before optimization
             paginated_data = CommonUtils.get_paginated_queryset(
-            queryset=jobs,
-            request=request,
-            search_fields=["title", "location", "job_type"],
-            sort_fields={
-                "title": "title",
-                "createdAt": "created_at",
-                "salary": "salary_range",
-            },
-            is_pagination=True)
-
-            jobs_queryset = paginated_data["queryset"]
+                queryset=jobs_qs,
+                request=request,
+                search_fields=["title", "location", "job_type"],
+                sort_fields={
+                    "title": "title",
+                    "createdAt": "created_at", 
+                    "salary": "salary_range",
+                },
+                is_pagination=True
+            )
+            
             pagination_info = paginated_data["pagination"]
+            paginated_jobs = paginated_data["queryset"]
 
-            serializer = CompanyJobListSerializer(jobs_queryset, many=True)
+            # 5. Optimize only the paginated results
+            job_ids = [job.id for job in paginated_jobs]
+            optimized_jobs = self.get_optimized_jobs_with_rules(
+                company, 
+                filters={'id__in': job_ids}
+            )
 
+            # 6. Serialize optimized jobs (they have cached_name)
+            serializer = CompanyJobListSerializer(optimized_jobs, many=True)
             
-            # 4. Prepare response with serializer
-            jobs_serializer = CompanyJobListSerializer(jobs, many=True)
-            
-            # response_data = {
-            #     "company_id": str(company.id),
-            #     "company_name": company.name,
-            #     "total_jobs": len(jobs_serializer.data),
-            #     "jobs": jobs_serializer.data
-            # }
             response_data = {
-            "company_id": str(company.id),
-            "company_name": company.name,
-            "jobs": serializer.data,
-            
-            "pagination": pagination_info
-        }
+                "company_id": str(company.id),
+                "company_name": company.name,
+                "jobs": serializer.data,
+                "pagination": pagination_info
+            }
 
-            
             return CustomResponse(
                 response=response_data,
-                general_message="Jobs retrieved successfully",
-                # status=status.HTTP_200_OK
+                general_message="Jobs retrieved successfully"
             ).get_success_response()
             
         except Exception as e:
             print(f"Error listing company jobs: {str(e)}")
-            # return CustomResponse(
-            #     general_message="Something went wrong",
-            #     # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-              
-            # ).get_failure_response(
-            #         status_code=500,
-            #         http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            #     )
             return CustomResponse(
                 general_message="Something went wrong in listing company jobs",
                 message={"error_code": "SERVER_ERROR"}
@@ -173,10 +203,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             # 1. Get authenticated user
             user = self.get_authenticated_user(request)
             if not user:
-                # return CustomResponse(
-                #     general_message="User not found",
-                #     status_code=status.HTTP_401_UNAUTHORIZED
-                # ).get_failure_response()
+             
                 return CustomResponse(
                     general_message="User not found"
                 ).get_failure_response(
@@ -187,20 +214,14 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             
             try:
                 company = Company.objects.get(
-                    company_user_id=user, 
-                   
-                    deleted_at__isnull=True,
+                    company_user_id=user,
                     status='active'
                 )
              
               
             except Company.DoesNotExist:
                 print(f"No company found for user: {user}")
-                # return CustomResponse(
-                #     general_message="No active company found for user",
-                #     status_code=status.HTTP_404_NOT_FOUND,
-                #     error_code="NO_COMPANY_FOUND"
-                # ).get_failure_response()
+           
                 return CustomResponse(
                     general_message="No active company found for user",
                     message={"error_code": "NO_COMPANY_FOUND"}
@@ -213,11 +234,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             print(f"Request data: {request.data}")
             serializer = CompanyJobCreateSerializer(data=request.data)
             if not serializer.is_valid():
-                # return CustomResponse(
-                #     message=serializer.errors,
-                #     status_code=status.HTTP_400_BAD_REQUEST,
-                #     error_code="INVALID_INPUT"
-                # ).get_failure_response()
+           
                 return CustomResponse(
                     message=serializer.errors,
                     general_message="Invalid input data"
@@ -226,20 +243,6 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                     http_status_code=status.HTTP_400_BAD_REQUEST
                 )
            
-            
-            
-            # company_id = serializer.validated_data['company_id']
-            
-            # # 3. Check company authorization
-            # authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
-            # if not authorized:
-            #     return error_response
-            # if company.status != 'active':
-            #     return CustomResponse(
-            #         general_message="Company is not active",
-            #         status_code=status.HTTP_400_BAD_REQUEST,
-            #         error_code="COMPANY_INACTIVE"
-            #     ).get_failure_response()
             
             # 6. Create the job
             job_data = {
@@ -275,15 +278,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             ).get_success_response()
             
         except Exception as e:
-            # Log the actual error for debugging
-            # print(f"Error creating company job: {str(e)}")
-  
-            
-            # return CustomResponse(
-            #     general_message="Something went wrong",
-            #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            #     error_code="SERVER_ERROR"
-            # ).get_failure_response()
+         
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
@@ -375,11 +370,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             try:
                 job = CompanyJob.objects.get(id=job_id, is_deleted=False)
             except CompanyJob.DoesNotExist:
-                # return CustomResponse(
-                #     general_message="Job does not exist",
-                #     status=status.HTTP_404_NOT_FOUND,
-                #     error_code="JOB_NOT_FOUND"
-                # ).get_failure_response()
+          
                 
                 return CustomResponse(
                     general_message="Job does not exist",
@@ -397,11 +388,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             # 4. Validate request data (partial update)
             serializer = CompanyJobUpdateSerializer(data=request.data, partial=True)
             if not serializer.is_valid():
-                # return CustomResponse(
-                #     message=serializer.errors,
-                #     status=status.HTTP_400_BAD_REQUEST,
-                #     error_code="INVALID_INPUT"
-                # ).get_failure_response()
+              
                 return CustomResponse(
                     message=serializer.errors,
                     general_message="Invalid input data"
@@ -427,12 +414,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
                 "updated_fields": updated_fields,
                 # "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
-            
-            # return CustomResponse(
-            #     response=response_data,
-            #     general_message="Job updated successfully",
-            #     status=status.HTTP_200_OK
-            # ).get_success_response()
+           
             return CustomResponse(
                 response=response_data,
                 general_message="Job updated successfully",
@@ -442,11 +424,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
         except Exception as e:
             # Log the actual error for debugging
             print(f"Error updating company job: {str(e)}")
-            # return CustomResponse(
-            #     general_message="Something went wrong",
-            #     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            #     error_code="SERVER_ERROR"
-            # ).get_failure_response()
+  
             return CustomResponse(
                 general_message="Something went wrong in updating the job",
                 message={"error_code": "SERVER_ERROR"}
@@ -507,9 +485,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             print(f"Error deleting company job: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
-                # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                # status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                # error_code="SERVER_ERROR"
+               
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
