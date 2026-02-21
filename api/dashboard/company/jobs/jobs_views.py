@@ -6,7 +6,7 @@ from utils.permission import JWTUtils, CustomizePermission
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer,   JobRuleUpdateSerializer 
-from db.skill import Skill  # Adjust these imports based on your project
+from db.skill import Skill 
 from db.task import InterestGroup  
 from db.achievement import Achievement
 
@@ -80,18 +80,19 @@ class BaseCompanyJobView(APIView):
         skill_ids = []
         interest_ids = []
         achievement_ids = []
+    
         
         for job in jobs:
             for rule in job.rules.all():
                 if rule.rule_type == 'skill':
                     skill_ids.append(rule.rule_type_id)
-                elif rule.rule_type == 'interest':
+                elif rule.rule_type == 'interest_group':
                     interest_ids.append(rule.rule_type_id)
                 elif rule.rule_type == 'achievement':
                     achievement_ids.append(rule.rule_type_id)
         
         # Bulk fetch all related objects (3 queries max)
-        skills_map = {str(s.id): s.title for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
+        skills_map = {str(s.id): s.name for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
         interests_map = {str(i.id): i.name for i in InterestGroup.objects.filter(id__in=interest_ids)} if interest_ids else {}
         achievements_map = {str(a.id): a.name for a in Achievement.objects.filter(id__in=achievement_ids)} if achievement_ids else {}
         
@@ -100,7 +101,7 @@ class BaseCompanyJobView(APIView):
             for rule in job.rules.all():
                 if rule.rule_type == 'skill':
                     rule.cached_name = skills_map.get(str(rule.rule_type_id), 'Unknown Skill')
-                elif rule.rule_type == 'interest':
+                elif rule.rule_type == 'interest_group':
                     rule.cached_name = interests_map.get(str(rule.rule_type_id), 'Unknown Interest')
                 elif rule.rule_type == 'achievement':
                     rule.cached_name = achievements_map.get(str(rule.rule_type_id), 'Unknown Achievement')
@@ -289,63 +290,68 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
 
 
 class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
-    """API view for retrieving specific job posting details."""
+    """API view for retrieving specific job posting details with optimized rules."""
     
     def get(self, request, job_id):
         try:
-            # 1. Get authenticated user
+            # 1. Get authenticated user FIRST (same pattern as ListCompanyJobsAPIView)
             user = self.get_authenticated_user(request)
             if not user:
                 return CustomResponse(
-                    general_message="Authentication required"
+                    general_message="User not found"
                 ).get_failure_response(
                     status_code=401,
                     http_status_code=status.HTTP_401_UNAUTHORIZED
                 )
 
-            # 2. Get the job details
+            # 2. Check if job exists and get company (same pattern)
             try:
-                job = CompanyJob.objects.get(id=job_id, is_deleted=False)
+                job_check = CompanyJob.objects.get(id=job_id, is_deleted=False)
+                company = job_check.company_id
             except CompanyJob.DoesNotExist:
                 return CustomResponse(
                     general_message="Job does not exist",
-                 
+                    message={"error_code": "JOB_NOT_FOUND"}
                 ).get_failure_response(
                     status_code=404,
                     http_status_code=status.HTTP_404_NOT_FOUND
                 )
 
-            # 3. Prepare job response data
-            job_data = {
-                "id": str(job.id),
-                "company_id": str(job.company_id.id),
-                "title": job.title,
-                "experience": job.experience,
-                "job_description": job.job_description,
-                "location": job.location,
-                "salary_range": job.salary_range,
-                "job_type": job.job_type,
-                "min_karma": job.min_karma,
-                "min_level": job.min_level,
-                "created_at": job.created_at.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
-            }
+            # 3. Use SAME N+1 optimization pattern (for single job)
+            optimized_jobs = self.get_optimized_jobs_with_rules(
+                company, 
+                filters={'id': job_id}  # Only get this specific job
+            )
+            
+            if not optimized_jobs:
+                return CustomResponse(
+                    general_message="Job not found",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get the optimized job (only one)
+            optimized_job = optimized_jobs[0]
 
+            # 4. Use SAME serializer pattern (includes rules with cached names!)
+            serializer = CompanyJobListSerializer(optimized_job)
+            
             response_data = {
-                "job": job_data
+                "job": serializer.data  # Includes rules with cached names!
             }
 
             return CustomResponse(
                 response=response_data,
                 general_message="Job details fetched successfully"
-            ).get_success_response( )
+            ).get_success_response()
 
         except Exception as e:
-            # Log the actual error for debugging
             print(f"Error fetching job details: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
-             
+                message={"error_code": "SERVER_ERROR"}
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR

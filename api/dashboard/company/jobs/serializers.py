@@ -21,7 +21,7 @@ class JobRuleListSerializer(serializers.ModelSerializer):
         if obj.rule_type == "skill":
             try:
                 skill = Skill.objects.get(id=obj.rule_type_id)
-                return skill.title  # Use 'title' field for skills
+                return skill.name  # Use 'title' field for skills
             except Skill.DoesNotExist:
                 return f"Unknown Skill ({obj.rule_type_id})"
                 
