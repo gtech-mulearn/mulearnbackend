@@ -183,23 +183,24 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                     status_code=401,
                     http_status_code=status.HTTP_401_UNAUTHORIZED
                 )
-         
+            
             
             try:
                 company = Company.objects.get(
                     company_user_id=user, 
+                   
                     deleted_at__isnull=True,
                     status='active'
                 )
+             
               
             except Company.DoesNotExist:
-                print(f"No company found for user: {user.id}")
+                print(f"No company found for user: {user}")
                 # return CustomResponse(
                 #     general_message="No active company found for user",
                 #     status_code=status.HTTP_404_NOT_FOUND,
                 #     error_code="NO_COMPANY_FOUND"
                 # ).get_failure_response()
-
                 return CustomResponse(
                     general_message="No active company found for user",
                     message={"error_code": "NO_COMPANY_FOUND"}
