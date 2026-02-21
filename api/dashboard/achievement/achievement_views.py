@@ -22,7 +22,7 @@ from mu_celery.achievement_tasks import bulk_check_and_issue_achievements
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired, BackendApiKeyPermission
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, CommonUtils
 
 
 class AchievementListAPIView(APIView):

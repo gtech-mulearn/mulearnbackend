@@ -27,5 +27,6 @@ urlpatterns = [
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
     path("skill/", include("api.dashboard.skill.urls")),
+    path("company/", include("api.dashboard.company.urls")),
     path("category/", include("api.dashboard.category.urls"))
 ]
