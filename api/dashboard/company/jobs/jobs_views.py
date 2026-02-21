@@ -563,7 +563,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
 
             # 6. Create the job rule
             job_rule = CompanyJobRule.objects.create(
-                job_id=job_id,
+                job_id=job,
                 rule_type=rule_type,
                 rule_type_id=rule_type_id
             )
