@@ -113,7 +113,7 @@ class logHandler:
         # Log entries their types and how to find them
         self.log_entries = {
             "id": {"regex": r"ID: (.+?)\n(?=TYPE:)", "type": str},
-            "timestamp": {"regex": r"\n(.+?) ERROR.*", "type": datetime},
+            "timestamp": {"regex": r"^(\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}[,\.]\d{3}) ERROR", "type": datetime},
             "type": {"regex": r"TYPE: (.+?)\n(?=MESSAGE:)", "type": str},
             "message": {"regex": r"MESSAGE: (.+?)\n(?=METHOD:)", "type": str},
             "method": {"regex": r"METHOD: (.+?)\n(?=PATH:)", "type": str},
