@@ -204,6 +204,21 @@ class UnitType(Enum):
         return [member.value for member in cls]
 
 
+class SocialPlatformType(Enum):
+    INSTAGRAM = "instagram"
+    LINKEDIN = "linkedin"
+    TWITTER = "twitter"
+    YOUTUBE = "youtube"
+    WEBSITE = "website"
+    FACEBOOK = "facebook"
+    GITHUB = "github"
+    OTHER = "other"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
     "name": "system",
     "gender": "system",

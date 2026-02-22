@@ -1,15 +1,19 @@
 import uuid
 from datetime import timedelta
 
-from django.db.models import Sum
+from django.db.models import Sum, Count, F
 from rest_framework import serializers
 
+from db.campus import CampusExecom, CampusExecomRole, CampusIGChapter, CampusSocialLink
 from db.organization import Organization, UserOrganizationLink, College
-from db.task import KarmaActivityLog
+from db.task import KarmaActivityLog, InterestGroup
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
+
+
+# ── Existing serializers (preserved) ──────────────────────────────
 
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
@@ -21,6 +25,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
 
     class Meta:
         model = Organization
@@ -33,6 +38,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "total_members",
             "active_members",
             "rank",
+            "social_links",
         ]
 
     def get_campus_level(self, obj):
@@ -86,6 +92,11 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             position = keys_list.index(obj.id)
             return position + 1
 
+    def get_social_links(self, obj):
+        return list(
+            CampusSocialLink.objects.filter(org=obj).values("platform", "url", "label")
+        )
+
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="org.title")
@@ -98,6 +109,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
 
     lead = serializers.SerializerMethodField()
+    karma_rate_30d = serializers.SerializerMethodField()
+    karma_rate_7d = serializers.SerializerMethodField()
+    campus_ig_count = serializers.SerializerMethodField()
+    ig_leads = serializers.SerializerMethodField()
+    ig_chapters = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
 
     class Meta:
         model = UserOrganizationLink
@@ -111,6 +128,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "active_members",
             "rank",
             "lead",
+            "karma_rate_30d",
+            "karma_rate_7d",
+            "campus_ig_count",
+            "ig_leads",
+            "ig_chapters",
+            "social_links",
         ]
 
     def get_lead(self, obj):
@@ -186,6 +209,68 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             keys_list = list(sorted_rank_dict.keys())
             position = keys_list.index(obj.org.id)
             return position + 1
+
+    # ── New fields added for campus dashboard ──
+
+    def get_karma_rate_30d(self, obj):
+        thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
+        return (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user__org=obj.org,
+                created_at__gte=thirty_days_ago,
+            ).aggregate(total=Sum("karma"))["total"]
+            or 0
+        )
+
+    def get_karma_rate_7d(self, obj):
+        seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
+        return (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user__org=obj.org,
+                created_at__gte=seven_days_ago,
+            ).aggregate(total=Sum("karma"))["total"]
+            or 0
+        )
+
+    def get_campus_ig_count(self, obj):
+        return CampusIGChapter.objects.filter(org=obj.org, is_active=True).count()
+
+    def get_ig_leads(self, obj):
+        chapters = CampusIGChapter.objects.select_related(
+            "lead_user", "ig"
+        ).filter(org=obj.org, is_active=True, lead_user__isnull=False)
+        return [
+            {
+                "full_name": ch.lead_user.full_name,
+                "muid": ch.lead_user.muid,
+                "profile_pic": getattr(ch.lead_user, "profile_pic", None),
+                "ig_name": ch.ig.name,
+            }
+            for ch in chapters
+        ]
+
+    def get_ig_chapters(self, obj):
+        chapters = CampusIGChapter.objects.select_related(
+            "ig", "lead_user"
+        ).filter(org=obj.org)
+        return [
+            {
+                "id": ch.id,
+                "ig_id": ch.ig_id,
+                "ig_name": ch.ig.name,
+                "ig_cluster": ch.ig.cluster,
+                "lead_name": ch.lead_user.full_name if ch.lead_user else None,
+                "is_active": ch.is_active,
+            }
+            for ch in chapters
+        ]
+
+    def get_social_links(self, obj):
+        return list(
+            CampusSocialLink.objects.filter(org=obj.org).values(
+                "platform", "url", "label"
+            )
+        )
 
 
 class CampusStudentDetailsSerializer(serializers.Serializer):
@@ -296,3 +381,163 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
         user_role_link = UserRoleLink.objects.create(**validated_data)
         return user_role_link
+
+
+# ── New serializers for campus dashboard ──────────────────────────
+
+
+class CampusLeaderboardSerializer(serializers.Serializer):
+    """Leaderboard list items with computed rank."""
+    user_id = serializers.CharField()
+    full_name = serializers.SerializerMethodField()
+    muid = serializers.CharField()
+    profile_pic = serializers.CharField(allow_null=True)
+    karma = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+    level = serializers.CharField()
+    join_date = serializers.CharField()
+    last_karma_at = serializers.CharField()
+    graduation_year = serializers.CharField(allow_null=True)
+    department = serializers.CharField(allow_null=True)
+    is_alumni = serializers.BooleanField()
+    ig_count = serializers.IntegerField()
+
+    def get_rank(self, obj):
+        ranks = self.context.get("ranks", {})
+        return ranks.get(obj.id, None)
+
+    def get_full_name(self, obj):
+        return obj.full_name
+
+
+class CampusEventListSerializer(serializers.Serializer):
+    """Campus event feed items."""
+    id = serializers.CharField()
+    title = serializers.CharField()
+    slug = serializers.CharField()
+    cover_image = serializers.CharField(allow_null=True)
+    event_type = serializers.CharField()
+    scope = serializers.SerializerMethodField()
+    status = serializers.CharField()
+    start_datetime = serializers.DateTimeField()
+    end_datetime = serializers.DateTimeField()
+    venue_type = serializers.SerializerMethodField()
+    venue_city = serializers.SerializerMethodField()
+    interest_count = serializers.IntegerField()
+    is_featured = serializers.BooleanField()
+    tags = serializers.SerializerMethodField()
+    organizer = serializers.SerializerMethodField()
+
+    def get_scope(self, obj):
+        scope = getattr(obj, 'event_scope', None)
+        if scope:
+            return scope.scope
+        return None
+
+    def get_venue_type(self, obj):
+        venue = getattr(obj, 'venue', None)
+        if venue:
+            return venue.venue_type
+        return None
+
+    def get_venue_city(self, obj):
+        venue = getattr(obj, 'venue', None)
+        if venue:
+            return venue.city
+        return None
+
+    def get_tags(self, obj):
+        return list(obj.tag_links.values_list('tag__name', flat=True))
+
+    def get_organizer(self, obj):
+        organiser = getattr(obj, 'organiser', None)
+        if organiser is None:
+            return None
+        org_type = organiser.organiser_type
+        name = None
+        logo = None
+        if organiser.org_id:
+            name = organiser.org_id.title if hasattr(organiser.org_id, 'title') else None
+        elif organiser.ig_id:
+            name = organiser.ig_id.name if hasattr(organiser.ig_id, 'name') else None
+        elif organiser.ci_org_id:
+            name = organiser.ci_org_id.title if hasattr(organiser.ci_org_id, 'title') else None
+        return {"type": org_type, "name": name, "logo": logo}
+
+
+class ExecomMemberSerializer(serializers.ModelSerializer):
+    """Execom list — user info + campus execom role title."""
+    execom_id = serializers.CharField(source="id")
+    user_id = serializers.CharField(source="user.id")
+    full_name = serializers.SerializerMethodField()
+    muid = serializers.CharField(source="user.muid")
+    profile_pic = serializers.SerializerMethodField()
+    role_id = serializers.CharField(source="role.id")
+    role_title = serializers.CharField(source="role.title")
+
+    class Meta:
+        model = CampusExecom
+        fields = ["execom_id", "user_id", "full_name", "muid", "profile_pic", "role_id", "role_title"]
+
+    def get_full_name(self, obj):
+        return obj.user.full_name
+
+    def get_profile_pic(self, obj):
+        return getattr(obj.user, "profile_pic", None)
+
+
+class ExecomAddSerializer(serializers.Serializer):
+    """Input validation for execom addition."""
+    user_muid = serializers.CharField()
+    role_id = serializers.CharField()
+
+
+class CampusIGChapterSerializer(serializers.ModelSerializer):
+    """Chapter list with IG and lead details."""
+    ig = serializers.SerializerMethodField()
+    lead = serializers.SerializerMethodField()
+    member_count = serializers.IntegerField(read_only=True, default=0)
+
+    class Meta:
+        model = CampusIGChapter
+        fields = [
+            "id",
+            "ig",
+            "lead",
+            "is_active",
+            "member_count",
+            "created_at",
+        ]
+
+    def get_ig(self, obj):
+        ig = obj.ig
+        return {
+            "id": ig.id,
+            "name": ig.name,
+            "cluster": ig.cluster,
+            "icon": ig.icon,
+        }
+
+    def get_lead(self, obj):
+        if obj.lead_user is None:
+            return None
+        return {
+            "user_id": obj.lead_user.id,
+            "full_name": obj.lead_user.full_name,
+            "muid": obj.lead_user.muid,
+        }
+
+
+class CampusIGChapterWriteSerializer(serializers.Serializer):
+    """Input validation for chapter create/update."""
+    ig_id = serializers.CharField(required=False)
+    lead_user_muid = serializers.CharField(required=False, allow_blank=True)
+    is_active = serializers.BooleanField(required=False)
+
+
+class CampusSocialLinkSerializer(serializers.ModelSerializer):
+    """Social links list and write."""
+
+    class Meta:
+        model = CampusSocialLink
+        fields = ["id", "platform", "url", "label"]

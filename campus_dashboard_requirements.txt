@@ -1,0 +1,1142 @@
+﻿μLearn Platform
+Campus Dashboard — Backend Development Requirements
+
+
+Version 2.0  ·  Target: ALTER 1.93  ·  Django REST Framework
+
+
+0. Document Purpose & Scope
+This document is the single source of truth for all backend changes required to implement the enhanced Campus Dashboard on the μLearn platform. It follows the same specification format as the Events System (ALTER 1.92) and is written for backend engineers implementing in Django REST Framework.
+
+
+The Campus Dashboard is the primary management interface for Campus Leads and Enablers. It exposes analytics, student management, IG chapter management, event feeds, leaderboards, execom configuration, and social profile management for a single campus (organization of org_type='College').
+
+
+Feature Area
+	New / Enhanced
+	DB Impact
+	Campus Stats (karma, rank, rates)
+	Enhanced
+	No new tables — uses existing wallet, karma_activity_log
+	Execom Management (add from members)
+	Enhanced
+	Reads user_organization_link; writes user_role_link
+	Campus IG Creation & Lead Assignment
+	New
+	New table: campus_ig_chapter (ALTER 1.93)
+	Campus IG Lead Management
+	New
+	Extends user_role_link pattern
+	Campus Events Feed
+	New
+	Reads event / event_scope / event_organiser (ALTER 1.92)
+	Campus Leaderboard
+	Enhanced
+	Uses wallet; paginated & filterable
+	Campus Social Media Links
+	New
+	New table: campus_social_link (ALTER 1.93)
+	Karma Distribution by IG Cluster
+	New
+	Joins wallet → user_ig_link → interest_group.cluster
+	Event Distribution by Tags
+	New
+	Joins event_tag_link → event_tag → event_scope
+	Level-wise Student Distribution
+	Existing (minor enhancement)
+	Uses user_lvl_link
+	
+
+
+
+1. Global Conventions
+All conventions below are inherited from the existing codebase and must be followed exactly. Deviating from any convention will cause the code review to fail.
+
+
+1.1 Repository Architecture
+* Pattern: Feature-module Django apps — each feature area is a self-contained app under the project root.
+* Existing campus app: api/v1/dashboard/campus/ (views, serializers, urls, helper files).
+* New endpoints extend this same module. Do not create a separate app.
+* Database models live in the db/ package, one file per domain (db/organization.py, db/task.py, db/user.py, db/event.py — new).
+* No business logic in serializers beyond field-level transforms. Service logic belongs in views or dedicated helper files (_helper.py).
+
+
+1.2 Authentication & Permissions
+* All private endpoints use: authentication_classes = [CustomizePermission]
+* Role gating uses the @role_required([RoleType.X.value, ...]) decorator.
+* User ID extraction: user_id = JWTUtils.fetch_user_id(request)
+* Public endpoints (readable without auth) omit the decorator but still declare authentication_classes.
+
+
+1.3 Response Envelope
+Every endpoint wraps its payload in CustomResponse. Never return raw JsonResponse or Response.
+
+
+Success
+	CustomResponse(response=data).get_success_response()
+	Success + message
+	CustomResponse(general_message='Done').get_success_response()
+	Failure
+	CustomResponse(general_message='Reason').get_failure_response()
+	Validation err
+	CustomResponse(message=serializer.errors).get_failure_response()
+	Paginated
+	CustomResponse(response={'data': s.data, 'pagination': p}).get_success_response()
+	
+
+1.4 Pagination
+All list endpoints that can return more than ~20 rows must use CommonUtils.get_paginated_queryset(). The helper accepts: queryset, request, search_fields list, sort_fields dict.
+
+
+paginated = CommonUtils.get_paginated_queryset(qs, request, ['full_name'], {'karma': 'wallet_user__karma'})
+serializer = MySerializer(paginated['queryset'], many=True)
+return CustomResponse(response={'data': serializer.data, 'pagination': paginated['pagination']}).get_success_response()
+
+
+1.5 UUID Generation
+import uuid
+instance.id = str(uuid.uuid4())
+
+
+1.6 DateTime Utilities
+from utils.utils import DateTimeUtils
+now = DateTimeUtils.get_current_utc_time()
+
+
+1.7 Type Enums
+Org types, role types, and new enum types live in utils/types.py as Python Enum classes. Add new types there — do not hardcode strings in views.
+
+
+1.8 Existing Helper
+from .dash_campus_helper import get_user_college_link
+get_user_college_link(user_id) returns the UserOrganizationLink for the authenticated campus lead, or None if no org association exists. Reuse this everywhere; do not duplicate the lookup logic.
+
+
+
+
+2. Database Migrations — ALTER 1.93
+Two new tables are required. All existing tables referenced here (user, organization, interest_group, user_organization_link, user_role_link) remain structurally unchanged. Run ALTER 1.92 (Events System) before running 1.93.
+
+
+2.1 campus_ig_chapter
+Represents a campus-level chapter of a global Interest Group. A chapter is identified by the combination of org_id (campus) and ig_id (interest group). One IG can have at most one chapter per campus.
+
+
+Design note: No campus_ig table existed prior to this migration. The Events System (ALTER 1.92) references campus IG pairs via (ci_org_id, ci_ig_id) columns. campus_ig_chapter is the authoritative registry that formalises which chapters exist and who leads them. ALTER 1.92 tables can optionally back-fill a campus_ig_chapter_id FK in a later migration, but this is not required for ALTER 1.93.
+	
+
+CREATE TABLE IF NOT EXISTS campus_ig_chapter
+(
+    id            VARCHAR(36) PRIMARY KEY NOT NULL,
+    org_id        VARCHAR(36)             NOT NULL,   -- → organization.id (College)
+    ig_id         VARCHAR(36)             NOT NULL,   -- → interest_group.id
+    lead_user_id  VARCHAR(36),                        -- → user.id  (Campus IG Lead; NULL if vacant)
+    is_active     BOOLEAN DEFAULT TRUE    NOT NULL,
+    created_by    VARCHAR(36)             NOT NULL,
+    created_at    DATETIME                NOT NULL,
+    updated_by    VARCHAR(36)             NOT NULL,
+    updated_at    DATETIME                NOT NULL,
+
+
+    CONSTRAINT uq_cic_org_ig   UNIQUE (org_id, ig_id),
+
+
+    CONSTRAINT fk_cic_org      FOREIGN KEY (org_id)       REFERENCES organization   (id) ON DELETE CASCADE,
+    CONSTRAINT fk_cic_ig       FOREIGN KEY (ig_id)        REFERENCES interest_group (id) ON DELETE CASCADE,
+    CONSTRAINT fk_cic_lead     FOREIGN KEY (lead_user_id) REFERENCES user           (id) ON DELETE SET NULL,
+    CONSTRAINT fk_cic_created  FOREIGN KEY (created_by)   REFERENCES user           (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_cic_updated  FOREIGN KEY (updated_by)   REFERENCES user           (id) ON DELETE RESTRICT
+);
+
+
+-- Indexes
+CREATE INDEX IF NOT EXISTS idx_cic_org    ON campus_ig_chapter (org_id);
+CREATE INDEX IF NOT EXISTS idx_cic_ig     ON campus_ig_chapter (ig_id);
+CREATE INDEX IF NOT EXISTS idx_cic_lead   ON campus_ig_chapter (lead_user_id);
+
+
+2.2 campus_social_link
+Stores social media and web presence URLs for a campus. One row per (campus, platform) pair. Allows the campus public page to display official social accounts.
+
+
+CREATE TABLE IF NOT EXISTS campus_social_link
+(
+    id         VARCHAR(36) PRIMARY KEY NOT NULL,
+    org_id     VARCHAR(36)             NOT NULL,   -- → organization.id
+    platform   VARCHAR(30)             NOT NULL,   -- 'instagram','linkedin','twitter','youtube','website','facebook','github','other'
+    url        VARCHAR(500)            NOT NULL,
+    label      VARCHAR(100),                       -- optional display label e.g. 'Official Page'
+    created_by VARCHAR(36)             NOT NULL,
+    created_at DATETIME                NOT NULL,
+    updated_by VARCHAR(36)             NOT NULL,
+    updated_at DATETIME                NOT NULL,
+
+
+    CONSTRAINT uq_csl_org_platform UNIQUE (org_id, platform),
+
+
+    CONSTRAINT fk_csl_org      FOREIGN KEY (org_id)     REFERENCES organization (id) ON DELETE CASCADE,
+    CONSTRAINT fk_csl_created  FOREIGN KEY (created_by) REFERENCES user         (id) ON DELETE RESTRICT,
+    CONSTRAINT fk_csl_updated  FOREIGN KEY (updated_by) REFERENCES user         (id) ON DELETE RESTRICT
+);
+
+
+CREATE INDEX IF NOT EXISTS idx_csl_org ON campus_social_link (org_id);
+
+
+2.3 interest_group.cluster (from ALTER 1.92)
+The cluster column on interest_group was added in ALTER 1.92. ALTER 1.93 assumes it already exists. If ALTER 1.92 has not been run, apply the ALTER TABLE statement from that migration first.
+	
+
+
+
+3. Django Models
+Add the following models to the appropriate db/ files. Follow the exact field naming and Meta conventions used in the existing models.
+
+
+3.1  db/campus.py  (new file)
+Create this file alongside db/organization.py. Import it in db/__init__.py if an __init__.py exists.
+
+
+# db/campus.py
+from django.db import models
+
+
+class CampusIGChapter(models.Model):
+    id           = models.CharField(max_length=36, primary_key=True)
+    org          = models.ForeignKey('organization.Organization', on_delete=models.CASCADE, related_name='campus_ig_chapters')
+    ig           = models.ForeignKey('task.InterestGroup',        on_delete=models.CASCADE, related_name='campus_chapters')
+    lead_user    = models.ForeignKey('user.User', null=True, blank=True, on_delete=models.SET_NULL, related_name='led_campus_ig_chapters')
+    is_active    = models.BooleanField(default=True)
+    created_by   = models.ForeignKey('user.User', on_delete=models.RESTRICT, related_name='created_campus_ig_chapters')
+    created_at   = models.DateTimeField()
+    updated_by   = models.ForeignKey('user.User', on_delete=models.RESTRICT, related_name='updated_campus_ig_chapters')
+    updated_at   = models.DateTimeField()
+
+
+    class Meta:
+        db_table       = 'campus_ig_chapter'
+        unique_together = (('org', 'ig'),)
+
+
+
+
+class CampusSocialLink(models.Model):
+    PLATFORM_CHOICES = [
+        ('instagram', 'Instagram'), ('linkedin', 'LinkedIn'),
+        ('twitter', 'Twitter'),     ('youtube',  'YouTube'),
+        ('website', 'Website'),     ('facebook', 'Facebook'),
+        ('github',  'GitHub'),      ('other',    'Other'),
+    ]
+    id         = models.CharField(max_length=36, primary_key=True)
+    org        = models.ForeignKey('organization.Organization', on_delete=models.CASCADE, related_name='social_links')
+    platform   = models.CharField(max_length=30, choices=PLATFORM_CHOICES)
+    url        = models.URLField(max_length=500)
+    label      = models.CharField(max_length=100, null=True, blank=True)
+    created_by = models.ForeignKey('user.User', on_delete=models.RESTRICT, related_name='created_campus_social_links')
+    created_at = models.DateTimeField()
+    updated_by = models.ForeignKey('user.User', on_delete=models.RESTRICT, related_name='updated_campus_social_links')
+    updated_at = models.DateTimeField()
+
+
+    class Meta:
+        db_table        = 'campus_social_link'
+        unique_together = (('org', 'platform'),)
+
+
+3.2  db/event.py  (from ALTER 1.92)
+The event models are introduced in ALTER 1.92. Reference them in campus views using standard ORM imports. The minimum fields needed by campus endpoints are:
+
+
+Event.status
+	ENUM — 'published', 'ongoing', 'completed', 'cancelled', 'draft', etc.
+	Event.start_datetime
+	DATETIME — used for date-range filtering
+	Event.interest_count
+	INT — denormalised counter from triggers
+	EventScope.scope
+	ENUM — 'global', 'campus', 'ig', 'campus_ig'
+	EventScope.target_org_id
+	FK → organization.id — filters campus events
+	EventOrganiser.organiser_type
+	ENUM — used to distinguish campus vs campus_ig events
+	EventTagLink.tag_id → EventTag.name
+	Used for event tag distribution chart
+	
+
+
+
+4. API Endpoint Reference
+Base URL: /api/v1/dashboard/campus/  (existing prefix; all new URLs are appended here)
+
+
+Method
+	URL
+	Auth
+	Purpose
+	GET
+	campus-details/
+	Campus Lead / Enabler
+	Enhanced campus stats (existing — extend response)
+	GET
+	<org_id>/
+	Public
+	Public campus detail (existing — extend with socials)
+	GET
+	student-level/
+	Campus Lead / Enabler
+	Level-wise student distribution (existing)
+	GET
+	student-details/
+	Campus Lead / Enabler
+	Paginated student list (existing)
+	GET
+	student-details/csv/
+	Campus Lead / Enabler
+	CSV export (existing)
+	GET
+	weekly-karma/
+	Any auth
+	7-day karma chart (existing)
+	GET
+	leaderboard/
+	Any auth
+	Campus leaderboard — paginated, filterable (enhanced)
+	GET
+	karma-by-cluster/
+	Campus Lead / Enabler
+	Karma totals grouped by IG cluster (new)
+	GET
+	events/
+	Campus Lead / Enabler
+	Campus events feed — paginated (new)
+	GET
+	events/distribution/
+	Campus Lead / Enabler
+	Event count grouped by tag (new)
+	GET
+	execom/
+	Campus Lead / Enabler
+	List current execom members (new)
+	POST
+	execom/
+	Campus Lead
+	Add user to execom by role (new)
+	DELETE
+	execom/<member_id>/
+	Campus Lead
+	Remove execom member (new)
+	GET
+	ig-chapters/
+	Campus Lead / Enabler
+	List campus IG chapters (new)
+	POST
+	ig-chapters/
+	Campus Lead / Enabler
+	Create a campus IG chapter (new)
+	PATCH
+	ig-chapters/<chapter_id>/
+	Campus Lead / Enabler
+	Update chapter / assign lead (new)
+	DELETE
+	ig-chapters/<chapter_id>/
+	Campus Lead
+	Deactivate a chapter (new)
+	GET
+	social-links/
+	Public (via org_id)
+	List social links for campus (new)
+	POST
+	social-links/
+	Campus Lead / Enabler
+	Upsert a social link (new)
+	DELETE
+	social-links/<link_id>/
+	Campus Lead / Enabler
+	Remove a social link (new)
+	
+
+
+
+5. Endpoint Specifications
+5.1  GET campus-details/  (Enhanced)
+Existing endpoint. Extend the CampusDetailsSerializer / CampusDetailsPublicSerializer to include the following additional fields in its response.
+
+
+IMPORTANT: Do not break the existing response shape. Append new keys to the serializer output. The frontend expects all existing keys to remain.
+	
+
+New fields added to campus-details/ response
+karma_rate_30d
+	Total karma earned by campus students in the last 30 days (SUM from karma_activity_log).
+	karma_rate_7d
+	Total karma earned in the last 7 days.
+	campus_ig_count
+	Number of active campus_ig_chapter rows for this org.
+	ig_leads
+	List of {full_name, muid, profile_pic, ig_name} for all active Campus IG Leads.
+	ig_chapters
+	Lightweight list of {id, ig_id, ig_name, ig_cluster, lead_name, is_active} for all chapters.
+	social_links
+	List of {platform, url, label} — all campus_social_link rows for this org.
+	
+
+Serializer implementation notes
+* karma_rate_30d: filter karma_activity_log on user__user_organization_link_user__org=org AND created_at__gte=now-30days. Aggregate SUM of karma.
+* karma_rate_7d: same filter, created_at__gte=now-7days.
+* campus_ig_count: CampusIGChapter.objects.filter(org=org, is_active=True).count()
+* ig_leads: query users who have lead_user_id = user.id in campus_ig_chapter for this org. Join through campus_ig_chapter to get ig name.
+* ig_chapters: CampusIGChapter.objects.select_related('ig','lead_user').filter(org=org)
+* social_links: CampusSocialLink.objects.filter(org=org).values('platform', 'url', 'label')
+
+
+Karma rate query pattern
+from django.db.models import Sum
+from django.utils import timezone
+from db.task import KarmaActivityLog
+
+
+thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
+karma_30d = KarmaActivityLog.objects.filter(
+    user__user_organization_link_user__org=org,
+    created_at__gte=thirty_days_ago
+).aggregate(total=Sum('karma'))['total'] or 0
+
+
+5.2  GET leaderboard/  (Enhanced)
+Returns a paginated list of students ranked by karma within the campus. Existing logic in CampusStudentDetailsAPI is the base; this is a new dedicated leaderboard endpoint that is publicly accessible.
+
+
+Query parameters
+pageIndex
+	1-indexed page number (default: 1)
+	perPage
+	Results per page (default: 25)
+	pass_out_year
+	Filter by graduation_year in user_organization_link
+	is_alumni
+	true/false — filter alumni vs active students
+	ig_id
+	Filter to students who are members of a specific IG (user_ig_link)
+	cluster
+	Filter to students in IGs belonging to this cluster
+	search
+	Substring match on full_name or muid
+	sortBy
+	Field to sort by: karma (desc default), full_name, join_date
+	
+
+Response shape (each item)
+rank
+	Integer rank on this campus (computed from overall karma ordering before pagination)
+	user_id
+	UUID
+	full_name
+	string
+	muid
+	string
+	profile_pic
+	URL or null
+	karma
+	integer — wallet.karma
+	level
+	string — level.name from user_lvl_link
+	join_date
+	ISO datetime — user_organization_link.created_at
+	last_karma_at
+	ISO datetime — wallet.karma_last_updated_at
+	graduation_year
+	string or null
+	department
+	string or null
+	is_alumni
+	boolean
+	ig_count
+	integer — number of IGs the user is a member of
+	
+
+Implementation pattern
+# 1. Build base queryset (all students in campus)
+qs = User.objects.filter(
+    user_organization_link_user__org=org,
+    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+).distinct()
+
+
+# 2. Apply optional filters
+if pass_out_year: qs = qs.filter(user_organization_link_user__graduation_year=pass_out_year)
+if ig_id:         qs = qs.filter(user_ig_link_user__ig_id=ig_id)
+if cluster:       qs = qs.filter(user_ig_link_user__ig__cluster=cluster)
+if is_alumni:     qs = qs.filter(user_organization_link_user__is_alumni=is_alumni)
+
+
+# 3. Compute global rank dict BEFORE pagination (on full karma-sorted set)
+rank_qs = Wallet.objects.filter(
+    user__user_organization_link_user__org=org,
+).distinct().order_by('-karma', 'created_at').values('user_id')
+ranks = {r['user_id']: i + 1 for i, r in enumerate(rank_qs)}
+
+
+# 4. Annotate and paginate
+qs = qs.annotate(karma=F('wallet_user__karma'), ...)
+paginated = CommonUtils.get_paginated_queryset(qs, request, ['full_name', 'muid'], {...})
+
+
+5.3  GET karma-by-cluster/
+Aggregates total campus karma broken down by IG cluster. Used to render a doughnut / bar chart on the analytics dashboard.
+
+
+Response shape
+{
+  'coder':   { 'total_karma': 450000, 'member_count': 120 },
+  'maker':   { 'total_karma': 85000,  'member_count':  34 },
+  'manager': { 'total_karma': 120000, 'member_count':  47 },
+  'creative':{ 'total_karma': 67000,  'member_count':  28 },
+  'unclustered': { 'total_karma': 15000, 'member_count':  9 }
+}
+
+
+Query pattern
+from django.db.models import Sum, Count
+
+
+# Users in this campus who are in an IG
+result = (
+    User.objects.filter(
+        user_organization_link_user__org=org,
+        user_ig_link_user__isnull=False
+    )
+    .values('user_ig_link_user__ig__cluster')
+    .annotate(
+        total_karma=Sum('wallet_user__karma'),
+        member_count=Count('id', distinct=True)
+    )
+)
+# Group null cluster as 'unclustered' in the serializer
+
+
+5.4  GET events/
+Returns a paginated list of events associated with this campus. Includes campus-scoped events and campus-IG-scoped events. Requires ALTER 1.92 (Events System) to be applied first.
+
+
+Query parameters
+status
+	Filter by event status. Default: published,ongoing
+	event_type
+	Filter by event format (workshop, hackathon, etc.)
+	scope
+	'campus' or 'campus_ig' — default: both
+	start_date
+	Events starting on or after this date (YYYY-MM-DD)
+	end_date
+	Events starting on or before this date
+	search
+	Full-text search on event title
+	sortBy
+	start_datetime (default), -start_datetime, interest_count, -interest_count
+	pageIndex
+	Default: 1
+	perPage
+	Default: 10
+	
+
+Event queryset logic
+from db.event import Event, EventScope
+
+
+# Campus-scoped events
+campus_events = Event.objects.filter(
+    deleted_at__isnull=True,
+    event_scope__scope='campus',
+    event_scope__target_org_id=org.id,
+)
+
+
+# Campus IG chapter events for this campus
+campus_ig_events = Event.objects.filter(
+    deleted_at__isnull=True,
+    event_scope__scope='campus_ig',
+    event_scope__target_ci_org_id=org.id,
+)
+
+
+# Union both sets
+from django.db.models import Q
+qs = Event.objects.filter(
+    deleted_at__isnull=True
+).filter(
+    Q(event_scope__scope='campus', event_scope__target_org_id=org.id) |
+    Q(event_scope__scope='campus_ig', event_scope__target_ci_org_id=org.id)
+).distinct()
+
+
+Response fields (EventListItem shape)
+id
+	UUID
+	title
+	string
+	slug
+	string
+	cover_image
+	URL or null
+	event_type
+	string enum
+	scope
+	string enum
+	status
+	string enum
+	start_datetime
+	ISO datetime
+	end_datetime
+	ISO datetime
+	venue_type
+	string enum — from event_venue
+	venue_city
+	string or null
+	interest_count
+	integer
+	is_featured
+	boolean
+	tags
+	string[]
+	organizer
+	{type, name, logo} — derived from event_organiser
+	
+
+5.5  GET events/distribution/
+Returns event counts grouped by tag for all campus and campus-IG events. Used to render a tag distribution bar chart or word cloud on the analytics dashboard.
+
+
+Response shape
+{
+  'data': [
+    { 'tag': 'AI',       'count': 12 },
+    { 'tag': 'Web Dev',  'count': 8  },
+    { 'tag': 'Hardware', 'count': 5  },
+    ...
+  ]
+}
+
+
+Query pattern
+from db.event import EventTagLink
+
+
+qs = EventTagLink.objects.filter(
+    event__deleted_at__isnull=True
+).filter(
+    Q(event__event_scope__scope='campus', event__event_scope__target_org_id=org.id) |
+    Q(event__event_scope__scope='campus_ig', event__event_scope__target_ci_org_id=org.id)
+).values('tag__name').annotate(count=Count('id')).order_by('-count')
+
+
+5.6  GET / POST / DELETE execom/
+Manages the campus execom — the set of users with specific operational roles in the campus. This includes Campus Lead, Lead Enabler, and all Campus IG Lead roles.
+
+
+GET execom/
+Returns all users currently holding roles associated with this campus.
+
+
+Response
+	List of { user_id, full_name, muid, profile_pic, role, ig_name (if IG role) }
+	Auth
+	Campus Lead or Enabler
+	Logic
+	Query user_role_link WHERE user is a member of this org. Join role table for role title.
+	
+
+POST execom/  (add execom member)
+Assigns a campus role to an existing campus member. The user must already be in user_organization_link for this org.
+
+
+Body: user_muid
+	MUID of the student to appoint — must be a current campus member
+	Body: role_title
+	Role title string from the role table (e.g. 'LeadEnabler', or a CampusIGLead role)
+	Validation
+	Verify user is in user_organization_link for this org. Verify role exists. Check not already assigned.
+	Side effect
+	Create UserRoleLink record. If role is a CampusIG role, also upsert campus_ig_chapter.lead_user_id.
+	Auth
+	Campus Lead only (CAMPUS_LEAD role)
+	
+
+DELETE execom/<member_id>/
+Removes an execom role from a user. member_id is the user_role_link.id.
+
+
+Auth
+	Campus Lead only
+	Restriction
+	Cannot remove the current Campus Lead's own lead role. Cannot remove an admin.
+	Side effect
+	Delete UserRoleLink row. If it was a CampusIG role, clear campus_ig_chapter.lead_user_id.
+	
+
+5.7  Campus IG Chapters CRUD  ( ig-chapters/ )
+
+
+GET ig-chapters/
+Returns all campus_ig_chapter rows for this campus with lead and IG details.
+
+
+Auth
+	Campus Lead or Enabler
+	Query
+	CampusIGChapter.objects.select_related('ig','lead_user').filter(org=org)
+	Response
+	List of { id, ig: {id, name, cluster, icon}, lead: {user_id, full_name, muid} | null, is_active, member_count, created_at }
+	member_count
+	Count of user_ig_link rows where ig_id matches AND user is in this campus — computed via annotation.
+	
+
+POST ig-chapters/  (create chapter)
+Creates a new campus IG chapter. The IG must be a globally approved interest_group. Only one chapter per IG per campus is allowed (enforced by unique constraint).
+
+
+Body: ig_id
+	UUID of the global interest_group to create a chapter of
+	Body: lead_user_muid
+	Optional — MUID of the student to appoint as Campus IG Lead immediately
+	Validation
+	interest_group must exist. user must be a campus member if provided. Chapter must not already exist (unique constraint).
+	Side effect
+	Insert campus_ig_chapter. If lead_user_muid provided: upsert UserRoleLink for the IG's lead role (title: ig.code + 'CampusLead'). Update chapter.lead_user_id.
+	Auth
+	Campus Lead or Enabler
+	Returns
+	Newly created chapter object
+	
+
+PATCH ig-chapters/<chapter_id>/  (update chapter)
+Partially update a chapter. The primary use case is re-assigning the Campus IG Lead (replicates the existing TransferIGRoleAPI logic, but tied to a specific chapter).
+
+
+Body: lead_user_muid
+	MUID of new lead — must be a campus member
+	Body: is_active
+	boolean — to activate or deactivate the chapter
+	Side effect on lead change
+	Remove old UserRoleLink for IG lead role. Create new UserRoleLink for the new user. Update campus_ig_chapter.lead_user_id.
+	Auth
+	Campus Lead or Enabler
+	
+
+DELETE ig-chapters/<chapter_id>/
+Soft deactivates a chapter by setting is_active=False. Does not hard-delete the record.
+
+
+Auth
+	Campus Lead only
+	Side effect
+	Set is_active=False. Clear lead_user_id. Remove associated CampusIG Lead UserRoleLink.
+	
+
+5.8  Campus Social Links  ( social-links/ )
+
+
+GET social-links/  (PUBLIC — via org_id param)
+Returns all campus_social_link rows for a campus. Accessible publicly for the campus public profile page.
+
+
+GET /api/v1/dashboard/campus/social-links/?org_id=<uuid>
+
+
+Auth
+	Public — no authentication required
+	Query
+	CampusSocialLink.objects.filter(org_id=org_id)
+	Response
+	List of { id, platform, url, label }
+	
+
+POST social-links/  (upsert)
+Create or update a social link for the authenticated campus. Since platform is unique per campus, this behaves as an upsert: if a row for this platform already exists, update its url and label; otherwise create a new row.
+
+
+Body: platform
+	One of: instagram, linkedin, twitter, youtube, website, facebook, github, other
+	Body: url
+	Valid URL (URLField validation)
+	Body: label
+	Optional display label
+	Logic
+	CampusSocialLink.objects.update_or_create(org=org, platform=platform, defaults={url, label, updated_by, updated_at})
+	Auth
+	Campus Lead or Enabler
+	Returns
+	The created/updated social link object
+	
+
+DELETE social-links/<link_id>/
+Hard deletes a social link row. link_id is campus_social_link.id.
+
+
+Auth
+	Campus Lead or Enabler
+	Validation
+	Verify the link belongs to the authenticated user's campus before deleting.
+	Returns
+	200 + general_message: 'Social link removed.'
+	
+
+
+
+6. File-by-File Implementation Plan
+The table below lists every file that must be created or modified, with the nature of the change and the order of execution. Follow this order to avoid import errors.
+
+
+Order
+	File Path
+	Action
+	Summary of Changes
+	1
+	db/campus.py
+	CREATE
+	CampusIGChapter and CampusSocialLink Django models
+	2
+	utils/types.py
+	MODIFY
+	Add CampusIGRoleType enum if not present; add SocialPlatformType enum
+	3
+	api/v1/dashboard/campus/dash_campus_helper.py
+	MODIFY
+	Add get_campus_ig_chapter(), validate_campus_member() helper functions
+	4
+	api/v1/dashboard/campus/campus_serializers.py
+	MODIFY
+	Extend existing serializers + add new serializers for all new endpoints
+	5
+	api/v1/dashboard/campus/campus_views.py
+	MODIFY
+	Add 8 new APIView classes; extend CampusDetailsSerializer usage
+	6
+	api/v1/dashboard/campus/urls.py
+	MODIFY
+	Register 10 new URL patterns
+	7
+	db/event.py
+	CREATE
+	Event, EventScope, EventOrganiser, EventTagLink Django models (from ALTER 1.92)
+	
+
+
+
+7. Serializer Design
+All serializers live in campus_serializers.py (rename from serializers.py if needed to match file naming conventions in the codebase, or keep as serializers.py — match the existing convention exactly).
+
+
+7.1 New Serializers Required
+Serializer Class
+	Model / Source
+	Purpose
+	CampusLeaderboardSerializer
+	User (annotated)
+	Leaderboard list items with computed rank
+	CampusKarmaByClusterSerializer
+	Dict/aggregation result
+	Cluster breakdown chart data
+	CampusEventListSerializer
+	Event (with related)
+	Event feed list items for campus dashboard
+	CampusEventDistributionSerializer
+	Aggregation result
+	Tag-based event count chart data
+	ExecomMemberSerializer
+	User + UserRoleLink
+	Execom list — user info + role title
+	ExecomAddSerializer
+	Input only (no model)
+	Validates user_muid + role_title for execom addition
+	CampusIGChapterSerializer
+	CampusIGChapter
+	Chapter list with IG and lead details
+	CampusIGChapterWriteSerializer
+	CampusIGChapter
+	Input validation for create/update
+	CampusSocialLinkSerializer
+	CampusSocialLink
+	Social links list and write
+	
+
+7.2 Serializer Patterns to Follow
+* Use SerializerMethodField for any computed values (rank, member_count, ig_name).
+* Pass context={'org': org, 'user_id': user_id} from views where needed.
+* Write serializers do not inherit ModelSerializer if the write logic is complex — use plain Serializer with explicit fields and a create()/update() method.
+* Never query the DB inside a SerializerMethodField in a loop — annotate on the queryset in the view instead.
+* For the EventListSerializer, select_related('event_scope', 'event_organiser__ig', 'event_organiser__org') in the view to avoid N+1 queries.
+
+
+
+
+8. URL Configuration
+Below is the complete updated urls.py for the campus module. New patterns are marked with # NEW comments. The existing patterns are preserved exactly as they are.
+
+
+from django.urls import path
+from . import campus_views
+
+
+urlpatterns = [
+    # ── existing ───────────────────────────────────────────────
+    path('campus-details/',         campus_views.CampusDetailsAPI.as_view(),           name='campus-details'),
+    path('student-level/',          campus_views.CampusStudentInEachLevelAPI.as_view(), name='student-in-each-level'),
+    path('student-level/<str:org_id>/', campus_views.CampusStudentInEachLevelAPI.as_view(), name='student-in-each-level-individual'),
+    path('student-details/',        campus_views.CampusStudentDetailsAPI.as_view(),    name='student-details'),
+    path('student-details/csv/',    campus_views.CampusStudentDetailsCSVAPI.as_view(), name='student-details-csv'),
+    path('weekly-karma/',           campus_views.WeeklyKarmaAPI.as_view(),             name='weekly-karma-insights'),
+    path('weekly-karma/<str:org_id>/', campus_views.WeeklyKarmaAPI.as_view(),          name='weekly-karma-insights-individual'),
+    path('change-student-type/<str:member_id>/', campus_views.ChangeStudentTypeAPI.as_view(), name='change-student-type'),
+    path('transfer-lead-role/',     campus_views.TransferLeadRoleAPI.as_view(),        name='transfer-lead-role'),
+    path('transfer-enabler-role/',  campus_views.TransferEnablerRoleAPI.as_view(),     name='transfer-enabler-role'),
+    path('transfer-ig-role/',       campus_views.TransferIGRoleAPI.as_view(),          name='transfer-ig-role'),
+
+
+    # ── new ────────────────────────────────────────────────────
+    path('leaderboard/',            campus_views.CampusLeaderboardAPI.as_view(),       name='campus-leaderboard'),             # NEW
+    path('karma-by-cluster/',       campus_views.CampusKarmaByClusterAPI.as_view(),   name='campus-karma-by-cluster'),        # NEW
+    path('events/',                 campus_views.CampusEventsAPI.as_view(),            name='campus-events'),                  # NEW
+    path('events/distribution/',    campus_views.CampusEventDistributionAPI.as_view(), name='campus-event-distribution'),     # NEW
+    path('execom/',                 campus_views.CampusExecomAPI.as_view(),            name='campus-execom'),                  # NEW
+    path('execom/<str:member_id>/', campus_views.CampusExecomAPI.as_view(),            name='campus-execom-remove'),           # NEW
+    path('ig-chapters/',            campus_views.CampusIGChapterAPI.as_view(),         name='campus-ig-chapters'),             # NEW
+    path('ig-chapters/<str:chapter_id>/', campus_views.CampusIGChapterAPI.as_view(),  name='campus-ig-chapter-detail'),       # NEW
+    path('social-links/',           campus_views.CampusSocialLinkAPI.as_view(),        name='campus-social-links'),            # NEW
+    path('social-links/<str:link_id>/', campus_views.CampusSocialLinkAPI.as_view(),   name='campus-social-link-detail'),      # NEW
+
+
+    # ── public detail — must be last (catches all str:org_id) ──
+    path('<str:org_id>/',            campus_views.CampusDetailsPublicAPI.as_view(),    name='campus-details-individual'),
+]
+
+
+
+
+9. Error Handling Standards
+All views must handle errors consistently with the existing codebase pattern. The following cases must be handled explicitly in every view.
+
+
+Condition
+	Response
+	get_user_college_link() returns None
+	get_failure_response() — 'User has no organization'
+	user_org_link.org is None
+	get_failure_response() — 'Campus lead has no college'
+	Requested org_id doesn't exist
+	get_failure_response() — 'College not found'
+	Serializer is_valid() returns False
+	CustomResponse(message=serializer.errors).get_failure_response()
+	Object not found (e.g. chapter_id)
+	get_failure_response() — specific 'not found' message
+	Permission violation (wrong org, not member)
+	get_failure_response() — 'Unauthorized action'
+	Duplicate unique constraint (IG chapter)
+	get_failure_response() — 'A chapter for this IG already exists'
+	User not a campus member
+	get_failure_response() — 'User is not a member of this campus'
+	
+
+Use the same .first() pattern throughout — never .get() which raises DoesNotExist exceptions. Always guard None returns before accessing attributes.
+	
+
+
+
+10. Performance Considerations
+
+
+10.1 N+1 Query Prevention
+* Always use select_related() for single ForeignKey traversals in list endpoints.
+* Use prefetch_related() for reverse relations and M2M in list endpoints.
+* Compute rank dict via a single wallet queryset before serialization — do not query wallet per user inside the serializer.
+* Annotate computed fields (karma, level name, ig_count) on the queryset in the view, not inside SerializerMethodField loops.
+
+
+10.2 Index Reliance
+* karma-by-cluster query relies on user_ig_link.ig_id (already indexed via FK) and interest_group.cluster (indexed in ALTER 1.92 as idx_ig_cluster).
+* campus events query relies on event_scope.target_org_id (indexed as idx_es_campus in ALTER 1.92).
+* campus_ig_chapter lookups rely on idx_cic_org added in ALTER 1.93.
+* campus_social_link lookups rely on idx_csl_org added in ALTER 1.93.
+
+
+10.3 Leaderboard Rank Computation
+Computing a global rank for a paginated list requires materialising the full sorted wallet queryset before slicing. This is acceptable given campus sizes (typically < 5,000 students) but should be revisited if campuses exceed 20,000 members. At that scale, store rank in a nightly-computed cache column.
+Use .values('user_id') on the rank queryset to avoid fetching full User objects — only IDs are needed for the rank dict.
+
+
+
+
+11. Helper Functions  (dash_campus_helper.py)
+Add the following helpers to the existing dash_campus_helper.py. Do not duplicate get_user_college_link() — it already exists.
+
+
+validate_campus_member(user_id, org)
+def validate_campus_member(user_id, org):
+    '''
+    Returns True if the given user_id has a UserOrganizationLink
+    for this org with org_type=COLLEGE. False otherwise.
+    '''
+    return UserOrganizationLink.objects.filter(
+        user_id=user_id,
+        org=org,
+        org__org_type=OrganizationType.COLLEGE.value,
+    ).exists()
+
+
+get_campus_ig_chapter(chapter_id, org)
+def get_campus_ig_chapter(chapter_id, org):
+    '''
+    Returns CampusIGChapter if it belongs to org, else None.
+    Always scope by org to prevent cross-campus access.
+    '''
+    return CampusIGChapter.objects.filter(id=chapter_id, org=org).first()
+
+
+assign_ig_lead_role(user, ig, org, created_by_id)
+def assign_ig_lead_role(user, ig, org, created_by_id):
+    '''
+    Upserts a UserRoleLink for the IG Lead role (title = ig.code + 'CampusLead').
+    Removes any existing holder of that role in this campus first.
+    Mirrors the logic in TransferIGRoleAPI.
+    '''
+    role = Role.objects.filter(title=f'{ig.code}CampusLead').first()
+    if role is None:
+        return None, 'IG lead role not found'
+    # Remove old lead
+    UserRoleLink.objects.filter(
+        user__user_organization_link_user__org=org,
+        role=role
+    ).delete()
+    # Assign new lead
+    UserRoleLink.objects.create(
+        id=str(uuid.uuid4()), user=user, role=role,
+        verified=True, created_by_id=created_by_id, created_at=DateTimeUtils.get_current_utc_time()
+    )
+    return role, None
+
+
+
+
+12. Implementation Checklist
+Use this checklist to verify completeness before submitting for code review.
+
+
+Database
+* ALTER 1.93 SQL applied to development DB (campus_ig_chapter, campus_social_link)
+* Django models created in db/campus.py
+* Models imported and accessible via ORM
+* interest_group.cluster column confirmed present (ALTER 1.92)
+* event tables confirmed present (ALTER 1.92)
+
+
+APIs — New Endpoints
+* GET  leaderboard/ — returns paginated, filterable, ranked student list
+* GET  karma-by-cluster/ — returns cluster breakdown dict
+* GET  events/ — returns campus + campus-IG events, paginated
+* GET  events/distribution/ — returns tag distribution list
+* GET  execom/ — returns execom member list with roles
+* POST execom/ — adds campus member to execom role
+* DELETE execom/<member_id>/ — removes execom role
+* GET  ig-chapters/ — lists campus IG chapters with lead and member count
+* POST ig-chapters/ — creates a new chapter, optionally assigns lead
+* PATCH ig-chapters/<chapter_id>/ — updates chapter / re-assigns lead
+* DELETE ig-chapters/<chapter_id>/ — deactivates chapter
+* GET  social-links/ — public, queryable by org_id
+* POST social-links/ — upserts a social link
+* DELETE social-links/<link_id>/ — removes a social link
+
+
+APIs — Enhanced Existing Endpoints
+* GET campus-details/ — extended with karma_rate_30d, karma_rate_7d, campus_ig_count, ig_leads, ig_chapters, social_links
+* GET <org_id>/ (public) — extended with social_links in public detail response
+
+
+Code Quality
+* No logic duplicated from existing views — shared logic extracted to helpers
+* No N+1 queries in any list endpoint — verified with django-debug-toolbar or query count assertions
+* All views use CustomResponse wrapper — no raw Response or JsonResponse
+* All write operations use serializer.is_valid() before saving
+* All UUID fields generated with str(uuid.uuid4())
+* All datetime fields use DateTimeUtils.get_current_utc_time()
+* All new URL patterns registered in urls.py in correct order (specific before generic)
+* role_required decorator applied to all private write endpoints
+* Public GET endpoints omit role_required but still declare authentication_classes
+
+
+Error Handling
+* Every view guards against get_user_college_link() returning None
+* Every view guards against org being None
+* Cross-campus access prevented (all queries scoped to authenticated user's org)
+* Duplicate chapter creation returns clear error (not 500 from unique constraint)
+* Non-existent chapter_id / link_id returns 'not found' message
+
+
+
+
+13. Screen-to-API Mapping
+
+
+Campus Dashboard Screen / Section
+	APIs Consumed
+	Overview / Stats Card
+	GET campus-details/ (extended response)
+	Karma Rate Chart (30d / 7d)
+	GET campus-details/ → karma_rate_30d, karma_rate_7d fields
+	Weekly Karma Chart
+	GET weekly-karma/
+	Level Distribution Chart
+	GET student-level/
+	Karma by IG Cluster Chart
+	GET karma-by-cluster/
+	Campus Leaderboard
+	GET leaderboard/  (paginated, filtered)
+	Student List / Management
+	GET student-details/ + student-details/csv/
+	Campus Events Tab
+	GET events/  (filtered by status, type, date)
+	Event Tag Distribution Chart
+	GET events/distribution/
+	Execom Management Panel
+	GET/POST/DELETE execom/
+	IG Chapters Panel
+	GET/POST/PATCH/DELETE ig-chapters/
+	Social Links Panel
+	GET/POST/DELETE social-links/
+	Public Campus Page — Social Links
+	GET social-links/?org_id=<uuid>
+	Public Campus Page — Stats
+	GET <org_id>/ (public detail, extended)
+	Transfer Campus Lead
+	POST transfer-lead-role/  (existing)
+	Transfer Enabler
+	POST transfer-enabler-role/  (existing)
+	Transfer IG Lead
+	POST transfer-ig-role/  (existing — superseded by PATCH ig-chapters/ for new flow)
+	
+
+14. Key Design Decisions
+
+
+1. campus_ig_chapter as the IG Chapter Registry
+Prior to this migration, campus IG chapters were implied by the co-existence of user_organization_link and user_ig_link rows, with the Campus IG Lead role stored as a UserRoleLink with a title of '{ig.code}CampusLead'. This worked for role assignment but provided no single place to query 'which IG chapters exist at this campus'. campus_ig_chapter formalises this as a first-class entity, enabling: member counts per chapter, chapter active/inactive states, clean API for creating/deactivating chapters, and a direct FK for the ALTER 1.92 event tables to reference.
+
+
+2. Upsert semantics for Social Links
+Since platform is unique per campus, POST social-links/ always upserts. This simplifies the frontend — it doesn't need to track whether a social link exists before deciding POST vs PATCH. The backend uses update_or_create() transparently.
+
+
+3. Rank computed before pagination
+The leaderboard rank is a positional rank (1st, 2nd, 3rd...) within the campus, not a score. It must be computed across the full student set before pagination slices it. The pattern is: materialise the full karma-sorted wallet queryset as a dict, then paginate the main student queryset. The rank dict lookup is O(1) per student in the page. This matches the pattern already used in the existing CampusStudentDetailsAPI.
+
+
+4. Events from ALTER 1.92 — read-only access
+The Campus Dashboard reads events from the ALTER 1.92 tables but does not create or manage them through this module. Event creation for campus leads is handled by the Events API module (POST /manage/events/). The campus endpoints only read event data for display in the campus-specific events tab and analytics charts.
+
+
+5. Public endpoints scoped by org_id query param
+Social links and the public campus detail are accessible without authentication. Instead of using the authenticated user's campus, these endpoints accept an org_id as a URL path parameter or query param. The existing GET <org_id>/ endpoint already follows this pattern.
+
+
+
+
+μLearn Platform  ·  Campus Dashboard Backend Requirements  ·  ALTER 1.93

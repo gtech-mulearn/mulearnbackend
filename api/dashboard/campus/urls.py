@@ -3,6 +3,7 @@ from django.urls import path
 from . import campus_views
 
 urlpatterns = [
+    # ── existing ───────────────────────────────────────────────
     path(
         "campus-details/",
         campus_views.CampusDetailsAPI.as_view(),
@@ -56,8 +57,60 @@ urlpatterns = [
     path(
         "transfer-ig-role/",
         campus_views.TransferIGRoleAPI.as_view(),
-        name="transfer-lead-role",
+        name="transfer-ig-role",
     ),
+    # ── new ────────────────────────────────────────────────────
+    path(
+        "leaderboard/",
+        campus_views.CampusLeaderboardAPI.as_view(),
+        name="campus-leaderboard",
+    ),
+    path(
+        "karma-by-cluster/",
+        campus_views.CampusKarmaByClusterAPI.as_view(),
+        name="campus-karma-by-cluster",
+    ),
+    path(
+        "events/distribution/",
+        campus_views.CampusEventDistributionAPI.as_view(),
+        name="campus-event-distribution",
+    ),
+    path(
+        "events/",
+        campus_views.CampusEventsAPI.as_view(),
+        name="campus-events",
+    ),
+    path(
+        "execom/<str:member_id>/",
+        campus_views.CampusExecomAPI.as_view(),
+        name="campus-execom-remove",
+    ),
+    path(
+        "execom/",
+        campus_views.CampusExecomAPI.as_view(),
+        name="campus-execom",
+    ),
+    path(
+        "ig-chapters/<str:chapter_id>/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapter-detail",
+    ),
+    path(
+        "ig-chapters/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapters",
+    ),
+    path(
+        "social-links/<str:link_id>/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-link-detail",
+    ),
+    path(
+        "social-links/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-links",
+    ),
+    # ── public detail — must be last (catches all str:org_id) ──
     path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
