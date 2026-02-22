@@ -1,0 +1,50 @@
+"""
+URL routing for the Events system.
+
+Registered at: api/v1/events/
+"""
+
+from django.urls import path
+
+from . import public_views, manage_views, admin_views, meta_views, scoped_views
+
+
+urlpatterns = [
+    # ── Public ────────────────────────────────────────────
+    path('', public_views.EventListAPI.as_view()),
+    path('featured/', public_views.EventFeaturedAPI.as_view()),
+    path('<str:event_id>/', public_views.EventDetailAPI.as_view()),
+    path('<str:event_id>/interest/', public_views.EventInterestAPI.as_view()),
+
+    # ── Meta (form selectors) ─────────────────────────────
+    path('meta/organizer-options/', meta_views.OrganizerOptionsAPI.as_view()),
+    path('meta/collaboration-targets/', meta_views.CollaborationTargetsAPI.as_view()),
+
+    # ── Manage ────────────────────────────────────────────
+    path('manage/', manage_views.ManageEventListCreateAPI.as_view()),
+    path('manage/<str:event_id>/', manage_views.ManageEventDetailAPI.as_view()),
+    path('manage/<str:event_id>/publish/', manage_views.ManageEventPublishAPI.as_view()),
+
+    # Co-owners
+    path('manage/<str:event_id>/co-owners/', manage_views.ManageEventCoOwnerAPI.as_view()),
+    path('manage/<str:event_id>/co-owners/<str:co_owner_id>/', manage_views.ManageEventCoOwnerRemoveAPI.as_view()),
+
+    # Collaborators
+    path('manage/<str:event_id>/collaborators/', manage_views.ManageEventCollaboratorAPI.as_view()),
+    path('manage/<str:event_id>/collaborators/<str:collaborator_id>/', manage_views.ManageEventCollaboratorRemoveAPI.as_view()),
+    path('manage/<str:event_id>/collaborators/<str:collaborator_id>/accept/', manage_views.ManageEventCollaboratorAcceptAPI.as_view()),
+    path('manage/<str:event_id>/collaborators/<str:collaborator_id>/reject/', manage_views.ManageEventCollaboratorRejectAPI.as_view()),
+
+    # ── Admin ─────────────────────────────────────────────
+    path('admin/', admin_views.AdminEventListAPI.as_view()),
+    path('admin/<str:event_id>/approve/', admin_views.AdminEventApproveAPI.as_view()),
+    path('admin/<str:event_id>/reject/', admin_views.AdminEventRejectAPI.as_view()),
+    path('admin/<str:event_id>/feature/', admin_views.AdminEventFeatureAPI.as_view()),
+
+    # ── Scoped Feeds ──────────────────────────────────────
+    path('ig/<str:ig_id>/', scoped_views.IGEventListAPI.as_view()),
+    path('ig/cluster/<str:cluster>/', scoped_views.ClusterEventListAPI.as_view()),
+    path('campus/<str:campus_id>/', scoped_views.CampusEventListAPI.as_view()),
+    path('campus-ig/', scoped_views.CampusIGEventListAPI.as_view()),
+    path('company/<str:company_id>/', scoped_views.CompanyEventListAPI.as_view()),
+]

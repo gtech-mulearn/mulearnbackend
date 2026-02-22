@@ -11,6 +11,7 @@ urlpatterns = [
     path('url-shortener/', include('api.url_shortener.urls')),
     path('protected/', include('api.protected.urls')),
     path('hackathon/', include('api.hackathon.urls')),
+    path('events/', include('api.events.urls')),
     path('notification/', include('api.notification.urls')),
     path('public/', include('api.common.urls')),
     path('top100/', include('api.top100_coders.urls')),
