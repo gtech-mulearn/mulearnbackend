@@ -813,13 +813,20 @@ class UserCircleListSerializer(serializers.ModelSerializer):
 
 class CircleInviteSerializer(serializers.Serializer):
     """Validates the invite request body for POST /invite/<circle_id>/."""
-    user_id = serializers.CharField(required=True)
+    muid = serializers.CharField(required=True, help_text="muid of the user to invite, e.g. user@mulearn")
     lead = serializers.BooleanField(required=False, default=False)
 
-    def validate_user_id(self, value):
-        if not User.objects.filter(id=value).exists():
-            raise serializers.ValidationError("User not found.")
-        return value
+    def validate_muid(self, value):
+        user = User.objects.filter(muid=value).first()
+        if not user:
+            raise serializers.ValidationError("No user found with this muid.")
+        return user.id  # Store resolved user_id under the 'muid' key
+
+    def to_internal_value(self, data):
+        ret = super().to_internal_value(data)
+        # Rename resolved muid -> user_id for use in the view
+        ret['user_id'] = ret.pop('muid')
+        return ret
 
 
 class CircleInviteStatusSerializer(serializers.ModelSerializer):

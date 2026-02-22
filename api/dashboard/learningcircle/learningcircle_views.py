@@ -782,14 +782,16 @@ class CircleMemberAddAPI(APIView):
                 general_message="Only the circle lead or creator can add members"
             ).get_failure_response()
 
-        target_user_id = request.data.get("user_id")
-        if not target_user_id:
-            return CustomResponse(general_message="user_id is required").get_failure_response()
+        target_muid = request.data.get("muid")
+        if not target_muid:
+            return CustomResponse(general_message="muid is required").get_failure_response()
 
         try:
-            User.objects.get(id=target_user_id)
+            target_user = User.objects.get(muid=target_muid)
         except User.DoesNotExist:
-            return CustomResponse(general_message="User not found").get_failure_response()
+            return CustomResponse(general_message="No user found with this muid").get_failure_response()
+
+        target_user_id = target_user.id
 
         already_member = UserCircleLink.objects.filter(
             circle=circle, user_id=target_user_id, accepted=True
@@ -983,9 +985,16 @@ class CircleTransferLeadAPI(APIView):
             circle=circle, user_id=user_id, accepted=True, lead=True
         ).first()
 
-        target_user_id = request.data.get("user_id")
-        if not target_user_id:
-            return CustomResponse(general_message="user_id is required").get_failure_response()
+        target_muid = request.data.get("muid")
+        if not target_muid:
+            return CustomResponse(general_message="muid is required").get_failure_response()
+
+        try:
+            target_user = User.objects.get(muid=target_muid)
+        except User.DoesNotExist:
+            return CustomResponse(general_message="No user found with this muid").get_failure_response()
+
+        target_user_id = target_user.id
 
         if target_user_id == user_id:
             return CustomResponse(
