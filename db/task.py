@@ -39,6 +39,7 @@ class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75, unique=True)
     code = models.CharField(max_length=10, unique=True)
+    cluster = models.CharField(max_length=10, blank=True, null=True)
     icon = models.CharField(max_length=10)
     category =models.CharField(max_length=20,default="others",blank=False,null=False)
     status = models.CharField(
