@@ -201,6 +201,13 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
     
     def post(self, request):
         try:
+            print(f"Content-Type: {request.content_type}")
+            print(f"META Content-Type: {request.META.get('CONTENT_TYPE', 'Not set')}")
+            print(f"HTTP_CONTENT_TYPE: {request.META.get('HTTP_CONTENT_TYPE', 'Not set')}")
+            print(f"Request body: {request.body}")
+            print(f"Request data: {request.data}")
+            print(f"Request method: {request.method}")
+            print(f"All headers: {dict(request.headers)}")
             # 1. Get authenticated user
             user = self.get_authenticated_user(request)
             if not user:
@@ -277,9 +284,9 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                 general_message="Job created successfully",
                 # status_code=status.HTTP_201_CREATED
             ).get_success_response()
-            
+        
         except Exception as e:
-         
+            print(e)
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
@@ -563,7 +570,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
 
             # 6. Create the job rule
             job_rule = CompanyJobRule.objects.create(
-                job_id=job,
+                job=job,
                 rule_type=rule_type,
                 rule_type_id=rule_type_id
             )
@@ -593,7 +600,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
+    
 class UpdateJobRuleAPIView(BaseCompanyJobView):
     """API to update a specific job rule."""
     
@@ -630,7 +637,7 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
             try:
                 job_rule = CompanyJobRule.objects.get(
                     id=rule_id,
-                    job_id=job,
+                    job=job,
                
                 )
             except CompanyJobRule.DoesNotExist:
@@ -659,7 +666,7 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
             # 6. Check for duplicate rule (if rule_type_id is being changed)
             if new_rule_type_id and new_rule_type_id != job_rule.rule_type_id:
                 existing_rule = CompanyJobRule.objects.filter(
-                    job_id=job,
+                    job=job,
                     rule_type=job_rule.rule_type,
                     rule_type_id=new_rule_type_id,
                     
@@ -675,12 +682,15 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                     )
 
             # 7. Update the job rule
-            old_value =job_rule.rule_type_id
-            
+            new_rule_type = serializer.validated_data.get('rule_type')
+            new_rule_type_id = serializer.validated_data.get('rule_type_id')
+
+            if new_rule_type:
+               job_rule.rule_type = new_rule_type
+
             if new_rule_type_id:
                 job_rule.rule_type_id = new_rule_type_id
-       
-                
+
             job_rule.save()
 
             # 8. Prepare response
@@ -702,6 +712,79 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR", "details": str(e)}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DeleteJobRuleAPIView(BaseCompanyJobView):
+    """API to delete a specific job rule."""
+    
+    def delete(self, request, job_id, rule_id):
+        try:
+            # 1. Get authenticated user
+            user = self.get_authenticated_user(request)
+            if not user:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get the job
+            try:
+                job = CompanyJob.objects.get(id=job_id, is_deleted=False)
+            except CompanyJob.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job does not exist",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 3. Check company authorization
+            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            if not authorized:
+                return error_response
+
+            # 4. Get the job rule to delete
+            try:
+                job_rule = CompanyJobRule.objects.get(
+                    id=rule_id,
+                    job=job
+                )
+            except CompanyJobRule.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job rule does not exist",
+                    message={"error_code": "RULE_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 5. Hard delete the job rule
+            job_rule.delete()
+            
+            # 6. Prepare response
+            response_data = {
+                "rule_id": str(rule_id),
+                "job_id": str(job_id),
+                "deleted_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+
+            return CustomResponse(
+                general_message="Job rule deleted successfully",
+                response=response_data
+            ).get_success_response()
+
+        except Exception as e:
+            print(f"Error deleting job rule: {str(e)}")
+            return CustomResponse(
+                general_message="Something went wrong",
+                message={"error_code": "SERVER_ERROR"}
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR

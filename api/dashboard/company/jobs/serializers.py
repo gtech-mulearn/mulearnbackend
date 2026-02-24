@@ -157,7 +157,7 @@ class JobRuleUpdateSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = CompanyJobRule
-        fields = ['rule_type_id']
+        fields = ['rule_type','rule_type_id']
     
     def validate_rule_type_id(self, value):
         """Validate that the rule_type_id exists."""
@@ -167,27 +167,26 @@ class JobRuleUpdateSerializer(serializers.ModelSerializer):
     
     def validate(self, data):
         """Validate that the rule_type_id exists for the current rule_type."""
-        rule_type_id = data.get('rule_type_id')
         
-        # Get the rule_type from the instance being updated
-        if hasattr(self, 'instance') and self.instance:
-            rule_type = self.instance.rule_type
+        
+        rule_type = data.get('rule_type', self.instance.rule_type)
+        rule_type_id = data.get('rule_type_id', self.instance.rule_type_id)
             
             # Validate the new rule_type_id exists
-            if rule_type == 'skill':
-                if not Skill.objects.filter(id=rule_type_id).exists():
-                    raise serializers.ValidationError({
+        if rule_type == 'skill':
+            if not Skill.objects.filter(id=rule_type_id).exists():
+                raise serializers.ValidationError({
                         'rule_type_id': f'Skill with ID {rule_type_id} does not exist'
-                    })
+                })
                     
-            elif rule_type == 'interest_group':
-                if not InterestGroup.objects.filter(id=rule_type_id).exists():
-                    raise serializers.ValidationError({
+        elif rule_type == 'interest_group':
+            if not InterestGroup.objects.filter(id=rule_type_id).exists():
+                raise serializers.ValidationError({
                         'rule_type_id': f'Interest Group with ID {rule_type_id} does not exist'
                     })
                     
-            elif rule_type == 'achievement':
-                if not Achievement.objects.filter(id=rule_type_id).exists():
+        elif rule_type == 'achievement':
+            if not Achievement.objects.filter(id=rule_type_id).exists():
                     raise serializers.ValidationError({
                         'rule_type_id': f'Achievement with ID {rule_type_id} does not exist'
                     })
