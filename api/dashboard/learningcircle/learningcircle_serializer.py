@@ -874,3 +874,17 @@ class CircleSentInvitesSerializer(serializers.ModelSerializer):
         model = UserCircleLink
         fields = ['link_id', 'user_id', 'full_name', 'profile_pic', 'muid',
                   'is_lead_invite', 'status', 'invited_at']
+
+
+class CircleJoinRequestSerializer(serializers.ModelSerializer):
+    """Serializes a user-initiated join request (is_invited=False, accepted=None) from the lead's perspective."""
+    link_id = serializers.CharField(source='id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
+    full_name = serializers.CharField(source='user.full_name', read_only=True)
+    profile_pic = serializers.CharField(source='user.profile_pic', read_only=True, allow_null=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
+    requested_at = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = UserCircleLink
+        fields = ['link_id', 'user_id', 'full_name', 'profile_pic', 'muid', 'requested_at']
