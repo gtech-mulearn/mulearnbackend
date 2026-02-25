@@ -2,7 +2,6 @@ import uuid
 from rest_framework import serializers
 from db.task import EventConnection, Events
 from db.user import User
-from utils.utils import DateTimeUtils
 
 
 class EventConnectionSerializer(serializers.ModelSerializer):
@@ -19,17 +18,30 @@ class EventConnectionSerializer(serializers.ModelSerializer):
             'entity_name', 'entity_email', 'created_by_name', 'updated_by_name'
         ]
 
+    def _get_user_for_obj(self, obj):
+        """Retrieve and cache the User instance for the given event connection object."""
+        if obj.entity_type != 'user':
+            return None
+        
+        # Initialize the cache on first use
+        if not hasattr(self, '_user_cache'):
+            self._user_cache = {}
+        
+        user_id = obj.entity_id
+        if user_id in self._user_cache:
+            return self._user_cache[user_id]
+        
+        user = User.objects.filter(id=user_id).first()
+        self._user_cache[user_id] = user
+        return user
+
     def get_entity_name(self, obj):
-        if obj.entity_type == 'user':
-            user = User.objects.filter(id=obj.entity_id).first()
-            return user.full_name if user else None
-        return None
+        user = self._get_user_for_obj(obj)
+        return user.full_name if user else None
 
     def get_entity_email(self, obj):
-        if obj.entity_type == 'user':
-            user = User.objects.filter(id=obj.entity_id).first()
-            return user.email if user else None
-        return None
+        user = self._get_user_for_obj(obj)
+        return user.email if user else None
 
 
 class EventConnectionCreateSerializer(serializers.ModelSerializer):
@@ -108,20 +120,31 @@ class EventUserSerializer(serializers.Serializer):
     connection_created_at = serializers.DateTimeField(source="created_at")
     connection_updated_at = serializers.DateTimeField(source="updated_at")
     
+    def _get_user_for_obj(self, obj):
+        """Retrieve and cache the User instance for the given event connection object."""
+        if obj.entity_type != 'user':
+            return None
+        
+        # Initialize the cache on first use
+        if not hasattr(self, '_user_cache'):
+            self._user_cache = {}
+        
+        user_id = obj.entity_id
+        if user_id in self._user_cache:
+            return self._user_cache[user_id]
+        
+        user = User.objects.filter(id=user_id).first()
+        self._user_cache[user_id] = user
+        return user
+    
     def get_full_name(self, obj):
-        if obj.entity_type == 'user':
-            user = User.objects.filter(id=obj.entity_id).first()
-            return user.full_name if user else None
-        return None
+        user = self._get_user_for_obj(obj)
+        return user.full_name if user else None
     
     def get_email(self, obj):
-        if obj.entity_type == 'user':
-            user = User.objects.filter(id=obj.entity_id).first()
-            return user.email if user else None
-        return None
+        user = self._get_user_for_obj(obj)
+        return user.email if user else None
     
     def get_muid(self, obj):
-        if obj.entity_type == 'user':
-            user = User.objects.filter(id=obj.entity_id).first()
-            return user.muid if user else None
-        return None
+        user = self._get_user_for_obj(obj)
+        return user.muid if user else None

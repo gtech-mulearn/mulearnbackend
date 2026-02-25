@@ -1,6 +1,5 @@
-import uuid
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db import transaction
 
 from db.task import Events, EventConnection
 from db.user import User
@@ -25,7 +24,7 @@ def can_manage_event(user_id, event, request):
         roles = JWTUtils.fetch_role(request)
         if RoleType.ADMIN.value in roles:
             return True
-    except:
+    except Exception:
         pass
     
     if event.created_by_id == user_id:
@@ -41,6 +40,7 @@ def check_user_limit(event):
     
     # Calculate active count dynamically
     # Active = ticket_status='active' (removed/rejected/withdrawn are inactive)
+    # Use select_for_update to prevent race conditions
     active_count = EventConnection.objects.filter(
         event=event,
         entity_type='user',
@@ -85,42 +85,50 @@ class EventJoinAPI(APIView):
                 general_message="Event has reached its user limit"
             ).get_failure_response()
         
-        # Check if user already has an active connection
+        # Check if user already has a connection for this event
+        # Due to unique_together constraint, we must reuse existing row if it exists
         existing_connection = EventConnection.objects.filter(
             event=event,
             entity_id=user_id,
-            entity_type='user',
-            ticket_status__in=['pending', 'active']
+            entity_type='user'
         ).first()
         
         if existing_connection:
-            return CustomResponse(
-                general_message="You already have a pending or active connection to this event"
-            ).get_failure_response()
-        
-        # Create connection
-        serializer = EventConnectionCreateSerializer(
-            data={
-                'entity_id': user_id,
-                'entity_type': 'user',
-                'ticket_status': 'pending'
-            },
-            context={
-                'user_id': user_id,
-                'event_id': event_id
-            }
-        )
-        
-        if serializer.is_valid():
+            # Block if the user already has a pending or active connection
+            if existing_connection.ticket_status in ['pending', 'active']:
+                return CustomResponse(
+                    general_message="You already have a pending or active connection to this event"
+                ).get_failure_response()
+            # Reuse existing connection row by updating its status to pending
+            existing_connection.ticket_status = 'pending'
+            existing_connection.updated_by_id = user_id
+            existing_connection.save()
+            connection = existing_connection
+        else:
+            # Create new connection
+            serializer = EventConnectionCreateSerializer(
+                data={
+                    'entity_id': user_id,
+                    'entity_type': 'user',
+                    'ticket_status': 'pending'
+                },
+                context={
+                    'user_id': user_id,
+                    'event_id': event_id
+                }
+            )
+            
+            if not serializer.is_valid():
+                return CustomResponse(
+                    general_message=serializer.errors
+                ).get_failure_response()
+            
             connection = serializer.save()
-            return CustomResponse(
-                general_message="Request to join event submitted successfully",
-                response=EventConnectionStatusSerializer(connection).data
-            ).get_success_response()
         
         return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+            general_message="Request to join event submitted successfully",
+            response=EventConnectionStatusSerializer(connection).data
+        ).get_success_response()
 
 
 class EventLeaveAPI(APIView):
@@ -271,16 +279,25 @@ class EventConnectionApproveAPI(APIView):
                 general_message="Only pending requests can be approved"
             ).get_failure_response()
         
-        # Check user limit before approving
-        if not check_user_limit(event):
-            return CustomResponse(
-                general_message="Event has reached its user limit"
-            ).get_failure_response()
-        
-        # Approve
-        connection.ticket_status = 'active'
-        connection.updated_by_id = user_id
-        connection.save()
+        # Use transaction with locking to prevent concurrent overbooking
+        with transaction.atomic():
+            # Lock the event row to prevent concurrent modifications
+            event = Events.objects.select_for_update().filter(id=event_id).first()
+            if not event:
+                return CustomResponse(
+                    general_message="Invalid Event id"
+                ).get_failure_response()
+            
+            # Check user limit before approving (with lock)
+            if not check_user_limit(event):
+                return CustomResponse(
+                    general_message="Event has reached its user limit"
+                ).get_failure_response()
+            
+            # Approve
+            connection.ticket_status = 'active'
+            connection.updated_by_id = user_id
+            connection.save()
         
         return CustomResponse(
             general_message="Request approved successfully",
@@ -368,49 +385,65 @@ class EventConnectionAddUserAPI(APIView):
                 general_message="Invalid user id"
             ).get_failure_response()
         
-        # Check user limit
-        if not check_user_limit(event):
-            return CustomResponse(
-                general_message="Event has reached its user limit"
-            ).get_failure_response()
-        
-        # Check if user already has active connection
-        existing_connection = EventConnection.objects.filter(
-            event=event,
-            entity_id=target_user_id,
-            entity_type='user',
-            ticket_status__in=['pending', 'active']
-        ).first()
-        
-        if existing_connection:
-            return CustomResponse(
-                general_message="User already has an active connection to this event"
-            ).get_failure_response()
-        
-        # Create connection with active status
-        serializer = EventConnectionCreateSerializer(
-            data={
-                'entity_id': target_user_id,
-                'entity_type': 'user',
-                'ticket_status': 'active'
-            },
-            context={
-                'user_id': user_id,
-                'event_id': event_id
-            }
-        )
-        
-        if serializer.is_valid():
-            connection = serializer.save()
+        # Use transaction with locking to prevent concurrent overbooking
+        with transaction.atomic():
+            # Lock the event row to prevent concurrent modifications
+            event = Events.objects.select_for_update().filter(id=event_id).first()
+            if not event:
+                return CustomResponse(
+                    general_message="Invalid Event id"
+                ).get_failure_response()
             
-            return CustomResponse(
-                general_message="User added to event successfully",
-                response=EventConnectionSerializer(connection).data
-            ).get_success_response()
+            # Check user limit before adding (with lock)
+            if not check_user_limit(event):
+                return CustomResponse(
+                    general_message="Event has reached its user limit"
+                ).get_failure_response()
+            
+            # Check if user already has a connection for this event
+            # Due to unique_together constraint, we must reuse existing row if it exists
+            existing_connection = EventConnection.objects.filter(
+                event=event,
+                entity_id=target_user_id,
+                entity_type='user'
+            ).first()
+            
+            if existing_connection:
+                # Block if the user already has a pending or active connection
+                if existing_connection.ticket_status in ['pending', 'active']:
+                    return CustomResponse(
+                        general_message="User already has an active connection to this event"
+                    ).get_failure_response()
+                # Reuse existing connection row by updating its status to active
+                existing_connection.ticket_status = 'active'
+                existing_connection.updated_by_id = user_id
+                existing_connection.save()
+                connection = existing_connection
+            else:
+                # Create connection with active status
+                serializer = EventConnectionCreateSerializer(
+                    data={
+                        'entity_id': target_user_id,
+                        'entity_type': 'user',
+                        'ticket_status': 'active'
+                    },
+                    context={
+                        'user_id': user_id,
+                        'event_id': event_id
+                    }
+                )
+                
+                if not serializer.is_valid():
+                    return CustomResponse(
+                        general_message=serializer.errors
+                    ).get_failure_response()
+                
+                connection = serializer.save()
         
         return CustomResponse(
-            general_message=serializer.errors
-        ).get_failure_response()
+            general_message="User added to event successfully",
+            response=EventConnectionSerializer(connection).data
+        ).get_success_response()
 
 
 class EventConnectionRemoveUserAPI(APIView):
