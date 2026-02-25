@@ -57,10 +57,7 @@ class EventsCUDSerializer(serializers.ModelSerializer):
         # Handle category FK
         category_id = validated_data.pop('category', None)
         if category_id:
-            try:
-                validated_data["category_id"] = category_id
-            except:
-                pass
+            validated_data["category_id"] = category_id
         
         # Set default status if not provided
         if 'status' not in validated_data:
