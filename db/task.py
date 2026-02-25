@@ -345,7 +345,8 @@ class Events(models.Model):
     ticket_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     link = models.CharField(max_length=255, null=True, blank=True)
     tags = models.JSONField(null=True, blank=True)
-    
+    is_featured = models.BooleanField(default=False)
+
     category = models.ForeignKey(
         'Category', 
         on_delete=models.SET_NULL, 
