@@ -136,6 +136,8 @@ class TaskList(models.Model):
     level = models.ForeignKey(Level, on_delete=models.CASCADE, null=True)
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, null=True, related_name="task_list_ig")
     event = models.CharField(max_length=50, null=True)
+    event_fk = models.ForeignKey("Events", on_delete=models.SET_NULL, null=True, blank=True, db_column="event_id",
+                                 related_name="task_list_events")
     active = models.BooleanField(default=True)
     variable_karma = models.BooleanField(default=False)
     usage_count = models.IntegerField(default=1)
@@ -150,6 +152,9 @@ class TaskList(models.Model):
     class Meta:
         managed = False
         db_table = "task_list"
+        indexes = [
+            models.Index(fields=['event_fk'], name='idx_task_list_event_id'),
+        ]
 
 
 class Wallet(models.Model):
@@ -296,19 +301,20 @@ class VoucherLog(models.Model):
         db_table = "voucher_log"
 
 class Category(models.Model):
-
     class EntityType(models.TextChoices):
         EVENT = 'event', 'Event'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=255)
-    description = models.TextField(null=True, blank=True)
+    description = models.TextField(blank=True, null=True)
     entity_id = models.CharField(max_length=36)
     entity_type = models.CharField(max_length=20, choices=EntityType.choices)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="category_created_by")
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by", related_name="category_updated_by")
-    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
+                                   related_name="category_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
+                                   related_name="category_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
         managed = False
         db_table = "categories"
@@ -317,9 +323,7 @@ class Category(models.Model):
         ]
 
 
-        
 class Events(models.Model):
-
     class Status(models.TextChoices):
         UPCOMING = 'upcoming', 'Upcoming'
         ONGOING = 'ongoing', 'Ongoing'
@@ -338,42 +342,76 @@ class Events(models.Model):
         FREE = 'free', 'Free'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    name = models.CharField(max_length=75)
-    description = models.CharField(max_length=200, null=True, blank=True)
-    slug = models.CharField(max_length=255)
-    registration_start_date = models.DateTimeField()
-    registration_end_date = models.DateTimeField()
-    event_start_date = models.DateField()
-    event_end_date = models.DateField()
-    event_start_time = models.TimeField()
-    event_end_time = models.TimeField()
+    name = models.CharField(max_length=255)
+    slug = models.CharField(max_length=255, unique=True, db_index=True)
+    description = models.TextField(blank=True, null=True)
+    registration_start_date = models.DateTimeField(blank=True, null=True)
+    registration_end_date = models.DateTimeField(blank=True, null=True)
+    event_start_date = models.DateField(blank=True, null=True)
+    event_end_date = models.DateField(blank=True, null=True)
+    event_start_time = models.TimeField(blank=True, null=True)
+    event_end_time = models.TimeField(blank=True, null=True)
     user_limit = models.IntegerField(default=0)
-    status = models.CharField(max_length=20, choices=Status.choices)
-    event_type = models.CharField(max_length=20, choices=EventType.choices)
-    ticket_type = models.CharField(max_length=20, choices=TicketType.choices)   
-    cover_image = models.CharField(max_length=512, null=True, blank=True)   
-    location_name = models.CharField(max_length=255, null=True, blank=True)
-    location_address = models.TextField(null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.UPCOMING)
+    cover_image = models.CharField(max_length=512, blank=True, null=True)
+    event_type = models.CharField(max_length=20, choices=EventType.choices, default=EventType.ONLINE)
+    location_name = models.CharField(max_length=255, blank=True, null=True)
+    location_address = models.TextField(blank=True, null=True)
+    ticket_type = models.CharField(max_length=20, choices=TicketType.choices, default=TicketType.FREE)
     ticket_value = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
-    link = models.CharField(max_length=255, null=True, blank=True)
-    tags = models.JSONField(null=True, blank=True)
-    
-    category = models.ForeignKey(
-        'Category', 
-        on_delete=models.SET_NULL, 
-        null=True, 
-        db_column='category_id',
-        related_name='events'
-    )
-
-    updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by", related_name="event_updated_by")
-    updated_at  = models.DateTimeField(auto_now=True)
-    created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by", related_name="event_created_by")
-    created_at  = models.DateTimeField(auto_now_add=True)
+    category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, blank=True, db_column="category_id",
+                                 related_name="events")
+    tags = models.JSONField(blank=True, null=True)
+    link = models.CharField(max_length=255, blank=True, null=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
+                                   related_name="event_updated_by")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
+                                   related_name="event_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:
         managed = False
         db_table = "events"
+
+
+class EventConnection(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    event = models.ForeignKey(Events, on_delete=models.CASCADE, db_column="event_id", related_name="connections")
+    entity_id = models.CharField(max_length=36)
+    entity_type = models.CharField(
+        max_length=20,
+        choices=[
+            ('user', 'user'),
+            ('company', 'company'),
+        ]
+    )
+    ticket_status = models.CharField(
+        max_length=20,
+        choices=[
+            ('pending', 'pending'),
+            ('active', 'active'),
+            ('removed', 'removed'),
+            ('rejected', 'rejected'),
+            ('withdrawn', 'withdrawn'),
+        ],
+        default='pending'
+    )
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
+                                   related_name="event_connection_updated_by")
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
+                                   related_name="event_connection_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = "event_connections"
+        unique_together = [('event', 'entity_id', 'entity_type')]
+        indexes = [
+            models.Index(fields=['entity_id', 'entity_type'], name='idx_event_connections_entity'),
+            models.Index(fields=['event'], name='idx_event_connections_event'),
+        ]
 
 class TaskReport(models.Model):
     id = models.CharField(primary_key=True, max_length=36)

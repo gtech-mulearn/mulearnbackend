@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta, timezone
+﻿from datetime import datetime, timedelta, timezone
 import requests
 from rest_framework.views import APIView
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink, KarmaActivityLog
@@ -51,11 +51,23 @@ class LearningCircleView(APIView):
             .order_by("-created_at", "-updated_at")
             .select_related("ig", "org", "created_by")
         )
-        serializer = LearningCircleListMinSerializer(learning_circles, many=True)
-        return CustomResponse(
-            general_message="Learning Circles fetched successfully",
-            response=serializer.data,
-        ).get_success_response()
+
+        ig_id = request.query_params.get("ig")
+        if ig_id:
+            learning_circles = learning_circles.filter(ig_id=ig_id)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            learning_circles,
+            request,
+            search_fields=["title"],
+        )
+        serializer = LearningCircleListMinSerializer(
+            paginated_queryset.get("queryset"), many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated_queryset.get("pagination"),
+        )
 
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -678,3 +690,330 @@ class LearningCircleMemberDetailsView(APIView):
             return CustomResponse(
                 general_message="Learning Circle not found"
             ).get_failure_response()
+
+# --- New Views ---
+
+
+def _is_lead_or_creator(circle, user_id):
+    """Returns True if the user is the circle creator OR has lead=True in UserCircleLink."""
+    if circle.created_by_id == user_id:
+        return True
+    return UserCircleLink.objects.filter(
+        circle=circle, user_id=user_id, accepted=True, lead=True
+    ).exists()
+
+
+class UserCircleListAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        links = (
+            UserCircleLink.objects.filter(user_id=user_id, accepted=True)
+            .select_related('circle__ig', 'circle__org')
+        )
+        from .learningcircle_serializer import UserCircleListSerializer
+        serializer = UserCircleListSerializer(links, many=True)
+        return CustomResponse(
+            general_message="User circles fetched successfully",
+            response=serializer.data,
+        ).get_success_response()
+
+
+class CircleJoinAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        existing = UserCircleLink.objects.filter(circle=circle, user_id=user_id).first()
+
+        if existing:
+            if existing.accepted:
+                return CustomResponse(
+                    general_message="You are already a member of this circle"
+                ).get_failure_response()
+            # Accept a pending invite
+            if existing.is_invited and existing.accepted is None:
+                existing.accepted = True
+                existing.accepted_at = DateTimeUtils.get_current_utc_time()
+                existing.save()
+                return CustomResponse(
+                    general_message="Invitation accepted. You have joined the circle."
+                ).get_success_response()
+            # Any other existing link state (e.g. previously rejected) — reject to prevent duplicate rows
+            return CustomResponse(
+                general_message="You have a previous link to this circle that prevents joining. Contact the circle lead."
+            ).get_failure_response()
+
+        import uuid
+        UserCircleLink.objects.create(
+            id=str(uuid.uuid4()),
+            user_id=user_id,
+            circle=circle,
+            lead=False,
+            is_invited=False,
+            accepted=True,
+            accepted_at=DateTimeUtils.get_current_utc_time(),
+        )
+        return CustomResponse(
+            general_message="Successfully joined the learning circle"
+        ).get_success_response()
+
+
+class CircleMemberAddAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if not _is_lead_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only the circle lead or creator can add members"
+            ).get_failure_response()
+
+        target_user_id = request.data.get("user_id")
+        if not target_user_id:
+            return CustomResponse(general_message="user_id is required").get_failure_response()
+
+        try:
+            User.objects.get(id=target_user_id)
+        except User.DoesNotExist:
+            return CustomResponse(general_message="User not found").get_failure_response()
+
+        already_member = UserCircleLink.objects.filter(
+            circle=circle, user_id=target_user_id, accepted=True
+        ).exists()
+        if already_member:
+            return CustomResponse(
+                general_message="User is already a member of this circle"
+            ).get_failure_response()
+
+        import uuid
+        # Remove any pending invite if exists to avoid duplicate
+        UserCircleLink.objects.filter(
+            circle=circle, user_id=target_user_id, accepted__isnull=True
+        ).delete()
+
+        UserCircleLink.objects.create(
+            id=str(uuid.uuid4()),
+            user_id=target_user_id,
+            circle=circle,
+            lead=False,
+            is_invited=False,
+            accepted=True,
+            accepted_at=DateTimeUtils.get_current_utc_time(),
+        )
+        return CustomResponse(general_message="Member added successfully").get_success_response()
+
+
+class CircleInviteAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if not _is_lead_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only the circle lead or creator can send invitations"
+            ).get_failure_response()
+
+        from .learningcircle_serializer import CircleInviteSerializer
+        serializer = CircleInviteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message="Invalid data", response=serializer.errors
+            ).get_failure_response()
+
+        target_user_id = serializer.validated_data['user_id']
+        invite_as_lead = serializer.validated_data.get('lead', False)
+
+        # Check already a member
+        already_member = UserCircleLink.objects.filter(
+            circle=circle, user_id=target_user_id, accepted=True
+        ).exists()
+        if already_member:
+            return CustomResponse(
+                general_message="User is already a member of this circle"
+            ).get_failure_response()
+
+        # Check pending invite already exists
+        pending_invite = UserCircleLink.objects.filter(
+            circle=circle, user_id=target_user_id, is_invited=True, accepted__isnull=True
+        ).exists()
+        if pending_invite:
+            return CustomResponse(
+                general_message="An invitation is already pending for this user"
+            ).get_failure_response()
+
+        import uuid
+        UserCircleLink.objects.create(
+            id=str(uuid.uuid4()),
+            user_id=target_user_id,
+            circle=circle,
+            lead=invite_as_lead,
+            is_invited=True,
+            invited_by_id=user_id,
+            accepted=None,
+        )
+        return CustomResponse(general_message="Invitation sent successfully").get_success_response()
+
+
+class CircleInviteStatusAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request):
+        """List all pending invitations for the current user."""
+        user_id = JWTUtils.fetch_user_id(request)
+        pending = UserCircleLink.objects.filter(
+            user_id=user_id, is_invited=True, accepted__isnull=True
+        ).select_related('circle__ig', 'invited_by')
+        from .learningcircle_serializer import CircleInviteStatusSerializer
+        serializer = CircleInviteStatusSerializer(pending, many=True)
+        return CustomResponse(
+            general_message="Invitations fetched successfully",
+            response=serializer.data,
+        ).get_success_response()
+
+    def post(self, request, link_id: str):
+        """Accept or reject an invitation by its link_id."""
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            link = UserCircleLink.objects.get(id=link_id, user_id=user_id, is_invited=True)
+        except UserCircleLink.DoesNotExist:
+            return CustomResponse(
+                general_message="Invitation not found"
+            ).get_failure_response()
+
+        if link.accepted is not None:
+            return CustomResponse(
+                general_message="This invitation has already been responded to"
+            ).get_failure_response()
+
+        action = request.data.get("action")
+        if action not in ("accept", "reject"):
+            return CustomResponse(
+                general_message="Invalid action. Must be 'accept' or 'reject'"
+            ).get_failure_response()
+
+        if action == "accept":
+            link.accepted = True
+            link.accepted_at = DateTimeUtils.get_current_utc_time()
+            link.save()
+            return CustomResponse(
+                general_message="Invitation accepted successfully"
+            ).get_success_response()
+
+        link.accepted = False
+        link.save()
+        return CustomResponse(
+            general_message="Invitation rejected successfully"
+        ).get_success_response()
+
+
+class CircleSentInvitesAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if not _is_lead_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only the circle lead or creator can view sent invitations"
+            ).get_failure_response()
+
+        # Optional status filter: pending | accepted | rejected
+        status_filter = request.query_params.get("status", None)
+        qs = UserCircleLink.objects.filter(circle=circle, is_invited=True).select_related('user')
+
+        if status_filter == "pending":
+            qs = qs.filter(accepted__isnull=True)
+        elif status_filter == "accepted":
+            qs = qs.filter(accepted=True)
+        elif status_filter == "rejected":
+            qs = qs.filter(accepted=False)
+
+        from .learningcircle_serializer import CircleSentInvitesSerializer
+        serializer = CircleSentInvitesSerializer(qs, many=True)
+        return CustomResponse(
+            general_message="Sent invitations fetched successfully",
+            response=serializer.data,
+        ).get_success_response()
+
+
+class CircleTransferLeadAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, circle_id: str):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(general_message="Learning Circle not found").get_failure_response()
+
+        if not _is_lead_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only the circle lead or creator can transfer leadership"
+            ).get_failure_response()
+
+        # caller_link may be None if the caller is the circle creator without a UserCircleLink row
+        caller_link = UserCircleLink.objects.filter(
+            circle=circle, user_id=user_id, accepted=True, lead=True
+        ).first()
+
+        target_user_id = request.data.get("user_id")
+        if not target_user_id:
+            return CustomResponse(general_message="user_id is required").get_failure_response()
+
+        if target_user_id == user_id:
+            return CustomResponse(
+                general_message="You are already the lead"
+            ).get_failure_response()
+
+        try:
+            target_link = UserCircleLink.objects.get(
+                circle=circle, user_id=target_user_id, accepted=True
+            )
+        except UserCircleLink.DoesNotExist:
+            return CustomResponse(
+                general_message="Target user is not an accepted member of this circle"
+            ).get_failure_response()
+
+        if target_link.lead:
+            return CustomResponse(
+                general_message="Target user is already the lead"
+            ).get_failure_response()
+
+        # Demote the caller only if they have an explicit lead link (creator may not)
+        if caller_link:
+            caller_link.lead = False
+            caller_link.save()
+
+        target_link.lead = True
+        target_link.save()
+
+        return CustomResponse(
+            general_message="Lead transferred successfully"
+        ).get_success_response()
