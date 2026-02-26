@@ -24,7 +24,7 @@ class EventsCUDSerializer(serializers.ModelSerializer):
             'event_start_date', 'event_end_date', 'event_start_time', 'event_end_time',
             'user_limit', 'event_type', 'ticket_type', 'cover_image',
             'location_name', 'location_address', 'ticket_value', 'link', 'tag',
-            'category'
+            'category', 'is_featured'
         ]
         extra_kwargs = {
             'ticket_value': {'required': False},
