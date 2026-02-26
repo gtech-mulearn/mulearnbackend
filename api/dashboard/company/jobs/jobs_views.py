@@ -77,19 +77,19 @@ class BaseCompanyJobView(APIView):
         jobs = list(jobs_qs.prefetch_related('rules').all())
         
         # Collect all rule type IDs by type
-        skill_ids = []
-        interest_ids = []
-        achievement_ids = []
+        skill_ids = set()
+        interest_ids = set()
+        achievement_ids = set()
     
         
         for job in jobs:
             for rule in job.rules.all():
                 if rule.rule_type == 'skill':
-                    skill_ids.append(rule.rule_type_id)
+                    skill_ids.add(rule.rule_type_id)
                 elif rule.rule_type == 'interest_group':
-                    interest_ids.append(rule.rule_type_id)
+                    interest_ids.add(rule.rule_type_id)
                 elif rule.rule_type == 'achievement':
-                    achievement_ids.append(rule.rule_type_id)
+                    achievement_ids.add(rule.rule_type_id)
         
         # Bulk fetch all related objects (3 queries max)
         skills_map = {str(s.id): s.name for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
@@ -201,13 +201,6 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
     
     def post(self, request):
         try:
-            print(f"Content-Type: {request.content_type}")
-            print(f"META Content-Type: {request.META.get('CONTENT_TYPE', 'Not set')}")
-            print(f"HTTP_CONTENT_TYPE: {request.META.get('HTTP_CONTENT_TYPE', 'Not set')}")
-            print(f"Request body: {request.body}")
-            print(f"Request data: {request.data}")
-            print(f"Request method: {request.method}")
-            print(f"All headers: {dict(request.headers)}")
             # 1. Get authenticated user
             user = self.get_authenticated_user(request)
             if not user:
@@ -660,21 +653,38 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                     http_status_code=status.HTTP_400_BAD_REQUEST
                 )
 
-            new_rule_type_id = serializer.validated_data.get('rule_type_id')
-            # new_rule_name = serializer.validated_data.get('rule_name')
+        
 
-            # 6. Check for duplicate rule (if rule_type_id is being changed)
-            if new_rule_type_id and new_rule_type_id != job_rule.rule_type_id:
+            # 6. Validate logical consistency first
+            new_rule_type = serializer.validated_data.get('rule_type')
+            new_rule_type_id = serializer.validated_data.get('rule_type_id')
+
+            # If rule_type is changing, rule_type_id MUST also be provided
+            if new_rule_type and new_rule_type != job_rule.rule_type:
+                if not new_rule_type_id:
+                    return CustomResponse(
+                        general_message="When changing rule_type, you must also provide rule_type_id",
+                        message={"error_code": "MISSING_RULE_TYPE_ID"}
+                    ).get_failure_response(
+                        status_code=400,
+                        http_status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Get final values for duplicate check
+            final_rule_type = new_rule_type or job_rule.rule_type
+            final_rule_type_id = new_rule_type_id or job_rule.rule_type_id
+
+            # Check for duplicates if anything is changing
+            if (final_rule_type != job_rule.rule_type) or (final_rule_type_id != job_rule.rule_type_id):
                 existing_rule = CompanyJobRule.objects.filter(
                     job=job,
-                    rule_type=job_rule.rule_type,
-                    rule_type_id=new_rule_type_id,
-                    
+                    rule_type=final_rule_type,
+                    rule_type_id=final_rule_type_id,
                 ).exclude(id=job_rule.id).first()
                 
                 if existing_rule:
                     return CustomResponse(
-                        general_message="A rule with this value already exists for the job",
+                        general_message=f"A rule with this {final_rule_type} already exists for the job",
                         message={"error_code": "DUPLICATE_RULE"}
                     ).get_failure_response(
                         status_code=400,
@@ -682,9 +692,6 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                     )
 
             # 7. Update the job rule
-            new_rule_type = serializer.validated_data.get('rule_type')
-            new_rule_type_id = serializer.validated_data.get('rule_type_id')
-
             if new_rule_type:
                job_rule.rule_type = new_rule_type
 
@@ -692,6 +699,8 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                 job_rule.rule_type_id = new_rule_type_id
 
             job_rule.save()
+
+
 
             # 8. Prepare response
             response_data = {
