@@ -46,14 +46,19 @@ class EventAPI(APIView):
             )
         )
     
-    @role_required(
-        [
-            RoleType.ADMIN.value,
-        ]
-    )
-
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        roles   = JWTUtils.fetch_role(request)
+        print(roles)
+        is_admin          = RoleType.ADMIN.value in roles
+        is_ig_lead        = any(r.endswith(" IGLead") for r in roles)
+        is_campus_lead    = RoleType.CAMPUS_LEAD.value in roles
+        is_campus_ig_lead = any(r.endswith(" CampusLead") for r in roles)
+
+        if not (is_admin or is_campus_lead or is_ig_lead or is_campus_ig_lead):
+            return CustomResponse(
+                general_message="You do not have permission to create events."
+            ).get_failure_response()
 
         serializer = EventsCUDSerializer(
             data=request.data,
