@@ -83,8 +83,7 @@ class CompanyJobRule(models.Model):
     rule_type_id = models.CharField(max_length=36)  # generic FK
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
-        # managed = False
-        # db_table = 'company_jobs_rules'
+     
         db_table = "company_job_rules"
         unique_together = ('job', 'rule_type', 'rule_type_id')
 
