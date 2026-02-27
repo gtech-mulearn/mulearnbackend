@@ -813,13 +813,20 @@ class UserCircleListSerializer(serializers.ModelSerializer):
 
 class CircleInviteSerializer(serializers.Serializer):
     """Validates the invite request body for POST /invite/<circle_id>/."""
-    user_id = serializers.CharField(required=True)
+    muid = serializers.CharField(required=True, help_text="muid of the user to invite, e.g. user@mulearn")
     lead = serializers.BooleanField(required=False, default=False)
 
-    def validate_user_id(self, value):
-        if not User.objects.filter(id=value).exists():
-            raise serializers.ValidationError("User not found.")
-        return value
+    def validate_muid(self, value):
+        user = User.objects.filter(muid=value).first()
+        if not user:
+            raise serializers.ValidationError("No user found with this muid.")
+        return user.id  # Store resolved user_id under the 'muid' key
+
+    def to_internal_value(self, data):
+        ret = super().to_internal_value(data)
+        # Rename resolved muid -> user_id for use in the view
+        ret['user_id'] = ret.pop('muid')
+        return ret
 
 
 class CircleInviteStatusSerializer(serializers.ModelSerializer):
@@ -867,3 +874,17 @@ class CircleSentInvitesSerializer(serializers.ModelSerializer):
         model = UserCircleLink
         fields = ['link_id', 'user_id', 'full_name', 'profile_pic', 'muid',
                   'is_lead_invite', 'status', 'invited_at']
+
+
+class CircleJoinRequestSerializer(serializers.ModelSerializer):
+    """Serializes a user-initiated join request (is_invited=False, accepted=None) from the lead's perspective."""
+    link_id = serializers.CharField(source='id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
+    full_name = serializers.CharField(source='user.full_name', read_only=True)
+    profile_pic = serializers.CharField(source='user.profile_pic', read_only=True, allow_null=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
+    requested_at = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = UserCircleLink
+        fields = ['link_id', 'user_id', 'full_name', 'profile_pic', 'muid', 'requested_at']
