@@ -147,7 +147,6 @@ class TaskList(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column="created_by", related_name="task_list_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
-    event_id = models.CharField(max_length=36, null=True)
 
     class Meta:
         managed = False
