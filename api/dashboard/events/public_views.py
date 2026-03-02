@@ -261,7 +261,7 @@ class EventInterestAPI(APIView):
 
         if created:
             # Triggers handle interest_count. If triggers are disabled, update manually:
-            # Event.objects.filter(id=event_id).update(interest_count=models.F('interest_count') + 1)
+            Event.objects.filter(id=event_id).update(interest_count=models.F('interest_count') + 1)
             msg = "You're now marked as interested in this event."
         else:
             msg = 'You have already expressed interest in this event.'
@@ -282,7 +282,7 @@ class EventInterestAPI(APIView):
 
         interest.delete()
         # Triggers handle the decrement. If triggers are disabled:
-        # Event.objects.filter(id=event_id).update(interest_count=models.F('interest_count') - 1)
+        Event.objects.filter(id=event_id).update(interest_count=models.F('interest_count') - 1)
 
         return CustomResponse(
             general_message='Your interest has been removed.'
