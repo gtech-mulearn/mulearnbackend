@@ -136,23 +136,22 @@ class EventListAPI(APIView):
             'created_at': 'created_at',
         }
 
+        # Annotate with viewer's interest status BEFORE pagination (Page objects can't be annotated)
+        if user_id:
+            events = events.annotate(
+                viewer_interested=Exists(
+                    EventInterest.objects.filter(event=OuterRef('pk'), user_id=user_id)
+                )
+            )
+
         paginated = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
             sort_fields=sort_fields,
         )
 
-        # Annotate with viewer's interest status to avoid N+1 in the serializer
-        queryset = paginated['queryset']
-        if user_id:
-            queryset = queryset.annotate(
-                viewer_interested=Exists(
-                    EventInterest.objects.filter(event=OuterRef('pk'), user_id=user_id)
-                )
-            )
-
         serializer = EventListItemSerializer(
-            queryset, many=True,
+            paginated['queryset'], many=True,
             context={'user_id': user_id, 'request': request},
         )
         return CustomResponse().paginated_response(
