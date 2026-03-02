@@ -112,13 +112,19 @@ class CollaborationTargetsAPI(APIView):
             'ig': [],
             'campus': [],
             'company': [],
+            'campus_ig': [],
         }
 
-        if not filter_type or filter_type == 'ig':
+        if not filter_type or filter_type in ('ig', 'campus_ig'):
             qs = InterestGroup.objects.all()
             if search:
                 qs = qs.filter(name__icontains=search)
-            results['ig'] = list(qs.values('id', 'name', 'icon', 'code')[:20])
+            ig_results = list(qs.values('id', 'name', 'icon', 'code')[:20])
+            if not filter_type or filter_type == 'ig':
+                results['ig'] = ig_results
+            if not filter_type or filter_type == 'campus_ig':
+                # campus_ig collaborators are identified by their IG; return as campus_ig key
+                results['campus_ig'] = ig_results
 
         if not filter_type or filter_type == 'campus':
             qs = Organization.objects.filter(org_type='College')

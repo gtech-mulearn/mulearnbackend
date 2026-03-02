@@ -176,10 +176,13 @@ class EventListItemSerializer(serializers.ModelSerializer):
         ]
 
     def get_viewer_interest_status(self, obj):
-        request = self.context.get('request')
         user_id = self.context.get('user_id')
         if not user_id:
             return None
+        # Use queryset annotation when available (avoids N+1 per list item);
+        # fall back to a direct query if the annotation is not present (e.g. detail view).
+        if hasattr(obj, 'viewer_interested'):
+            return 'interested' if obj.viewer_interested else 'none'
         exists = EventInterest.objects.filter(event=obj, user_id=user_id).exists()
         return 'interested' if exists else 'none'
 
@@ -242,22 +245,28 @@ class EventDetailSerializer(serializers.ModelSerializer):
         return LinkedTaskSerializer(tasks, many=True).data
 
     def _get_viewer_info(self, obj):
-        """Returns (user_id, viewer_karma) or (None, None)."""
+        """Returns (user_id, viewer_karma). Cached per serializer call."""
+        if hasattr(self, '_viewer_info_cache'):
+            return self._viewer_info_cache
         user_id = self.context.get('user_id')
         if not user_id:
-            return None, None
+            self._viewer_info_cache = (None, None)
+            return self._viewer_info_cache
         try:
             from db.task import Wallet
             wallet = Wallet.objects.filter(user_id=user_id).first()
             karma = wallet.karma if wallet else 0
         except Exception:
             karma = 0
-        return user_id, karma
+        self._viewer_info_cache = (user_id, karma)
+        return self._viewer_info_cache
 
     def get_viewer_interest_status(self, obj):
         user_id, _ = self._get_viewer_info(obj)
         if not user_id:
             return None
+        if hasattr(obj, 'viewer_interested'):
+            return 'interested' if obj.viewer_interested else 'none'
         exists = EventInterest.objects.filter(event=obj, user_id=user_id).exists()
         return 'interested' if exists else 'none'
 

@@ -45,23 +45,10 @@ def _can_create_event(roles):
     return any(r.endswith(' IGLead') or r.endswith(' CampusLead') for r in roles)
 
 
-def _determine_initial_status(organiser_type, roles):
-    """
-    Calculates the correct first status based on who is creating.
-
-    Rules:
-      admin / campus-lead      → draft  (they publish themselves when ready)
-      global IG lead           → pending_mentor_approval
-      campus IG lead           → pending_campus_approval
-      company                  → draft
-    """
-    if RoleType.ADMIN.value in roles:
-        return Event.Status.DRAFT
-    if organiser_type == Event.OrganiserType.CAMPUS_IG:
-        return Event.Status.DRAFT  # campus lead approves → pending_approval
-    if organiser_type == Event.OrganiserType.GLOBAL_IG:
-        return Event.Status.DRAFT  # mentor approval flow starts on publish
-    return Event.Status.DRAFT
+def _get_manageable_events():
+    """Base queryset for manage views: includes cancelled events but not hard-deleted rows.
+    Organisers need to see their own cancelled events (soft-delete sets deleted_at)."""
+    return Event.objects.all()  # No deleted_at filter — managers see everything they own
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -87,7 +74,8 @@ class ManageEventListCreateAPI(APIView):
         )
 
         from django.db.models import Q
-        events = get_live_events().filter(
+        # Use _get_manageable_events() so cancelled events remain visible to their owner
+        events = _get_manageable_events().filter(
             Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
         )
 
@@ -151,7 +139,8 @@ class ManageEventDetailAPI(APIView):
     def _get_managed_event(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        event = get_live_events().filter(id=event_id).first()
+        # Use _get_manageable_events() so managers can see/edit their cancelled events
+        event = _get_manageable_events().filter(id=event_id).first()
         if not event:
             return None, None, None, 'Event not found.'
         is_admin = RoleType.ADMIN.value in roles

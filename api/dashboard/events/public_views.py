@@ -2,21 +2,24 @@
 Public Events API views — no special role required, but some
 endpoints benefit from an authenticated user context.
 """
+import uuid
+
+from django.db.models import F, Q, Exists, OuterRef
 from rest_framework.views import APIView
+from rest_framework.permissions import IsAuthenticated
 
 from db.events import Event, EventInterest
 from db.task import Wallet, UserIgLink
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from utils.utils import CommonUtils, DateTimeUtils
+from utils.utils import CommonUtils
 
 from .serializers import (
     EventListItemSerializer,
     EventDetailSerializer,
     get_live_events,
 )
-import uuid
 
 
 def _get_viewer_id(request):
@@ -39,8 +42,6 @@ def _build_scope_filter(user_id):
       - scope=campus_ig  → user must be in scope_org AND scope_ig
       - scope=company    → user must be in organiser_org (company)
     """
-    from django.db.models import Q
-
     # Always show global events
     q = Q(scope=Event.Scope.GLOBAL)
 
@@ -69,9 +70,9 @@ def _build_scope_filter(user_id):
                 scope_org_id__in=user_org_ids,
                 scope_ig_id__in=user_ig_ids)
 
-    # Company scope: user belongs to company that's the organiser
+    # Company scope: event is scoped to a company the user belongs to
     if user_org_ids:
-        q |= Q(scope=Event.Scope.COMPANY, organiser_org_id__in=user_org_ids)
+        q |= Q(scope=Event.Scope.COMPANY, scope_org_id__in=user_org_ids)
 
     return q
 
@@ -120,13 +121,12 @@ class EventListAPI(APIView):
 
         # Karma eligibility filter
         if params.get('eligible_only') == 'true' and user_id:
-            from django.db.models import Q as DjQ
             try:
                 karma = Wallet.objects.filter(user_id=user_id).values_list('karma', flat=True).first() or 0
             except Exception:
                 karma = 0
             events = events.filter(
-                DjQ(min_karma__isnull=True) | DjQ(min_karma__lte=karma)
+                Q(min_karma__isnull=True) | Q(min_karma__lte=karma)
             )
 
         sort_fields = {
@@ -142,8 +142,17 @@ class EventListAPI(APIView):
             sort_fields=sort_fields,
         )
 
+        # Annotate with viewer's interest status to avoid N+1 in the serializer
+        queryset = paginated['queryset']
+        if user_id:
+            queryset = queryset.annotate(
+                viewer_interested=Exists(
+                    EventInterest.objects.filter(event=OuterRef('pk'), user_id=user_id)
+                )
+            )
+
         serializer = EventListItemSerializer(
-            paginated['queryset'], many=True,
+            queryset, many=True,
             context={'user_id': user_id, 'request': request},
         )
         return CustomResponse().paginated_response(
@@ -229,6 +238,7 @@ class EventInterestAPI(APIView):
     DELETE /events/<event_id>/interest/  → Remove interest
     """
     authentication_classes = [CustomizePermission]
+    permission_classes = [IsAuthenticated]
 
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -260,8 +270,7 @@ class EventInterestAPI(APIView):
         )
 
         if created:
-            # Triggers handle interest_count. If triggers are disabled, update manually:
-            Event.objects.filter(id=event_id).update(interest_count=models.F('interest_count') + 1)
+            Event.objects.filter(id=event_id).update(interest_count=F('interest_count') + 1)
             msg = "You're now marked as interested in this event."
         else:
             msg = 'You have already expressed interest in this event.'
@@ -281,8 +290,7 @@ class EventInterestAPI(APIView):
             ).get_failure_response()
 
         interest.delete()
-        # Triggers handle the decrement. If triggers are disabled:
-        Event.objects.filter(id=event_id).update(interest_count=models.F('interest_count') - 1)
+        Event.objects.filter(id=event_id).update(interest_count=F('interest_count') - 1)
 
         return CustomResponse(
             general_message='Your interest has been removed.'

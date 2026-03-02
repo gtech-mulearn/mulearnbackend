@@ -148,11 +148,15 @@ class AdminEventRejectAPI(APIView):
         event.updated_by_id = user_id
         event.save()
 
+        # Store rejection reason in the audit log's changed_fields as structured data
         EventLog.objects.create(
             id=str(uuid.uuid4()),
             event=event,
             edited_by_id=user_id,
-            changed_fields=['status', '_rejection_reason'],
+            changed_fields={
+                'status': {'from': old_status, 'to': Event.Status.DRAFT},
+                'rejection_reason': reason,
+            },
         )
 
         return CustomResponse(
