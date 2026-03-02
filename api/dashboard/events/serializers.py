@@ -1,0 +1,409 @@
+"""
+Shared serializers for the Events system.
+All view modules import from this file.
+"""
+import uuid
+
+from django.utils.text import slugify
+from rest_framework import serializers
+
+from db.events import Event, EventConnection, EventInterest, EventLog
+from db.task import InterestGroup, TaskList
+from db.organization import Organization
+from db.user import User
+from utils.utils import DateTimeUtils
+
+
+# ─────────────────────────────────────────────────────────────
+# MINIMAL / NESTED SHAPES
+# ─────────────────────────────────────────────────────────────
+
+class MinimalUserSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ['id', 'full_name', 'muid', 'profile_pic']
+
+
+class MinimalIGSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = InterestGroup
+        fields = ['id', 'name', 'icon']
+
+
+class MinimalCampusSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ['id', 'title', 'org_type']
+
+
+class MinimalCampusIGSerializer(serializers.Serializer):
+    """Represents a campus-IG chapter as (org_id, ig_id) pair."""
+    org_id = serializers.CharField()
+    ig_id = serializers.CharField()
+    org_title = serializers.CharField()
+    ig_name = serializers.CharField()
+
+
+# ─────────────────────────────────────────────────────────────
+# ORGANISER INFO
+# ─────────────────────────────────────────────────────────────
+
+class OrganizerInfoSerializer(serializers.Serializer):
+    """Reads organiser fields off the Event model directly."""
+    type = serializers.CharField(source='organiser_type')
+    ig = serializers.SerializerMethodField()
+    campus = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
+    campus_ig_id = serializers.CharField(source='organiser_ci_id', allow_null=True)
+
+    def get_ig(self, obj):
+        if obj.organiser_type in (Event.OrganiserType.GLOBAL_IG, Event.OrganiserType.CAMPUS_IG) and obj.organiser_ig:
+            return MinimalIGSerializer(obj.organiser_ig).data
+        return None
+
+    def get_campus(self, obj):
+        if obj.organiser_type == Event.OrganiserType.CAMPUS and obj.organiser_org:
+            return MinimalCampusSerializer(obj.organiser_org).data
+        return None
+
+    def get_company(self, obj):
+        if obj.organiser_type == Event.OrganiserType.COMPANY and obj.organiser_org:
+            return MinimalCampusSerializer(obj.organiser_org).data
+        return None
+
+
+# ─────────────────────────────────────────────────────────────
+# VENUE
+# ─────────────────────────────────────────────────────────────
+
+class EventVenueSerializer(serializers.Serializer):
+    """Flattens venue_* fields from the Event model."""
+    type = serializers.CharField(source='venue_type')
+    address = serializers.CharField(source='venue_address', allow_null=True)
+    city = serializers.CharField(source='venue_city', allow_null=True)
+    maps_url = serializers.CharField(source='venue_maps_url', allow_null=True)
+    online_link = serializers.CharField(source='venue_online_link', allow_null=True)
+    platform = serializers.CharField(source='venue_platform', allow_null=True)
+
+
+# ─────────────────────────────────────────────────────────────
+# COLLABORATORS
+# ─────────────────────────────────────────────────────────────
+
+class EventCollaboratorSerializer(serializers.ModelSerializer):
+    entity_detail = serializers.SerializerMethodField()
+
+    class Meta:
+        model = EventConnection
+        fields = [
+            'id', 'entity_type', 'entity_id', 'entity_detail',
+            'role_label', 'invite_status', 'rejection_reason',
+            'responded_at', 'created_at',
+        ]
+
+    def get_entity_detail(self, obj):
+        try:
+            if obj.entity_type == EventConnection.EntityType.COLLAB_IG:
+                ig = InterestGroup.objects.filter(id=obj.entity_id).first()
+                return MinimalIGSerializer(ig).data if ig else None
+            elif obj.entity_type in (
+                EventConnection.EntityType.COLLAB_CAMPUS,
+                EventConnection.EntityType.COLLAB_COMPANY,
+            ):
+                org = Organization.objects.filter(id=obj.entity_id).first()
+                return MinimalCampusSerializer(org).data if org else None
+            elif obj.entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
+                return {'campus_ig_id': obj.entity_id}
+        except Exception:
+            return None
+        return None
+
+
+# ─────────────────────────────────────────────────────────────
+# CO-OWNERS
+# ─────────────────────────────────────────────────────────────
+
+class EventCoOwnerSerializer(serializers.ModelSerializer):
+    user = serializers.SerializerMethodField()
+    added_by = serializers.SerializerMethodField()
+    added_at = serializers.DateTimeField(source='created_at')
+
+    class Meta:
+        model = EventConnection
+        fields = ['id', 'entity_id', 'user', 'added_by', 'added_at']
+
+    def get_user(self, obj):
+        user = User.objects.filter(id=obj.entity_id).first()
+        return MinimalUserSerializer(user).data if user else None
+
+    def get_added_by(self, obj):
+        return MinimalUserSerializer(obj.created_by).data
+
+
+# ─────────────────────────────────────────────────────────────
+# LINKED TASKS
+# ─────────────────────────────────────────────────────────────
+
+class LinkedTaskSerializer(serializers.ModelSerializer):
+    ig = MinimalIGSerializer(read_only=True)
+
+    class Meta:
+        model = TaskList
+        fields = [
+            'id', 'title', 'description', 'hashtag',
+            'karma', 'bonus_time', 'bonus_karma', 'active', 'ig',
+        ]
+
+
+# ─────────────────────────────────────────────────────────────
+# EVENT LIST ITEM  (lean — for paginated feeds)
+# ─────────────────────────────────────────────────────────────
+
+class EventListItemSerializer(serializers.ModelSerializer):
+    organizer = OrganizerInfoSerializer(source='*')
+    venue = EventVenueSerializer(source='*')
+    viewer_interest_status = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
+
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'slug', 'cover_image',
+            'status', 'scope', 'start_datetime', 'end_datetime',
+            'venue', 'organizer', 'is_featured', 'is_collaboration',
+            'interest_count', 'min_karma', 'tags', 'user_limit',
+            'category_name', 'viewer_interest_status',
+        ]
+
+    def get_viewer_interest_status(self, obj):
+        request = self.context.get('request')
+        user_id = self.context.get('user_id')
+        if not user_id:
+            return None
+        exists = EventInterest.objects.filter(event=obj, user_id=user_id).exists()
+        return 'interested' if exists else 'none'
+
+
+# ─────────────────────────────────────────────────────────────
+# EVENT DETAIL  (full — for detail page)
+# ─────────────────────────────────────────────────────────────
+
+class EventDetailSerializer(serializers.ModelSerializer):
+    organizer = OrganizerInfoSerializer(source='*')
+    venue = EventVenueSerializer(source='*')
+    collaborators = serializers.SerializerMethodField()
+    co_owners = serializers.SerializerMethodField()
+    linked_tasks = serializers.SerializerMethodField()
+    created_by = MinimalUserSerializer(read_only=True)
+    updated_by = MinimalUserSerializer(read_only=True)
+    viewer_interest_status = serializers.SerializerMethodField()
+    viewer_can_access_registration = serializers.SerializerMethodField()
+    viewer_access_blocked_reason = serializers.SerializerMethodField()
+    category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
+    scope_org = MinimalCampusSerializer(read_only=True, allow_null=True)
+    scope_ig = MinimalIGSerializer(read_only=True, allow_null=True)
+
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'slug', 'description',
+            'cover_image', 'banner_image', 'category_name',
+            'status', 'scope', 'scope_org', 'scope_ig', 'scope_ci_id',
+            'organizer', 'venue',
+            'start_datetime', 'end_datetime',
+            'registration_url', 'registration_deadline', 'min_karma',
+            'is_featured', 'is_collaboration', 'interest_count',
+            'tags', 'user_limit',
+            'linked_tasks', 'co_owners', 'collaborators',
+            'viewer_interest_status',
+            'viewer_can_access_registration',
+            'viewer_access_blocked_reason',
+            'created_by', 'updated_by', 'created_at', 'updated_at',
+        ]
+
+    def get_collaborators(self, obj):
+        is_manage_view = self.context.get('is_manage_view', False)
+        qs = obj.connections.filter(
+            entity_type__in=EventConnection.COLLABORATOR_TYPES
+        )
+        if not is_manage_view:
+            # Public view: only accepted collaborators
+            qs = qs.filter(invite_status=EventConnection.InviteStatus.ACCEPTED)
+        return EventCollaboratorSerializer(qs, many=True).data
+
+    def get_co_owners(self, obj):
+        qs = obj.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER)
+        return EventCoOwnerSerializer(qs, many=True).data
+
+    def get_linked_tasks(self, obj):
+        # Use event_fk_id (raw UUID) to avoid Django's FK type-check
+        # which rejects a new `Event` object where old `Events` is expected.
+        tasks = TaskList.objects.filter(event_fk_id=obj.id)
+        return LinkedTaskSerializer(tasks, many=True).data
+
+    def _get_viewer_info(self, obj):
+        """Returns (user_id, viewer_karma) or (None, None)."""
+        user_id = self.context.get('user_id')
+        if not user_id:
+            return None, None
+        try:
+            from db.task import Wallet
+            wallet = Wallet.objects.filter(user_id=user_id).first()
+            karma = wallet.karma if wallet else 0
+        except Exception:
+            karma = 0
+        return user_id, karma
+
+    def get_viewer_interest_status(self, obj):
+        user_id, _ = self._get_viewer_info(obj)
+        if not user_id:
+            return None
+        exists = EventInterest.objects.filter(event=obj, user_id=user_id).exists()
+        return 'interested' if exists else 'none'
+
+    def get_viewer_can_access_registration(self, obj):
+        user_id, karma = self._get_viewer_info(obj)
+        if not user_id:
+            # Unauthenticated: only global events with no karma gate
+            return obj.scope == Event.Scope.GLOBAL and not obj.min_karma
+        if obj.status in (Event.Status.CANCELLED, Event.Status.COMPLETED, Event.Status.DRAFT):
+            return False
+        if obj.min_karma and karma < obj.min_karma:
+            return False
+        return True
+
+    def get_viewer_access_blocked_reason(self, obj):
+        user_id, karma = self._get_viewer_info(obj)
+        if obj.status == Event.Status.CANCELLED:
+            return 'This event has been cancelled.'
+        if obj.status == Event.Status.COMPLETED:
+            return 'This event has already completed.'
+        if obj.status == Event.Status.DRAFT:
+            return 'This event is not yet published.'
+        if obj.min_karma and user_id and karma < obj.min_karma:
+            return f'Requires {obj.min_karma:,} karma. You have {karma:,}.'
+        return None
+
+
+# ─────────────────────────────────────────────────────────────
+# EVENT WRITE  (create / update input)
+# ─────────────────────────────────────────────────────────────
+
+class EventWriteSerializer(serializers.ModelSerializer):
+    """Input serializer for POST /manage/ and PUT/PATCH /manage/<id>/."""
+
+    class Meta:
+        model = Event
+        fields = [
+            'title', 'description', 'cover_image', 'banner_image', 'category',
+            'start_datetime', 'end_datetime',
+            'registration_url', 'registration_deadline', 'min_karma',
+            'venue_type', 'venue_address', 'venue_city',
+            'venue_maps_url', 'venue_online_link', 'venue_platform',
+            'scope', 'scope_org', 'scope_ig', 'scope_ci_id',
+            'organiser_type', 'organiser_ig', 'organiser_org', 'organiser_ci_id',
+            'is_collaboration', 'is_featured', 'tags', 'user_limit',
+        ]
+        extra_kwargs = {
+            'description': {'required': False, 'allow_null': True},
+            'cover_image': {'required': False, 'allow_null': True},
+            'banner_image': {'required': False, 'allow_null': True},
+            'category': {'required': False, 'allow_null': True},
+            'registration_url': {'required': False, 'allow_null': True},
+            'registration_deadline': {'required': False, 'allow_null': True},
+            'min_karma': {'required': False, 'allow_null': True},
+            'venue_address': {'required': False, 'allow_null': True},
+            'venue_city': {'required': False, 'allow_null': True},
+            'venue_maps_url': {'required': False, 'allow_null': True},
+            'venue_online_link': {'required': False, 'allow_null': True},
+            'venue_platform': {'required': False, 'allow_null': True},
+            'scope_org': {'required': False, 'allow_null': True},
+            'scope_ig': {'required': False, 'allow_null': True},
+            'scope_ci_id': {'required': False, 'allow_null': True},
+            'organiser_ig': {'required': False, 'allow_null': True},
+            'organiser_org': {'required': False, 'allow_null': True},
+            'organiser_ci_id': {'required': False, 'allow_null': True},
+            'is_collaboration': {'required': False},
+            'is_featured': {'required': False},
+            'tags': {'required': False, 'allow_null': True},
+            'user_limit': {'required': False},
+        }
+
+    def validate(self, attrs):
+        start = attrs.get('start_datetime')
+        end = attrs.get('end_datetime')
+        if start and end and end <= start:
+            raise serializers.ValidationError({'end_datetime': 'Must be after start_datetime.'})
+        return attrs
+
+    def _generate_unique_slug(self, title):
+        base = slugify(title)
+        slug = base
+        counter = 1
+        while Event.objects.filter(slug=slug).exists():
+            slug = f'{base}-{counter}'
+            counter += 1
+        return slug
+
+    def create(self, validated_data):
+        user_id = self.context['user_id']
+        validated_data['id'] = str(uuid.uuid4())
+        validated_data['slug'] = self._generate_unique_slug(validated_data['title'])
+        validated_data['created_by_id'] = user_id
+        validated_data['updated_by_id'] = user_id
+        return Event.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        user_id = self.context['user_id']
+        changed_fields = list(validated_data.keys())
+
+        if 'title' in validated_data and validated_data['title'] != instance.title:
+            validated_data['slug'] = self._generate_unique_slug(validated_data['title'])
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.updated_by_id = user_id
+        instance.save()
+
+        # Write audit log
+        if changed_fields:
+            EventLog.objects.create(
+                id=str(uuid.uuid4()),
+                event=instance,
+                edited_by_id=user_id,
+                changed_fields=changed_fields,
+            )
+        return instance
+
+
+# ─────────────────────────────────────────────────────────────
+# EDIT HISTORY (manage detail view)
+# ─────────────────────────────────────────────────────────────
+
+class EventLogSerializer(serializers.ModelSerializer):
+    edited_by = MinimalUserSerializer(read_only=True)
+
+    class Meta:
+        model = EventLog
+        fields = ['id', 'edited_by', 'changed_fields', 'edited_at']
+
+
+# ─────────────────────────────────────────────────────────────
+# HELPERS (used inside views — not serializers)
+# ─────────────────────────────────────────────────────────────
+
+def get_live_events():
+    """Base queryset: non-deleted events."""
+    return Event.objects.filter(deleted_at__isnull=True)
+
+
+def can_manage_event(user_id, event):
+    """True if user is creator OR co-owner of this event."""
+    if event.created_by_id == user_id:
+        return True
+    return EventConnection.objects.filter(
+        event=event,
+        entity_type=EventConnection.EntityType.CO_OWNER,
+        entity_id=user_id,
+    ).exists()
