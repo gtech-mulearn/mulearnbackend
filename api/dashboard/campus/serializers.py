@@ -21,6 +21,9 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    karma_last_7_days = serializers.SerializerMethodField()
+    karma_last_30_days = serializers.SerializerMethodField()
+  
 
     class Meta:
         model = Organization
@@ -33,6 +36,8 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "total_members",
             "active_members",
             "rank",
+            "karma_last_7_days",
+            "karma_last_30_days",
         ]
 
     def get_campus_level(self, obj):
@@ -85,6 +90,24 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             keys_list = list(sorted_rank_dict.keys())
             position = keys_list.index(obj.id)
             return position + 1
+    
+    def get_karma_last_7_days(self, obj):
+        seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
+        return (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user__org=obj,
+                created_at__gte=seven_days_ago,
+            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+        )
+
+    def get_karma_last_30_days(self, obj):
+        thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
+        return (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user__org=obj,
+                created_at__gte=thirty_days_ago,
+            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+        )
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
@@ -98,7 +121,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
 
     lead = serializers.SerializerMethodField()
-
+    karma_last_7_days = serializers.SerializerMethodField()
+    karma_last_30_days = serializers.SerializerMethodField()
     class Meta:
         model = UserOrganizationLink
         fields = [
@@ -111,6 +135,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "active_members",
             "rank",
             "lead",
+            "karma_last_7_days",
+            "karma_last_30_days",
         ]
 
     def get_lead(self, obj):
@@ -186,6 +212,23 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             keys_list = list(sorted_rank_dict.keys())
             position = keys_list.index(obj.org.id)
             return position + 1
+    def get_karma_last_7_days(self, obj):
+        seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
+        return (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user__org=obj.org,
+                created_at__gte=seven_days_ago,
+            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+        )
+
+    def get_karma_last_30_days(self, obj):
+        thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
+        return (
+            KarmaActivityLog.objects.filter(
+                user__user_organization_link_user__org=obj.org,
+                created_at__gte=thirty_days_ago,
+            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+        )
 
 
 class CampusStudentDetailsSerializer(serializers.Serializer):
