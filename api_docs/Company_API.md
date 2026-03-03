@@ -522,13 +522,17 @@ Structure:
   },
   "response": {
     "id": "string (UUID)",
+    "company_user_id": "string (UUID)",
     "name": "string",
+    "slug": "string",
+    "logo": "string | null",
     "description": "string",
     "industry_sector": "string | null",
     "website_link": "string | null",
     "email": "string | null",
     "location": "string | null",
-    "logo": "string | null",
+    "status": "string (enum)",
+    "created_at": "string (ISO 8601 datetime)",
     "updated_at": "string (ISO 8601 datetime)"
   }
 }
@@ -677,7 +681,7 @@ PUT /api/v1/dashboard/company/acme-technologies/
 ```json
 {
   "name": "Acme Tech Solutions",
-  "status": "blocked",
+  "status": "inactive",
   "description": "Updated by admin",
   "industry_sector": "Technology"
 }
@@ -697,17 +701,18 @@ Structure:
   },
   "response": {
     "id": "string (UUID)",
+    "company_user_id": "string (UUID)",
     "name": "string",
     "slug": "string",
+    "logo": "string | null",
     "description": "string",
     "industry_sector": "string | null",
     "website_link": "string | null",
     "email": "string | null",
     "location": "string | null",
-    "logo": "string | null",
     "status": "string (enum)",
-    "updated_at": "string (ISO 8601 datetime)",
-    "updated_by": "string (UUID)"
+    "created_at": "string (ISO 8601 datetime)",
+    "updated_at": "string (ISO 8601 datetime)"
   }
 }
 ```
@@ -715,11 +720,12 @@ Structure:
 | Field | Type | Description |
 |-------|------|-------------|
 | `response.id` | string (UUID) | Company identifier |
+| `response.company_user_id` | string (UUID) | User ID of company owner |
 | `response.name` | string | Company name (may be changed by admin) |
 | `response.slug` | string | Company slug (unchanged) |
 | `response.status` | string | Current status: "pending", "active", "inactive" |
+| `response.created_at` | string (ISO 8601) | Creation timestamp |
 | `response.updated_at` | string (ISO 8601) | Timestamp of update |
-| `response.updated_by` | string (UUID) | Admin user ID who made the change |
 
 Example:
 ```json
@@ -731,17 +737,18 @@ Example:
   },
   "response": {
     "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+    "company_user_id": "user-uuid-here",
     "name": "Acme Tech Solutions",
     "slug": "acme-technologies",
+    "logo": null,
     "description": "Updated by admin",
     "industry_sector": "Technology",
     "website_link": "https://acmetech.com",
     "email": "contact@acmetech.com",
     "location": "Remote",
-    "logo": null,
-    "status": "blocked",
-    "updated_at": "2026-02-19T16:50:00Z",
-    "updated_by": "admin-uuid-here"
+    "status": "inactive",
+    "created_at": "2026-01-15T10:30:00Z",
+    "updated_at": "2026-02-19T16:50:00Z"
   }
 }
 ```

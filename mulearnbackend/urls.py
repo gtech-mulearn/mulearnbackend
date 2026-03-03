@@ -1,23 +1,6 @@
-"""mulearnbackend URL Configuration
-
-The `urlpatterns` list routes URLs to views. For more information please see:
-    https://docs.djangoproject.com/en/4.1/topics/http/urls/
-Examples:
-Function views
-    1. Add an import:  from my_app import views
-    2. Add a URL to urlpatterns:  path('', views.home, name='home')
-Class-based views
-    1. Add an import:  from other_app.views import Home
-    2. Add a URL to urlpatterns:  path('', Home.as_view(), name='home')
-Including another URLconf
-    1. Import the include() function: from django.urls import include, path
-    2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
-"""
-
 from django.conf import settings
 from django.urls import path, include, re_path
 from django.views.static import serve
-<<<<<<< HEAD
 from drf_spectacular.views import (
     SpectacularAPIView,
     SpectacularRedocView,
@@ -26,26 +9,17 @@ from drf_spectacular.views import (
 from decouple import config as decouple_config
 
 urlpatterns = [
-    # path('admin/', admin.site.urls),
     path("api/v1/", include("api.urls")),
     re_path(
-        r"^muback-media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}
+        r"^muback-media/(?P<path>.*)$",
+        serve,
+        {"document_root": settings.MEDIA_ROOT},
     ),
-    # OpenAPI Schema
+    # OpenAPI schema (always available)
     path("api/schema/", SpectacularAPIView.as_view(), name="schema"),
-=======
-from drf_spectacular.views import SpectacularAPIView, SpectacularSwaggerView
-
-urlpatterns = [
-    # path('admin/', admin.site.urls),
-    path('api/v1/', include('api.urls')),
-    # Swagger/OpenAPI endpoints
-    path('api/v1/schema/', SpectacularAPIView.as_view(), name='schema'),
-    path('api/v1/docs/', SpectacularSwaggerView.as_view(url_name='schema'), name='swagger-ui'),
-    re_path(r'^muback-media/(?P<path>.*)$',serve,{'document_root':settings.MEDIA_ROOT})
->>>>>>> dda433f4 (feat(company): implement Company module with lifecycle workflow and admin approval)
 ]
 
+# Conditionally enable Swagger UI & Redoc
 if decouple_config("ENABLE_SWAGGER", default=False, cast=bool):
     urlpatterns += [
         path(
@@ -59,6 +33,3 @@ if decouple_config("ENABLE_SWAGGER", default=False, cast=bool):
             name="redoc",
         ),
     ]
-
-
-# urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

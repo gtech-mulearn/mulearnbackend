@@ -250,7 +250,7 @@ class CompanySlugView(APIView):
                 "Admin Update Example",
                 value={
                     "name": "Acme Tech Solutions",
-                    "status": "blocked",
+                    "status": "inactive",
                     "description": "Updated by admin",
                     "industry_sector": "Technology",
                 },
