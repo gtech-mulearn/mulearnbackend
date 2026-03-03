@@ -145,7 +145,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
             jobs_qs = CompanyJob.objects.filter(
                 company_id=company,
                 is_deleted=False
-            ).order_by('-created_at')
+            ).prefetch_related('rules').order_by('-created_at')
 
             # 4. Apply pagination before optimization
             paginated_data = CommonUtils.get_paginated_queryset(
@@ -160,18 +160,58 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
                 is_pagination=True
             )
             
-            pagination_info = paginated_data["pagination"]
-            paginated_jobs = paginated_data["queryset"]
+            # pagination_info = paginated_data["pagination"]
+            # paginated_jobs = paginated_data["queryset"]
 
-            # 5. Optimize only the paginated results
-            job_ids = [job.id for job in paginated_jobs]
-            optimized_jobs = self.get_optimized_jobs_with_rules(
-                company, 
-                filters={'id__in': job_ids}
+            # # 5. Optimize only the paginated results
+            # job_ids = [job.id for job in paginated_jobs]
+            # optimized_jobs = self.get_optimized_jobs_with_rules(
+            #     company, 
+            #     filters={'id__in': job_ids}
+            # )
+
+            # # 6. Serialize optimized jobs (they have cached_name)
+            # serializer = CompanyJobListSerializer(optimized_jobs, many=True)
+                        # ...existing code...
+            pagination_info = paginated_data["pagination"]
+            
+            # 5. Evaluate paginated queryset once with prefetch (no double-fetch)
+            paginated_jobs = list(
+                paginated_data["queryset"]
             )
 
-            # 6. Serialize optimized jobs (they have cached_name)
-            serializer = CompanyJobListSerializer(optimized_jobs, many=True)
+            if paginated_jobs:
+                # Collect rule type IDs
+                skill_ids, interest_ids, achievement_ids = set(), set(), set()
+                for job in paginated_jobs:
+                    for rule in job.rules.all():
+                        if rule.rule_type == 'skill':
+                            skill_ids.add(rule.rule_type_id)
+                        elif rule.rule_type == 'interest_group':
+                            interest_ids.add(rule.rule_type_id)
+                        elif rule.rule_type == 'achievement':
+                            achievement_ids.add(rule.rule_type_id)
+
+                # Bulk fetch name maps (3 queries max)
+                skills_map = {str(s.id): s.name for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
+                interests_map = {str(i.id): i.name for i in InterestGroup.objects.filter(id__in=interest_ids)} if interest_ids else {}
+                achievements_map = {str(a.id): a.name for a in Achievement.objects.filter(id__in=achievement_ids)} if achievement_ids else {}
+
+                # Cache names on rules
+                for job in paginated_jobs:
+                    for rule in job.rules.all():
+                        if rule.rule_type == 'skill':
+                            rule.cached_name = skills_map.get(str(rule.rule_type_id), 'Unknown Skill')
+                        elif rule.rule_type == 'interest_group':
+                            rule.cached_name = interests_map.get(str(rule.rule_type_id), 'Unknown Interest')
+                        elif rule.rule_type == 'achievement':
+                            rule.cached_name = achievements_map.get(str(rule.rule_type_id), 'Unknown Achievement')
+                        else:
+                            rule.cached_name = 'Unknown Rule Type'
+
+            # 6. Serialize (order preserved naturally from paginated queryset)
+            serializer = CompanyJobListSerializer(paginated_jobs, many=True)
+            # ...existing code...
             
             response_data = {
                 "company_id": str(company.id),
@@ -546,7 +586,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
 
             # 5. Check for duplicate rule
             existing_rule = CompanyJobRule.objects.filter(
-                job_id=job,
+                job=job,
                 rule_type=rule_type,
                 rule_type_id=rule_type_id,
             
