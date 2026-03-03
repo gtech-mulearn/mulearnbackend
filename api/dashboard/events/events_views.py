@@ -160,7 +160,7 @@ class CompanyEventAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     def _get_company(self, user_id):
-        return Company.objects.filter(company_user_id=user_id).first()
+        return Company.objects.filter(company_user_id=user_id, status='active').first()
     
     def _check_ownership(self, request_company, event):
         """
