@@ -13,15 +13,21 @@ class EventAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request, event_id=None):
+        # If event_id is provided, return single event
         if event_id:
-            events = Events.objects.filter(id=event_id).first()
-            if not events:
+            event = Events.objects.filter(id=event_id).first()
+            if not event:
                 return CustomResponse(
                     general_message="Invalid Event id"
                 ).get_failure_response()
-            serializer = EventsListSerializer(events)
-            return CustomResponse(response=serializer.data).get_success_response()
+            
+            serializer = EventsListSerializer(event)
+            return CustomResponse(
+                general_message="Event retrieved successfully",
+                response=serializer.data
+            ).get_success_response()
         
+        # Otherwise, return paginated list of all events
         events = Events.objects.exclude(status=Events.Status.CANCELLED.value)
         paginated_queryset = CommonUtils.get_paginated_queryset(
             events,
