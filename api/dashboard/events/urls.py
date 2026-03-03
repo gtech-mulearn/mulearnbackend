@@ -1,16 +1,5 @@
 from django.urls import path
 
-<<<<<<< HEAD
-from . import events_views
-
-urlpatterns = [
-    path('', events_views.EventAPI.as_view()),
-    path('manage/company/', events_views.CompanyEventAPI.as_view()),
-    path('manage/company/<str:event_id>/', events_views.CompanyEventAPI.as_view()),
-    path('<str:event_id>/', events_views.EventAPI.as_view()),
-    
-]
-=======
 from . import public_views, manage_views, admin_views, scoped_views, meta_views
 
 urlpatterns = [
@@ -56,4 +45,3 @@ urlpatterns = [
     path('<str:event_id>/', public_views.EventDetailAPI.as_view()),
     path('', public_views.EventListAPI.as_view()),
 ]
->>>>>>> upstream/dev
