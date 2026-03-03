@@ -1,3 +1,4 @@
+from pytz import timezone
 from rest_framework.views import APIView
 from rest_framework import status
 from db.user import User
@@ -160,19 +161,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
                 is_pagination=True
             )
             
-            # pagination_info = paginated_data["pagination"]
-            # paginated_jobs = paginated_data["queryset"]
-
-            # # 5. Optimize only the paginated results
-            # job_ids = [job.id for job in paginated_jobs]
-            # optimized_jobs = self.get_optimized_jobs_with_rules(
-            #     company, 
-            #     filters={'id__in': job_ids}
-            # )
-
-            # # 6. Serialize optimized jobs (they have cached_name)
-            # serializer = CompanyJobListSerializer(optimized_jobs, many=True)
-                        # ...existing code...
+      
             pagination_info = paginated_data["pagination"]
             
             # 5. Evaluate paginated queryset once with prefetch (no double-fetch)
@@ -458,7 +447,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             response_data = {
                 "job_id": str(job.id),
                 "updated_fields": updated_fields,
-                # "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
             }
            
             return CustomResponse(
@@ -821,7 +810,7 @@ class DeleteJobRuleAPIView(BaseCompanyJobView):
             response_data = {
                 "rule_id": str(rule_id),
                 "job_id": str(job_id),
-                "deleted_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+                "deleted_at": timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')
             }
 
             return CustomResponse(
