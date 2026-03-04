@@ -188,7 +188,7 @@ class KarmaActivityLog(models.Model):
                                          null=True, related_name="karma_activity_log_peer_approved_by")
     appraiser_approved = models.BooleanField(blank=True, null=True)
     appraiser_approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="appraiser_approved_by",
-                                              blank=True, null=True,
+                                                  blank=True, null=True,
                                               related_name="karma_activity_log_appraiser_approved_by")
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="karma_activity_log_updated_by")
