@@ -5,7 +5,7 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink, College
-from db.task import KarmaActivityLog
+from db.task import KarmaActivityLog,InterestGroup
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType
@@ -23,6 +23,10 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
     karma_last_7_days = serializers.SerializerMethodField()
     karma_last_30_days = serializers.SerializerMethodField()
+    active_ig_count = serializers.SerializerMethodField()
+    active_igs = serializers.SerializerMethodField()  # add this field
+
+    
   
 
     class Meta:
@@ -38,6 +42,8 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "rank",
             "karma_last_7_days",
             "karma_last_30_days",
+            "active_ig_count",
+            "active_igs",
         ]
 
     def get_campus_level(self, obj):
@@ -108,6 +114,29 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
                 created_at__gte=thirty_days_ago,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
         )
+    def get_active_ig_count(self, obj):
+        return (
+            InterestGroup.objects.filter(
+                user_ig_link_ig__user__user_organization_link_user__org=obj,
+                user_ig_link_ig__user__user_organization_link_user__verified=True,
+                status="Active",
+            )
+            .distinct()
+            .count()
+        )
+    def get_active_igs(self, obj):
+        igs = (
+            InterestGroup.objects.filter(
+                user_ig_link_ig__user__user_organization_link_user__org=obj,
+                user_ig_link_ig__user__user_organization_link_user__verified=True,
+                # status="Active",
+            )
+            .distinct()
+            .values("id", "name")
+        )
+        return list(igs)
+    
+
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
