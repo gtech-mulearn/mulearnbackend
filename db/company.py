@@ -60,7 +60,7 @@ class CompanyJob(models.Model):
     location = models.CharField(max_length=75, blank=True, null=True)
     salary_range = models.CharField(max_length=36, blank=True, null=True)
     job_type = models.CharField(max_length=20, choices=JOB_TYPE_CHOICES)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Draft')
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='Active')
     is_deleted = models.BooleanField(default=False)
     min_karma = models.IntegerField(blank=True, null=True)
     min_level = models.SmallIntegerField(blank=True, null=True)  # TINYINT
@@ -83,8 +83,7 @@ class CompanyJobRule(models.Model):
     rule_type_id = models.CharField(max_length=36)  # generic FK
     created_at = models.DateTimeField(auto_now_add=True)
     class Meta:
-        # managed = False
-        # db_table = 'company_jobs_rules'
+     
         db_table = "company_job_rules"
         unique_together = ('job', 'rule_type', 'rule_type_id')
 

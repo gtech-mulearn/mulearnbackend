@@ -1,3 +1,4 @@
+from pytz import timezone
 from rest_framework.views import APIView
 from rest_framework import status
 from db.user import User
@@ -6,7 +7,9 @@ from utils.permission import JWTUtils, CustomizePermission
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer,   JobRuleUpdateSerializer 
-
+from db.skill import Skill 
+from db.task import InterestGroup  
+from db.achievement import Achievement
 
 class BaseCompanyJobView(APIView):
     """Base view for common functionality across company job views."""
@@ -35,7 +38,7 @@ class BaseCompanyJobView(APIView):
             if job:
                 company = job.company_id
             else:
-                company = Company.objects.get(id=company_id, deleted_at__isnull=True)
+                company = Company.objects.get(id=company_id, status='active')
         except Company.DoesNotExist:
             error_response = CustomResponse(
                 general_message="Company does not exist",
@@ -62,100 +65,157 @@ class BaseCompanyJobView(APIView):
             
         return True, company, None
 
+    @staticmethod
+    def get_optimized_jobs_with_rules(company, filters=None):
+        """Fetch jobs with optimized rule loading to prevent N+1 queries."""
+        # Base queryset
+        jobs_qs = CompanyJob.objects.filter(company_id=company, is_deleted=False)
+        
+        if filters:
+            jobs_qs = jobs_qs.filter(**filters)
+        
+        # Get all jobs with rules in 2 queries
+        jobs = list(jobs_qs.prefetch_related('rules').all())
+        
+        # Collect all rule type IDs by type
+        skill_ids = set()
+        interest_ids = set()
+        achievement_ids = set()
+    
+        
+        for job in jobs:
+            for rule in job.rules.all():
+                if rule.rule_type == 'skill':
+                    skill_ids.add(rule.rule_type_id)
+                elif rule.rule_type == 'interest_group':
+                    interest_ids.add(rule.rule_type_id)
+                elif rule.rule_type == 'achievement':
+                    achievement_ids.add(rule.rule_type_id)
+        
+        # Bulk fetch all related objects (3 queries max)
+        skills_map = {str(s.id): s.name for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
+        interests_map = {str(i.id): i.name for i in InterestGroup.objects.filter(id__in=interest_ids)} if interest_ids else {}
+        achievements_map = {str(a.id): a.name for a in Achievement.objects.filter(id__in=achievement_ids)} if achievement_ids else {}
+        
+        # Cache the names directly on rules
+        for job in jobs:
+            for rule in job.rules.all():
+                if rule.rule_type == 'skill':
+                    rule.cached_name = skills_map.get(str(rule.rule_type_id), 'Unknown Skill')
+                elif rule.rule_type == 'interest_group':
+                    rule.cached_name = interests_map.get(str(rule.rule_type_id), 'Unknown Interest')
+                elif rule.rule_type == 'achievement':
+                    rule.cached_name = achievements_map.get(str(rule.rule_type_id), 'Unknown Achievement')
+                else:
+                    rule.cached_name = 'Unknown Rule Type'
+        
+        return jobs
+
 
 class ListCompanyJobsAPIView(BaseCompanyJobView):
     """API to list jobs for a specific company."""
     
     def get(self, request):
         try:
-            # 1. Get authenticated user
+            # 1. Get authenticated user FIRST
             user = self.get_authenticated_user(request)
-            # print(user)
-            company = Company.objects.get(company_user_id=user.id)
             if not user:
                 return CustomResponse(
-                    general_message="User not found",
-                    # status_code=status.HTTP_401_UNAUTHORIZED
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,  # Should be 401, not 404
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get company AFTER user validation
+            try:
+                company = Company.objects.get(
+                    company_user_id=user,  # Use user object, not user.id
+                    status='active'  # Remove deleted_at filter based on our previous discussion
+                )
+            except Company.DoesNotExist:
+                return CustomResponse(
+                    general_message="No active company found for user",
+                    message={"error_code": "NO_COMPANY_FOUND"}
                 ).get_failure_response(
                     status_code=404,
                     http_status_code=status.HTTP_404_NOT_FOUND
                 )
-            
-            # # 2. Check company authorization
-            # authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
-            # if not authorized:
-            #     return error_response
-           ## Check user is linked to a company
-            # if not hasattr(user, "company") or not user.company:
-            #     return CustomResponse(
-            #     general_message="User is not associated with any company",
-            #     # status=status.HTTP_403_FORBIDDEN
-            # ).get_failure_response(
-            #         status_code=403,
-            #         http_status_code=status.HTTP_403_FORBIDDEN
-            #     )
 
-            # company = user.company
-            # 3. Get all active jobs for the company
-            # jobs = CompanyJob.objects.filter(
-            #     company_id=company,
-            #     is_deleted=False
-            # ).order_by('-created_at')
-            jobs = CompanyJob.objects.filter(
-            company_id=company,
-            is_deleted=False).prefetch_related("rules")
+            # 3. Get base queryset for pagination FIRST
+            jobs_qs = CompanyJob.objects.filter(
+                company_id=company,
+                is_deleted=False
+            ).prefetch_related('rules').order_by('-created_at')
 
+            # 4. Apply pagination before optimization
             paginated_data = CommonUtils.get_paginated_queryset(
-            queryset=jobs,
-            request=request,
-            search_fields=["title", "location", "job_type"],
-            sort_fields={
-                "title": "title",
-                "createdAt": "created_at",
-                "salary": "salary_range",
-            },
-            is_pagination=True)
-
-            jobs_queryset = paginated_data["queryset"]
+                queryset=jobs_qs,
+                request=request,
+                search_fields=["title", "location", "job_type"],
+                sort_fields={
+                    "title": "title",
+                    "createdAt": "created_at", 
+                    "salary": "salary_range",
+                },
+                is_pagination=True
+            )
+            
+      
             pagination_info = paginated_data["pagination"]
-
-            serializer = CompanyJobListSerializer(jobs_queryset, many=True)
-
             
-            # 4. Prepare response with serializer
-            jobs_serializer = CompanyJobListSerializer(jobs, many=True)
+            # 5. Evaluate paginated queryset once with prefetch (no double-fetch)
+            paginated_jobs = list(
+                paginated_data["queryset"]
+            )
+
+            if paginated_jobs:
+                # Collect rule type IDs
+                skill_ids, interest_ids, achievement_ids = set(), set(), set()
+                for job in paginated_jobs:
+                    for rule in job.rules.all():
+                        if rule.rule_type == 'skill':
+                            skill_ids.add(rule.rule_type_id)
+                        elif rule.rule_type == 'interest_group':
+                            interest_ids.add(rule.rule_type_id)
+                        elif rule.rule_type == 'achievement':
+                            achievement_ids.add(rule.rule_type_id)
+
+                # Bulk fetch name maps (3 queries max)
+                skills_map = {str(s.id): s.name for s in Skill.objects.filter(id__in=skill_ids)} if skill_ids else {}
+                interests_map = {str(i.id): i.name for i in InterestGroup.objects.filter(id__in=interest_ids)} if interest_ids else {}
+                achievements_map = {str(a.id): a.name for a in Achievement.objects.filter(id__in=achievement_ids)} if achievement_ids else {}
+
+                # Cache names on rules
+                for job in paginated_jobs:
+                    for rule in job.rules.all():
+                        if rule.rule_type == 'skill':
+                            rule.cached_name = skills_map.get(str(rule.rule_type_id), 'Unknown Skill')
+                        elif rule.rule_type == 'interest_group':
+                            rule.cached_name = interests_map.get(str(rule.rule_type_id), 'Unknown Interest')
+                        elif rule.rule_type == 'achievement':
+                            rule.cached_name = achievements_map.get(str(rule.rule_type_id), 'Unknown Achievement')
+                        else:
+                            rule.cached_name = 'Unknown Rule Type'
+
+            # 6. Serialize (order preserved naturally from paginated queryset)
+            serializer = CompanyJobListSerializer(paginated_jobs, many=True)
+            # ...existing code...
             
-            # response_data = {
-            #     "company_id": str(company.id),
-            #     "company_name": company.name,
-            #     "total_jobs": len(jobs_serializer.data),
-            #     "jobs": jobs_serializer.data
-            # }
             response_data = {
-            "company_id": str(company.id),
-            "company_name": company.name,
-            "jobs": serializer.data,
-            
-            "pagination": pagination_info
-        }
+                "company_id": str(company.id),
+                "company_name": company.name,
+                "jobs": serializer.data,
+                "pagination": pagination_info
+            }
 
-            
             return CustomResponse(
                 response=response_data,
-                general_message="Jobs retrieved successfully",
-                # status=status.HTTP_200_OK
+                general_message="Jobs retrieved successfully"
             ).get_success_response()
             
         except Exception as e:
             print(f"Error listing company jobs: {str(e)}")
-            # return CustomResponse(
-            #     general_message="Something went wrong",
-            #     # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-              
-            # ).get_failure_response(
-            #         status_code=500,
-            #         http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
-            #     )
             return CustomResponse(
                 general_message="Something went wrong in listing company jobs",
                 message={"error_code": "SERVER_ERROR"}
@@ -173,33 +233,25 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             # 1. Get authenticated user
             user = self.get_authenticated_user(request)
             if not user:
-                # return CustomResponse(
-                #     general_message="User not found",
-                #     status_code=status.HTTP_401_UNAUTHORIZED
-                # ).get_failure_response()
+             
                 return CustomResponse(
                     general_message="User not found"
                 ).get_failure_response(
                     status_code=401,
                     http_status_code=status.HTTP_401_UNAUTHORIZED
                 )
-         
+            
             
             try:
                 company = Company.objects.get(
-                    company_user_id=user, 
-                    deleted_at__isnull=True,
+                    company_user_id=user,
                     status='active'
                 )
+             
               
             except Company.DoesNotExist:
-                print(f"No company found for user: {user.id}")
-                # return CustomResponse(
-                #     general_message="No active company found for user",
-                #     status_code=status.HTTP_404_NOT_FOUND,
-                #     error_code="NO_COMPANY_FOUND"
-                # ).get_failure_response()
-
+                print(f"No company found for user: {user}")
+           
                 return CustomResponse(
                     general_message="No active company found for user",
                     message={"error_code": "NO_COMPANY_FOUND"}
@@ -212,11 +264,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             print(f"Request data: {request.data}")
             serializer = CompanyJobCreateSerializer(data=request.data)
             if not serializer.is_valid():
-                # return CustomResponse(
-                #     message=serializer.errors,
-                #     status_code=status.HTTP_400_BAD_REQUEST,
-                #     error_code="INVALID_INPUT"
-                # ).get_failure_response()
+           
                 return CustomResponse(
                     message=serializer.errors,
                     general_message="Invalid input data"
@@ -225,20 +273,6 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                     http_status_code=status.HTTP_400_BAD_REQUEST
                 )
            
-            
-            
-            # company_id = serializer.validated_data['company_id']
-            
-            # # 3. Check company authorization
-            # authorized, company, error_response = self.check_company_authorization(user, company_id=company_id)
-            # if not authorized:
-            #     return error_response
-            # if company.status != 'active':
-            #     return CustomResponse(
-            #         general_message="Company is not active",
-            #         status_code=status.HTTP_400_BAD_REQUEST,
-            #         error_code="COMPANY_INACTIVE"
-            #     ).get_failure_response()
             
             # 6. Create the job
             job_data = {
@@ -272,17 +306,9 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                 general_message="Job created successfully",
                 # status_code=status.HTTP_201_CREATED
             ).get_success_response()
-            
+        
         except Exception as e:
-            # Log the actual error for debugging
-            # print(f"Error creating company job: {str(e)}")
-  
-            
-            # return CustomResponse(
-            #     general_message="Something went wrong",
-            #     status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            #     error_code="SERVER_ERROR"
-            # ).get_failure_response()
+            print(e)
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
@@ -293,63 +319,68 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
 
 
 class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
-    """API view for retrieving specific job posting details."""
+    """API view for retrieving specific job posting details with optimized rules."""
     
     def get(self, request, job_id):
         try:
-            # 1. Get authenticated user
+            # 1. Get authenticated user FIRST (same pattern as ListCompanyJobsAPIView)
             user = self.get_authenticated_user(request)
             if not user:
                 return CustomResponse(
-                    general_message="Authentication required"
+                    general_message="User not found"
                 ).get_failure_response(
                     status_code=401,
                     http_status_code=status.HTTP_401_UNAUTHORIZED
                 )
 
-            # 2. Get the job details
+            # 2. Check if job exists and get company (same pattern)
             try:
-                job = CompanyJob.objects.get(id=job_id, is_deleted=False)
+                job_check = CompanyJob.objects.get(id=job_id, is_deleted=False)
+                company = job_check.company_id
             except CompanyJob.DoesNotExist:
                 return CustomResponse(
                     general_message="Job does not exist",
-                 
+                    message={"error_code": "JOB_NOT_FOUND"}
                 ).get_failure_response(
                     status_code=404,
                     http_status_code=status.HTTP_404_NOT_FOUND
                 )
 
-            # 3. Prepare job response data
-            job_data = {
-                "id": str(job.id),
-                "company_id": str(job.company_id.id),
-                "title": job.title,
-                "experience": job.experience,
-                "job_description": job.job_description,
-                "location": job.location,
-                "salary_range": job.salary_range,
-                "job_type": job.job_type,
-                "min_karma": job.min_karma,
-                "min_level": job.min_level,
-                "created_at": job.created_at.strftime('%Y-%m-%dT%H:%M:%SZ'),
-                "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
-            }
+            # 3. Use SAME N+1 optimization pattern (for single job)
+            optimized_jobs = self.get_optimized_jobs_with_rules(
+                company, 
+                filters={'id': job_id}  # Only get this specific job
+            )
+            
+            if not optimized_jobs:
+                return CustomResponse(
+                    general_message="Job not found",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+            
+            # Get the optimized job (only one)
+            optimized_job = optimized_jobs[0]
 
+            # 4. Use SAME serializer pattern (includes rules with cached names!)
+            serializer = CompanyJobListSerializer(optimized_job)
+            
             response_data = {
-                "job": job_data
+                "job": serializer.data  # Includes rules with cached names!
             }
 
             return CustomResponse(
                 response=response_data,
                 general_message="Job details fetched successfully"
-            ).get_success_response( )
+            ).get_success_response()
 
         except Exception as e:
-            # Log the actual error for debugging
             print(f"Error fetching job details: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
-             
+                message={"error_code": "SERVER_ERROR"}
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -374,11 +405,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             try:
                 job = CompanyJob.objects.get(id=job_id, is_deleted=False)
             except CompanyJob.DoesNotExist:
-                # return CustomResponse(
-                #     general_message="Job does not exist",
-                #     status=status.HTTP_404_NOT_FOUND,
-                #     error_code="JOB_NOT_FOUND"
-                # ).get_failure_response()
+          
                 
                 return CustomResponse(
                     general_message="Job does not exist",
@@ -396,11 +423,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             # 4. Validate request data (partial update)
             serializer = CompanyJobUpdateSerializer(data=request.data, partial=True)
             if not serializer.is_valid():
-                # return CustomResponse(
-                #     message=serializer.errors,
-                #     status=status.HTTP_400_BAD_REQUEST,
-                #     error_code="INVALID_INPUT"
-                # ).get_failure_response()
+              
                 return CustomResponse(
                     message=serializer.errors,
                     general_message="Invalid input data"
@@ -424,14 +447,9 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             response_data = {
                 "job_id": str(job.id),
                 "updated_fields": updated_fields,
-                # "updated_at": job.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+        
             }
-            
-            # return CustomResponse(
-            #     response=response_data,
-            #     general_message="Job updated successfully",
-            #     status=status.HTTP_200_OK
-            # ).get_success_response()
+           
             return CustomResponse(
                 response=response_data,
                 general_message="Job updated successfully",
@@ -441,11 +459,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
         except Exception as e:
             # Log the actual error for debugging
             print(f"Error updating company job: {str(e)}")
-            # return CustomResponse(
-            #     general_message="Something went wrong",
-            #     status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            #     error_code="SERVER_ERROR"
-            # ).get_failure_response()
+  
             return CustomResponse(
                 general_message="Something went wrong in updating the job",
                 message={"error_code": "SERVER_ERROR"}
@@ -506,9 +520,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             print(f"Error deleting company job: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
-                # status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                # status=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                # error_code="SERVER_ERROR"
+               
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
@@ -563,7 +575,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
 
             # 5. Check for duplicate rule
             existing_rule = CompanyJobRule.objects.filter(
-                job_id=job,
+                job=job,
                 rule_type=rule_type,
                 rule_type_id=rule_type_id,
             
@@ -580,7 +592,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
 
             # 6. Create the job rule
             job_rule = CompanyJobRule.objects.create(
-                job_id=job_id,
+                job=job,
                 rule_type=rule_type,
                 rule_type_id=rule_type_id
             )
@@ -610,7 +622,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
-        
+    
 class UpdateJobRuleAPIView(BaseCompanyJobView):
     """API to update a specific job rule."""
     
@@ -647,7 +659,7 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
             try:
                 job_rule = CompanyJobRule.objects.get(
                     id=rule_id,
-                    job_id=job,
+                    job=job,
                
                 )
             except CompanyJobRule.DoesNotExist:
@@ -670,21 +682,38 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                     http_status_code=status.HTTP_400_BAD_REQUEST
                 )
 
-            new_rule_type_id = serializer.validated_data.get('rule_type_id')
-            # new_rule_name = serializer.validated_data.get('rule_name')
+        
 
-            # 6. Check for duplicate rule (if rule_type_id is being changed)
-            if new_rule_type_id and new_rule_type_id != job_rule.rule_type_id:
+            # 6. Validate logical consistency first
+            new_rule_type = serializer.validated_data.get('rule_type')
+            new_rule_type_id = serializer.validated_data.get('rule_type_id')
+
+            # If rule_type is changing, rule_type_id MUST also be provided
+            if new_rule_type and new_rule_type != job_rule.rule_type:
+                if not new_rule_type_id:
+                    return CustomResponse(
+                        general_message="When changing rule_type, you must also provide rule_type_id",
+                        message={"error_code": "MISSING_RULE_TYPE_ID"}
+                    ).get_failure_response(
+                        status_code=400,
+                        http_status_code=status.HTTP_400_BAD_REQUEST
+                    )
+
+            # Get final values for duplicate check
+            final_rule_type = new_rule_type or job_rule.rule_type
+            final_rule_type_id = new_rule_type_id or job_rule.rule_type_id
+
+            # Check for duplicates if anything is changing
+            if (final_rule_type != job_rule.rule_type) or (final_rule_type_id != job_rule.rule_type_id):
                 existing_rule = CompanyJobRule.objects.filter(
-                    job_id=job,
-                    rule_type=job_rule.rule_type,
-                    rule_type_id=new_rule_type_id,
-                    
+                    job=job,
+                    rule_type=final_rule_type,
+                    rule_type_id=final_rule_type_id,
                 ).exclude(id=job_rule.id).first()
                 
                 if existing_rule:
                     return CustomResponse(
-                        general_message="A rule with this value already exists for the job",
+                        general_message=f"A rule with this {final_rule_type} already exists for the job",
                         message={"error_code": "DUPLICATE_RULE"}
                     ).get_failure_response(
                         status_code=400,
@@ -692,13 +721,15 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                     )
 
             # 7. Update the job rule
-            old_value =job_rule.rule_type_id
-            
+            if new_rule_type:
+               job_rule.rule_type = new_rule_type
+
             if new_rule_type_id:
                 job_rule.rule_type_id = new_rule_type_id
-       
-                
+
             job_rule.save()
+
+
 
             # 8. Prepare response
             response_data = {
@@ -719,6 +750,79 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR", "details": str(e)}
+            ).get_failure_response(
+                status_code=500,
+                http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
+            )
+
+
+class DeleteJobRuleAPIView(BaseCompanyJobView):
+    """API to delete a specific job rule."""
+    
+    def delete(self, request, job_id, rule_id):
+        try:
+            # 1. Get authenticated user
+            user = self.get_authenticated_user(request)
+            if not user:
+                return CustomResponse(
+                    general_message="User not found"
+                ).get_failure_response(
+                    status_code=401,
+                    http_status_code=status.HTTP_401_UNAUTHORIZED
+                )
+
+            # 2. Get the job
+            try:
+                job = CompanyJob.objects.get(id=job_id, is_deleted=False)
+            except CompanyJob.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job does not exist",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 3. Check company authorization
+            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            if not authorized:
+                return error_response
+
+            # 4. Get the job rule to delete
+            try:
+                job_rule = CompanyJobRule.objects.get(
+                    id=rule_id,
+                    job=job
+                )
+            except CompanyJobRule.DoesNotExist:
+                return CustomResponse(
+                    general_message="Job rule does not exist",
+                    message={"error_code": "RULE_NOT_FOUND"}
+                ).get_failure_response(
+                    status_code=404,
+                    http_status_code=status.HTTP_404_NOT_FOUND
+                )
+
+            # 5. Hard delete the job rule
+            job_rule.delete()
+            
+            # 6. Prepare response
+            response_data = {
+                "rule_id": str(rule_id),
+                "job_id": str(job_id),
+                "deleted_at": timezone.now().strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
+
+            return CustomResponse(
+                general_message="Job rule deleted successfully",
+                response=response_data
+            ).get_success_response()
+
+        except Exception as e:
+            print(f"Error deleting job rule: {str(e)}")
+            return CustomResponse(
+                general_message="Something went wrong",
+                message={"error_code": "SERVER_ERROR"}
             ).get_failure_response(
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
