@@ -1,4 +1,4 @@
-from django.db.models import Count, F
+from django.db.models import Count, F,Sum
 from django.db.models import Q
 from rest_framework.views import APIView
 
@@ -740,7 +740,7 @@ class CampusStudentLeaderboardAPI(APIView):
                 "muid":            "mu_id",
                 "karma":           "wallet_user__karma",
                 "level":           "user_lvl_link_user__level__level_order",
-                "join_date":       "user_organization_link_user__created_at",
+                "join_date":       "created_at",
                 "graduation_year": "user_organization_link_user__graduation_year",
                 "is_alumni":       "user_organization_link_user__is_alumni",
             },
@@ -760,3 +760,77 @@ class CampusStudentLeaderboardAPI(APIView):
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
+
+# ...existing code...
+
+class CampusKarmaByClusterAPI(APIView):
+
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request, org_id=None):
+
+        if not org_id:
+            return CustomResponse(
+                general_message="College not found"
+            ).get_failure_response()
+
+        org = Organization.objects.filter(
+            id=org_id,
+            org_type=OrganizationType.COLLEGE.value
+        ).first()
+
+        if org is None:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        # Aggregate karma and member count by IG cluster
+        cluster_data = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_ig_link_user__isnull=False,
+            )
+            .values("user_ig_link_user__ig__category")
+            .annotate(
+                total_karma=Sum("wallet_user__karma"),
+                member_count=Count("id", distinct=True),
+            )
+        )
+
+        # Users with NO IG membership (unclustered)
+        unclustered = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_ig_link_user__isnull=True,  # no IG at all
+            )
+            .distinct()
+            .aggregate(
+                total_karma=Sum("wallet_user__karma"),
+                member_count=Count("id", distinct=True),
+            )
+        )
+
+        # Build response dict
+        response = {}
+
+        for row in cluster_data:
+            cluster_name = row["user_ig_link_user__ig__category"] or "unclustered"
+            response[cluster_name] = {
+                "total_karma":  row["total_karma"] or 0,
+                "member_count": row["member_count"] or 0,
+            }
+
+        # Merge unclustered users (those with no IG at all)
+        if unclustered["member_count"]:
+            existing = response.get("unclustered", {"total_karma": 0, "member_count": 0})
+            response["unclustered"] = {
+                "total_karma":  (existing["total_karma"] or 0) + (unclustered["total_karma"] or 0),
+                "member_count": (existing["member_count"] or 0) + (unclustered["member_count"] or 0),
+            }
+
+        return CustomResponse(
+            response=response
+        ).get_success_response()
+
