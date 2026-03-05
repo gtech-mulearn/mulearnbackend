@@ -629,3 +629,134 @@ class TransferIGRoleAPI(APIView):
                 general_message="Assigned new Ig lead successfully"
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+# ...existing code...
+
+class CampusStudentLeaderboardAPI(APIView):
+
+    authentication_classes = [CustomizePermission]
+    def get(self, request, org_id=None):
+
+        if not org_id:
+            return CustomResponse(
+                general_message="College not found"
+            ).get_failure_response()
+                                        
+  
+        org = Organization.objects.filter(
+            id=org_id,
+            org_type=OrganizationType.COLLEGE.value
+        ).first()
+  
+        if org is None:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+       
+        # 1. Compute Campus rank BEFORE filters/pagination                    #
+
+        rank_qs = (
+            Wallet.objects.filter(
+                user__user_organization_link_user__org=org,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma","-created_at")
+            .values("user_id")
+        )
+        ranks = {r["user_id"]: i + 1 for i, r in enumerate(rank_qs)}
+
+     
+        # 2. Base queryset - all students with annotations                    #
+
+        qs = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),  
+                # existing fields from CampusStudentDetailsAPI
+                karma=F("wallet_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+                join_date=F("created_at"),
+             # org join date (fixed from created_at)
+                last_karma_gained=F("wallet_user__karma_last_updated_at"),
+                department=F("user_organization_link_user__department__title"),
+                graduation_year=F("user_organization_link_user__graduation_year"),
+                is_alumni=F("user_organization_link_user__is_alumni"),
+
+                # new fields not in existing API
+                ig_count=Count(
+                    "user_ig_link_user",
+                    distinct=True
+                ),
+            )
+            .order_by("-wallet_user__karma", "-wallet_user__created_at")  # ← rank 1 appears on page 1
+        )
+
+      
+        # 3. Apply optional filters from query params                         #
+      
+        params = request.query_params
+
+        pass_out_year   = params.get("pass_out_year")
+        ig_id           = params.get("ig_id")
+        cluster         = params.get("cluster")
+        is_alumni_param = params.get("is_alumni")
+        search          = params.get("search")
+
+        if pass_out_year:
+            qs = qs.filter(
+                user_organization_link_user__graduation_year=pass_out_year
+            )
+        if ig_id:
+            qs = qs.filter(user_ig_link_user__ig_id=ig_id)
+
+        if cluster:
+            qs = qs.filter(user_ig_link_user__ig__cluster=cluster)
+
+        if is_alumni_param is not None and is_alumni_param != "":
+            is_alumni_bool = is_alumni_param.lower() == "true"
+            qs = qs.filter(
+                user_organization_link_user__is_alumni=is_alumni_bool
+            )
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search) | Q(mu_id__icontains=search)
+            )
+
+     
+        # 4. Paginate using CommonUtils (handles pageIndex, perPage, sortBy)  #
+   
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            qs,
+            request,
+            search_fields=["full_name", "mu_id"],
+            sort_fields={
+                "full_name":       "full_name",
+                "muid":            "mu_id",
+                "karma":           "wallet_user__karma",
+                "level":           "user_lvl_link_user__level__level_order",
+                "join_date":       "user_organization_link_user__created_at",
+                "graduation_year": "user_organization_link_user__graduation_year",
+                "is_alumni":       "user_organization_link_user__is_alumni",
+            },
+        )
+
+        # 5. Serialize and return                                              #
+       
+        serializer = serializers.CampusLeaderboardSerializer(
+            paginated_queryset.get("queryset"),
+            many=True,
+            context={"ranks": ranks},
+        )
+
+        return CustomResponse(
+            response={
+                "data":       serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()

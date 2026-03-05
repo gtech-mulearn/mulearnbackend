@@ -63,4 +63,10 @@ urlpatterns = [
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",
     ),
+
+    path(
+        "<str:org_id>/leaderboard/",
+        campus_views.CampusStudentLeaderboardAPI.as_view(),
+        name="campus-student-leaderboard",
+    ),
 ]
