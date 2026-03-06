@@ -5,7 +5,7 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink, College
-from db.task import KarmaActivityLog
+from db.task import KarmaActivityLog,InterestGroup
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
 from utils.types import RoleType
@@ -21,9 +21,8 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
-    karma_last_7_days = serializers.SerializerMethodField()
-    karma_last_30_days = serializers.SerializerMethodField()
-  
+   
+    
 
     class Meta:
         model = Organization
@@ -36,8 +35,6 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "total_members",
             "active_members",
             "rank",
-            "karma_last_7_days",
-            "karma_last_30_days",
         ]
 
     def get_campus_level(self, obj):
@@ -90,24 +87,9 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             keys_list = list(sorted_rank_dict.keys())
             position = keys_list.index(obj.id)
             return position + 1
-    
-    def get_karma_last_7_days(self, obj):
-        seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
-        return (
-            KarmaActivityLog.objects.filter(
-                user__user_organization_link_user__org=obj,
-                created_at__gte=seven_days_ago,
-            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
-        )
 
-    def get_karma_last_30_days(self, obj):
-        thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        return (
-            KarmaActivityLog.objects.filter(
-                user__user_organization_link_user__org=obj,
-                created_at__gte=thirty_days_ago,
-            ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
-        )
+    
+
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
@@ -123,6 +105,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     lead = serializers.SerializerMethodField()
     karma_last_7_days = serializers.SerializerMethodField()
     karma_last_30_days = serializers.SerializerMethodField()
+    active_ig_count = serializers.SerializerMethodField()
     class Meta:
         model = UserOrganizationLink
         fields = [
@@ -137,6 +120,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "lead",
             "karma_last_7_days",
             "karma_last_30_days",
+            "active_ig_count",
         ]
 
     def get_lead(self, obj):
@@ -228,6 +212,16 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
                 user__user_organization_link_user__org=obj.org,
                 created_at__gte=thirty_days_ago,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+        )
+    def get_active_ig_count(self, obj):
+        return (
+            InterestGroup.objects.filter(
+                user_ig_link_ig__user__user_organization_link_user__org=obj.org,
+                user_ig_link_ig__user__user_organization_link_user__verified=True,
+                status="active",
+            )
+            .distinct()
+            .count()
         )
 
 
@@ -339,3 +333,40 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
         user_role_link = UserRoleLink.objects.create(**validated_data)
         return user_role_link
+
+
+
+
+class CampusLeaderboardSerializer(CampusStudentDetailsSerializer):
+    # ── override fields (email & mobile removed — public endpoint) ──────────
+    email           = None
+    mobile          = None
+
+    # ── NEW fields not in CampusStudentDetailsSerializer ────────────────────
+    profile_pic     = serializers.SerializerMethodField()
+    ig_count        = serializers.IntegerField(default=0)
+
+    class Meta(CampusStudentDetailsSerializer.Meta):
+        # inherit parent Meta and extend fields
+        fields = (
+            "rank",
+            "user_id",
+            "full_name",
+            "muid",
+            "profile_pic",       
+            "karma",
+            "level",
+            "join_date",
+            "last_karma_gained",
+            "graduation_year",
+            "department",
+            "is_alumni",
+            "ig_count",          
+          
+        )
+
+    def get_profile_pic(self, obj):
+        return str(obj.profile_pic) if obj.profile_pic else None
+
+    # get_rank and get_full_name are inherited from CampusStudentDetailsSerializer
+   
