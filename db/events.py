@@ -235,3 +235,29 @@ class EventLog(models.Model):
     class Meta:
         managed = False
         db_table = 'events_log'
+
+class EventTag(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    title = models.CharField(max_length=100, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'event_tag'
+
+
+class EventTagLink(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    event = models.ForeignKey(
+        Event, on_delete=models.CASCADE,
+        db_column='event_id', related_name='tag_links'
+    )
+    tag = models.ForeignKey(
+        EventTag, on_delete=models.CASCADE,
+        db_column='tag_id', related_name='event_links'
+    )
+
+    class Meta:
+        managed = False
+        db_table = 'event_tag_link'
+        unique_together = [('event', 'tag')]
