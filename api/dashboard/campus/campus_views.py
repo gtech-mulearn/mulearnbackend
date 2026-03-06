@@ -1,7 +1,7 @@
-from django.db.models import Count, F,Sum
+from django.db.models import Count, F,Sum, Subquery, OuterRef
 from django.db.models import Q
 from rest_framework.views import APIView
-
+from collections import defaultdict
 from db.organization import Organization, UserOrganizationLink
 from db.task import Level, Wallet, InterestGroup
 from db.user import User, Role, UserRoleLink
@@ -652,7 +652,8 @@ class CampusStudentLeaderboardAPI(APIView):
             return CustomResponse(
                 general_message="Campus not found"
             ).get_failure_response()
-
+        
+       
        
         # 1. Compute Campus rank BEFORE filters/pagination                    #
 
@@ -704,7 +705,7 @@ class CampusStudentLeaderboardAPI(APIView):
 
         pass_out_year   = params.get("pass_out_year")
         ig_id           = params.get("ig_id")
-        cluster         = params.get("cluster")
+        category         = params.get("category")
         is_alumni_param = params.get("is_alumni")
         search          = params.get("search")
 
@@ -715,8 +716,8 @@ class CampusStudentLeaderboardAPI(APIView):
         if ig_id:
             qs = qs.filter(user_ig_link_user__ig_id=ig_id)
 
-        if cluster:
-            qs = qs.filter(user_ig_link_user__ig__cluster=cluster)
+        if category:
+            qs = qs.filter(user_ig_link_user__ig__category=category)
 
         if is_alumni_param is not None and is_alumni_param != "":
             is_alumni_bool = is_alumni_param.lower() == "true"
@@ -725,7 +726,7 @@ class CampusStudentLeaderboardAPI(APIView):
             )
         if search:
             qs = qs.filter(
-                Q(full_name__icontains=search) | Q(mu_id__icontains=search)
+                Q(full_name__icontains=search) | Q(muid__icontains=search)
             )
 
      
@@ -734,10 +735,10 @@ class CampusStudentLeaderboardAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(
             qs,
             request,
-            search_fields=["full_name", "mu_id"],
+            search_fields=["full_name", "muid"],
             sort_fields={
                 "full_name":       "full_name",
-                "muid":            "mu_id",
+                "muid":            "muid",
                 "karma":           "wallet_user__karma",
                 "level":           "user_lvl_link_user__level__level_order",
                 "join_date":       "created_at",
@@ -761,7 +762,6 @@ class CampusStudentLeaderboardAPI(APIView):
             }
         ).get_success_response()
 
-# ...existing code...
 
 class CampusKarmaByClusterAPI(APIView):
 
@@ -784,53 +784,50 @@ class CampusKarmaByClusterAPI(APIView):
                 general_message="Campus not found"
             ).get_failure_response()
 
-        # Aggregate karma and member count by IG cluster
-        cluster_data = (
+        # Subquery: fetch each user's karma once — no JOIN fan-out
+        wallet_karma_sq = Wallet.objects.filter(
+            user=OuterRef("pk")
+        ).values("karma")[:1]
+
+        # Single query — LEFT JOIN via isnull=False removed
+        # users with NO IG will have category=None → goes to "unclustered"
+        all_rows = (
             User.objects.filter(
                 user_organization_link_user__org=org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_ig_link_user__isnull=False,
             )
-            .values("user_ig_link_user__ig__category")
-            .annotate(
-                total_karma=Sum("wallet_user__karma"),
-                member_count=Count("id", distinct=True),
-            )
+            .annotate(user_karma=Subquery(wallet_karma_sq))
+            .values("id", "user_ig_link_user__ig__category", "user_karma")
+            .distinct()   # 1 row per (user_id, category) — kills IG fan-out
         )
 
-        # Users with NO IG membership (unclustered)
-        unclustered = (
-            User.objects.filter(
-                user_organization_link_user__org=org,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_ig_link_user__isnull=True,  # no IG at all
-            )
-            .distinct()
-            .aggregate(
-                total_karma=Sum("wallet_user__karma"),
-                member_count=Count("id", distinct=True),
-            )
-        )
+        # Aggregate in Python
+        category_map = defaultdict(lambda: {"total_karma": 0, "member_count": 0, "seen_users": set()})
 
-        # Build response dict
-        response = {}
+        for row in all_rows:  # streams from DB — no list() memory spike
+            category = row["user_ig_link_user__ig__category"] or "unclustered"
+            user_id  = row["id"]
+            karma    = row["user_karma"] or 0
 
-        for row in cluster_data:
-            cluster_name = row["user_ig_link_user__ig__category"] or "unclustered"
-            response[cluster_name] = {
-                "total_karma":  row["total_karma"] or 0,
-                "member_count": row["member_count"] or 0,
+            # seen_users guards against edge case where
+            # a user has NO IG (category=None) but still appears multiple times
+            # due to multiple org links
+            if user_id not in category_map[category]["seen_users"]:
+                category_map[category]["seen_users"].add(user_id)
+                category_map[category]["total_karma"]  += karma
+                category_map[category]["member_count"] += 1
+
+        # Build final response — strip seen_users from output
+        response = {
+            category: {
+                "total_karma":  data["total_karma"],
+                "member_count": data["member_count"],
             }
-
-        # Merge unclustered users (those with no IG at all)
-        if unclustered["member_count"]:
-            existing = response.get("unclustered", {"total_karma": 0, "member_count": 0})
-            response["unclustered"] = {
-                "total_karma":  (existing["total_karma"] or 0) + (unclustered["total_karma"] or 0),
-                "member_count": (existing["member_count"] or 0) + (unclustered["member_count"] or 0),
-            }
+            for category, data in category_map.items()
+        }
 
         return CustomResponse(
             response=response
         ).get_success_response()
 
+# ...existing code...

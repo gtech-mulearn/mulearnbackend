@@ -23,8 +23,6 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     rank = serializers.SerializerMethodField()
    
     
-    
-  
 
     class Meta:
         model = Organization
@@ -37,10 +35,6 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "total_members",
             "active_members",
             "rank",
-            "karma_last_7_days",
-            "karma_last_30_days",
-            "active_ig_count",
-           
         ]
 
     def get_campus_level(self, obj):
@@ -224,7 +218,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             InterestGroup.objects.filter(
                 user_ig_link_ig__user__user_organization_link_user__org=obj.org,
                 user_ig_link_ig__user__user_organization_link_user__verified=True,
-                status="Active",
+                status="active",
             )
             .distinct()
             .count()

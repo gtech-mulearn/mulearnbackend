@@ -70,9 +70,9 @@ urlpatterns = [
         name="campus-student-leaderboard",
     ),
     path(
-    "<str:org_id>/karma-by-cluster/",
-    campus_views.CampusKarmaByClusterAPI.as_view(),
-    name="campus-karma-by-cluster",
+        "<str:org_id>/karma-by-cluster/",
+        campus_views.CampusKarmaByClusterAPI.as_view(),
+        name="campus-karma-by-cluster",
 ),
 
 ]
