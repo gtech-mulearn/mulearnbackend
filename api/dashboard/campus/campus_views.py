@@ -1,7 +1,7 @@
-from django.db.models import Count, F
+from django.db.models import Count, F,Sum, Subquery, OuterRef
 from django.db.models import Q
 from rest_framework.views import APIView
-
+from collections import defaultdict
 from db.organization import Organization, UserOrganizationLink
 from db.task import Level, Wallet, InterestGroup
 from db.user import User, Role, UserRoleLink
@@ -629,3 +629,205 @@ class TransferIGRoleAPI(APIView):
                 general_message="Assigned new Ig lead successfully"
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+# ...existing code...
+
+class CampusStudentLeaderboardAPI(APIView):
+
+    authentication_classes = [CustomizePermission]
+    def get(self, request, org_id=None):
+
+        if not org_id:
+            return CustomResponse(
+                general_message="College not found"
+            ).get_failure_response()
+                                        
+  
+        org = Organization.objects.filter(
+            id=org_id,
+            org_type=OrganizationType.COLLEGE.value
+        ).first()
+  
+        if org is None:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+        
+       
+       
+        # 1. Compute Campus rank BEFORE filters/pagination                    #
+
+        rank_qs = (
+            Wallet.objects.filter(
+                user__user_organization_link_user__org=org,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .order_by("-karma","-created_at")
+            .values("user_id")
+        )
+        ranks = {r["user_id"]: i + 1 for i, r in enumerate(rank_qs)}
+
+     
+        # 2. Base queryset - all students with annotations                    #
+
+        qs = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                user_id=F("id"),  
+                # existing fields from CampusStudentDetailsAPI
+                karma=F("wallet_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+                join_date=F("created_at"),
+             # org join date (fixed from created_at)
+                last_karma_gained=F("wallet_user__karma_last_updated_at"),
+                department=F("user_organization_link_user__department__title"),
+                graduation_year=F("user_organization_link_user__graduation_year"),
+                is_alumni=F("user_organization_link_user__is_alumni"),
+
+                # new fields not in existing API
+                ig_count=Count(
+                    "user_ig_link_user",
+                    distinct=True
+                ),
+            )
+            .order_by("-wallet_user__karma", "-wallet_user__created_at")  # ← rank 1 appears on page 1
+        )
+
+      
+        # 3. Apply optional filters from query params                         #
+      
+        params = request.query_params
+
+        pass_out_year   = params.get("pass_out_year")
+        ig_id           = params.get("ig_id")
+        category         = params.get("category")
+        is_alumni_param = params.get("is_alumni")
+        search          = params.get("search")
+
+        if pass_out_year:
+            qs = qs.filter(
+                user_organization_link_user__graduation_year=pass_out_year
+            )
+        if ig_id:
+            qs = qs.filter(user_ig_link_user__ig_id=ig_id)
+
+        if category:
+            qs = qs.filter(user_ig_link_user__ig__category=category)
+
+        if is_alumni_param is not None and is_alumni_param != "":
+            is_alumni_bool = is_alumni_param.lower() == "true"
+            qs = qs.filter(
+                user_organization_link_user__is_alumni=is_alumni_bool
+            )
+        if search:
+            qs = qs.filter(
+                Q(full_name__icontains=search) | Q(muid__icontains=search)
+            )
+
+     
+        # 4. Paginate using CommonUtils (handles pageIndex, perPage, sortBy)  #
+   
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            qs,
+            request,
+            search_fields=["full_name", "muid"],
+            sort_fields={
+                "full_name":       "full_name",
+                "muid":            "muid",
+                "karma":           "wallet_user__karma",
+                "level":           "user_lvl_link_user__level__level_order",
+                "join_date":       "created_at",
+                "graduation_year": "user_organization_link_user__graduation_year",
+                "is_alumni":       "user_organization_link_user__is_alumni",
+            },
+        )
+
+        # 5. Serialize and return                                              #
+       
+        serializer = serializers.CampusLeaderboardSerializer(
+            paginated_queryset.get("queryset"),
+            many=True,
+            context={"ranks": ranks},
+        )
+
+        return CustomResponse(
+            response={
+                "data":       serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+
+
+class CampusKarmaByClusterAPI(APIView):
+
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request, org_id=None):
+
+        if not org_id:
+            return CustomResponse(
+                general_message="College not found"
+            ).get_failure_response()
+
+        org = Organization.objects.filter(
+            id=org_id,
+            org_type=OrganizationType.COLLEGE.value
+        ).first()
+
+        if org is None:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        # Subquery: fetch each user's karma once — no JOIN fan-out
+        wallet_karma_sq = Wallet.objects.filter(
+            user=OuterRef("pk")
+        ).values("karma")[:1]
+
+        # Single query — LEFT JOIN via isnull=False removed
+        # users with NO IG will have category=None → goes to "unclustered"
+        all_rows = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .annotate(user_karma=Subquery(wallet_karma_sq))
+            .values("id", "user_ig_link_user__ig__category", "user_karma")
+            .distinct()   # 1 row per (user_id, category) — kills IG fan-out
+        )
+
+        # Aggregate in Python
+        category_map = defaultdict(lambda: {"total_karma": 0, "member_count": 0, "seen_users": set()})
+
+        for row in all_rows:  # streams from DB — no list() memory spike
+            category = row["user_ig_link_user__ig__category"] or "unclustered"
+            user_id  = row["id"]
+            karma    = row["user_karma"] or 0
+
+            # seen_users guards against edge case where
+            # a user has NO IG (category=None) but still appears multiple times
+            # due to multiple org links
+            if user_id not in category_map[category]["seen_users"]:
+                category_map[category]["seen_users"].add(user_id)
+                category_map[category]["total_karma"]  += karma
+                category_map[category]["member_count"] += 1
+
+        # Build final response — strip seen_users from output
+        response = {
+            category: {
+                "total_karma":  data["total_karma"],
+                "member_count": data["member_count"],
+            }
+            for category, data in category_map.items()
+        }
+
+        return CustomResponse(
+            response=response
+        ).get_success_response()
+
+# ...existing code...
