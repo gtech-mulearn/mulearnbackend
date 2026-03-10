@@ -249,6 +249,10 @@ class CampusExecomAPI(APIView):
 
         org = user_org_link.org
 
+        if org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
         # Fetch the role link
         role_link = UserRoleLink.objects.filter(
             id=member_id
