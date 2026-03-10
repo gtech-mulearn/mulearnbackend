@@ -3,7 +3,6 @@ from collections import Counter
 from django.db.models import Q
 from rest_framework.views import APIView
 
-from db.events import Event
 from db.organization import UserOrganizationLink
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
