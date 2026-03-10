@@ -191,6 +191,10 @@ class CampusExecomAPI(APIView):
             ).get_failure_response()
 
         org = user_org_link.org
+        if org is None:
+            return CustomResponse(
+                general_message="User has no organization"
+            ).get_failure_response()
 
         # Validate new user is a non-alumni campus member
         if not validate_campus_member(new_user.id, org):
