@@ -173,6 +173,15 @@ class CampusExecomAPI(APIView):
         muid = request.data.get("muid")
         role_title = request.data.get("role_title")
 
+        ALLOWED_ROLES = [
+        RoleType.CAMPUS_LEAD.value,
+        RoleType.LEAD_ENABLER.value,
+        ]
+        if role_title not in ALLOWED_ROLES and not role_title.endswith("CampusLead"):
+            return CustomResponse(
+                general_message="Invalid role"
+            ).get_failure_response()
+
         if not muid or not role_title:
             return CustomResponse(
                 general_message="muid and role_title are required"

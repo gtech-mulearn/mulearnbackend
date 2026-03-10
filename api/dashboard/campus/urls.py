@@ -60,9 +60,9 @@ urlpatterns = [
         name="transfer-ig-role",
     ),
     path(
-    "events/",
-    events_views.CampusEventsAPI.as_view(),
-    name="campus-events",
+        "events/",
+        events_views.CampusEventsAPI.as_view(),
+        name="campus-events",
     ),
     path(
         "events/distribution/",
