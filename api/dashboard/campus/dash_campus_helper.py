@@ -15,7 +15,7 @@ def validate_campus_member(user_id, org):
         org=org,
         org__org_type=OrganizationType.COLLEGE.value,
         is_alumni=False,
-    ).first()
+    ).exists()
 
 
 def get_campus_events_qs(org):
