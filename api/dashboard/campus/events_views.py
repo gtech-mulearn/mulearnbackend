@@ -3,7 +3,6 @@ from collections import Counter
 from django.db.models import Q
 from rest_framework.views import APIView
 
-from db.events import Event
 from db.organization import UserOrganizationLink
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -201,6 +200,10 @@ class CampusExecomAPI(APIView):
             ).get_failure_response()
 
         org = user_org_link.org
+        if org is None:
+            return CustomResponse(
+                general_message="User has no organization"
+            ).get_failure_response()
 
         # Validate new user is a non-alumni campus member
         if not validate_campus_member(new_user.id, org):
@@ -255,6 +258,10 @@ class CampusExecomAPI(APIView):
 
         org = user_org_link.org
 
+        if org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
         # Fetch the role link
         role_link = UserRoleLink.objects.filter(
             id=member_id
@@ -266,12 +273,13 @@ class CampusExecomAPI(APIView):
             ).get_failure_response()
 
         # Guard: must belong to this campus
-        campus_user_ids = UserOrganizationLink.objects.filter(
+        is_campus_member = UserOrganizationLink.objects.filter(
             org=org,
             org__org_type=OrganizationType.COLLEGE.value,
-        ).values_list("user_id", flat=True)
+            user_id=role_link.user_id,
+        ).exists()
 
-        if role_link.user_id not in campus_user_ids:
+        if not is_campus_member:
             return CustomResponse(
                 general_message="Role link not found or not part of this campus"
             ).get_failure_response()

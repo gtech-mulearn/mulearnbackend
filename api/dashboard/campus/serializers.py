@@ -380,11 +380,12 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
 
     def get_ig_name(self, obj):
         title = obj.role.title
-        # IG campus lead roles end with 'CampusLead' (no space)
-        # e.g. 'pythonCampusLead' → ig_name = 'python'
+        # IG campus lead roles end with 'CampusLead'
+        # Handles both 'pythonCampusLead' and 'WEBDEV CampusLead'
         if title not in (
             RoleType.CAMPUS_LEAD.value,
             RoleType.LEAD_ENABLER.value,
         ) and title.endswith("CampusLead"):
-            return title.replace("CampusLead", "")
+            ig_name = title.replace("CampusLead", "").strip()
+            return ig_name or None
         return None
