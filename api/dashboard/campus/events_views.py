@@ -264,12 +264,13 @@ class CampusExecomAPI(APIView):
             ).get_failure_response()
 
         # Guard: must belong to this campus
-        campus_user_ids = UserOrganizationLink.objects.filter(
+        is_campus_member = UserOrganizationLink.objects.filter(
             org=org,
             org__org_type=OrganizationType.COLLEGE.value,
-        ).values_list("user_id", flat=True)
+            user_id=role_link.user_id,
+        ).exists()
 
-        if role_link.user_id not in campus_user_ids:
+        if not is_campus_member:
             return CustomResponse(
                 general_message="Role link not found or not part of this campus"
             ).get_failure_response()
