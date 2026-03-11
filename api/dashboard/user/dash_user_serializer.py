@@ -360,6 +360,9 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                     ]
                 )
 
+            if "discord_id" in validated_data:
+                instance.discord_id = validated_data["discord_id"]
+
             if isinstance(role_ids := validated_data.pop("roles", None), list):
                 instance.user_role_link_user.all().delete()
                 UserRoleLink.objects.bulk_create(
