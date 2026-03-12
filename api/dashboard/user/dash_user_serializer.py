@@ -360,8 +360,9 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                     ]
                 )
 
-            if "discord_id" in validated_data:
-                instance.discord_id = validated_data["discord_id"]
+            discord_id = validated_data.pop("discord_id", None)
+            if discord_id is not None:
+                instance.discord_id = discord_id
 
             if isinstance(role_ids := validated_data.pop("roles", None), list):
                 instance.user_role_link_user.all().delete()
