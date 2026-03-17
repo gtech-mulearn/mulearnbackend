@@ -1,7 +1,8 @@
-from django.db.models import Count
+from django.db.models import Count, Sum
 from rest_framework.views import APIView
 
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog
+from db.user import User
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
@@ -17,6 +18,8 @@ from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
 from db.user import Role
+from datetime import datetime
+from django.db.models import Q
 
 
 class InterestGroupAPI(APIView):
@@ -494,4 +497,107 @@ class InterestGroupListApi(APIView):
 
         return CustomResponse(
             response={"interestGroup": serializer.data}
+        ).get_success_response()
+
+
+class IGTaskSummaryAPI(APIView):
+    """API to fetch task activity summary for an Interest Group."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    def get(self, request, ig_id):
+        """
+        Get task activity summary for an Interest Group.
+        
+        Query Parameters:
+            - from_date (optional): Start date in YYYY-MM-DD format
+            - to_date (optional): End date in YYYY-MM-DD format
+        
+        Returns:
+            - ig_id: UUID of the Interest Group
+            - ig_name: Name of the IG
+            - ig_code: Code of the IG
+            - total_tasks_completed: Count of tasks completed
+            - total_karma_awarded: Sum of karma earned
+            - unique_contributors: Count of unique users
+            - top_contributors: List of top 5 contributors with karma_earned
+            - date_range: The date range used for filtering
+        """
+        # Validate that the Interest Group exists
+        ig = InterestGroup.objects.filter(id=ig_id).first()
+        if not ig:
+            return CustomResponse(
+                general_message="Interest Group not found"
+            ).get_failure_response(status_code=404, http_status_code=404)
+
+        # Get optional date range from query parameters
+        from_date = request.query_params.get("from_date")
+        to_date = request.query_params.get("to_date")
+        
+        # Validate and parse dates
+        date_filter = Q()
+        date_range_response = {
+            "from_date": from_date,
+            "to_date": to_date,
+        }
+        
+        try:
+            if from_date:
+                from_date_obj = datetime.strptime(from_date, "%Y-%m-%d").date()
+                date_filter &= Q(created_at__date__gte=from_date_obj)
+            
+            if to_date:
+                to_date_obj = datetime.strptime(to_date, "%Y-%m-%d").date()
+                date_filter &= Q(created_at__date__lte=to_date_obj)
+        except ValueError:
+            return CustomResponse(
+                general_message="Invalid date format. Use YYYY-MM-DD"
+            ).get_failure_response(status_code=400, http_status_code=400)
+        
+        # Build the base queryset: filter by IG and date range
+        karma_logs = KarmaActivityLog.objects.filter(task__ig_id=ig_id).filter(date_filter)
+        
+        # Count tasks completed
+        total_tasks_completed = karma_logs.count()
+        
+        # Sum karma awarded
+        total_karma_result = karma_logs.aggregate(total=Sum("karma"))
+        total_karma_awarded = total_karma_result.get("total") or 0
+        
+        # Count unique contributors
+        unique_contributors = karma_logs.filter(user_id__isnull=False).values("user_id").distinct().count()
+        
+        # Get top 5 contributors
+        top_contributors = (
+            karma_logs
+            .filter(user_id__isnull=False)
+            .values("user_id", "user__full_name", "user__muid")
+            .annotate(karma_earned=Sum("karma"))
+            .order_by("-karma_earned")[:5]
+        )
+        
+        # Format top contributors for response
+        top_contributors_list = [
+            {
+                "full_name": contributor["user__full_name"],
+                "muid": contributor["user__muid"],
+                "karma_earned": contributor["karma_earned"],
+            }
+            for contributor in top_contributors
+        ]
+        
+        response_data = {
+            "ig_id": ig.id,
+            "ig_name": ig.name,
+            "ig_code": ig.code,
+            "total_tasks_completed": total_tasks_completed,
+            "total_karma_awarded": total_karma_awarded,
+            "unique_contributors": unique_contributors,
+            "top_contributors": top_contributors_list,
+            "date_range": date_range_response,
+        }
+        
+        return CustomResponse(
+            response=response_data,
+            general_message="Task summary fetched successfully"
         ).get_success_response()

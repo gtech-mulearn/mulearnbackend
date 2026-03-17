@@ -8,6 +8,7 @@ urlpatterns = [
     path('request/<str:pk>/', dash_ig_view.InterestGroupRequestAPI.as_view()),  # for updating IG request status
     path('list/', dash_ig_view.InterestGroupListApi.as_view()),  # for public listing without admin permission
     path('csv/', dash_ig_view.InterestGroupCSV.as_view()),  # for IG data CSV download
+    path('<str:pk>/task-summary/', dash_ig_view.IGTaskSummaryAPI.as_view()),  # for IG task activity summary
     path('<str:pk>/', dash_ig_view.InterestGroupAPI.as_view()),  # for edit and delete
     path('get/<str:pk>/', dash_ig_view.InterestGroupGetAPI.as_view()),  # for edit and delete
 ]
