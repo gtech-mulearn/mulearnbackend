@@ -1,7 +1,9 @@
-from django.db.models import Count
+from datetime import datetime
+
+from django.db.models import Count, Sum
 from rest_framework.views import APIView
 
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
@@ -11,6 +13,7 @@ from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
     InterestGroupRequestSerializer,
+    IGTaskSummarySerializer,
 )
 import json
 from django.utils.decorators import method_decorator
@@ -494,4 +497,87 @@ class InterestGroupListApi(APIView):
 
         return CustomResponse(
             response={"interestGroup": serializer.data}
+        ).get_success_response()
+
+
+class IGTaskSummaryAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value])
+    def get(self, request, ig_id):
+        """Return a task activity summary for a given Interest Group.
+
+        Supports optional date range filtering via `from_date` and `to_date`
+        query params (format: YYYY-MM-DD). Returns aggregate zeros — not a
+        failure — when there is no activity in the requested range.
+        """
+        ig = InterestGroup.objects.filter(id=ig_id).first()
+        if not ig:
+            return CustomResponse(
+                general_message="Interest Group not found"
+            ).get_failure_response()
+
+        from_date_str = request.query_params.get("from_date")
+        to_date_str = request.query_params.get("to_date")
+
+        from_date = None
+        to_date = None
+
+        try:
+            if from_date_str:
+                from_date = datetime.strptime(from_date_str, "%Y-%m-%d")
+            if to_date_str:
+                to_date = datetime.strptime(to_date_str, "%Y-%m-%d")
+        except ValueError:
+            return CustomResponse(
+                general_message="Invalid date format. Use YYYY-MM-DD"
+            ).get_failure_response()
+
+        logs = KarmaActivityLog.objects.filter(
+            task__ig=ig,
+            user__isnull=False,
+        ).select_related("user", "task")
+
+        if from_date:
+            logs = logs.filter(created_at__date__gte=from_date.date())
+        if to_date:
+            logs = logs.filter(created_at__date__lte=to_date.date())
+
+        totals = logs.aggregate(
+            total_tasks_completed=Count("id"),
+            total_karma_awarded=Sum("karma"),
+            unique_contributors=Count("user", distinct=True),
+        )
+
+        top_contributors = [
+            {
+                "full_name": row["user__full_name"],
+                "muid": row["user__muid"],
+                "karma_earned": row["karma_earned"],
+            }
+            for row in (
+                logs.values("user__full_name", "user__muid")
+                .annotate(karma_earned=Sum("karma"))
+                .order_by("-karma_earned")[:5]
+            )
+        ]
+
+        serializer = IGTaskSummarySerializer(data={
+            "ig_id": ig.id,
+            "ig_name": ig.name,
+            "ig_code": ig.code,
+            "total_tasks_completed": totals["total_tasks_completed"] or 0,
+            "total_karma_awarded": totals["total_karma_awarded"] or 0,
+            "unique_contributors": totals["unique_contributors"] or 0,
+            "top_contributors": top_contributors,
+            "date_range": {
+                "from_date": from_date_str,
+                "to_date": to_date_str,
+            },
+        })
+        serializer.is_valid(raise_exception=True)
+
+        return CustomResponse(
+            general_message="Task summary fetched successfully",
+            response=serializer.validated_data,
         ).get_success_response()

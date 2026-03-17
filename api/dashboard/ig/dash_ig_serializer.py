@@ -122,3 +122,21 @@ class InterestGroupRequestSerializer(serializers.ModelSerializer):
             "category": {"required": True},
             "icon": {"required": True},
         }
+
+
+class IGTaskSummarySerializer(serializers.Serializer):
+    """Read-only serializer documenting the IGTaskSummaryAPI response shape."""
+
+    class ContributorSerializer(serializers.Serializer):
+        full_name = serializers.CharField()
+        muid = serializers.CharField()
+        karma_earned = serializers.IntegerField()
+
+    ig_id = serializers.CharField()
+    ig_name = serializers.CharField()
+    ig_code = serializers.CharField()
+    total_tasks_completed = serializers.IntegerField()
+    total_karma_awarded = serializers.IntegerField()
+    unique_contributors = serializers.IntegerField()
+    top_contributors = ContributorSerializer(many=True)
+    date_range = serializers.DictField(child=serializers.CharField(allow_null=True))
