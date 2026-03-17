@@ -23,7 +23,11 @@ class CollegeApi(APIView):
             colleges,
             request,
             search_fields=["org__title"],
-            sort_fields={'org': 'org'},
+            sort_fields={
+                'org': 'org__title',
+                'level': 'level',
+                'created_at': 'created_at',
+            },
         )
         serializer = CollegeListSerializer(
             paginated_queryset.get("queryset"), many=True
