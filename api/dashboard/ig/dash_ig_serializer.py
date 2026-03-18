@@ -88,3 +88,20 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
             "created_by",
             "updated_by",
         ]
+
+
+class IGTopContributorSerializer(serializers.Serializer):
+    full_name = serializers.CharField()
+    muid = serializers.CharField()
+    karma_earned = serializers.IntegerField()
+
+
+class IGTaskSummarySerializer(serializers.Serializer):
+    ig_id = serializers.CharField()
+    ig_name = serializers.CharField()
+    ig_code = serializers.CharField()
+    total_tasks_completed = serializers.IntegerField()
+    total_karma_awarded = serializers.IntegerField()
+    unique_contributors = serializers.IntegerField()
+    top_contributors = IGTopContributorSerializer(many=True)
+    date_range = serializers.DictField(child=serializers.DateField(allow_null=True), allow_null=True)
