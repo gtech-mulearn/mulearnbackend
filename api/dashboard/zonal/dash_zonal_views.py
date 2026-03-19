@@ -22,6 +22,11 @@ class ZonalDetailsAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         serializer = dash_zonal_serializer.ZonalDetailsSerializer(
             user_org_link, many=False
         )
@@ -36,6 +41,11 @@ class ZonalTopThreeDistrictAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         district_karma_dict = (
             UserOrganizationLink.objects.filter(
@@ -78,6 +88,11 @@ class ZonalStudentLevelStatusAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         zone = user_org_link.org.district.zone
 
         levels = Level.objects.all()
@@ -95,6 +110,11 @@ class ZonalStudentDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         rank = (
             Wallet.objects.filter(
@@ -157,6 +177,11 @@ class ZonalStudentDetailsCSVAPI(APIView):
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         rank = (
             Wallet.objects.filter(
                 user__user_organization_link_user__org__district__zone=user_org_link.org.district.zone,
@@ -199,6 +224,11 @@ class ZonalCollegeDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
@@ -263,6 +293,11 @@ class ZonalCollegeDetailsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = dash_zonal_helper.get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
