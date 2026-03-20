@@ -1,6 +1,7 @@
 from django.urls import path
 
 from . import campus_views
+from . import events_views
 
 urlpatterns = [
     path(
@@ -56,7 +57,27 @@ urlpatterns = [
     path(
         "transfer-ig-role/",
         campus_views.TransferIGRoleAPI.as_view(),
-        name="transfer-lead-role",
+        name="transfer-ig-role",
+    ),
+    path(
+        "events/",
+        events_views.CampusEventsAPI.as_view(),
+        name="campus-events",
+    ),
+    path(
+        "events/distribution/",
+        events_views.CampusEventDistributionAPI.as_view(),
+        name="campus-event-distribution",
+    ),
+    path(
+        "execom/",
+        events_views.CampusExecomAPI.as_view(),
+        name="campus-execom",
+    ),
+    path(
+        "execom/<str:member_id>/",
+        events_views.CampusExecomAPI.as_view(),
+        name="campus-execom-delete",
     ),
     path(
         "ig-chapters/",

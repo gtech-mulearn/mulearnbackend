@@ -14,12 +14,13 @@ def get_user_college_link(user_id):
 
 
 def validate_campus_member(user_id, org_id):
-    """Confirm that a user is a member of the given campus."""
+    """Confirm that a user is an active member of the given campus (not alumni)."""
     return UserOrganizationLink.objects.filter(
         user_id=user_id,
         org_id=org_id,
         org__org_type=OrganizationType.COLLEGE.value,
-    ).first()
+        is_alumni=False,
+    ).exists()
 
 
 def get_campus_ig_chapters(org_id):
@@ -27,17 +28,15 @@ def get_campus_ig_chapters(org_id):
     return CampusIGChapter.objects.filter(
         org_id=org_id,
         is_active=True,
-    ).select_related('ig', 'lead')
+    ).select_related("ig", "lead")
 
 
 def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
     """
     Assign a new campus-level IG lead for a chapter.
-
     - Removes the old lead's UserRoleLink for {ig_code}CampusLead at this campus.
     - Creates a new UserRoleLink for the new lead.
     - Updates the chapter's lead field.
-
     Mirrors the role-transfer logic in TransferIGRoleAPI.post().
     """
     ig_code = chapter.ig.code
@@ -67,3 +66,14 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
     chapter.save()
 
     return True
+
+
+def get_campus_events_qs(org):
+    from api.dashboard.events.serializers import get_live_events
+    from db.events import Event
+
+    base = get_live_events()
+    return (
+        base.filter(scope=Event.Scope.CAMPUS, scope_org=org)
+        | base.filter(scope=Event.Scope.CAMPUS_IG, scope_org=org)
+    ).distinct()

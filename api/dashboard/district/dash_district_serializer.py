@@ -137,7 +137,7 @@ class DistrictStudentDetailsSerializer(serializers.Serializer):
 
     class Meta:
         fields = (
-            "user_id"
+            "user_id",
             "full_name",
             "karma",
             "muid",
@@ -163,12 +163,12 @@ class DistrictCollegeDetailsSerializer(serializers.Serializer):
 
     class Meta:
         fields = (
-            'id'
+            'id',
             'title',
             'level',
             'code',
             'lead',
-            'lead_number'
+            'lead_number',
         )
 
     def get_lead(self, obj):

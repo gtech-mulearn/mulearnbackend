@@ -12,7 +12,7 @@ from utils.types import OrganizationType
 from utils.types import RoleType, SocialPlatformType
 from utils.utils import DateTimeUtils
 from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead
-
+from db.events import Event
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     college_name = serializers.ReadOnlyField(source="title")
@@ -341,38 +341,60 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
         return user_role_link
 
 
+class CampusEventListSerializer(serializers.ModelSerializer):
+    tags = serializers.JSONField()
+
+    class Meta:
+        model = Event
+        fields = [
+            "id",
+            "title",
+            "status",
+            "scope",
+            "organiser_type",
+            "start_datetime",
+            "end_datetime",
+            "venue_type",
+            "venue_city",
+            "interest_count",
+            "cover_image",
+            "tags",
+        ]
 
 
-class CampusLeaderboardSerializer(CampusStudentDetailsSerializer):
-    # ── override fields (email & mobile removed — public endpoint) ──────────
-    email           = None
-    mobile          = None
+class ExecomMemberSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id")
+    full_name = serializers.CharField(source="user.full_name")
+    muid = serializers.CharField(source="user.muid")
+    profile_pic = serializers.SerializerMethodField()
+    role_title = serializers.CharField(source="role.title")
+    ig_name = serializers.SerializerMethodField()
 
-    # ── NEW fields not in CampusStudentDetailsSerializer ────────────────────
-    profile_pic     = serializers.SerializerMethodField()
-    ig_count        = serializers.IntegerField(default=0)
-
-    class Meta(CampusStudentDetailsSerializer.Meta):
-        # inherit parent Meta and extend fields
-        fields = (
-            "rank",
+    class Meta:
+        model = UserRoleLink
+        fields = [
             "user_id",
             "full_name",
             "muid",
-            "profile_pic",       
-            "karma",
-            "level",
-            "join_date",
-            "last_karma_gained",
-            "graduation_year",
-            "department",
-            "is_alumni",
-            "ig_count",          
-          
-        )
+            "profile_pic",
+            "role_title",
+            "ig_name",
+        ]
 
     def get_profile_pic(self, obj):
-        return str(obj.profile_pic) if obj.profile_pic else None
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_ig_name(self, obj):
+        title = obj.role.title
+        # IG campus lead roles end with 'CampusLead'
+        # Handles both 'pythonCampusLead' and 'WEBDEV CampusLead'
+        if title not in (
+            RoleType.CAMPUS_LEAD.value,
+            RoleType.LEAD_ENABLER.value,
+        ) and title.endswith("CampusLead"):
+            ig_name = title.replace("CampusLead", "").strip()
+            return ig_name or None
+        return None
 
     # get_rank and get_full_name are inherited from CampusStudentDetailsSerializer
 
@@ -521,4 +543,3 @@ class CampusSocialLinkUpsertSerializer(serializers.Serializer):
                 updated_by_id=user_id,
             )
         return social_link
-
