@@ -40,15 +40,15 @@ Structure:
   "response": [
     {
       "id": "string (UUID)",
+      "ig_id": "string (UUID)",
       "ig_name": "string",
       "ig_code": "string",
+      "ig_icon": "string | null",
+      "lead_id": "string (UUID) | null",
       "lead_name": "string | null",
-      "lead_email": "string | null",
       "description": "string | null",
-      "campus_ig_member_count": "integer",
       "is_active": "boolean",
-      "created_at": "string (ISO 8601 datetime)",
-      "updated_at": "string (ISO 8601 datetime)"
+      "campus_ig_member_count": "integer"
     }
   ]
 }
@@ -57,36 +57,34 @@ Structure:
 | Field | Type | Description |
 |-------|------|-------------|
 | `response[].id` | string (UUID) | Unique identifier for the chapter |
+| `response[].ig_id` | string (UUID) | Unique identifier for the interest group |
 | `response[].ig_name` | string | Name of the interest group |
 | `response[].ig_code` | string | Code of the interest group |
+| `response[].ig_icon` | string or null | URL to the interest group icon |
+| `response[].lead_id` | string (UUID) or null | Unique identifier for the assigned chapter lead |
 | `response[].lead_name` | string or null | Full name of the assigned chapter lead |
-| `response[].lead_email` | string or null | Email of the assigned chapter lead |
 | `response[].description` | string or null | Description of the chapter |
-| `response[].campus_ig_member_count` | integer | Number of members in this IG at the campus |
 | `response[].is_active` | boolean | Active status of the chapter |
-| `response[].created_at` | string (ISO 8601) | Creation timestamp |
-| `response[].updated_at` | string (ISO 8601) | Last update timestamp |
+| `response[].campus_ig_member_count` | integer | Number of members in this IG at the campus |
 
 Example:
 ```json
 {
   "hasError": false,
   "statusCode": 200,
-  "message": {
-    "general": ["Data fetched successfully"]
-  },
+  "message": {},
   "response": [
     {
       "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+      "ig_id": "b2c3d4e5-f678-90ab-cdef-1234567890ab",
       "ig_name": "Web Development",
       "ig_code": "WEB",
+      "ig_icon": "https://mulearn.org/icon.png",
+      "lead_id": "c3d4e5f6-7890-abcd-ef12-34567890abcd",
       "lead_name": "John Doe",
-      "lead_email": "john@example.com",
       "description": "Learn web development",
-      "campus_ig_member_count": 42,
       "is_active": true,
-      "created_at": "2026-03-15T10:30:00Z",
-      "updated_at": "2026-03-15T10:30:00Z"
+      "campus_ig_member_count": 42
     }
   ]
 }
