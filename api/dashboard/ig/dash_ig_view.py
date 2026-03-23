@@ -40,6 +40,7 @@ class InterestGroupAPI(APIView):
             {
                 "name": "name",
                 "members": "members",
+                "status": "status",
                 "updated_on": "updated_at",
                 "updated_by": "updated_by__full_name",
                 "created_on": "created_at",
@@ -378,6 +379,9 @@ class InterestGroupRequestAPI(APIView):
             {
                 "name": "name",
                 "status": "status",
+                "ig_name": "name",
+                "user_full_name": "created_by__full_name",
+                "created_at": "created_at",
                 "created_on": "created_at",
                 "updated_on": "updated_at",
             },

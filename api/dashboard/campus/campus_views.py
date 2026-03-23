@@ -4,13 +4,14 @@ from rest_framework.views import APIView
 from collections import defaultdict
 from db.organization import Organization, UserOrganizationLink
 from db.task import Level, Wallet, InterestGroup
+from db.campus import CampusIGChapter, CampusSocialLink
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
-from .dash_campus_helper import get_user_college_link
+from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
 
 
 class CampusDetailsPublicAPI(APIView):
@@ -828,5 +829,152 @@ class CampusKarmaByClusterAPI(APIView):
 
         return CustomResponse(
             response=response
+        ).get_success_response()
+
+
+class CampusIGChapterAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        chapters = get_campus_ig_chapters(user_org_link.org.id)
+        serializer = serializers.CampusIGChapterListSerializer(chapters, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        serializer = serializers.CampusIGChapterCreateSerializer(
+            data=request.data,
+            context={"user_id": user_id, "org": user_org_link.org},
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="IG Chapter created successfully"
+            ).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def patch(self, request, chapter_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        chapter = CampusIGChapter.objects.filter(
+            id=chapter_id,
+            org=user_org_link.org,
+        ).first()
+        if chapter is None:
+            return CustomResponse(
+                general_message="IG Chapter not found"
+            ).get_failure_response()
+
+        serializer = serializers.CampusIGChapterUpdateSerializer(
+            chapter,
+            data=request.data,
+            partial=True,
+            context={"user_id": user_id},
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="IG Chapter updated successfully"
+            ).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def delete(self, request, chapter_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        chapter = CampusIGChapter.objects.filter(
+            id=chapter_id,
+            org=user_org_link.org,
+        ).first()
+        if chapter is None:
+            return CustomResponse(
+                general_message="IG Chapter not found"
+            ).get_failure_response()
+
+        if chapter.lead:
+            role = Role.objects.filter(title=f"{chapter.ig.code}CampusLead").first()
+            if role:
+                UserRoleLink.objects.filter(
+                    user=chapter.lead,
+                    user__user_organization_link_user__org=user_org_link.org,
+                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    role=role,
+                ).delete()
+            chapter.lead = None
+
+        chapter.is_active = False
+        chapter.updated_by_id = user_id
+        chapter.save()
+
+        return CustomResponse(
+            general_message="IG Chapter deleted successfully"
+        ).get_success_response()
+
+
+class CampusSocialLinkAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def put(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        serializer = serializers.CampusSocialLinkUpsertSerializer(
+            data=request.data,
+            context={"user_id": user_id, "org": user_org_link.org},
+        )
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Social link saved successfully"
+            ).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def delete(self, request, link_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        social_link = CampusSocialLink.objects.filter(
+            id=link_id,
+            org=user_org_link.org,
+        ).first()
+        if social_link is None:
+            return CustomResponse(
+                general_message="Social link not found"
+            ).get_failure_response()
+
+        social_link.delete()
+
+        return CustomResponse(
+            general_message="Social link deleted successfully"
         ).get_success_response()
 

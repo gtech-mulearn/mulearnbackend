@@ -80,6 +80,26 @@ urlpatterns = [
         name="campus-execom-delete",
     ),
     path(
+        "ig-chapters/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapters",
+    ),
+    path(
+        "ig-chapters/<str:chapter_id>/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapter-detail",
+    ),
+    path(
+        "social-links/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-links",
+    ),
+    path(
+        "social-links/<str:link_id>/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-link-detail",
+    ),
+    path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",
