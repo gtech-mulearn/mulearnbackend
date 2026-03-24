@@ -976,4 +976,5 @@ class CampusSocialLinkAPI(APIView):
 
         return CustomResponse(
             general_message="Social link deleted successfully"
-        ).get_success_response()
+        ).get_success_response()
+
