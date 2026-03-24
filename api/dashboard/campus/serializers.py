@@ -156,6 +156,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
         return None
 
+   
+
     def get_total_members(self, obj):
         return obj.org.user_organization_link_org.count()
 
@@ -396,6 +398,37 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
             return ig_name or None
         return None
 
+        
+class CampusLeaderboardSerializer(CampusStudentDetailsSerializer):
+    # ── override fields (email & mobile removed — public endpoint) ──────────
+    email           = None
+    mobile          = None
+
+    # ── NEW fields not in CampusStudentDetailsSerializer ────────────────────
+    profile_pic     = serializers.SerializerMethodField()
+    ig_count        = serializers.IntegerField(default=0)
+
+    class Meta(CampusStudentDetailsSerializer.Meta):
+        # inherit parent Meta and extend fields
+        fields = (
+            "rank",
+            "user_id",
+            "full_name",
+            "muid",
+            "profile_pic",       
+            "karma",
+            "level",
+            "join_date",
+            "last_karma_gained",
+            "graduation_year",
+            "department",
+            "is_alumni",
+            "ig_count",          
+          
+        )
+
+    def get_profile_pic(self, obj):
+        return str(obj.profile_pic) if obj.profile_pic else None
     # get_rank and get_full_name are inherited from CampusStudentDetailsSerializer
 
 
