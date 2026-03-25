@@ -15,6 +15,7 @@ from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead
 from db.events import Event
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
+    org_id = serializers.ReadOnlyField(source="id")
     college_name = serializers.ReadOnlyField(source="title")
     campus_code = serializers.ReadOnlyField(source="code")
     campus_zone = serializers.ReadOnlyField(source="district.zone.name")
@@ -30,6 +31,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     class Meta:
         model = Organization
         fields = [
+            "org_id",
             "college_name",
             "campus_code",
             "campus_zone",
@@ -98,7 +100,14 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
 
 
 
+class CampusListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ["id", "title", "code"]
+
+
 class CampusDetailsSerializer(serializers.ModelSerializer):
+    org_id = serializers.ReadOnlyField(source="org.id")
     college_name = serializers.ReadOnlyField(source="org.title")
     campus_code = serializers.ReadOnlyField(source="org.code")
     campus_zone = serializers.ReadOnlyField(source="org.district.zone.name")
@@ -112,9 +121,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     karma_last_7_days = serializers.SerializerMethodField()
     karma_last_30_days = serializers.SerializerMethodField()
     active_ig_count = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
+
     class Meta:
         model = UserOrganizationLink
         fields = [
+            "org_id",
             "college_name",
             "campus_code",
             "campus_zone",
@@ -127,6 +139,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "karma_last_7_days",
             "karma_last_30_days",
             "active_ig_count",
+            "social_links",
         ]
 
     def get_lead(self, obj):
@@ -231,6 +244,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             .distinct()
             .count()
         )
+
+    def get_social_links(self, obj):
+        links = CampusSocialLink.objects.filter(org=obj.org)
+        return CampusSocialLinkSerializer(links, many=True).data
 
 
 class CampusStudentDetailsSerializer(serializers.Serializer):
