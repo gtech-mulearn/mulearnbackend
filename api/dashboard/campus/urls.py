@@ -5,6 +5,11 @@ from . import events_views
 
 urlpatterns = [
     path(
+        "campus-list/",
+        campus_views.CampusListAPI.as_view(),
+        name="campus-list",
+    ),
+    path(
         "campus-details/",
         campus_views.CampusDetailsAPI.as_view(),
         name="campus-details",
@@ -103,12 +108,6 @@ urlpatterns = [
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",
-    ),
-    
-    path(
-        "<str:org_id>/campus-details/",
-        campus_views.CampusDetailsAPI.as_view(),
-        name="campus-details",
     ),
     path(
         "<str:org_id>/leaderboard/",
