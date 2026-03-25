@@ -14,6 +14,26 @@ from . import serializers
 from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
 
 
+class CampusListAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        campuses = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            campuses,
+            request,
+            ["title", "code"],
+            {"title": "title", "code": "code"}
+        )
+        serializer = serializers.CampusListSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+
+
 class CampusDetailsPublicAPI(APIView):
     """
     Campus Details API
