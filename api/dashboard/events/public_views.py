@@ -237,7 +237,6 @@ class EventInterestAPI(APIView):
     DELETE /events/<event_id>/interest/  → Remove interest
     """
     authentication_classes = [CustomizePermission]
-    permission_classes = [IsAuthenticated]
 
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)

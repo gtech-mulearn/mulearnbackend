@@ -44,6 +44,7 @@ Structure:
     "general": ["string"]
   },
   "response": {
+    "org_id": "string (UUID)",
     "college_name": "string",
     "campus_code": "string",
     "campus_zone": "string",
@@ -65,6 +66,7 @@ Structure:
 
 | Field | Type | Description |
 |-------|------|-------------|
+| `response.org_id` | string (UUID) | Unique ID of the college/campus |
 | `response.college_name` | string | Name of the college/campus |
 | `response.campus_code` | string | The unique MULEARN campus code |
 | `response.campus_zone` | string | Geographical zone of the campus |
@@ -87,6 +89,7 @@ Example:
     "general": ["Campus details fetched successfully"]
   },
   "response": {
+    "org_id": "82e6f245-59ea-4be4-a33d-35189a395000",
     "college_name": "Example Engineering College",
     "campus_code": "EEC",
     "campus_zone": "Central",

@@ -31,6 +31,7 @@
 | 20 | [`social-links/<link_id>/`](#20-social-linkslink_id) | `DELETE` | Campus Lead, Lead Enabler |
 | 21 | [`<org_id>/leaderboard/`](#21-org_idleaderboard) | `GET` | Any authenticated user |
 | 22 | [`<org_id>/karma-by-cluster/`](#22-org_idkarma-by-cluster) | `GET` | Any authenticated user |
+| 23 | [`campus-list/`](#23-campus-list) | `GET` | Any authenticated user |
 
 ---
 
@@ -53,6 +54,7 @@ Returns detailed information about the authenticated Campus Lead's own campus, i
   "statusCode": 200,
   "message": { "general": ["Success"] },
   "response": {
+    "org_id": "82e6f245-59ea-4be4-a33d-35189a395000",
     "college_name": "Example College of Engineering",
     "campus_code": "ECE001",
     "campus_zone": "South Zone",
@@ -67,7 +69,14 @@ Returns detailed information about the authenticated Campus Lead's own campus, i
     },
     "karma_last_7_days": 1200,
     "karma_last_30_days": 4800,
-    "active_ig_count": 7
+    "active_ig_count": 7,
+    "social_links": [
+      {
+        "id": "e5f67890-abcd-ef12-3456-7890abcdef12",
+        "platform": "instagram",
+        "url": "https://instagram.com/eec_mulearn"
+      }
+    ]
   }
 }
 ```
@@ -92,6 +101,7 @@ Returns public details of any campus by its organisation ID. Does not require a 
   "statusCode": 200,
   "message": { "general": ["Success"] },
   "response": {
+    "org_id": "82e6f245-59ea-4be4-a33d-35189a395000",
     "college_name": "Example College of Engineering",
     "campus_code": "ECE001",
     "campus_zone": "South Zone",
@@ -99,7 +109,14 @@ Returns public details of any campus by its organisation ID. Does not require a 
     "total_karma": 45200,
     "total_members": 312,
     "active_members": 180,
-    "rank": 5
+    "rank": 5,
+    "social_links": [
+      {
+        "id": "e5f67890-abcd-ef12-3456-7890abcdef12",
+        "platform": "instagram",
+        "url": "https://instagram.com/eec_mulearn"
+      }
+    ]
   }
 }
 ```
@@ -950,3 +967,39 @@ Returns total karma and member count grouped by Interest Group category for the 
 ```
 
 > Members with no IG are grouped under `"unclustered"`.
+
+---
+
+## 23. Campus List
+
+**`GET /api/dashboard/campus/campus-list/`**
+
+Returns a simplified, paginated list of all active campuses, intended for dropdown menus or global selectors.
+
+**Roles:** Any authenticated user.
+
+**Request Body:** None
+
+**Response:**
+```json
+{
+  "hasError": false,
+  "statusCode": 200,
+  "message": { "general": ["Success"] },
+  "response": {
+    "data": [
+      {
+        "id": "82e6f245-59ea-4be4-a33d-35189a395000",
+        "title": "Example College of Engineering",
+        "code": "ECE001"
+      }
+    ],
+    "pagination": {
+      "count": 450,
+      "totalPages": 23,
+      "isFirst": true,
+      "isLast": false
+    }
+  }
+}
+```
