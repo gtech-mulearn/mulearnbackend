@@ -30,8 +30,4 @@ urlpatterns = [
         "organization/create/",
         register_views.UnverifiedOrganizationCreateView.as_view(),
     ),
-    path(
-        "company/create/",
-        register_views.CompanyCreateView.as_view(),
-    ),
 ]
