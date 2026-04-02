@@ -292,25 +292,7 @@ class UnverifiedOrganizationCreateSerializer(serializers.ModelSerializer):
         fields = ["title", "org_type", "graduation_year", "department"]
 
 
-
-class CompanyCreateSerializer(serializers.Serializer):
-    name = serializers.CharField(max_length=75, required=True)
-    description = serializers.CharField(max_length=500, required=True)
-    industry_sector = serializers.CharField(max_length=75, required=False, allow_null=True)
-    website_link = serializers.URLField(max_length=255, required=False, allow_null=True)
-    email = serializers.EmailField(max_length=255, required=False, allow_null=True)
-    location = serializers.CharField(max_length=255, required=False, allow_null=True)
-
-    def validate(self, attrs):
-        user_id = self.context.get("user_id")
-        if not user_id:
-            raise serializers.ValidationError("User ID is required in context")
-        return super().validate(attrs)
-
-
-
 class UserSerializer(serializers.ModelSerializer):
-
     role = serializers.PrimaryKeyRelatedField(
         queryset=Role.objects.all(), required=False, write_only=True
     )
