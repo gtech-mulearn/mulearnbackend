@@ -87,7 +87,7 @@ SPECTACULAR_SETTINGS = {
         "persistAuthorization": True,
         "displayOperationId": True,
     },
-    "SERVE_PERMISSIONS": ["rest_framework.permissions.AllowAny"],
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"] if not decouple_config("ENABLE_SWAGGER", default=False, cast=bool) else ["rest_framework.permissions.AllowAny"],
     "SECURITY": [
         {
             "jwtAuth": [],
