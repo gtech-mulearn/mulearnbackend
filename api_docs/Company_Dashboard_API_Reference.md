@@ -23,6 +23,7 @@ All responses use this envelope:
 Description: Public company signup with POC user creation, company-role mapping, org-linking, and company record creation in `pending_verification`.
 Auth: `AllowAny`
 
+
 Request body:
 ```json
 {
