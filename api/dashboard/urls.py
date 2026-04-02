@@ -6,6 +6,7 @@ urlpatterns = [
     path("zonal/", include("api.dashboard.zonal.urls")),
     path("district/", include("api.dashboard.district.urls")),
     path("campus/", include("api.dashboard.campus.urls")),
+    path("company/", include("api.dashboard.company.urls")),
     path("roles/", include("api.dashboard.roles.urls")),
     path("ig/", include("api.dashboard.ig.urls")),
     path("task/", include("api.dashboard.task.urls")),
@@ -27,6 +28,5 @@ urlpatterns = [
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
     path("skill/", include("api.dashboard.skill.urls")),
-    path("company/", include("api.dashboard.company.urls")),
     path("category/", include("api.dashboard.category.urls"))
 ]
