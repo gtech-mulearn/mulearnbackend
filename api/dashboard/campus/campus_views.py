@@ -165,17 +165,20 @@ class CampusStudentDetailsAPI(APIView):
                 general_message="User have no organization"
             ).get_failure_response()
         is_alumni = request.query_params.get("is_alumni")
+        is_alumni_filter = None
+        if is_alumni is not None:
+            is_alumni_filter = str(is_alumni).lower() == "true"
 
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
-        if is_alumni:
+        if is_alumni_filter is not None:
             rank = (
                 Wallet.objects.filter(
                     user__user_organization_link_user__org=user_org_link.org,
                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user__user_organization_link_user__is_alumni=is_alumni,
+                    user__user_organization_link_user__is_alumni=is_alumni_filter,
                 )
                 .distinct()
                 .order_by("-karma", "-created_at")
@@ -191,7 +194,7 @@ class CampusStudentDetailsAPI(APIView):
                 User.objects.filter(
                     user_organization_link_user__org=user_org_link.org,
                     user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user_organization_link_user__is_alumni=is_alumni,
+                    user_organization_link_user__is_alumni=is_alumni_filter,
                 )
                 .distinct()
                 .annotate(
@@ -282,18 +285,21 @@ class CampusStudentDetailsCSVAPI(APIView):
                 general_message="User have no organization"
             ).get_failure_response()
         is_alumni = request.query_params.get("is_alumni")
+        is_alumni_filter = None
+        if is_alumni is not None:
+            is_alumni_filter = str(is_alumni).lower() == "true"
 
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
 
-        if is_alumni:
+        if is_alumni_filter is not None:
             rank = (
                 Wallet.objects.filter(
                     user__user_organization_link_user__org=user_org_link.org,
                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user__user_organization_link_user__is_alumni=is_alumni,
+                    user__user_organization_link_user__is_alumni=is_alumni_filter,
                 )
                 .distinct()
                 .order_by("-karma", "-created_at")
@@ -309,7 +315,7 @@ class CampusStudentDetailsCSVAPI(APIView):
                 User.objects.filter(
                     user_organization_link_user__org=user_org_link.org,
                     user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user_organization_link_user__is_alumni=is_alumni,
+                    user_organization_link_user__is_alumni=is_alumni_filter,
                 )
                 .distinct()
                 .annotate(
