@@ -5,6 +5,7 @@ from . import public_views, manage_views, admin_views, scoped_views, meta_views
 urlpatterns = [
 
     # ── Meta (BEFORE wildcards) ───────────────────────────────
+    path('meta/categories/', meta_views.EventCategoriesAPI.as_view()),
     path('meta/organizer-options/', meta_views.OrganizerOptionsAPI.as_view()),
     path('meta/collaboration-targets/', meta_views.CollaborationTargetsAPI.as_view()),
 

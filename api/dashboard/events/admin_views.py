@@ -2,8 +2,6 @@
 Admin Events API views.
 All endpoints require the 'Admins' role.
 """
-import uuid
-
 from rest_framework.views import APIView
 
 from db.events import Event, EventLog
@@ -13,6 +11,7 @@ from utils.utils import CommonUtils
 from utils.types import RoleType
 
 from .serializers import EventListItemSerializer, EventDetailSerializer, get_live_events
+from .event_logger import log_event_action
 
 
 PENDING_STATUSES = [
@@ -103,11 +102,11 @@ class AdminEventApproveAPI(APIView):
         event.updated_by_id = user_id
         event.save()
 
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields=['status'],
+            user_id=user_id,
+            action=EventLog.Action.APPROVED,
+            changes={'Status': {'from': old_status, 'to': new_status}},
         )
 
         return CustomResponse(
@@ -148,15 +147,12 @@ class AdminEventRejectAPI(APIView):
         event.updated_by_id = user_id
         event.save()
 
-        # Store rejection reason in the audit log's changed_fields as structured data
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields={
-                'status': {'from': old_status, 'to': Event.Status.DRAFT},
-                'rejection_reason': reason,
-            },
+            user_id=user_id,
+            action=EventLog.Action.REJECTED,
+            changes={'Status': {'from': old_status, 'to': Event.Status.DRAFT}},
+            details={'reason': reason},
         )
 
         return CustomResponse(
@@ -191,11 +187,11 @@ class AdminEventFeatureAPI(APIView):
         event.updated_by_id = user_id
         event.save()
 
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields=['is_featured'],
+            user_id=user_id,
+            action=EventLog.Action.FEATURED if new_value else EventLog.Action.UNFEATURED,
+            changes={'Featured': {'from': not new_value, 'to': new_value}},
         )
 
         action = 'featured' if new_value else 'unfeatured'

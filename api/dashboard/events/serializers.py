@@ -164,6 +164,7 @@ class EventListItemSerializer(serializers.ModelSerializer):
     venue = EventVenueSerializer(source='*')
     viewer_interest_status = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
+    category_id   = serializers.CharField(source='category.id',   allow_null=True, read_only=True)
 
     class Meta:
         model = Event
@@ -172,7 +173,7 @@ class EventListItemSerializer(serializers.ModelSerializer):
             'status', 'scope', 'start_datetime', 'end_datetime',
             'venue', 'organizer', 'is_featured', 'is_collaboration',
             'interest_count', 'min_karma', 'tags', 'user_limit',
-            'category_name', 'viewer_interest_status',
+            'category_id', 'category_name', 'viewer_interest_status',
         ]
 
     def get_viewer_interest_status(self, obj):
@@ -203,6 +204,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
     viewer_can_access_registration = serializers.SerializerMethodField()
     viewer_access_blocked_reason = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
+    category_id   = serializers.CharField(source='category.id',   allow_null=True, read_only=True)
     scope_org = MinimalCampusSerializer(read_only=True, allow_null=True)
     scope_ig = MinimalIGSerializer(read_only=True, allow_null=True)
 
@@ -210,7 +212,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'slug', 'description',
-            'cover_image', 'banner_image', 'category_name',
+            'cover_image', 'banner_image', 'category_id', 'category_name',
             'status', 'scope', 'scope_org', 'scope_ig', 'scope_ci_id',
             'organizer', 'venue',
             'start_datetime', 'end_datetime',
@@ -338,6 +340,23 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'user_limit': {'required': False},
         }
 
+    def validate_category(self, value):
+        """Ensure the provided Category belongs to the event entity type."""
+        if value is None:
+            return value
+        from db.task import Category as CategoryModel
+        # Re-fetch to confirm this category exists and is scoped to events
+        cat = CategoryModel.objects.filter(
+            id=value.id,
+            entity_type=CategoryModel.EntityType.EVENT,
+        ).first()
+        if not cat:
+            raise serializers.ValidationError(
+                'Invalid category: must be an event category. '
+                'Use GET /events/meta/categories/ to list valid options.'
+            )
+        return value
+
     def validate(self, attrs):
         start = attrs.get('start_datetime')
         end = attrs.get('end_datetime')
@@ -363,8 +382,12 @@ class EventWriteSerializer(serializers.ModelSerializer):
         return Event.objects.create(**validated_data)
 
     def update(self, instance, validated_data):
+        from .event_logger import build_diff, log_event_action
+
         user_id = self.context['user_id']
-        changed_fields = list(validated_data.keys())
+
+        # Capture diff BEFORE applying changes so we have old values
+        changes = build_diff(instance, validated_data)
 
         if 'title' in validated_data and validated_data['title'] != instance.title:
             validated_data['slug'] = self._generate_unique_slug(validated_data['title'])
@@ -375,13 +398,13 @@ class EventWriteSerializer(serializers.ModelSerializer):
         instance.updated_by_id = user_id
         instance.save()
 
-        # Write audit log
-        if changed_fields:
-            EventLog.objects.create(
-                id=str(uuid.uuid4()),
+        # Write structured audit log (only if something actually changed)
+        if changes:
+            log_event_action(
                 event=instance,
-                edited_by_id=user_id,
-                changed_fields=changed_fields,
+                user_id=user_id,
+                action=EventLog.Action.UPDATED,
+                changes=changes,
             )
         return instance
 
@@ -392,10 +415,54 @@ class EventWriteSerializer(serializers.ModelSerializer):
 
 class EventLogSerializer(serializers.ModelSerializer):
     edited_by = MinimalUserSerializer(read_only=True)
+    action    = serializers.SerializerMethodField()
+    summary   = serializers.SerializerMethodField()
+    changes   = serializers.SerializerMethodField()
+    details   = serializers.SerializerMethodField()
 
     class Meta:
         model = EventLog
-        fields = ['id', 'edited_by', 'changed_fields', 'edited_at']
+        fields = ['id', 'action', 'edited_by', 'summary', 'changes', 'details', 'edited_at']
+
+    # ── Helpers ──────────────────────────────────────────────────────────────
+
+    def _cf(self, obj):
+        """Always return changed_fields as a dict (handles legacy list rows)."""
+        cf = obj.changed_fields
+        return cf if isinstance(cf, dict) else {}
+
+    def get_action(self, obj):
+        return self._cf(obj).get('action', 'event_updated')
+
+    def get_changes(self, obj):
+        return self._cf(obj).get('changes', {})
+
+    def get_details(self, obj):
+        return self._cf(obj).get('details', None)
+
+    def get_summary(self, obj):
+        action  = self.get_action(obj)
+        changes = self.get_changes(obj)
+        details = self.get_details(obj) or {}
+
+        ACTION_SUMMARIES = {
+            'event_created':         lambda c, d: 'Event created',
+            'event_updated':         lambda c, d: f"Updated: {', '.join(c.keys())}" if c else 'Event updated',
+            'event_published':       lambda c, d: f"Event submitted for approval → {d.get('new_status', '')}".rstrip(' →'),
+            'event_cancelled':       lambda c, d: 'Event cancelled',
+            'event_approved':        lambda c, d: f"Event approved → {c.get('Status', {}).get('to', '')}".rstrip(' →'),
+            'event_rejected':        lambda c, d: f"Event rejected — {d.get('reason', 'no reason given')}",
+            'event_featured':        lambda c, d: 'Event marked as featured',
+            'event_unfeatured':      lambda c, d: 'Event removed from featured',
+            'co_owner_added':        lambda c, d: f"Co-owner added: {d.get('name', '')}".rstrip(': '),
+            'co_owner_removed':      lambda c, d: f"Co-owner removed: {d.get('name', '')}".rstrip(': '),
+            'collaborator_invited':  lambda c, d: f"{d.get('entity_type', 'Collaborator')} invited: {d.get('name', '')}".rstrip(': '),
+            'collaborator_accepted': lambda c, d: f"{d.get('entity_type', 'Collaborator')} accepted the invite: {d.get('name', '')}".rstrip(': '),
+            'collaborator_rejected': lambda c, d: f"{d.get('entity_type', 'Collaborator')} rejected the invite: {d.get('name', '')} — {d.get('reason', '')}".rstrip(' —: '),
+            'collaborator_removed':  lambda c, d: f"{d.get('entity_type', 'Collaborator')} removed: {d.get('name', '')}".rstrip(': '),
+        }
+        fn = ACTION_SUMMARIES.get(action)
+        return fn(changes, details) if fn else action.replace('_', ' ').title()
 
 
 # ─────────────────────────────────────────────────────────────
