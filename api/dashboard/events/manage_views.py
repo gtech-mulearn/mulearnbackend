@@ -64,20 +64,26 @@ class ManageEventListCreateAPI(APIView):
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
 
-        # Events created by the user + events where user is co_owner
-        co_owned_event_ids = list(
-            EventConnection.objects.filter(
-                entity_type=EventConnection.EntityType.CO_OWNER,
-                entity_id=user_id,
-            ).values_list('event_id', flat=True)
-        )
+        if is_admin:
+            # Admins can view/edit all events (excluding drafts) from the manage list.
+            events = _get_manageable_events().exclude(status=Event.Status.DRAFT)
+        else:
+            # Events created by the user + events where user is co_owner
+            co_owned_event_ids = list(
+                EventConnection.objects.filter(
+                    entity_type=EventConnection.EntityType.CO_OWNER,
+                    entity_id=user_id,
+                ).values_list('event_id', flat=True)
+            )
 
-        from django.db.models import Q
-        # Use _get_manageable_events() so cancelled events remain visible to their owner
-        events = _get_manageable_events().filter(
-            Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
-        )
+            from django.db.models import Q
+            # Use _get_manageable_events() so cancelled events remain visible to their owner
+            events = _get_manageable_events().filter(
+                Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
+            )
 
         # Optional status filter
         if status := request.query_params.get('status'):
@@ -312,10 +318,12 @@ class ManageEventCoOwnerAPI(APIView):
 
     def get(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage co-owners for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(
                 general_message='Permission denied.'
             ).get_failure_response()
@@ -332,10 +340,12 @@ class ManageEventCoOwnerAPI(APIView):
         Adds a single user as a co-owner.
         """
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage co-owners for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         target_user_id = request.data.get('user_id')
@@ -381,10 +391,12 @@ class ManageEventCoOwnerRemoveAPI(APIView):
 
     def delete(self, request, event_id, co_owner_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage co-owners for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         conn = EventConnection.objects.filter(
@@ -448,10 +460,12 @@ class ManageEventCollaboratorAPI(APIView):
 
     def get(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage collaborators for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         collabs = event.connections.filter(entity_type__in=COLLAB_TYPES)
@@ -469,10 +483,12 @@ class ManageEventCollaboratorAPI(APIView):
         }
         """
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage collaborators for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         entity_type = request.data.get('entity_type')
@@ -519,10 +535,12 @@ class ManageEventCollaboratorRemoveAPI(APIView):
 
     def delete(self, request, event_id, collaborator_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage collaborators for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         conn = EventConnection.objects.filter(
