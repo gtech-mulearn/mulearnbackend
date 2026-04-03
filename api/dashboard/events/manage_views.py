@@ -24,6 +24,7 @@ from .serializers import (
     can_manage_event,
     get_live_events,
 )
+from .event_logger import log_event_action
 
 
 MANAGEABLE_ROLES = {
@@ -211,16 +212,17 @@ class ManageEventDetailAPI(APIView):
                 general_message='Event is already cancelled.'
             ).get_failure_response()
 
+        old_status = event.status
         event.status = Event.Status.CANCELLED
         event.deleted_at = timezone.now()
         event.updated_by_id = user_id
         event.save()
 
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields=['status', 'deleted_at'],
+            user_id=user_id,
+            action=EventLog.Action.CANCELLED,
+            changes={'Status': {'from': old_status, 'to': Event.Status.CANCELLED}},
         )
 
         return CustomResponse(
@@ -292,11 +294,12 @@ class ManageEventPublishAPI(APIView):
         event.updated_by_id = user_id
         event.save()
 
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields=['status'],
+            user_id=user_id,
+            action=EventLog.Action.PUBLISHED,
+            changes={'Status': {'from': Event.Status.DRAFT, 'to': new_status}},
+            details={'new_status': new_status},
         )
 
         return CustomResponse(
@@ -376,6 +379,19 @@ class ManageEventCoOwnerAPI(APIView):
                 general_message='User is already a co-owner.'
             ).get_failure_response()
 
+        # Resolve co-owner's name for the log
+        co_owner_user = User.objects.filter(id=target_user_id).first()
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.CO_OWNER_ADDED,
+            details={
+                'name': co_owner_user.full_name if co_owner_user else target_user_id,
+                'muid': co_owner_user.muid if co_owner_user else None,
+                'user_id': target_user_id,
+            },
+        )
+
         return CustomResponse(
             general_message='Co-owner added.',
             response=EventCoOwnerSerializer(conn).data,
@@ -407,7 +423,20 @@ class ManageEventCoOwnerRemoveAPI(APIView):
         if not conn:
             return CustomResponse(general_message='Co-owner record not found.').get_failure_response()
 
+        # Resolve co-owner's name before deleting
+        co_owner_user = User.objects.filter(id=conn.entity_id).first()
         conn.delete()
+
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.CO_OWNER_REMOVED,
+            details={
+                'name': co_owner_user.full_name if co_owner_user else conn.entity_id,
+                'muid': co_owner_user.muid if co_owner_user else None,
+                'user_id': conn.entity_id,
+            },
+        )
         return CustomResponse(general_message='Co-owner removed.').get_success_response()
 
 
@@ -421,6 +450,30 @@ COLLAB_TYPES = [
     EventConnection.EntityType.COLLAB_CAMPUS_IG,
     EventConnection.EntityType.COLLAB_COMPANY,
 ]
+
+
+def _resolve_entity_name(entity_type, entity_id):
+    """
+    Return a human-readable name for a collaborator entity.
+    Used to populate the 'name' field in log details.
+    """
+    try:
+        if entity_type == EventConnection.EntityType.COLLAB_IG:
+            from db.task import InterestGroup
+            ig = InterestGroup.objects.filter(id=entity_id).first()
+            return ig.name if ig else entity_id
+        elif entity_type in (
+            EventConnection.EntityType.COLLAB_CAMPUS,
+            EventConnection.EntityType.COLLAB_COMPANY,
+        ):
+            from db.organization import Organization
+            org = Organization.objects.filter(id=entity_id).first()
+            return org.title if org else entity_id
+        elif entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
+            return f'Campus-IG ({entity_id})'
+    except Exception:
+        pass
+    return entity_id
 
 
 def _caller_can_respond(conn, user_id, roles):
@@ -521,6 +574,20 @@ class ManageEventCollaboratorAPI(APIView):
                 general_message='This entity has already been invited.'
             ).get_failure_response()
 
+        # Resolve entity name for the log
+        entity_name = _resolve_entity_name(entity_type, entity_id)
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_INVITED,
+            details={
+                'entity_type': entity_type,
+                'entity_id':   entity_id,
+                'name':        entity_name,
+                'role_label':  role_label or None,
+            },
+        )
+
         return CustomResponse(
             general_message='Collaborator invited.',
             response=EventCollaboratorSerializer(conn).data,
@@ -551,7 +618,19 @@ class ManageEventCollaboratorRemoveAPI(APIView):
         if not conn:
             return CustomResponse(general_message='Collaborator not found.').get_failure_response()
 
+        entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
         conn.delete()
+
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_REMOVED,
+            details={
+                'entity_type': conn.entity_type,
+                'entity_id':   conn.entity_id,
+                'name':        entity_name,
+            },
+        )
         return CustomResponse(general_message='Collaborator removed.').get_success_response()
 
 
@@ -593,6 +672,18 @@ class ManageEventCollaboratorAcceptAPI(APIView):
         conn.responded_at = timezone.now()
         conn.updated_by_id = user_id
         conn.save()
+
+        entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_ACCEPTED,
+            details={
+                'entity_type': conn.entity_type,
+                'entity_id':   conn.entity_id,
+                'name':        entity_name,
+            },
+        )
 
         return CustomResponse(
             general_message='Collaboration accepted.',
@@ -640,6 +731,19 @@ class ManageEventCollaboratorRejectAPI(APIView):
         conn.responded_at = timezone.now()
         conn.updated_by_id = user_id
         conn.save()
+
+        entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_REJECTED,
+            details={
+                'entity_type': conn.entity_type,
+                'entity_id':   conn.entity_id,
+                'name':        entity_name,
+                'reason':      conn.rejection_reason,
+            },
+        )
 
         return CustomResponse(
             general_message='Collaboration invite rejected.',

@@ -220,6 +220,26 @@ class EventInterest(models.Model):
 class EventLog(models.Model):
     """Audit trail of every save on an event."""
 
+    class Action:
+        """
+        Action-type constants stored inside changed_fields['action'].
+        Plain class (not TextChoices) — no DB column required.
+        """
+        CREATED          = 'event_created'
+        UPDATED          = 'event_updated'
+        PUBLISHED        = 'event_published'
+        CANCELLED        = 'event_cancelled'
+        FEATURED         = 'event_featured'
+        UNFEATURED       = 'event_unfeatured'
+        APPROVED         = 'event_approved'
+        REJECTED         = 'event_rejected'
+        CO_OWNER_ADDED   = 'co_owner_added'
+        CO_OWNER_REMOVED = 'co_owner_removed'
+        COLLAB_INVITED   = 'collaborator_invited'
+        COLLAB_ACCEPTED  = 'collaborator_accepted'
+        COLLAB_REJECTED  = 'collaborator_rejected'
+        COLLAB_REMOVED   = 'collaborator_removed'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     event = models.ForeignKey(
         Event, on_delete=models.CASCADE,

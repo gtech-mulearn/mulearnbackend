@@ -3,11 +3,29 @@ Meta API views — helpers to populate form dropdowns.
 """
 from rest_framework.views import APIView
 
-from db.task import InterestGroup
+from db.task import InterestGroup, Category
 from db.organization import Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+
+
+class EventCategoriesAPI(APIView):
+    """
+    GET /events/meta/categories/
+    Lists all valid event categories for use in create/edit form dropdowns.
+    No authentication required.
+    """
+
+    def get(self, request):
+        categories = Category.objects.filter(
+            entity_type=Category.EntityType.EVENT,
+        ).values('id', 'name', 'description').order_by('name')
+
+        return CustomResponse(
+            general_message='Event categories retrieved.',
+            response=list(categories),
+        ).get_success_response()
 
 
 class OrganizerOptionsAPI(APIView):
