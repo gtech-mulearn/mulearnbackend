@@ -172,6 +172,11 @@ class CampusExecomAPI(APIView):
         muid = request.data.get("muid")
         role_title = request.data.get("role_title")
 
+        if not muid or not role_title:
+            return CustomResponse(
+                general_message="muid and role_title are required"
+            ).get_failure_response()
+
         ALLOWED_ROLES = [
         RoleType.CAMPUS_LEAD.value,
         RoleType.LEAD_ENABLER.value,
@@ -179,11 +184,6 @@ class CampusExecomAPI(APIView):
         if role_title not in ALLOWED_ROLES and not role_title.endswith("CampusLead"):
             return CustomResponse(
                 general_message="Invalid role"
-            ).get_failure_response()
-
-        if not muid or not role_title:
-            return CustomResponse(
-                general_message="muid and role_title are required"
             ).get_failure_response()
 
         # Fetch user by muid
@@ -206,7 +206,7 @@ class CampusExecomAPI(APIView):
             ).get_failure_response()
 
         # Validate new user is a non-alumni campus member
-        if not validate_campus_member(new_user.id, org):
+        if not validate_campus_member(new_user.id, org.id):
             return CustomResponse(
                 general_message="User is not a member of your campus"
             ).get_failure_response()
