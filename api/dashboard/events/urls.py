@@ -45,6 +45,7 @@ urlpatterns = [
 
     # ── Public (wildcards last) ───────────────────────────────
     path('featured/', public_views.EventFeaturedAPI.as_view()),
+    path('is-featured/', public_views.EventFeaturedAPI.as_view()),
     path('<str:event_id>/interest/', public_views.EventInterestAPI.as_view()),
     path('<str:event_id>/', public_views.EventDetailAPI.as_view()),
     path('', public_views.EventListAPI.as_view()),
