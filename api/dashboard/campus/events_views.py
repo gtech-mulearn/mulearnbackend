@@ -9,6 +9,9 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
+from db.campus import CampusIGChapter
+from db.task import InterestGroup
+import uuid
 from . import serializers as campus_serializers
 from .dash_campus_helper import (
     get_user_college_link,
@@ -149,13 +152,22 @@ class CampusExecomAPI(APIView):
             org__org_type=OrganizationType.COLLEGE.value,
         ).values_list("user_id", flat=True)
 
+        # Extracted all non-execom system roles to properly support listing dynamic custom/IG roles
+        BLACKLIST_ROLES = [
+            RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
+            RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value,
+            RoleType.MENTOR.value, RoleType.COMPANY.value, RoleType.BOT_DEV.value,
+            RoleType.TECH_TEAM.value, RoleType.CAMPUS_ACTIVATION_TEAM.value,
+            RoleType.DISCORD_MANAGER.value, RoleType.EX_OFFICIAL.value,
+            RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
+            RoleType.MULEARNER.value, RoleType.STUDENT.value, RoleType.ASSOCIATE.value,
+            RoleType.IG_LEAD.value
+        ]
+
         execom_links = UserRoleLink.objects.filter(
             user_id__in=campus_user_ids
-        ).filter(
-            Q(role__title=RoleType.CAMPUS_LEAD.value)
-            | Q(role__title=RoleType.LEAD_ENABLER.value)
-            | Q(role__title=RoleType.ENABLER.value)
-            | Q(role__title__endswith="CampusLead")  # IG roles — no space
+        ).exclude(
+            role__title__in=BLACKLIST_ROLES
         ).select_related("user", "role")
 
         serializer = campus_serializers.ExecomMemberSerializer(
@@ -177,13 +189,20 @@ class CampusExecomAPI(APIView):
                 general_message="muid and role_title are required"
             ).get_failure_response()
 
-        ALLOWED_ROLES = [
-        RoleType.CAMPUS_LEAD.value,
-        RoleType.LEAD_ENABLER.value,
+        # System roles that are highly privileged and cannot be assigned by campus leads
+        BLACKLIST_ROLES = [
+            RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
+            RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value,
+            RoleType.MENTOR.value, RoleType.COMPANY.value, RoleType.BOT_DEV.value,
+            RoleType.TECH_TEAM.value, RoleType.CAMPUS_ACTIVATION_TEAM.value,
+            RoleType.DISCORD_MANAGER.value, RoleType.EX_OFFICIAL.value,
+            RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
+            RoleType.MULEARNER.value
         ]
-        if role_title not in ALLOWED_ROLES and not role_title.endswith("CampusLead"):
+        
+        if role_title in BLACKLIST_ROLES:
             return CustomResponse(
-                general_message="Invalid role"
+                general_message=f"Cannot assign highly privileged system role: {role_title}"
             ).get_failure_response()
 
         # Fetch user by muid
@@ -205,6 +224,25 @@ class CampusExecomAPI(APIView):
                 general_message="User has no organization"
             ).get_failure_response()
 
+        # Validate IG if the role indicates one
+        active_igs = CampusIGChapter.objects.filter(org=org, is_active=True).select_related("ig")
+        matched_active_ig = False
+        matched_inactive_or_missing_ig = False
+        
+        all_system_igs = InterestGroup.objects.all()
+        for ig in all_system_igs:
+            if role_title.startswith(f"{ig.code} ") or role_title.startswith(f"{ig.name} ") or role_title.startswith(f"{ig.code}_") or role_title.startswith(f"{ig.name}_") or role_title == f"{ig.code} CampusLead" or role_title == f"{ig.code}CampusLead":
+                ig_active_in_campus = active_igs.filter(ig=ig).exists()
+                if ig_active_in_campus:
+                    matched_active_ig = True
+                else:
+                    matched_inactive_or_missing_ig = True
+
+        if matched_inactive_or_missing_ig and not matched_active_ig:
+            return CustomResponse(
+                general_message="The Interest Group for this role is not active in your campus."
+            ).get_failure_response()
+
         # Validate new user is a non-alumni campus member
         if not validate_campus_member(new_user.id, org.id):
             return CustomResponse(
@@ -214,9 +252,12 @@ class CampusExecomAPI(APIView):
         # Fetch role by title
         role = Role.objects.filter(title=role_title).first()
         if role is None:
-            return CustomResponse(
-                general_message="Role not found"
-            ).get_failure_response()
+            role = Role.objects.create(
+                id=str(uuid.uuid4()),
+                title=role_title,
+                created_by_id=user_id,
+                updated_by_id=user_id
+            )
 
         # Remove existing holder of this role in the campus
         campus_user_ids = UserOrganizationLink.objects.filter(
@@ -297,3 +338,86 @@ class CampusExecomAPI(APIView):
         return CustomResponse(
             general_message="Role removed successfully"
         ).get_success_response()
+
+
+class CampusExecomRoleAPI(APIView):
+    """
+    GET  campus/execom/roles/  — list all assignable roles
+    POST campus/execom/roles/  — explicitly create a custom role
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(general_message="User has no organization").get_failure_response()
+
+        org = user_org_link.org
+        if org is None:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
+
+        roles = set()
+        roles.add(RoleType.CAMPUS_LEAD.value)
+        roles.add(RoleType.LEAD_ENABLER.value)
+        roles.add(RoleType.ENABLER.value)
+
+        # Active IGs
+        active_chapters = CampusIGChapter.objects.filter(org=org, is_active=True).select_related("ig")
+        for chapter in active_chapters:
+            if chapter.ig:
+                roles.add(f"{chapter.ig.code} CampusLead")
+                roles.add(f"{chapter.ig.name} Design Lead")
+                roles.add(f"{chapter.ig.name} Tech Lead")
+
+        # Global Custom Roles (exclude blacklisted system roles)
+        blacklist = [
+            RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
+            RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value,
+            RoleType.MENTOR.value, RoleType.COMPANY.value, RoleType.BOT_DEV.value,
+            RoleType.TECH_TEAM.value, RoleType.CAMPUS_ACTIVATION_TEAM.value,
+            RoleType.DISCORD_MANAGER.value, RoleType.EX_OFFICIAL.value,
+            RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
+            RoleType.MULEARNER.value
+        ]
+
+        custom_roles = Role.objects.exclude(title__in=blacklist).values_list("title", flat=True)
+        for cr in custom_roles:
+            roles.add(cr)
+
+        return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
+
+    @role_required([RoleType.CAMPUS_LEAD.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        role_title = request.data.get("role_title")
+
+        if not role_title:
+            return CustomResponse(general_message="role_title is required").get_failure_response()
+
+        blacklist = [
+            RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
+            RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value,
+            RoleType.MENTOR.value, RoleType.COMPANY.value, RoleType.BOT_DEV.value,
+            RoleType.TECH_TEAM.value, RoleType.CAMPUS_ACTIVATION_TEAM.value,
+            RoleType.DISCORD_MANAGER.value, RoleType.EX_OFFICIAL.value,
+            RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
+            RoleType.MULEARNER.value
+        ]
+
+        if role_title in blacklist:
+            return CustomResponse(general_message=f"Cannot create highly privileged system role: {role_title}").get_failure_response()
+
+        role = Role.objects.filter(title=role_title).first()
+        if role:
+            return CustomResponse(general_message="Role already exists").get_success_response()
+
+        Role.objects.create(
+            id=str(uuid.uuid4()),
+            title=role_title,
+            created_by_id=user_id,
+            updated_by_id=user_id
+        )
+
+        return CustomResponse(general_message="Role created successfully").get_success_response()
