@@ -392,6 +392,7 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRoleLink
         fields = [
+            "id",
             "user_id",
             "full_name",
             "muid",
