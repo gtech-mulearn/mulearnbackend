@@ -19,6 +19,7 @@ from .serializers import (
     EventDetailSerializer,
     EventCoOwnerSerializer,
     EventCollaboratorSerializer,
+    MyEventInviteSerializer,
     EventLogSerializer,
     EventWriteSerializer,
     can_manage_event,
@@ -748,4 +749,79 @@ class ManageEventCollaboratorRejectAPI(APIView):
         return CustomResponse(
             general_message='Collaboration invite rejected.',
             response=EventCollaboratorSerializer(conn).data,
+        ).get_success_response()
+
+
+class MyEventInvitesAPI(APIView):
+    """
+    GET /events/my-invites/
+    Returns all pending event collaboration invites directed at entities the current user leads.
+    """
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        
+        # If admin, fetch all pending collab invites globally
+        if RoleType.ADMIN.value in roles:
+            invites = EventConnection.objects.filter(
+                invite_status=EventConnection.InviteStatus.PENDING,
+                entity_type__in=COLLAB_TYPES
+            ).select_related('event').order_by('-created_at')
+            serializer = MyEventInviteSerializer(invites, many=True)
+            return CustomResponse(
+                general_message='Global pending invites retrieved.',
+                response=serializer.data
+            ).get_success_response()
+            
+        auth_ig_codes = []
+        is_campus_lead = RoleType.CAMPUS_LEAD.value in roles
+        is_company = RoleType.COMPANY.value in roles
+        has_any_campus_lead_role = False
+        
+        for role in roles:
+            if role.endswith(' IGLead'):
+                ig_code = role.replace(' IGLead', '')
+                auth_ig_codes.append(ig_code)
+            if role.endswith(' CampusLead') or role == RoleType.CAMPUS_LEAD.value:
+                has_any_campus_lead_role = True
+
+        from db.task import InterestGroup
+        from db.organization import UserOrganizationLink
+        from django.db.models import Q
+        
+        query = Q()
+        
+        if auth_ig_codes:
+            ig_ids = InterestGroup.objects.filter(code__in=auth_ig_codes).values_list('id', flat=True)
+            query |= Q(entity_type=EventConnection.EntityType.COLLAB_IG, entity_id__in=ig_ids)
+            
+        if is_campus_lead or is_company:
+            org_ids = UserOrganizationLink.objects.filter(
+                user_id=user_id, verified=True
+            ).values_list('org_id', flat=True)
+            query |= Q(
+                entity_type__in=[EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY], 
+                entity_id__in=org_ids
+            )
+            
+        if has_any_campus_lead_role:
+            query |= Q(entity_type=EventConnection.EntityType.COLLAB_CAMPUS_IG)
+            
+        if not query:
+            return CustomResponse(
+                general_message='Pending invites retrieved.',
+                response=[]
+            ).get_success_response()
+            
+        invites = EventConnection.objects.filter(
+            query,
+            invite_status=EventConnection.InviteStatus.PENDING,
+        ).select_related('event').order_by('-created_at')
+        
+        serializer = MyEventInviteSerializer(invites, many=True)
+        return CustomResponse(
+            general_message='Pending invites retrieved.',
+            response=serializer.data
         ).get_success_response()
