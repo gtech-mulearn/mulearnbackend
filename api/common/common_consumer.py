@@ -119,7 +119,10 @@ def db_signals(sender, instance, created=None, *args, **kwargs):
     if created or created == None:
         landing_stats.get_data(sender)
         data = landing_stats.data
-        async_to_sync(channel_layer.group_send)(
-            "landing_stats",
-            {"type": "send_data", "data": data}
-        )
+        try:
+            async_to_sync(channel_layer.group_send)(
+                "landing_stats",
+                {"type": "send_data", "data": data}
+            )
+        except Exception as e:
+            pass
