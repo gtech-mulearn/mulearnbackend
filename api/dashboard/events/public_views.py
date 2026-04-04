@@ -172,7 +172,9 @@ class EventFeaturedAPI(APIView):
             status=Event.Status.PUBLISHED,
         ).order_by('start_datetime')[:20]
 
-        serializer = EventListItemSerializer(events, many=True, context={'user_id': None})
+        serializer = EventListItemSerializer(
+            events, many=True, context={'user_id': None, 'request': request},
+        )
         return CustomResponse(
             general_message='Featured events retrieved.',
             response=serializer.data,

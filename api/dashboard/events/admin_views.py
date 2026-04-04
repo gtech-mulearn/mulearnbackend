@@ -63,7 +63,10 @@ class AdminEventListAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': JWTUtils.fetch_user_id(request)},
+            context={
+                'user_id': JWTUtils.fetch_user_id(request),
+                'request': request,
+            },
         )
         return CustomResponse().paginated_response(
             data=serializer.data,

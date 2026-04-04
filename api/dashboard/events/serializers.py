@@ -13,6 +13,8 @@ from db.organization import Organization
 from db.user import User
 from utils.utils import DateTimeUtils
 
+from .event_image_utils import resolve_event_image_url
+
 
 # ─────────────────────────────────────────────────────────────
 # MINIMAL / NESTED SHAPES
@@ -123,12 +125,18 @@ class MyEventInviteSerializer(EventCollaboratorSerializer):
     event_id = serializers.CharField(source='event.id', read_only=True)
     event_title = serializers.CharField(source='event.title', read_only=True)
     event_start_datetime = serializers.DateTimeField(source='event.start_datetime', read_only=True)
-    event_cover_image = serializers.CharField(source='event.cover_image', read_only=True, allow_null=True)
+    event_cover_image = serializers.SerializerMethodField()
 
     class Meta(EventCollaboratorSerializer.Meta):
         fields = EventCollaboratorSerializer.Meta.fields + [
             'event_id', 'event_title', 'event_start_datetime', 'event_cover_image'
         ]
+
+    def get_event_cover_image(self, obj):
+        ev = getattr(obj, 'event', None)
+        if not ev:
+            return None
+        return resolve_event_image_url(ev.cover_image, self.context.get('request'))
 
 
 
@@ -176,6 +184,7 @@ class EventListItemSerializer(serializers.ModelSerializer):
     organizer = OrganizerInfoSerializer(source='*')
     venue = EventVenueSerializer(source='*')
     viewer_interest_status = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
     category_id   = serializers.CharField(source='category.id',   allow_null=True, read_only=True)
 
@@ -188,6 +197,9 @@ class EventListItemSerializer(serializers.ModelSerializer):
             'interest_count', 'min_karma', 'tags', 'user_limit',
             'category_id', 'category_name', 'viewer_interest_status',
         ]
+
+    def get_cover_image(self, obj):
+        return resolve_event_image_url(obj.cover_image, self.context.get('request'))
 
     def get_viewer_interest_status(self, obj):
         user_id = self.context.get('user_id')
@@ -216,6 +228,8 @@ class EventDetailSerializer(serializers.ModelSerializer):
     viewer_interest_status = serializers.SerializerMethodField()
     viewer_can_access_registration = serializers.SerializerMethodField()
     viewer_access_blocked_reason = serializers.SerializerMethodField()
+    cover_image = serializers.SerializerMethodField()
+    banner_image = serializers.SerializerMethodField()
     category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
     category_id   = serializers.CharField(source='category.id',   allow_null=True, read_only=True)
     scope_org = MinimalCampusSerializer(read_only=True, allow_null=True)
@@ -238,6 +252,12 @@ class EventDetailSerializer(serializers.ModelSerializer):
             'viewer_access_blocked_reason',
             'created_by', 'updated_by', 'created_at', 'updated_at',
         ]
+
+    def get_cover_image(self, obj):
+        return resolve_event_image_url(obj.cover_image, self.context.get('request'))
+
+    def get_banner_image(self, obj):
+        return resolve_event_image_url(obj.banner_image, self.context.get('request'))
 
     def get_collaborators(self, obj):
         is_manage_view = self.context.get('is_manage_view', False)

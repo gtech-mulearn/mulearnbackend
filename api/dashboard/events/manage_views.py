@@ -5,6 +5,7 @@ Organiser / co-owner access required for all endpoints.
 import uuid
 from django.utils import timezone
 from django.db import transaction
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 
 from db.events import Event, EventConnection, EventLog
@@ -26,6 +27,7 @@ from .serializers import (
     get_live_events,
 )
 from .event_logger import log_event_action
+from .event_image_utils import delete_stale_event_media, merge_event_write_payload
 
 
 MANAGEABLE_ROLES = {
@@ -63,6 +65,7 @@ class ManageEventListCreateAPI(APIView):
     POST /events/manage/   → create a new event
     """
     authentication_classes = [CustomizePermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -98,7 +101,7 @@ class ManageEventListCreateAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': user_id},
+            context={'user_id': user_id, 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -114,8 +117,14 @@ class ManageEventListCreateAPI(APIView):
                 general_message='You do not have permission to create events.'
             ).get_failure_response()
 
+        payload, merge_error = merge_event_write_payload(
+            request, partial=False, event=None,
+        )
+        if merge_error:
+            return CustomResponse(general_message=merge_error).get_failure_response()
+
         serializer = EventWriteSerializer(
-            data=request.data,
+            data=payload,
             context={'user_id': user_id},
         )
         if not serializer.is_valid():
@@ -127,7 +136,9 @@ class ManageEventListCreateAPI(APIView):
 
         return CustomResponse(
             general_message='Event created successfully.',
-            response=EventDetailSerializer(event, context={'user_id': user_id}).data,
+            response=EventDetailSerializer(
+                event, context={'user_id': user_id, 'request': request},
+            ).data,
         ).get_success_response()
 
 
@@ -143,6 +154,7 @@ class ManageEventDetailAPI(APIView):
     DELETE /events/manage/<event_id>/  → soft cancel
     """
     authentication_classes = [CustomizePermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_managed_event(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -164,7 +176,9 @@ class ManageEventDetailAPI(APIView):
         logs = EventLog.objects.filter(event=event).order_by('-edited_at')
         event_data = EventDetailSerializer(
             event,
-            context={'user_id': user_id, 'is_manage_view': True},
+            context={
+                'user_id': user_id, 'is_manage_view': True, 'request': request,
+            },
         ).data
         event_data['edit_history'] = EventLogSerializer(logs, many=True).data
 
@@ -189,8 +203,17 @@ class ManageEventDetailAPI(APIView):
                 general_message=f'Cannot edit a {event.status} event.'
             ).get_failure_response()
 
+        old_cover = event.cover_image
+        old_banner = event.banner_image
+
+        payload, merge_error = merge_event_write_payload(
+            request, partial=partial, event=event,
+        )
+        if merge_error:
+            return CustomResponse(general_message=merge_error).get_failure_response()
+
         serializer = EventWriteSerializer(
-            event, data=request.data,
+            event, data=payload,
             partial=partial,
             context={'user_id': user_id},
         )
@@ -198,9 +221,14 @@ class ManageEventDetailAPI(APIView):
             return CustomResponse(general_message=serializer.errors).get_failure_response()
 
         serializer.save()
+        delete_stale_event_media(old_cover, event.cover_image)
+        delete_stale_event_media(old_banner, event.banner_image)
+
         return CustomResponse(
             general_message='Event updated successfully.',
-            response=EventDetailSerializer(event, context={'user_id': user_id}).data,
+            response=EventDetailSerializer(
+                event, context={'user_id': user_id, 'request': request},
+            ).data,
         ).get_success_response()
 
     def delete(self, request, event_id):
@@ -769,7 +797,9 @@ class MyEventInvitesAPI(APIView):
                 invite_status=EventConnection.InviteStatus.PENDING,
                 entity_type__in=COLLAB_TYPES
             ).select_related('event').order_by('-created_at')
-            serializer = MyEventInviteSerializer(invites, many=True)
+            serializer = MyEventInviteSerializer(
+                invites, many=True, context={'request': request},
+            )
             return CustomResponse(
                 general_message='Global pending invites retrieved.',
                 response=serializer.data
@@ -820,7 +850,9 @@ class MyEventInvitesAPI(APIView):
             invite_status=EventConnection.InviteStatus.PENDING,
         ).select_related('event').order_by('-created_at')
         
-        serializer = MyEventInviteSerializer(invites, many=True)
+        serializer = MyEventInviteSerializer(
+            invites, many=True, context={'request': request},
+        )
         return CustomResponse(
             general_message='Pending invites retrieved.',
             response=serializer.data
