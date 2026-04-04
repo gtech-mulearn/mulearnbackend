@@ -119,6 +119,19 @@ class EventCollaboratorSerializer(serializers.ModelSerializer):
         return None
 
 
+class MyEventInviteSerializer(EventCollaboratorSerializer):
+    event_id = serializers.CharField(source='event.id', read_only=True)
+    event_title = serializers.CharField(source='event.title', read_only=True)
+    event_start_datetime = serializers.DateTimeField(source='event.start_datetime', read_only=True)
+    event_cover_image = serializers.CharField(source='event.cover_image', read_only=True, allow_null=True)
+
+    class Meta(EventCollaboratorSerializer.Meta):
+        fields = EventCollaboratorSerializer.Meta.fields + [
+            'event_id', 'event_title', 'event_start_datetime', 'event_cover_image'
+        ]
+
+
+
 # ─────────────────────────────────────────────────────────────
 # CO-OWNERS
 # ─────────────────────────────────────────────────────────────
