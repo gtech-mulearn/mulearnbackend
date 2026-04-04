@@ -38,7 +38,7 @@ class AdminEventListAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        events = get_live_events()
+        events = Event.objects.all()
 
         params = request.query_params
         if status := params.get('status'):
