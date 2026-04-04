@@ -80,6 +80,11 @@ urlpatterns = [
         name="campus-execom",
     ),
     path(
+        "execom/roles/",
+        events_views.CampusExecomRoleAPI.as_view(),
+        name="campus-execom-roles",
+    ),
+    path(
         "execom/<str:member_id>/",
         events_views.CampusExecomAPI.as_view(),
         name="campus-execom-delete",
