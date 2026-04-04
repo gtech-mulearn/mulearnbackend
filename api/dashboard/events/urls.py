@@ -40,6 +40,9 @@ urlpatterns = [
     # Manage event detail (GET / PUT / PATCH / DELETE)
     path('manage/<str:event_id>/', manage_views.ManageEventDetailAPI.as_view()),
 
+    # ── User Dashboard ───────────────────────────────
+    path('my-invites/', manage_views.MyEventInvitesAPI.as_view()),
+
     # ── Public (wildcards last) ───────────────────────────────
     path('featured/', public_views.EventFeaturedAPI.as_view()),
     path('<str:event_id>/interest/', public_views.EventInterestAPI.as_view()),
