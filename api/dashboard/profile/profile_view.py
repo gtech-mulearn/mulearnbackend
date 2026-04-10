@@ -26,6 +26,7 @@ from db.user import (
     UserEndgoals,
     UserRoleLink,
     UserSettings,
+    UserProfile,
 )
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -726,3 +727,108 @@ class UserPermuteAPI(APIView):
 
         serializer = profile_serializer.UserPermuteSerializer(user, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class UserProfileEnhancedAPI(APIView):
+    """
+    User Profile Enhancement API
+
+    Handles extended user profile information including bio, projects, and experience.
+
+    Endpoints:
+        GET  /api/v1/dashboard/profile/user-profile/ - Fetch user profile
+        PATCH /api/v1/dashboard/profile/user-profile/ - Update user profile
+    """
+
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        """
+        Fetch full user profile with bio, projects, and experience
+
+        Returns:
+            User profile with all details
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        # Get or create user profile
+        user_profile, created = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={"created_by_id": user_id, "updated_by_id": user_id}
+        )
+
+        serializer = profile_serializer.UserProfileSerializer(user_profile, many=False)
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    def patch(self, request):
+        """
+        Update user profile fields (bio, projects, experience)
+
+        Request body:
+        {
+            "bio": "User biography",
+            "projects": [
+                {
+                    "title": "Project Title",
+                    "link": "https://github.com/...",
+                    "description": "Project description",
+                    "tags": ["React", "Firebase"]
+                }
+            ],
+            "experience": [
+                {
+                    "company": "Company Name",
+                    "position": "Position",
+                    "duration": "2020-2023"
+                }
+            ]
+        }
+
+        Returns:
+            Updated user profile
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        # Get or create user profile
+        user_profile, created = UserProfile.objects.get_or_create(
+            user=user,
+            defaults={"created_by_id": user_id, "updated_by_id": user_id}
+        )
+
+        serializer = profile_serializer.UserProfileUpdateSerializer(
+            user_profile, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_NAME.value,
+                WebHookActions.UPDATE.value,
+                user_id,
+            )
+
+            response_serializer = profile_serializer.UserProfileSerializer(
+                user_profile, many=False
+            )
+            return CustomResponse(
+                response=response_serializer.data
+            ).get_success_response()
+
+        return CustomResponse(
+            general_message="Invalid data",
+            error=serializer.errors
+        ).get_failure_response()

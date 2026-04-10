@@ -17,7 +17,7 @@ from db.task import (
     UserLvlLink,
     UserIgLvlLink,
 )
-from db.user import User, UserSettings, Socials
+from db.user import User, UserSettings, Socials, UserProfile
 from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import (
@@ -577,3 +577,80 @@ class UserPermuteSerializer(serializers.ModelSerializer):
         org_type = self._get_org_type(obj)
         user_org_link = self._get_user_org_link(obj, org_type)
         return user_org_link.org.title if user_org_link and user_org_link.org else None
+
+
+class UserProfileSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id", read_only=True)
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+    muid = serializers.CharField(source="user.muid", read_only=True)
+    profile_pic = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserProfile
+        fields = [
+            "user_id",
+            "full_name",
+            "email",
+            "muid",
+            "profile_pic",
+            "bio",
+            "projects",
+            "experience",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "user_id",
+            "full_name",
+            "email",
+            "muid",
+            "profile_pic",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_profile_pic(self, obj):
+        return obj.user.profile_pic
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserProfile
+        fields = [
+            "bio",
+            "projects",
+            "experience",
+        ]
+
+    def validate_projects(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Projects must be a list")
+        
+        for project in value:
+            if not isinstance(project, dict):
+                raise serializers.ValidationError("Each project must be an object")
+            
+            required_fields = ["title", "link", "description", "tags"]
+            for field in required_fields:
+                if field not in project:
+                    raise serializers.ValidationError(f"Project must have '{field}' field")
+        
+        return value
+
+    def validate_experience(self, value):
+        if not isinstance(value, list):
+            raise serializers.ValidationError("Experience must be a list")
+        
+        for exp in value:
+            if not isinstance(exp, dict):
+                raise serializers.ValidationError("Each experience entry must be an object")
+        
+        return value
+
+    def update(self, instance, validated_data):
+        instance.bio = validated_data.get("bio", instance.bio)
+        instance.projects = validated_data.get("projects", instance.projects)
+        instance.experience = validated_data.get("experience", instance.experience)
+        instance.save()
+        return instance

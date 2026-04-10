@@ -262,3 +262,21 @@ class UserCouponLink(models.Model):
         managed = False
 
         db_table = 'user_coupon_link'
+
+
+class UserProfile(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name='user_profile_user')
+    bio = models.TextField(max_length=500, blank=True, null=True)
+    projects = models.JSONField(default=list, blank=True, null=True)
+    experience = models.JSONField(default=list, blank=True, null=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
+                                   related_name='user_profile_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
+                                   related_name='user_profile_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'user_profile'
