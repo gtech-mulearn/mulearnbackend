@@ -134,6 +134,26 @@ class College(models.Model):
         db_table = 'college'
 
 
+class CampusExecom(models.Model):
+    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    org         = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='campus_execom_org')
+    user        = models.ForeignKey(User, on_delete=models.CASCADE, related_name='campus_execom_user')
+    role        = models.ForeignKey(Role, on_delete=models.SET_NULL, null=True, related_name='campus_execom_role')
+    updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='campus_execom_updated_by')
+    updated_at  = models.DateTimeField(auto_now=True)
+    created_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='campus_execom_created_by')
+    created_at  = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'campus_execom'
+        unique_together = ('org', 'user')
+        indexes = [
+            models.Index(fields=['org', 'user']),
+            models.Index(fields=['org']),
+        ]
+
+
 class OrgDiscordLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36)
     discord_id = models.CharField(unique=True, max_length=36)

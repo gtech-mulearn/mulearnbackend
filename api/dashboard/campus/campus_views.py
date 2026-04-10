@@ -2,7 +2,7 @@ from django.db.models import Count, F,Sum, Subquery, OuterRef
 from django.db.models import Q
 from rest_framework.views import APIView
 from collections import defaultdict
-from db.organization import Organization, UserOrganizationLink
+from db.organization import Organization, UserOrganizationLink, CampusExecom
 from db.task import Level, Wallet, InterestGroup
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -829,5 +829,190 @@ class CampusKarmaByClusterAPI(APIView):
         return CustomResponse(
             response=response
         ).get_success_response()
+
+
+class CampusExecomAPI(APIView):
+    """
+    Campus Execom API
+
+    This API view allows authorized users to manage the Executive Committee
+    members of a campus (college).
+
+    Endpoints:
+        GET  /api/campus/:id/execom      - View all execom members
+        POST /api/campus/:id/execom      - Add a new execom member
+        DELETE /api/campus/:id/execom/:uid - Remove an execom member
+    """
+
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request, org_id):
+        """
+        Get all execom members for a campus
+
+        Args:
+            request: HTTP request object
+            org_id: Organization/Campus ID
+
+        Returns:
+            List of execom members with their details
+        """
+        if not org_id:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        org = Organization.objects.filter(
+            id=org_id, org_type=OrganizationType.COLLEGE.value
+        ).first()
+
+        if not org:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        # Check if user has permission to view execom (Campus Lead or Enabler)
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(
+            user_id=user_id, org=org
+        ).first()
+
+        if not user_org_link:
+            return CustomResponse(
+                general_message="You don't have access to this campus"
+            ).get_failure_response()
+
+        execom_members = CampusExecom.objects.filter(org=org).select_related(
+            "user", "role"
+        )
+
+        serializer = serializers.CampusExecomSerializer(
+            execom_members, many=True
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    def post(self, request, org_id):
+        """
+        Add a new member to the campus execom
+
+        Args:
+            request: HTTP request object with user_id and role_id
+            org_id: Organization/Campus ID
+
+        Returns:
+            Created execom member details
+        """
+        if not org_id:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        org = Organization.objects.filter(
+            id=org_id, org_type=OrganizationType.COLLEGE.value
+        ).first()
+
+        if not org:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        # Check if user is campus admin/lead
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(
+            user_id=user_id, org=org
+        ).first()
+
+        if not user_org_link:
+            return CustomResponse(
+                general_message="You don't have access to manage this campus execom"
+            ).get_failure_response()
+
+        serializer = serializers.CampusExecomCreateSerializer(
+            data=request.data,
+            context={"org_id": org_id, "user_id": user_id},
+        )
+
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message="Invalid data",
+                error=serializer.errors,
+            ).get_failure_response()
+
+        try:
+            execom = serializer.save()
+            response_serializer = serializers.CampusExecomSerializer(execom)
+            return CustomResponse(
+                response=response_serializer.data
+            ).get_success_response()
+        except Exception as e:
+            return CustomResponse(
+                general_message=str(e)
+            ).get_failure_response()
+
+
+class CampusExecomDetailAPI(APIView):
+    """
+    Campus Execom Detail API
+
+    Delete a member from the campus execom
+    """
+
+    authentication_classes = [CustomizePermission]
+
+    def delete(self, request, org_id, uid):
+        """
+        Remove a member from the campus execom
+
+        Args:
+            request: HTTP request object
+            org_id: Organization/Campus ID
+            uid: User ID to remove from execom
+
+        Returns:
+            Success message
+        """
+        if not org_id:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        org = Organization.objects.filter(
+            id=org_id, org_type=OrganizationType.COLLEGE.value
+        ).first()
+
+        if not org:
+            return CustomResponse(
+                general_message="Campus not found"
+            ).get_failure_response()
+
+        # Check if user is authorized to manage execom
+        user_id = JWTUtils.fetch_user_id(request)
+        user_org_link = UserOrganizationLink.objects.filter(
+            user_id=user_id, org=org
+        ).first()
+
+        if not user_org_link:
+            return CustomResponse(
+                general_message="You don't have access to manage this campus execom"
+            ).get_failure_response()
+
+        # Check if execom member exists
+        execom = CampusExecom.objects.filter(org=org, user_id=uid).first()
+
+        if not execom:
+            return CustomResponse(
+                general_message="Execom member not found"
+            ).get_failure_response()
+
+        try:
+            execom.delete()
+            return CustomResponse(
+                general_message="Execom member removed successfully"
+            ).get_success_response()
+        except Exception as e:
+            return CustomResponse(
+                general_message=str(e)
+            ).get_failure_response()
 
 # ...existing code...

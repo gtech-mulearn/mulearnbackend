@@ -70,14 +70,14 @@ urlpatterns = [
         name="campus-event-distribution",
     ),
     path(
-        "execom/",
-        events_views.CampusExecomAPI.as_view(),
+        "<str:org_id>/execom/",
+        campus_views.CampusExecomAPI.as_view(),
         name="campus-execom",
     ),
     path(
-        "execom/<str:member_id>/",
-        events_views.CampusExecomAPI.as_view(),
-        name="campus-execom-delete",
+        "<str:org_id>/execom/<str:uid>/",
+        campus_views.CampusExecomDetailAPI.as_view(),
+        name="campus-execom-detail",
     ),
     path(
         "<str:org_id>/",

@@ -4,9 +4,9 @@ from datetime import timedelta
 from django.db.models import Sum
 from rest_framework import serializers
 
-from db.organization import Organization, UserOrganizationLink, College
+from db.organization import Organization, UserOrganizationLink, College, CampusExecom
 from db.task import KarmaActivityLog,InterestGroup
-from db.user import User, UserRoleLink
+from db.user import User, UserRoleLink, Role
 from utils.types import OrganizationType
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
@@ -389,3 +389,82 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
             ig_name = title.replace("CampusLead", "").strip()
             return ig_name or None
         return None
+
+
+class CampusExecomSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id", read_only=True)
+    full_name = serializers.CharField(source="user.full_name", read_only=True)
+    muid = serializers.CharField(source="user.muid", read_only=True)
+    email = serializers.CharField(source="user.email", read_only=True)
+    profile_pic = serializers.SerializerMethodField()
+    role_id = serializers.CharField(source="role.id")
+    role_title = serializers.CharField(source="role.title", read_only=True)
+
+    class Meta:
+        model = CampusExecom
+        fields = [
+            "id",
+            "user_id",
+            "full_name",
+            "muid",
+            "email",
+            "profile_pic",
+            "role_id",
+            "role_title",
+            "created_at",
+            "updated_at",
+        ]
+        read_only_fields = [
+            "id",
+            "user_id",
+            "full_name",
+            "muid",
+            "email",
+            "profile_pic",
+            "role_title",
+            "created_at",
+            "updated_at",
+        ]
+
+    def get_profile_pic(self, obj):
+        return obj.user.profile_pic
+
+
+class CampusExecomCreateSerializer(serializers.Serializer):
+    user_id = serializers.CharField()
+    role_id = serializers.CharField()
+
+    def validate_user_id(self, value):
+        if not User.objects.filter(id=value).exists():
+            raise serializers.ValidationError("User does not exist")
+        return value
+
+    def validate_role_id(self, value):
+        if not Role.objects.filter(id=value).exists():
+            raise serializers.ValidationError("Role does not exist")
+        return value
+
+    def create(self, validated_data):
+        org_id = self.context.get("org_id")
+        user_id = self.context.get("user_id")
+        
+        org = Organization.objects.get(id=org_id)
+        user = User.objects.get(id=validated_data["user_id"])
+        role = Role.objects.get(id=validated_data["role_id"])
+
+        execom, created = CampusExecom.objects.get_or_create(
+            org=org,
+            user=user,
+            defaults={
+                "role": role,
+                "created_by_id": user_id,
+                "updated_by_id": user_id,
+            }
+        )
+
+        if not created:
+            execom.role = role
+            execom.updated_by_id = user_id
+            execom.save()
+
+        return execom
