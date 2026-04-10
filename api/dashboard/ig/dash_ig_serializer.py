@@ -2,19 +2,24 @@ from rest_framework import serializers
 import json
 
 from db.task import InterestGroup
-from db.user import User
+from db.user import User, Socials
 
 
 def _resolve_muid_list(muid_list):
     """
     Given a list like [{"muid": "foo@mulearn"}, ...], fetch each user's
-    details from the DB and return an enriched list:
+    details (including socials) from the DB and return an enriched list:
     [
         {
             "muid": "foo@mulearn",
             "full_name": "Foo Bar",
             "email": "foo@example.com",
-            "profile_pic": "https://..."   # or null
+            "profile_pic": "https://...",   # or null
+            "socials": {
+                "github": "...",
+                "linkedin": "...",
+                ...                          # null for unset fields
+            }
         },
         ...
     ]
@@ -28,8 +33,17 @@ def _resolve_muid_list(muid_list):
     if not muids:
         return muid_list
 
-    users_qs = User.objects.filter(muid__in=muids).values("muid", "full_name", "email", "id")
-    user_map = {u["muid"]: u for u in users_qs}
+    # Batch-fetch users
+    user_objs = User.objects.filter(muid__in=muids)
+    user_map = {u.muid: u for u in user_objs}
+
+    # Batch-fetch socials keyed by user_id
+    user_ids = [u.id for u in user_objs]
+    socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
+        "user_id", "github", "facebook", "instagram", "linkedin",
+        "dribble", "behance", "stackoverflow", "medium", "hackerrank"
+    )
+    socials_map = {s["user_id"]: s for s in socials_qs}
 
     enriched = []
     for item in muid_list:
@@ -41,18 +55,25 @@ def _resolve_muid_list(muid_list):
         user = user_map.get(muid)
 
         if user:
-            # Compute profile_pic using the User model property
-            try:
-                user_obj = User.objects.get(id=user["id"])
-                profile_pic = user_obj.profile_pic
-            except User.DoesNotExist:
-                profile_pic = None
+            raw_socials = socials_map.get(user.id)
+            socials = {
+                "github":        raw_socials.get("github")        if raw_socials else None,
+                "facebook":      raw_socials.get("facebook")      if raw_socials else None,
+                "instagram":     raw_socials.get("instagram")     if raw_socials else None,
+                "linkedin":      raw_socials.get("linkedin")      if raw_socials else None,
+                "dribble":       raw_socials.get("dribble")       if raw_socials else None,
+                "behance":       raw_socials.get("behance")       if raw_socials else None,
+                "stackoverflow": raw_socials.get("stackoverflow") if raw_socials else None,
+                "medium":        raw_socials.get("medium")        if raw_socials else None,
+                "hackerrank":    raw_socials.get("hackerrank")    if raw_socials else None,
+            }
 
             enriched.append({
-                "muid": muid,
-                "full_name": user["full_name"],
-                "email": user["email"],
-                "profile_pic": profile_pic,
+                "muid":        muid,
+                "full_name":   user.full_name,
+                "email":       user.email,
+                "profile_pic": user.profile_pic,
+                "socials":     socials,
             })
         else:
             # muid not found — include as-is with null details
