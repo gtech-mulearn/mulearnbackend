@@ -3,11 +3,29 @@ Meta API views — helpers to populate form dropdowns.
 """
 from rest_framework.views import APIView
 
-from db.task import InterestGroup
+from db.task import InterestGroup, Category
 from db.organization import Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+
+
+class EventCategoriesAPI(APIView):
+    """
+    GET /events/meta/categories/
+    Lists all valid event categories for use in create/edit form dropdowns.
+    No authentication required.
+    """
+
+    def get(self, request):
+        categories = Category.objects.filter(
+            entity_type=Category.EntityType.EVENT,
+        ).values('id', 'name', 'description').order_by('name')
+
+        return CustomResponse(
+            general_message='Event categories retrieved.',
+            response=list(categories),
+        ).get_success_response()
 
 
 class OrganizerOptionsAPI(APIView):
@@ -23,16 +41,16 @@ class OrganizerOptionsAPI(APIView):
         roles = JWTUtils.fetch_role(request)
 
         options = {
-            'global_ig': [],      # IGs the user leads globally
-            'campus_ig': [],      # Campus IG chapters the user leads (code present in roles)
-            'campus': [],         # Campus orgs the user leads
-            'company': [],        # Companies the user belongs to with Company role
-            'admin': False,       # True if user is admin
+            'can_create_as_ig': [],      # IGs the user leads globally
+            'can_create_as_campus_ig': [],      # Campus IG chapters the user leads (code present in roles)
+            'can_create_as_campus': [],         # Campus orgs the user leads
+            'can_create_as_company': [],        # Companies the user belongs to with Company role
+            'can_create_as_admin': False,       # True if user is admin
         }
 
         # Admin can create events as admin
         if RoleType.ADMIN.value in roles:
-            options['admin'] = True
+            options['can_create_as_admin'] = True
 
         # Global IG leads: roles like "WEBDEV IGLead"
         ig_lead_codes = [
@@ -43,7 +61,7 @@ class OrganizerOptionsAPI(APIView):
             igs = InterestGroup.objects.filter(code__in=ig_lead_codes).values(
                 'id', 'name', 'icon', 'code'
             )
-            options['global_ig'] = list(igs)
+            options['can_create_as_ig'] = list(igs)
 
         # Campus IG leads: roles like "WEBDEV CampusLead"
         ci_lead_codes = [
@@ -54,7 +72,7 @@ class OrganizerOptionsAPI(APIView):
             igs = InterestGroup.objects.filter(code__in=ci_lead_codes).values(
                 'id', 'name', 'icon', 'code'
             )
-            options['campus_ig'] = list(igs)
+            options['can_create_as_campus_ig'] = list(igs)
 
         # Campus Lead or Zonal/District leads can create campus events
         campus_lead_roles = {
@@ -68,7 +86,7 @@ class OrganizerOptionsAPI(APIView):
             ).select_related('org')
             for link in user_orgs:
                 if link.org.org_type in ('College', 'School'):
-                    options['campus'].append({
+                    options['can_create_as_campus'].append({
                         'id': link.org.id,
                         'title': link.org.title,
                         'org_type': link.org.org_type,
@@ -81,7 +99,7 @@ class OrganizerOptionsAPI(APIView):
             ).select_related('org')
             for link in user_orgs:
                 if link.org.org_type == 'Company':
-                    options['company'].append({
+                    options['can_create_as_company'].append({
                         'id': link.org.id,
                         'title': link.org.title,
                     })

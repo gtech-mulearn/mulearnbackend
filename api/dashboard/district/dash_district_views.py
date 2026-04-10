@@ -23,6 +23,11 @@ class DistrictDetailAPI(APIView):
 
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         serializer = dash_district_serializer.DistrictDetailsSerializer(
             user_org_link, many=False
         )
@@ -38,6 +43,11 @@ class DistrictTopThreeCampusAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         org_karma_dict = (
             UserOrganizationLink.objects.filter(
@@ -78,6 +88,11 @@ class DistrictStudentLevelStatusAPI(APIView):
 
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         district = user_org_link.org.district
 
         levels = Level.objects.all()
@@ -97,13 +112,18 @@ class DistrictStudentDetailsAPI(APIView):
 
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         rank = (
             Wallet.objects.filter(
                 user__user_organization_link_user__org__district=user_org_link.org.district,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma", '-update_at', "created_at")
+            .order_by("-karma", "-updated_at", "created_at")
             .values(
                 "user_id",
                 "karma",
@@ -158,13 +178,18 @@ class DistrictStudentDetailsCSVAPI(APIView):
 
         user_org_link = get_user_college_link(user_id)
 
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
+
         rank = (
             Wallet.objects.filter(
                 user__user_organization_link_user__org__district=user_org_link.org.district,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma", '-updated_at', "created_at")
+            .order_by("-karma", "-updated_at", "created_at")
             .values(
                 "user_id",
                 "karma",
@@ -200,6 +225,11 @@ class DistrictsCollageDetailsAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
@@ -264,6 +294,11 @@ class DistrictsCollageDetailsCSVAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(

@@ -8,7 +8,9 @@ from .achievement import Achievement
 
 class Company(models.Model):
     STATUS_CHOICES = [
+        ('pending_verification', 'Pending Verification'),
         ('active', 'Active'),
+        ('rejected', 'Rejected'),
         ('inactive', 'Inactive'),
         ('blocked', 'Blocked'),
     ]
@@ -22,8 +24,18 @@ class Company(models.Model):
     website_link = models.TextField(blank=True, null=True)
     email = models.EmailField(max_length=100, blank=True, null=True)
     slug = models.CharField(max_length=100, unique=True)
-    status = models.CharField(max_length=10, choices=STATUS_CHOICES, blank=True, null=True)
+    status = models.CharField(max_length=30, choices=STATUS_CHOICES, blank=True, null=True)
     location = models.CharField(max_length=150, blank=True, null=True)
+    legal_name = models.CharField(max_length=150, blank=True, null=True)
+    registration_number = models.CharField(max_length=100, blank=True, null=True)
+    tax_id = models.CharField(max_length=100, blank=True, null=True)
+    company_size = models.CharField(max_length=50, blank=True, null=True)
+    linkedin_url = models.TextField(blank=True, null=True)
+    verification_document_url = models.TextField(blank=True, null=True)
+    verification_requested_at = models.DateTimeField(blank=True, null=True)
+    verified_at = models.DateTimeField(blank=True, null=True)
+    verified_by = models.CharField(max_length=36, blank=True, null=True)
+    rejection_reason = models.TextField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     deleted_at = models.DateTimeField(blank=True, null=True)

@@ -215,3 +215,19 @@ DEFAULT_HACKATHON_FORM_FIELDS = {
     "linkedin": "input",
     "bio": "input",
 }
+
+
+class SocialPlatformType(Enum):
+    INSTAGRAM = "instagram"
+    LINKEDIN = "linkedin"
+    TWITTER = "twitter"
+    FACEBOOK = "facebook"
+    YOUTUBE = "youtube"
+    DISCORD = "discord"
+    GITHUB = "github"
+    WEBSITE = "website"
+    OTHER = "other"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]

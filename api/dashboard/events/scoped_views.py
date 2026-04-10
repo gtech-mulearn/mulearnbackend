@@ -50,7 +50,7 @@ class IGEventListAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': _viewer_id(request)},
+            context={'user_id': _viewer_id(request), 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -91,7 +91,7 @@ class ClusterEventListAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': _viewer_id(request)},
+            context={'user_id': _viewer_id(request), 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -133,7 +133,7 @@ class CampusEventListAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': _viewer_id(request)},
+            context={'user_id': _viewer_id(request), 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -162,7 +162,7 @@ class CampusIGEventListAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': _viewer_id(request)},
+            context={'user_id': _viewer_id(request), 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -195,7 +195,7 @@ class CompanyEventListAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': _viewer_id(request)},
+            context={'user_id': _viewer_id(request), 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
