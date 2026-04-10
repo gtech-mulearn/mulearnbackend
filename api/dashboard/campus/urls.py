@@ -84,7 +84,6 @@ urlpatterns = [
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",
     ),
-
     path(
         "<str:org_id>/leaderboard/",
         campus_views.CampusStudentLeaderboardAPI.as_view(),
@@ -94,6 +93,5 @@ urlpatterns = [
         "<str:org_id>/karma-by-cluster/",
         campus_views.CampusKarmaByClusterAPI.as_view(),
         name="campus-karma-by-cluster",
-),
-
+    ),
 ]
