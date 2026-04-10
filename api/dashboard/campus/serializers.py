@@ -5,14 +5,17 @@ from django.db.models import Sum
 from rest_framework import serializers
 
 from db.organization import Organization, UserOrganizationLink, College
-from db.task import KarmaActivityLog,InterestGroup
+from db.task import KarmaActivityLog, InterestGroup, UserIgLink
+from db.campus import CampusIGChapter, CampusSocialLink
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
-from utils.types import RoleType
+from utils.types import RoleType, SocialPlatformType
 from utils.utils import DateTimeUtils
+from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead
 from db.events import Event
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
+    org_id = serializers.ReadOnlyField(source="id")
     college_name = serializers.ReadOnlyField(source="title")
     campus_code = serializers.ReadOnlyField(source="code")
     campus_zone = serializers.ReadOnlyField(source="district.zone.name")
@@ -21,12 +24,14 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     total_members = serializers.SerializerMethodField()
     active_members = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
    
     
 
     class Meta:
         model = Organization
         fields = [
+            "org_id",
             "college_name",
             "campus_code",
             "campus_zone",
@@ -35,6 +40,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             "total_members",
             "active_members",
             "rank",
+            "social_links",
         ]
 
     def get_campus_level(self, obj):
@@ -88,11 +94,20 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
             position = keys_list.index(obj.id)
             return position + 1
 
-    
+    def get_social_links(self, obj):
+        links = CampusSocialLink.objects.filter(org=obj)
+        return CampusSocialLinkSerializer(links, many=True).data
 
+
+
+class CampusListSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = Organization
+        fields = ["id", "title", "code"]
 
 
 class CampusDetailsSerializer(serializers.ModelSerializer):
+    org_id = serializers.ReadOnlyField(source="org.id")
     college_name = serializers.ReadOnlyField(source="org.title")
     campus_code = serializers.ReadOnlyField(source="org.code")
     campus_zone = serializers.ReadOnlyField(source="org.district.zone.name")
@@ -106,9 +121,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     karma_last_7_days = serializers.SerializerMethodField()
     karma_last_30_days = serializers.SerializerMethodField()
     active_ig_count = serializers.SerializerMethodField()
+    social_links = serializers.SerializerMethodField()
+
     class Meta:
         model = UserOrganizationLink
         fields = [
+            "org_id",
             "college_name",
             "campus_code",
             "campus_zone",
@@ -121,6 +139,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             "karma_last_7_days",
             "karma_last_30_days",
             "active_ig_count",
+            "social_links",
         ]
 
     def get_lead(self, obj):
@@ -149,6 +168,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             return campus.level
 
         return None
+
+   
 
     def get_total_members(self, obj):
         return obj.org.user_organization_link_org.count()
@@ -223,6 +244,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             .distinct()
             .count()
         )
+
+    def get_social_links(self, obj):
+        links = CampusSocialLink.objects.filter(org=obj.org)
+        return CampusSocialLinkSerializer(links, many=True).data
 
 
 class CampusStudentDetailsSerializer(serializers.Serializer):
@@ -367,6 +392,7 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
     class Meta:
         model = UserRoleLink
         fields = [
+            "id",
             "user_id",
             "full_name",
             "muid",
@@ -376,7 +402,7 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
         ]
 
     def get_profile_pic(self, obj):
-        return obj.user.profile_pic
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
 
     def get_ig_name(self, obj):
         title = obj.role.title
@@ -389,3 +415,182 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
             ig_name = title.replace("CampusLead", "").strip()
             return ig_name or None
         return None
+
+        
+class CampusLeaderboardSerializer(CampusStudentDetailsSerializer):
+    # ── override fields (email & mobile removed — public endpoint) ──────────
+    email           = None
+    mobile          = None
+
+    # ── NEW fields not in CampusStudentDetailsSerializer ────────────────────
+    profile_pic     = serializers.SerializerMethodField()
+    ig_count        = serializers.IntegerField(default=0)
+
+    class Meta(CampusStudentDetailsSerializer.Meta):
+        # inherit parent Meta and extend fields
+        fields = (
+            "rank",
+            "user_id",
+            "full_name",
+            "muid",
+            "profile_pic",       
+            "karma",
+            "level",
+            "join_date",
+            "last_karma_gained",
+            "graduation_year",
+            "department",
+            "is_alumni",
+            "ig_count",          
+          
+        )
+
+    def get_profile_pic(self, obj):
+        return str(obj.profile_pic) if obj.profile_pic else None
+    # get_rank and get_full_name are inherited from CampusStudentDetailsSerializer
+
+
+class CampusIGChapterListSerializer(serializers.ModelSerializer):
+    ig_id = serializers.ReadOnlyField(source="ig.id")
+    ig_name = serializers.ReadOnlyField(source="ig.name")
+    ig_code = serializers.ReadOnlyField(source="ig.code")
+    ig_icon = serializers.ReadOnlyField(source="ig.icon")
+    lead_id = serializers.ReadOnlyField(source="lead.id")
+    lead_name = serializers.SerializerMethodField()
+    campus_ig_member_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CampusIGChapter
+        fields = [
+            "id",
+            "ig_id",
+            "ig_name",
+            "ig_code",
+            "ig_icon",
+            "lead_id",
+            "lead_name",
+            "description",
+            "is_active",
+            "campus_ig_member_count",
+        ]
+
+    def get_lead_name(self, obj):
+        if obj.lead:
+            return obj.lead.full_name
+        return None
+
+    def get_campus_ig_member_count(self, obj):
+        return UserIgLink.objects.filter(
+            ig=obj.ig,
+            user__user_organization_link_user__org=obj.org,
+        ).count()
+
+
+class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CampusIGChapter
+        fields = ["ig", "description", "lead"]
+
+    def validate_ig(self, value):
+        org = self.context.get("org")
+        if CampusIGChapter.objects.filter(org=org, ig=value, is_active=True).exists():
+            raise serializers.ValidationError("An active IG chapter already exists for this campus and IG.")
+        return value
+
+    def validate_lead(self, value):
+        if value is None:
+            return value
+        org = self.context.get("org")
+        if not validate_campus_member(value.id, org.id):
+            raise serializers.ValidationError("The lead must be a member of this campus.")
+        return value
+
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        org = self.context.get("org")
+        validated_data["id"] = str(uuid.uuid4())
+        validated_data["org"] = org
+        validated_data["created_by_id"] = user_id
+        validated_data["updated_by_id"] = user_id
+
+        chapter = CampusIGChapter.objects.create(**validated_data)
+
+        # Assign campus IG lead role if lead is provided
+        if chapter.lead:
+            assign_ig_campus_lead(chapter, chapter.lead, user_id)
+
+        return chapter
+
+
+class CampusIGChapterUpdateSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CampusIGChapter
+        fields = ["description", "lead", "is_active"]
+
+    def validate_lead(self, value):
+        if value is None:
+            return value
+        org = self.instance.org
+        if not validate_campus_member(value.id, org.id):
+            raise serializers.ValidationError("The lead must be a member of this campus.")
+        return value
+
+    def update(self, instance, validated_data):
+        user_id = self.context.get("user_id")
+        new_lead = validated_data.get("lead")
+
+        instance.description = validated_data.get("description", instance.description)
+        instance.is_active = validated_data.get("is_active", instance.is_active)
+        instance.updated_by_id = user_id
+
+        # If lead changed, reassign campus IG lead role
+        if new_lead and new_lead != instance.lead:
+            assign_ig_campus_lead(instance, new_lead, user_id)
+        else:
+            instance.save()
+
+        return instance
+
+
+class CampusSocialLinkSerializer(serializers.ModelSerializer):
+
+    class Meta:
+        model = CampusSocialLink
+        fields = ["id", "platform", "url"]
+
+
+class CampusSocialLinkUpsertSerializer(serializers.Serializer):
+    platform = serializers.CharField(max_length=30)
+    url = serializers.URLField(max_length=500)
+
+    def validate_platform(self, value):
+        if value not in SocialPlatformType.get_all_values():
+            raise serializers.ValidationError(
+                f"Invalid platform. Must be one of: {', '.join(SocialPlatformType.get_all_values())}"
+            )
+        return value
+
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        org = self.context.get("org")
+
+        try:
+            social_link = CampusSocialLink.objects.get(
+                org=org,
+                platform=validated_data["platform"],
+            )
+            social_link.url = validated_data["url"]
+            social_link.updated_by_id = user_id
+            social_link.save()
+        except CampusSocialLink.DoesNotExist:
+            social_link = CampusSocialLink.objects.create(
+                id=str(uuid.uuid4()),
+                org=org,
+                platform=validated_data["platform"],
+                url=validated_data["url"],
+                created_by_id=user_id,
+                updated_by_id=user_id,
+            )
+        return social_link

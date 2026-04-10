@@ -77,6 +77,71 @@ def _build_scope_filter(user_id):
     return q
 
 
+def _public_events_queryset(request, *, featured_only=False):
+    """
+    Base queryset for public event lists: scope visibility, published/ongoing,
+    optional filters. When ``featured_only`` is True, only ``is_featured`` rows
+    are returned (used by /events/featured/ and /events/is-featured/).
+    """
+    user_id = _get_viewer_id(request)
+
+    scope_filter = _build_scope_filter(user_id)
+    events = get_live_events().filter(scope_filter)
+
+    events = events.filter(
+        status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING]
+    )
+
+    if featured_only:
+        events = events.filter(is_featured=True)
+
+    params = request.query_params
+
+    if event_type := params.get('event_type'):
+        events = events.filter(organiser_type=event_type)
+    if ig_id := params.get('ig_id'):
+        events = events.filter(scope_ig_id=ig_id)
+    if campus_id := params.get('campus_id'):
+        events = events.filter(scope_org_id=campus_id)
+    if cluster := params.get('cluster'):
+        events = events.filter(organiser_ig__category=cluster)
+    if not featured_only:
+        if is_featured := params.get('is_featured'):
+            events = events.filter(is_featured=is_featured.lower() == 'true')
+    if start_date := params.get('start_date'):
+        events = events.filter(start_datetime__date__gte=start_date)
+    if end_date := params.get('end_date'):
+        events = events.filter(end_datetime__date__lte=end_date)
+    if tags := params.get('tags'):
+        events = events.filter(tags__icontains=tags)
+
+    if params.get('eligible_only') == 'true' and user_id:
+        try:
+            karma = Wallet.objects.filter(user_id=user_id).values_list('karma', flat=True).first() or 0
+        except Exception:
+            karma = 0
+        events = events.filter(
+            Q(min_karma__isnull=True) | Q(min_karma__lte=karma)
+        )
+
+    if user_id:
+        events = events.annotate(
+            viewer_interested=Exists(
+                EventInterest.objects.filter(event=OuterRef('pk'), user_id=user_id)
+            )
+        )
+
+    return events, user_id
+
+
+_PUBLIC_EVENT_SORT_FIELDS = {
+    'start_datetime': 'start_datetime',
+    '-start_datetime': '-start_datetime',
+    'interest_count': '-interest_count',
+    'created_at': 'created_at',
+}
+
+
 class EventListAPI(APIView):
     """
     GET /events/
@@ -86,68 +151,12 @@ class EventListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        user_id = _get_viewer_id(request)
-
-        # Base: live events the viewer can see
-        scope_filter = _build_scope_filter(user_id)
-        events = get_live_events().filter(scope_filter)
-
-        # Default: published + ongoing only
-        events = events.filter(
-            status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING]
-        )
-
-        # Optional query-param filters
-        params = request.query_params
-
-        if event_type := params.get('event_type'):
-            events = events.filter(organiser_type=event_type)
-        if ig_id := params.get('ig_id'):
-            events = events.filter(scope_ig_id=ig_id)
-        if campus_id := params.get('campus_id'):
-            events = events.filter(scope_org_id=campus_id)
-        if cluster := params.get('cluster'):
-            # Filter by organiser IG's category (cluster proxy)
-            events = events.filter(organiser_ig__category=cluster)
-        if is_featured := params.get('is_featured'):
-            events = events.filter(is_featured=is_featured.lower() == 'true')
-        if start_date := params.get('start_date'):
-            events = events.filter(start_datetime__date__gte=start_date)
-        if end_date := params.get('end_date'):
-            events = events.filter(end_datetime__date__lte=end_date)
-        if tags := params.get('tags'):
-            # tags is a JSON array field; search for a tag value
-            events = events.filter(tags__icontains=tags)
-
-        # Karma eligibility filter
-        if params.get('eligible_only') == 'true' and user_id:
-            try:
-                karma = Wallet.objects.filter(user_id=user_id).values_list('karma', flat=True).first() or 0
-            except Exception:
-                karma = 0
-            events = events.filter(
-                Q(min_karma__isnull=True) | Q(min_karma__lte=karma)
-            )
-
-        sort_fields = {
-            'start_datetime': 'start_datetime',
-            '-start_datetime': '-start_datetime',
-            'interest_count': '-interest_count',
-            'created_at': 'created_at',
-        }
-
-        # Annotate with viewer's interest status BEFORE pagination (Page objects can't be annotated)
-        if user_id:
-            events = events.annotate(
-                viewer_interested=Exists(
-                    EventInterest.objects.filter(event=OuterRef('pk'), user_id=user_id)
-                )
-            )
+        events, user_id = _public_events_queryset(request, featured_only=False)
 
         paginated = CommonUtils.get_paginated_queryset(
             events, request,
             search_fields=['title', 'description', 'venue_city'],
-            sort_fields=sort_fields,
+            sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
         )
 
         serializer = EventListItemSerializer(
@@ -162,21 +171,33 @@ class EventListAPI(APIView):
 
 class EventFeaturedAPI(APIView):
     """
-    GET /events/featured/
-    Featured published events — no auth required.
+    GET /events/featured/  and  GET /events/is-featured/
+
+    Featured events the viewer may see (same scope rules as GET /events/),
+    ``is_featured=True``, status published or ongoing. Paginated; optional JWT
+    for ``viewer_interest_status``.
     """
+    authentication_classes = [CustomizePermission]
 
     def get(self, request):
-        events = get_live_events().filter(
-            is_featured=True,
-            status=Event.Status.PUBLISHED,
-        ).order_by('start_datetime')[:20]
+        events, user_id = _public_events_queryset(request, featured_only=True)
 
-        serializer = EventListItemSerializer(events, many=True, context={'user_id': None})
+        paginated = CommonUtils.get_paginated_queryset(
+            events, request,
+            search_fields=['title', 'description', 'venue_city'],
+            sort_fields=_PUBLIC_EVENT_SORT_FIELDS,
+        )
+
+        serializer = EventListItemSerializer(
+            paginated['queryset'], many=True,
+            context={'user_id': user_id, 'request': request},
+        )
         return CustomResponse(
             general_message='Featured events retrieved.',
-            response=serializer.data,
-        ).get_success_response()
+        ).paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
 
 
 class EventDetailAPI(APIView):
@@ -237,7 +258,6 @@ class EventInterestAPI(APIView):
     DELETE /events/<event_id>/interest/  → Remove interest
     """
     authentication_classes = [CustomizePermission]
-    permission_classes = [IsAuthenticated]
 
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)

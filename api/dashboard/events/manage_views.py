@@ -5,6 +5,7 @@ Organiser / co-owner access required for all endpoints.
 import uuid
 from django.utils import timezone
 from django.db import transaction
+from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
 
 from db.events import Event, EventConnection, EventLog
@@ -19,11 +20,14 @@ from .serializers import (
     EventDetailSerializer,
     EventCoOwnerSerializer,
     EventCollaboratorSerializer,
+    MyEventInviteSerializer,
     EventLogSerializer,
     EventWriteSerializer,
     can_manage_event,
     get_live_events,
 )
+from .event_logger import log_event_action
+from .event_image_utils import delete_stale_event_media, merge_event_write_payload
 
 
 MANAGEABLE_ROLES = {
@@ -61,23 +65,30 @@ class ManageEventListCreateAPI(APIView):
     POST /events/manage/   → create a new event
     """
     authentication_classes = [CustomizePermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
 
-        # Events created by the user + events where user is co_owner
-        co_owned_event_ids = list(
-            EventConnection.objects.filter(
-                entity_type=EventConnection.EntityType.CO_OWNER,
-                entity_id=user_id,
-            ).values_list('event_id', flat=True)
-        )
+        if is_admin:
+            # Admins can view/edit all events (excluding drafts) from the manage list.
+            events = _get_manageable_events().exclude(status=Event.Status.DRAFT)
+        else:
+            # Events created by the user + events where user is co_owner
+            co_owned_event_ids = list(
+                EventConnection.objects.filter(
+                    entity_type=EventConnection.EntityType.CO_OWNER,
+                    entity_id=user_id,
+                ).values_list('event_id', flat=True)
+            )
 
-        from django.db.models import Q
-        # Use _get_manageable_events() so cancelled events remain visible to their owner
-        events = _get_manageable_events().filter(
-            Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
-        )
+            from django.db.models import Q
+            # Use _get_manageable_events() so cancelled events remain visible to their owner
+            events = _get_manageable_events().filter(
+                Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
+            )
 
         # Optional status filter
         if status := request.query_params.get('status'):
@@ -90,7 +101,7 @@ class ManageEventListCreateAPI(APIView):
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
-            context={'user_id': user_id},
+            context={'user_id': user_id, 'request': request},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -106,8 +117,14 @@ class ManageEventListCreateAPI(APIView):
                 general_message='You do not have permission to create events.'
             ).get_failure_response()
 
+        payload, merge_error = merge_event_write_payload(
+            request, partial=False, event=None,
+        )
+        if merge_error:
+            return CustomResponse(general_message=merge_error).get_failure_response()
+
         serializer = EventWriteSerializer(
-            data=request.data,
+            data=payload,
             context={'user_id': user_id},
         )
         if not serializer.is_valid():
@@ -119,7 +136,9 @@ class ManageEventListCreateAPI(APIView):
 
         return CustomResponse(
             general_message='Event created successfully.',
-            response=EventDetailSerializer(event, context={'user_id': user_id}).data,
+            response=EventDetailSerializer(
+                event, context={'user_id': user_id, 'request': request},
+            ).data,
         ).get_success_response()
 
 
@@ -135,6 +154,7 @@ class ManageEventDetailAPI(APIView):
     DELETE /events/manage/<event_id>/  → soft cancel
     """
     authentication_classes = [CustomizePermission]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_managed_event(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -156,7 +176,9 @@ class ManageEventDetailAPI(APIView):
         logs = EventLog.objects.filter(event=event).order_by('-edited_at')
         event_data = EventDetailSerializer(
             event,
-            context={'user_id': user_id, 'is_manage_view': True},
+            context={
+                'user_id': user_id, 'is_manage_view': True, 'request': request,
+            },
         ).data
         event_data['edit_history'] = EventLogSerializer(logs, many=True).data
 
@@ -181,8 +203,17 @@ class ManageEventDetailAPI(APIView):
                 general_message=f'Cannot edit a {event.status} event.'
             ).get_failure_response()
 
+        old_cover = event.cover_image
+        old_banner = event.banner_image
+
+        payload, merge_error = merge_event_write_payload(
+            request, partial=partial, event=event,
+        )
+        if merge_error:
+            return CustomResponse(general_message=merge_error).get_failure_response()
+
         serializer = EventWriteSerializer(
-            event, data=request.data,
+            event, data=payload,
             partial=partial,
             context={'user_id': user_id},
         )
@@ -190,9 +221,14 @@ class ManageEventDetailAPI(APIView):
             return CustomResponse(general_message=serializer.errors).get_failure_response()
 
         serializer.save()
+        delete_stale_event_media(old_cover, event.cover_image)
+        delete_stale_event_media(old_banner, event.banner_image)
+
         return CustomResponse(
             general_message='Event updated successfully.',
-            response=EventDetailSerializer(event, context={'user_id': user_id}).data,
+            response=EventDetailSerializer(
+                event, context={'user_id': user_id, 'request': request},
+            ).data,
         ).get_success_response()
 
     def delete(self, request, event_id):
@@ -205,16 +241,17 @@ class ManageEventDetailAPI(APIView):
                 general_message='Event is already cancelled.'
             ).get_failure_response()
 
+        old_status = event.status
         event.status = Event.Status.CANCELLED
         event.deleted_at = timezone.now()
         event.updated_by_id = user_id
         event.save()
 
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields=['status', 'deleted_at'],
+            user_id=user_id,
+            action=EventLog.Action.CANCELLED,
+            changes={'Status': {'from': old_status, 'to': Event.Status.CANCELLED}},
         )
 
         return CustomResponse(
@@ -286,11 +323,12 @@ class ManageEventPublishAPI(APIView):
         event.updated_by_id = user_id
         event.save()
 
-        EventLog.objects.create(
-            id=str(uuid.uuid4()),
+        log_event_action(
             event=event,
-            edited_by_id=user_id,
-            changed_fields=['status'],
+            user_id=user_id,
+            action=EventLog.Action.PUBLISHED,
+            changes={'Status': {'from': Event.Status.DRAFT, 'to': new_status}},
+            details={'new_status': new_status},
         )
 
         return CustomResponse(
@@ -312,10 +350,12 @@ class ManageEventCoOwnerAPI(APIView):
 
     def get(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage co-owners for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(
                 general_message='Permission denied.'
             ).get_failure_response()
@@ -332,10 +372,12 @@ class ManageEventCoOwnerAPI(APIView):
         Adds a single user as a co-owner.
         """
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage co-owners for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         target_user_id = request.data.get('user_id')
@@ -366,6 +408,19 @@ class ManageEventCoOwnerAPI(APIView):
                 general_message='User is already a co-owner.'
             ).get_failure_response()
 
+        # Resolve co-owner's name for the log
+        co_owner_user = User.objects.filter(id=target_user_id).first()
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.CO_OWNER_ADDED,
+            details={
+                'name': co_owner_user.full_name if co_owner_user else target_user_id,
+                'muid': co_owner_user.muid if co_owner_user else None,
+                'user_id': target_user_id,
+            },
+        )
+
         return CustomResponse(
             general_message='Co-owner added.',
             response=EventCoOwnerSerializer(conn).data,
@@ -381,10 +436,12 @@ class ManageEventCoOwnerRemoveAPI(APIView):
 
     def delete(self, request, event_id, co_owner_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage co-owners for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         conn = EventConnection.objects.filter(
@@ -395,7 +452,20 @@ class ManageEventCoOwnerRemoveAPI(APIView):
         if not conn:
             return CustomResponse(general_message='Co-owner record not found.').get_failure_response()
 
+        # Resolve co-owner's name before deleting
+        co_owner_user = User.objects.filter(id=conn.entity_id).first()
         conn.delete()
+
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.CO_OWNER_REMOVED,
+            details={
+                'name': co_owner_user.full_name if co_owner_user else conn.entity_id,
+                'muid': co_owner_user.muid if co_owner_user else None,
+                'user_id': conn.entity_id,
+            },
+        )
         return CustomResponse(general_message='Co-owner removed.').get_success_response()
 
 
@@ -409,6 +479,30 @@ COLLAB_TYPES = [
     EventConnection.EntityType.COLLAB_CAMPUS_IG,
     EventConnection.EntityType.COLLAB_COMPANY,
 ]
+
+
+def _resolve_entity_name(entity_type, entity_id):
+    """
+    Return a human-readable name for a collaborator entity.
+    Used to populate the 'name' field in log details.
+    """
+    try:
+        if entity_type == EventConnection.EntityType.COLLAB_IG:
+            from db.task import InterestGroup
+            ig = InterestGroup.objects.filter(id=entity_id).first()
+            return ig.name if ig else entity_id
+        elif entity_type in (
+            EventConnection.EntityType.COLLAB_CAMPUS,
+            EventConnection.EntityType.COLLAB_COMPANY,
+        ):
+            from db.organization import Organization
+            org = Organization.objects.filter(id=entity_id).first()
+            return org.title if org else entity_id
+        elif entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
+            return f'Campus-IG ({entity_id})'
+    except Exception:
+        pass
+    return entity_id
 
 
 def _caller_can_respond(conn, user_id, roles):
@@ -448,10 +542,12 @@ class ManageEventCollaboratorAPI(APIView):
 
     def get(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage collaborators for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         collabs = event.connections.filter(entity_type__in=COLLAB_TYPES)
@@ -469,10 +565,12 @@ class ManageEventCollaboratorAPI(APIView):
         }
         """
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage collaborators for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         entity_type = request.data.get('entity_type')
@@ -505,6 +603,20 @@ class ManageEventCollaboratorAPI(APIView):
                 general_message='This entity has already been invited.'
             ).get_failure_response()
 
+        # Resolve entity name for the log
+        entity_name = _resolve_entity_name(entity_type, entity_id)
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_INVITED,
+            details={
+                'entity_type': entity_type,
+                'entity_id':   entity_id,
+                'name':        entity_name,
+                'role_label':  role_label or None,
+            },
+        )
+
         return CustomResponse(
             general_message='Collaborator invited.',
             response=EventCollaboratorSerializer(conn).data,
@@ -519,10 +631,12 @@ class ManageEventCollaboratorRemoveAPI(APIView):
 
     def delete(self, request, event_id, collaborator_id):
         user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
         event = get_live_events().filter(id=event_id).first()
         if not event:
             return CustomResponse(general_message='Event not found.').get_failure_response()
-        if not can_manage_event(user_id, event):
+        # Admins can manage collaborators for any event.
+        if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
         conn = EventConnection.objects.filter(
@@ -533,7 +647,19 @@ class ManageEventCollaboratorRemoveAPI(APIView):
         if not conn:
             return CustomResponse(general_message='Collaborator not found.').get_failure_response()
 
+        entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
         conn.delete()
+
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_REMOVED,
+            details={
+                'entity_type': conn.entity_type,
+                'entity_id':   conn.entity_id,
+                'name':        entity_name,
+            },
+        )
         return CustomResponse(general_message='Collaborator removed.').get_success_response()
 
 
@@ -575,6 +701,18 @@ class ManageEventCollaboratorAcceptAPI(APIView):
         conn.responded_at = timezone.now()
         conn.updated_by_id = user_id
         conn.save()
+
+        entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_ACCEPTED,
+            details={
+                'entity_type': conn.entity_type,
+                'entity_id':   conn.entity_id,
+                'name':        entity_name,
+            },
+        )
 
         return CustomResponse(
             general_message='Collaboration accepted.',
@@ -623,7 +761,99 @@ class ManageEventCollaboratorRejectAPI(APIView):
         conn.updated_by_id = user_id
         conn.save()
 
+        entity_name = _resolve_entity_name(conn.entity_type, conn.entity_id)
+        log_event_action(
+            event=event,
+            user_id=user_id,
+            action=EventLog.Action.COLLAB_REJECTED,
+            details={
+                'entity_type': conn.entity_type,
+                'entity_id':   conn.entity_id,
+                'name':        entity_name,
+                'reason':      conn.rejection_reason,
+            },
+        )
+
         return CustomResponse(
             general_message='Collaboration invite rejected.',
             response=EventCollaboratorSerializer(conn).data,
+        ).get_success_response()
+
+
+class MyEventInvitesAPI(APIView):
+    """
+    GET /events/my-invites/
+    Returns all pending event collaboration invites directed at entities the current user leads.
+    """
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        
+        # If admin, fetch all pending collab invites globally
+        if RoleType.ADMIN.value in roles:
+            invites = EventConnection.objects.filter(
+                invite_status=EventConnection.InviteStatus.PENDING,
+                entity_type__in=COLLAB_TYPES
+            ).select_related('event').order_by('-created_at')
+            serializer = MyEventInviteSerializer(
+                invites, many=True, context={'request': request},
+            )
+            return CustomResponse(
+                general_message='Global pending invites retrieved.',
+                response=serializer.data
+            ).get_success_response()
+            
+        auth_ig_codes = []
+        is_campus_lead = RoleType.CAMPUS_LEAD.value in roles
+        is_company = RoleType.COMPANY.value in roles
+        has_any_campus_lead_role = False
+        
+        for role in roles:
+            if role.endswith(' IGLead'):
+                ig_code = role.replace(' IGLead', '')
+                auth_ig_codes.append(ig_code)
+            if role.endswith(' CampusLead') or role == RoleType.CAMPUS_LEAD.value:
+                has_any_campus_lead_role = True
+
+        from db.task import InterestGroup
+        from db.organization import UserOrganizationLink
+        from django.db.models import Q
+        
+        query = Q()
+        
+        if auth_ig_codes:
+            ig_ids = InterestGroup.objects.filter(code__in=auth_ig_codes).values_list('id', flat=True)
+            query |= Q(entity_type=EventConnection.EntityType.COLLAB_IG, entity_id__in=ig_ids)
+            
+        if is_campus_lead or is_company:
+            org_ids = UserOrganizationLink.objects.filter(
+                user_id=user_id, verified=True
+            ).values_list('org_id', flat=True)
+            query |= Q(
+                entity_type__in=[EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY], 
+                entity_id__in=org_ids
+            )
+            
+        if has_any_campus_lead_role:
+            query |= Q(entity_type=EventConnection.EntityType.COLLAB_CAMPUS_IG)
+            
+        if not query:
+            return CustomResponse(
+                general_message='Pending invites retrieved.',
+                response=[]
+            ).get_success_response()
+            
+        invites = EventConnection.objects.filter(
+            query,
+            invite_status=EventConnection.InviteStatus.PENDING,
+        ).select_related('event').order_by('-created_at')
+        
+        serializer = MyEventInviteSerializer(
+            invites, many=True, context={'request': request},
+        )
+        return CustomResponse(
+            general_message='Pending invites retrieved.',
+            response=serializer.data
         ).get_success_response()

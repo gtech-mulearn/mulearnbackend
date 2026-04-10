@@ -5,6 +5,11 @@ from . import events_views
 
 urlpatterns = [
     path(
+        "campus-list/",
+        campus_views.CampusListAPI.as_view(),
+        name="campus-list",
+    ),
+    path(
         "campus-details/",
         campus_views.CampusDetailsAPI.as_view(),
         name="campus-details",
@@ -75,16 +80,40 @@ urlpatterns = [
         name="campus-execom",
     ),
     path(
+        "execom/roles/",
+        events_views.CampusExecomRoleAPI.as_view(),
+        name="campus-execom-roles",
+    ),
+    path(
         "execom/<str:member_id>/",
         events_views.CampusExecomAPI.as_view(),
         name="campus-execom-delete",
+    ),
+    path(
+        "ig-chapters/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapters",
+    ),
+    path(
+        "ig-chapters/<str:chapter_id>/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapter-detail",
+    ),
+    path(
+        "social-links/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-links",
+    ),
+    path(
+        "social-links/<str:link_id>/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-link-detail",
     ),
     path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",
     ),
-
     path(
         "<str:org_id>/leaderboard/",
         campus_views.CampusStudentLeaderboardAPI.as_view(),
