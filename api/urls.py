@@ -12,6 +12,7 @@ urlpatterns = [
     path('protected/', include('api.protected.urls')),
     path('hackathon/', include('api.hackathon.urls')),
     path('notification/', include('api.notification.urls')),
+    path('events/', include('api.events.urls')),
     path('public/', include('api.common.urls')),
     path('top100/', include('api.top100_coders.urls')),
     path('launchpad/', include('api.launchpad.urls')),
