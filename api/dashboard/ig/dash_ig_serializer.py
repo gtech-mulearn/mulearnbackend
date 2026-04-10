@@ -2,6 +2,68 @@ from rest_framework import serializers
 import json
 
 from db.task import InterestGroup
+from db.user import User
+
+
+def _resolve_muid_list(muid_list):
+    """
+    Given a list like [{"muid": "foo@mulearn"}, ...], fetch each user's
+    details from the DB and return an enriched list:
+    [
+        {
+            "muid": "foo@mulearn",
+            "full_name": "Foo Bar",
+            "email": "foo@example.com",
+            "profile_pic": "https://..."   # or null
+        },
+        ...
+    ]
+    MUIDs that don't match any User are included with null for extra fields.
+    """
+    if not isinstance(muid_list, list):
+        return muid_list
+
+    muids = [item.get("muid") for item in muid_list if isinstance(item, dict) and item.get("muid")]
+
+    if not muids:
+        return muid_list
+
+    users_qs = User.objects.filter(muid__in=muids).values("muid", "full_name", "email", "id")
+    user_map = {u["muid"]: u for u in users_qs}
+
+    enriched = []
+    for item in muid_list:
+        if not isinstance(item, dict):
+            enriched.append(item)
+            continue
+
+        muid = item.get("muid")
+        user = user_map.get(muid)
+
+        if user:
+            # Compute profile_pic using the User model property
+            try:
+                user_obj = User.objects.get(id=user["id"])
+                profile_pic = user_obj.profile_pic
+            except User.DoesNotExist:
+                profile_pic = None
+
+            enriched.append({
+                "muid": muid,
+                "full_name": user["full_name"],
+                "email": user["email"],
+                "profile_pic": profile_pic,
+            })
+        else:
+            # muid not found — include as-is with null details
+            enriched.append({
+                "muid": muid,
+                "full_name": None,
+                "email": None,
+                "profile_pic": None,
+            })
+
+    return enriched
 
 
 class InterestGroupSerializer(serializers.ModelSerializer):
@@ -46,26 +108,35 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         return obj.user_ig_link_ig.all().count()
 
     def to_representation(self, instance):
-        """Convert JSON-serialized text fields back to Python objects for API output."""
+        """Convert JSON-serialized text fields back to Python objects for API output.
+        For 'leads' and 'mentors', further enrich with user details from DB."""
         data = super().to_representation(instance)
-        json_fields = [
+
+        # Plain JSON fields — just parse the string back to Python
+        plain_json_fields = [
             "prerequisites",
             "career_opportunities",
             "top_blogs",
             "people_to_follow",
-            "mentors",
-            "leads",
         ]
 
-        for field in json_fields:
+        for field in plain_json_fields:
+            val = data.get(field)
+            if isinstance(val, str) and val:
+                try:
+                    data[field] = json.loads(val)
+                except Exception:
+                    pass  # leave as-is (plain string)
+
+        # MUID fields — parse + enrich with user details
+        for field in ["leads", "mentors"]:
             val = data.get(field)
             if isinstance(val, str) and val:
                 try:
                     parsed = json.loads(val)
-                    data[field] = parsed
+                    data[field] = _resolve_muid_list(parsed)
                 except Exception:
-                    # leave as-is (plain string)
-                    pass
+                    pass  # leave as-is if parsing fails
 
         return data
 
@@ -97,7 +168,7 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
 
 class InterestGroupRequestSerializer(serializers.ModelSerializer):
     """Serializer for user-submitted IG creation requests."""
-    
+
     class Meta:
         model = InterestGroup
         fields = [

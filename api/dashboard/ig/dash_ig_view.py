@@ -2,6 +2,7 @@ from django.db.models import Count
 from rest_framework.views import APIView
 
 from db.task import InterestGroup
+from db.user import User, Role
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
@@ -16,7 +17,42 @@ import json
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
-from db.user import Role
+
+
+def _validate_muids(request_data, fields=("leads", "mentors")):
+    """
+    Validate that every muid in the given fields actually exists in the User table.
+    Returns (is_valid, error_message).
+    """
+    for fld in fields:
+        raw = request_data.get(fld)
+        if not raw:
+            continue
+        # raw may already be a list (before json.dumps) or a string (already dumped)
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except Exception:
+                continue
+        if not isinstance(raw, list):
+            continue
+
+        muids = [
+            item.get("muid")
+            for item in raw
+            if isinstance(item, dict) and item.get("muid")
+        ]
+        if not muids:
+            continue
+
+        existing = set(
+            User.objects.filter(muid__in=muids).values_list("muid", flat=True)
+        )
+        invalid = [m for m in muids if m not in existing]
+        if invalid:
+            return False, f"Invalid MUIDs in '{fld}': {invalid}"
+
+    return True, None
 
 
 class InterestGroupAPI(APIView):
@@ -61,6 +97,11 @@ class InterestGroupAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
 
         # serialize JSON-able fields to strings for DB storage
         for fld in [
@@ -160,6 +201,12 @@ class InterestGroupAPI(APIView):
         ig_old_code = ig.code
 
         request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
+
         for fld in [
             "prerequisites",
             "career_opportunities",
@@ -304,6 +351,12 @@ class InterestGroupGetAPI(APIView):
             return CustomResponse(general_message="You do not have permission to update this Interest Group").get_failure_response()
 
         request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
+
         for fld in [
             "prerequisites",
             "career_opportunities",
@@ -402,6 +455,11 @@ class InterestGroupRequestAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         request_data = request.data.copy()
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
 
         for fld in [
             "prerequisites",
