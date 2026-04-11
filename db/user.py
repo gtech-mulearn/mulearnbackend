@@ -103,6 +103,7 @@ class UserMentor(models.Model):
     about = models.CharField(max_length=1000, blank=True, null=True)
     reason = models.CharField(max_length=1000, blank=True, null=True)
     hours = models.IntegerField()
+    is_verified = models.BooleanField(default=False)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='user_mentor_updated_by_set')
     updated_at = models.DateTimeField(blank=True, null=True)

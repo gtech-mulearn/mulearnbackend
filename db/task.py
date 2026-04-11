@@ -190,6 +190,8 @@ class KarmaActivityLog(models.Model):
     appraiser_approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="appraiser_approved_by",
                                                   blank=True, null=True,
                                               related_name="karma_activity_log_appraiser_approved_by")
+    proof_link = models.CharField(max_length=500, blank=True, null=True)
+    remarks = models.TextField(blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="karma_activity_log_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
@@ -338,3 +340,38 @@ class TaskReport(models.Model):
     class Meta:
         managed = False
         db_table = "task_report"
+
+
+class MentorSession(models.Model):
+    class Status(models.TextChoices):
+        SCHEDULED = 'scheduled'
+        COMPLETED = 'completed'
+        CANCELLED = 'cancelled'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    mentor = models.ForeignKey(User, on_delete=models.CASCADE,
+                               related_name='mentor_sessions_mentor')
+    mentee = models.ForeignKey(User, on_delete=models.CASCADE,
+                               related_name='mentor_sessions_mentee')
+    ig = models.ForeignKey(InterestGroup, on_delete=models.SET_NULL,
+                           null=True, blank=True)
+    title = models.CharField(max_length=200)
+    description = models.TextField(null=True, blank=True)
+    scheduled_at = models.DateTimeField()
+    duration_minutes = models.IntegerField()
+    status = models.CharField(max_length=20, choices=Status.choices,
+                              default=Status.SCHEDULED)
+    meeting_link = models.CharField(max_length=500, null=True, blank=True)
+    notes = models.TextField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   db_column='created_by',
+                                   related_name='mentor_session_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   db_column='updated_by',
+                                   related_name='mentor_session_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_session'
