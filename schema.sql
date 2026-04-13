@@ -1834,6 +1834,12 @@ CREATE TABLE `user` (
   `suspended_by` varchar(36) DEFAULT NULL,
   `interested_in_work` tinyint(1) DEFAULT '0',
   `interested_in_gig_work` tinyint(1) DEFAULT '0',
+
+
+  `bio` TEXT,
+  `projects` JSON,
+  `experience` JSON,
+
   PRIMARY KEY (`id`),
   UNIQUE KEY `muid` (`muid`),
   UNIQUE KEY `email` (`email`),
@@ -1844,7 +1850,7 @@ CREATE TABLE `user` (
   CONSTRAINT `fk_user_ref_deleted_by` FOREIGN KEY (`deleted_by`) REFERENCES `user` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_user_ref_district_id` FOREIGN KEY (`district_id`) REFERENCES `district` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_user_ref_suspended_by` FOREIGN KEY (`suspended_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+); ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 
 --
