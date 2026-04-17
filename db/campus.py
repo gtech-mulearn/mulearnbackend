@@ -3,7 +3,7 @@ import uuid
 from django.db import models
 
 from django.conf import settings
-from .user import User
+from .user import User, Role
 from .organization import Organization
 from .task import InterestGroup
 
@@ -46,3 +46,25 @@ class CampusSocialLink(models.Model):
     class Meta:
         managed = False
         db_table = 'campus_social_link'
+
+
+class CampusExecom(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    campus = models.ForeignKey(
+        Organization, on_delete=models.CASCADE, related_name='campus_execom_campus'
+    )
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='campus_execom_user')
+    role = models.ForeignKey(Role, on_delete=models.CASCADE, related_name='campus_execom_role')
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
+                                   related_name='campus_execom_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
+                                   related_name='campus_execom_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'campus_execom'
+        constraints = [
+            models.UniqueConstraint(fields=['campus', 'role'], name='campus_execom_unique_role_per_campus')
+        ]

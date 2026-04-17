@@ -35,6 +35,9 @@
         - `college-monthly/`
         - `wadhwani-college/`
         - `wadhwani-zonal/`
+    - `campus/`
+        - `<str:campus_id>/execom/`
+        - `<str:campus_id>/execom/<str:uid>/`
     - `dashboard/`
         - `user/`
             - `preferences/`
