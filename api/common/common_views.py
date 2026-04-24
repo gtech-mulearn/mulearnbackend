@@ -567,8 +567,12 @@ class GTASANDSHOREAPI(APIView):
 
 class UserProfilePicAPI(APIView):
     def get(self, request, muid):
-        user = User.objects.filter(muid=muid).annotate(image=F("profile_pic")).values("image")
-        return CustomResponse(response=user).get_success_response()
+        user = User.objects.filter(muid=muid).first()
+        if user is None:
+            return CustomResponse(general_message='User not found').get_failure_response()
+        
+        return CustomResponse(response={'image': user.profile_pic}).get_success_response()
+
 
 
 class ListIGAPI(APIView):
