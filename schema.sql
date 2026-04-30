@@ -2260,3 +2260,29 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-01-03 23:24:46
+
+--
+-- Table structure for table `unified_events`
+--
+
+DROP TABLE IF EXISTS `unified_events`;
+CREATE TABLE `unified_events` (
+  `id` varchar(36) NOT NULL,
+  `type` varchar(50) NOT NULL,
+  `title` varchar(255) NOT NULL,
+  `description` text,
+  `date` datetime DEFAULT NULL,
+  `location` varchar(255) DEFAULT NULL,
+  `campus_id` varchar(36) DEFAULT NULL,
+  `ig_id` varchar(36) DEFAULT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` datetime NOT NULL,
+  `updated_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `fk_unified_events_campus_id` (`campus_id`),
+  KEY `fk_unified_events_ig_id` (`ig_id`),
+  KEY `fk_unified_events_created_by` (`created_by`),
+  CONSTRAINT `fk_unified_events_campus_id` FOREIGN KEY (`campus_id`) REFERENCES `organization` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_unified_events_ig_id` FOREIGN KEY (`ig_id`) REFERENCES `interest_group` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_unified_events_created_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

@@ -338,3 +338,22 @@ class TaskReport(models.Model):
     class Meta:
         managed = False
         db_table = "task_report"
+
+class UnifiedEvent(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    title = models.CharField(max_length=255)
+    description = models.TextField(blank=True, null=True)
+    type = models.CharField(max_length=50)
+    date = models.DateTimeField(blank=True, null=True)
+    location = models.CharField(max_length=255, blank=True, null=True)
+    
+    campus = models.ForeignKey(Organization, on_delete=models.CASCADE, null=True, blank=True, related_name='unified_events_campus')
+    ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, null=True, blank=True, related_name='unified_events_ig')
+    
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by", related_name="unified_event_created_by")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = "unified_events"
