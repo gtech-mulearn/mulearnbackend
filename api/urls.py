@@ -6,6 +6,7 @@ urlpatterns = [
     path('auth/', include('api.auth.urls')),
     path('register/', include('api.register.urls')),
     path('leaderboard/', include('api.leaderboard.urls')),
+    path('events/', include('api.events.urls')),
     path('dashboard/', include('api.dashboard.urls')),
     path('integrations/', include('api.integrations.urls')),
     path('url-shortener/', include('api.url_shortener.urls')),

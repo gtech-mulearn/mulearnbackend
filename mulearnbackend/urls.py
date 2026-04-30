@@ -26,6 +26,7 @@ from decouple import config as decouple_config
 
 urlpatterns = [
     # path('admin/', admin.site.urls),
+    path("api/events/", include("api.events.urls")),
     path("api/v1/", include("api.urls")),
     re_path(
         r"^muback-media/(?P<path>.*)$", serve, {"document_root": settings.MEDIA_ROOT}
