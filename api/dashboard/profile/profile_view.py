@@ -166,6 +166,34 @@ class UserProfileAPI(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
+    def patch(self, request, muid=None):
+        JWTUtils.is_jwt_authenticated(request)
+        
+        if muid and muid != JWTUtils.fetch_muid(request):
+            return CustomResponse(
+                general_message="You can only update your own profile"
+            ).get_failure_response()
+        
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id)
+
+        serializer = profile_serializer.UserProfileEditSerializer(
+            user, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+
+            DiscordWebhooks.general_updates(
+                WebHookCategory.USER_NAME.value,
+                WebHookActions.UPDATE.value,
+                user_id,
+            )
+
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
 
 class UserLogAPI(APIView):
     def get(self, request, muid=None):

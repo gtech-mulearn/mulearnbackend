@@ -33,6 +33,9 @@ class User(models.Model):
     interested_in_gig_work = models.BooleanField(default=False)
     suspended_by = models.ForeignKey("self", on_delete=models.SET(settings.SYSTEM_ADMIN_ID), blank=True, null=True,
                                      related_name="user_suspended_by_user", db_column="suspended_by", default=None)
+    bio = models.TextField(blank=True, null=True, default=None)
+    projects = models.JSONField(blank=True, null=True, default=None)
+    experience = models.JSONField(blank=True, null=True, default=None)
     objects = user_manager.ActiveUserManager()
     every = models.Manager()
 
