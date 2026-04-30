@@ -58,7 +58,19 @@ def _validate_muids(request_data, fields=("leads", "mentors")):
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    def get(self, request):
+    def get(self, request, pk=None):
+        if pk:
+            ig_data = InterestGroup.objects.filter(id=pk).first()
+            if not ig_data:
+                return CustomResponse(
+                    general_message="Interest Group Does Not Exist"
+                ).get_failure_response()
+            serializer = InterestGroupSerializer(ig_data, many=False)
+            return CustomResponse(
+                response={"interestGroup": serializer.data}
+            ).get_success_response()
+
+
         ig_queryset = (
             InterestGroup.objects.select_related("created_by", "updated_by")
             .prefetch_related("user_ig_link_ig")
@@ -193,6 +205,50 @@ class InterestGroupAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        """Allow IG Lead or Admin to update IG editable fields."""
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        ig = InterestGroup.objects.filter(id=pk).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
+
+        # Permission: Admins or IG Lead role for this IG code
+        ig_lead_role_title = RoleType.IG_LEAD_ROLE(ig.code)
+        if (RoleType.ADMIN.value not in roles) and (ig_lead_role_title not in roles):
+            return CustomResponse(general_message="You do not have permission to update this Interest Group").get_failure_response()
+
+        request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
+
+        for fld in [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+        ]:
+            if fld in request_data and not isinstance(request_data.get(fld), str):
+                try:
+                    request_data[fld] = json.dumps(request_data.get(fld))
+                except Exception:
+                    pass
+        request_data["updated_by"] = user_id
+
+        serializer = InterestGroupCreateUpdateSerializer(data=request_data, instance=ig, partial=True)
+
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
+
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         ig = InterestGroup.objects.get(id=pk)
@@ -319,66 +375,6 @@ class InterestGroupCSV(APIView):
         return CommonUtils.generate_csv(ig_serializer_data, "Interest Group")
 
 
-class InterestGroupGetAPI(APIView):
-    authentication_classes = [CustomizePermission]
-    @role_required([RoleType.ADMIN.value])
-    def get(self, request, pk):
-        ig_data = InterestGroup.objects.filter(id=pk).first()
-
-        if not ig_data:
-            return CustomResponse(
-                general_message="Interest Group Does Not Exist"
-            ).get_failure_response()
-
-        serializer = InterestGroupSerializer(ig_data, many=False)
-
-        return CustomResponse(
-            response={"interestGroup": serializer.data}
-        ).get_success_response()
-
-    @role_required([RoleType.ADMIN.value])
-    def patch(self, request, pk):
-        """Allow IG Lead or Admin to update IG editable fields."""
-        user_id = JWTUtils.fetch_user_id(request)
-        roles = JWTUtils.fetch_role(request)
-        ig = InterestGroup.objects.filter(id=pk).first()
-        if not ig:
-            return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
-
-        # Permission: Admins or IG Lead role for this IG code
-        ig_lead_role_title = RoleType.IG_LEAD_ROLE(ig.code)
-        if (RoleType.ADMIN.value not in roles) and (ig_lead_role_title not in roles):
-            return CustomResponse(general_message="You do not have permission to update this Interest Group").get_failure_response()
-
-        request_data = request.data
-
-        # Validate MUIDs for leads/mentors before serializing
-        is_valid, error_msg = _validate_muids(request_data)
-        if not is_valid:
-            return CustomResponse(general_message=error_msg).get_failure_response()
-
-        for fld in [
-            "prerequisites",
-            "career_opportunities",
-            "top_blogs",
-            "people_to_follow",
-            "leads",
-            "mentors",
-        ]:
-            if fld in request_data and not isinstance(request_data.get(fld), str):
-                try:
-                    request_data[fld] = json.dumps(request_data.get(fld))
-                except Exception:
-                    pass
-        request_data["updated_by"] = user_id
-
-        serializer = InterestGroupCreateUpdateSerializer(data=request_data, instance=ig, partial=True)
-
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
-
-        return CustomResponse(message=serializer.errors).get_failure_response()
 
 
 class InterestGroupRequestAPI(APIView):

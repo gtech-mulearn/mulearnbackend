@@ -772,6 +772,7 @@ CREATE TABLE `interest_group` (
   `mentors` text,
   `thinktank` text,
   `office_hours` varchar(200) DEFAULT NULL,
+  `foundation_deck_link` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   UNIQUE KEY `name` (`name`),
   UNIQUE KEY `code` (`code`),
