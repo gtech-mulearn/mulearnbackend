@@ -6,6 +6,14 @@ from rest_framework.views import APIView
 
 from api.dashboard.events.event_logger import log_event_action
 from api.dashboard.events.manage_views import _can_create_event
+from api.dashboard.events.event_image_utils import (
+    delete_stale_event_media,
+    merge_event_write_payload,
+)
+from api.dashboard.events.public_views import (
+    _build_scope_filter,
+    _get_viewer_id,
+)
 from api.dashboard.events.serializers import (
     EventWriteSerializer,
     can_manage_event,
@@ -18,8 +26,8 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 
 
-def _normalize_payload(data):
-    payload = data.copy()
+def _normalize_payload(payload):
+    payload = dict(payload)
 
     event_type = payload.pop('type', None)
     campus_id = payload.pop('campus_id', None)
@@ -43,7 +51,9 @@ def _normalize_payload(data):
 
 
 def _apply_filters(request):
-    events = get_live_events()
+    user_id = _get_viewer_id(request)
+    events = get_live_events().filter(_build_scope_filter(user_id))
+    events = events.filter(status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING])
     params = request.query_params
 
     if event_type := params.get('type'):
@@ -54,16 +64,12 @@ def _apply_filters(request):
         events = events.filter(scope_ig_id=ig_id)
     if title := params.get('title'):
         events = events.filter(title__icontains=title)
-    if search := params.get('search'):
-        events = events.filter(
-            Q(title__icontains=search) | Q(description__icontains=search)
-        )
     if start_date := params.get('start_date'):
         events = events.filter(start_datetime__date__gte=start_date)
     if end_date := params.get('end_date'):
-        events = events.filter(start_datetime__date__lte=end_date)
+        events = events.filter(end_datetime__date__lte=end_date)
 
-    return events
+    return events, user_id
 
 
 class UnifiedEventOutputSerializer(serializers.ModelSerializer):
@@ -90,14 +96,16 @@ class EventCollectionAPI(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def get(self, request):
-        events = _apply_filters(request)
+        events, user_id = _apply_filters(request)
         paginated = CommonUtils.get_paginated_queryset(
             events,
             request,
             search_fields=['title', 'description', 'venue_city', 'venue_address'],
             sort_fields={'created_at': '-created_at', 'start_datetime': 'start_datetime'},
         )
-        serializer = UnifiedEventOutputSerializer(paginated['queryset'], many=True)
+        serializer = UnifiedEventOutputSerializer(
+            paginated['queryset'], many=True, context={'user_id': user_id, 'request': request}
+        )
         return CustomResponse().paginated_response(
             data=serializer.data,
             pagination=paginated['pagination'],
@@ -112,7 +120,11 @@ class EventCollectionAPI(APIView):
                 general_message='You do not have permission to create events.'
             ).get_failure_response()
 
-        payload = _normalize_payload(request.data)
+        payload, merge_error = merge_event_write_payload(request, partial=False, event=None)
+        if merge_error:
+            return CustomResponse(general_message=merge_error).get_failure_response()
+
+        payload = _normalize_payload(payload)
         serializer = EventWriteSerializer(data=payload, context={'user_id': user_id})
         if not serializer.is_valid():
             return CustomResponse(response=serializer.errors).get_failure_response()
@@ -129,7 +141,7 @@ class EventDetailAPI(APIView):
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     def _get_event(self, request, event_id):
-        event = get_live_events().filter(id=event_id).first()
+        event = Event.objects.filter(id=event_id).first()
         if not event:
             return None, None, 'Event not found.'
 
@@ -151,7 +163,14 @@ class EventDetailAPI(APIView):
                 general_message=f'Cannot edit a {event.status} event.'
             ).get_failure_response()
 
-        payload = _normalize_payload(request.data)
+        old_cover = event.cover_image
+        old_banner = event.banner_image
+
+        payload, merge_error = merge_event_write_payload(request, partial=True, event=event)
+        if merge_error:
+            return CustomResponse(general_message=merge_error).get_failure_response()
+
+        payload = _normalize_payload(payload)
         serializer = EventWriteSerializer(
             event,
             data=payload,
@@ -162,6 +181,8 @@ class EventDetailAPI(APIView):
             return CustomResponse(response=serializer.errors).get_failure_response()
 
         serializer.save()
+        delete_stale_event_media(old_cover, event.cover_image)
+        delete_stale_event_media(old_banner, event.banner_image)
         return CustomResponse(
             general_message='Event updated successfully.',
             response=UnifiedEventOutputSerializer(event).data,
