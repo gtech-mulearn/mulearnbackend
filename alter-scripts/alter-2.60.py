@@ -1,7 +1,6 @@
 import os
 import sys
 import django
-from decouple import config
 
 from connection import execute
 
@@ -25,6 +24,9 @@ ADD COLUMN experience JSON NULL DEFAULT NULL;
 if __name__ == "__main__":
     try:
         migrate_profile_fields()
+        execute(
+            "UPDATE system_setting SET value = '2.60', updated_at = now() WHERE `key` = 'db.version';"
+        )
         print("Migration completed successfully!")
     except Exception as e:
         print(f"Migration failed: {e}")

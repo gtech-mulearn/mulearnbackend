@@ -43,6 +43,40 @@ from .profile_serializer import LinkSocials, ResetPasswordSerialzier
 from .profile_serializer import UserTermSerializer
 
 
+def _update_profile(request, muid=None):
+    JWTUtils.is_jwt_authenticated(request)
+
+    if muid and muid != JWTUtils.fetch_muid(request):
+        return CustomResponse(
+            general_message="You can only update your own profile"
+        ).get_failure_response()
+
+    user_id = JWTUtils.fetch_user_id(request)
+    user = User.objects.filter(id=user_id).first()
+
+    if not user:
+        return CustomResponse(
+            general_message="User Not Exists"
+        ).get_failure_response()
+
+    serializer = profile_serializer.UserProfileEditSerializer(
+        user, data=request.data, partial=True
+    )
+
+    if serializer.is_valid():
+        serializer.save()
+
+        DiscordWebhooks.general_updates(
+            WebHookCategory.USER_PROFILE.value,
+            WebHookActions.UPDATE.value,
+            user_id,
+        )
+
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    return CustomResponse(response=serializer.errors).get_failure_response()
+
+
 class UserProfileEditView(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -60,25 +94,7 @@ class UserProfileEditView(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.get(id=user_id)
-
-        serializer = profile_serializer.UserProfileEditSerializer(
-            user, data=request.data, partial=True
-        )
-
-        if serializer.is_valid():
-            serializer.save()
-
-            DiscordWebhooks.general_updates(
-                WebHookCategory.USER_NAME.value,
-                WebHookActions.UPDATE.value,
-                user_id,
-            )
-
-            return CustomResponse(response=serializer.data).get_success_response()
-
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return _update_profile(request)
 
     def delete(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -167,32 +183,7 @@ class UserProfileAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     def patch(self, request, muid=None):
-        JWTUtils.is_jwt_authenticated(request)
-        
-        if muid and muid != JWTUtils.fetch_muid(request):
-            return CustomResponse(
-                general_message="You can only update your own profile"
-            ).get_failure_response()
-        
-        user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.get(id=user_id)
-
-        serializer = profile_serializer.UserProfileEditSerializer(
-            user, data=request.data, partial=True
-        )
-
-        if serializer.is_valid():
-            serializer.save()
-
-            DiscordWebhooks.general_updates(
-                WebHookCategory.USER_NAME.value,
-                WebHookActions.UPDATE.value,
-                user_id,
-            )
-
-            return CustomResponse(response=serializer.data).get_success_response()
-
-        return CustomResponse(response=serializer.errors).get_failure_response()
+        return _update_profile(request, muid=muid)
 
 
 class UserLogAPI(APIView):
