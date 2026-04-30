@@ -59,6 +59,16 @@ urlpatterns = [
         name="transfer-lead-role",
     ),
     path(
+        "<str:campus_id>/execom/",
+        campus_views.CampusExecomAPI.as_view(),
+        name="campus-execom",
+    ),
+    path(
+        "<str:campus_id>/execom/<str:uid>/",
+        campus_views.CampusExecomAPI.as_view(),
+        name="campus-execom-delete",
+    ),
+    path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",

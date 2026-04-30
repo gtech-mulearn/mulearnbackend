@@ -4,7 +4,7 @@ from datetime import timedelta
 from django.db.models import Sum
 from rest_framework import serializers
 
-from db.organization import Organization, UserOrganizationLink, College
+from db.organization import Organization, UserOrganizationLink, College, CampusExecom
 from db.task import KarmaActivityLog
 from db.user import User, UserRoleLink
 from utils.types import OrganizationType
@@ -296,3 +296,37 @@ class UserRoleLinkSerializer(serializers.ModelSerializer):
 
         user_role_link = UserRoleLink.objects.create(**validated_data)
         return user_role_link
+
+
+class CampusExecomSerializer(serializers.ModelSerializer):
+    execom_role = serializers.CharField(source='execom_role.title', read_only=True)
+    execom_role_id = serializers.CharField(source='execom_role.id', write_only=True)
+    full_name = serializers.CharField(source='user.full_name', read_only=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
+
+    class Meta:
+        model = CampusExecom
+        fields = [
+            'id',
+            'user',
+            'execom_role',
+            'execom_role_id',
+            'full_name',
+            'muid'
+        ]
+
+    def create(self, validated_data):
+        user_id = self.context.get("user_id")
+        campus_id = self.context.get("campus_id")
+        
+        # Map execom_role_id back to execom_role
+        execom_role = validated_data.pop('execom_role')
+        
+        validated_data["id"] = uuid.uuid4()
+        validated_data["campus_id"] = campus_id
+        validated_data["execom_role_id"] = execom_role.get("id")
+        validated_data["created_by_id"] = user_id
+        validated_data["updated_by_id"] = user_id
+
+        return CampusExecom.objects.create(**validated_data)
+

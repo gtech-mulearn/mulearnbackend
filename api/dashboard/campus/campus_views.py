@@ -2,7 +2,7 @@ from django.db.models import Count, F
 from django.db.models import Q
 from rest_framework.views import APIView
 
-from db.organization import Organization, UserOrganizationLink
+from db.organization import Organization, UserOrganizationLink, CampusExecom
 from db.task import Level, Wallet, InterestGroup
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -629,3 +629,39 @@ class TransferIGRoleAPI(APIView):
                 general_message="Assigned new Ig lead successfully"
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+class CampusExecomAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request, campus_id):
+        execom = CampusExecom.objects.filter(campus_id=campus_id)
+        serializer = serializers.CampusExecomSerializer(execom, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    def post(self, request, campus_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        
+        serializer = serializers.CampusExecomSerializer(
+            data=request.data, 
+            context={"user_id": user_id, "campus_id": campus_id}
+        )
+        if serializer.is_valid():
+            # Check if user already has an execom role in this campus
+            user = request.data.get("user")
+            if CampusExecom.objects.filter(campus_id=campus_id, user_id=user).exists():
+                return CustomResponse(general_message="User is already an execom member in this campus").get_failure_response()
+            
+            serializer.save()
+            return CustomResponse(
+                general_message="Execom member added successfully"
+            ).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+    def delete(self, request, campus_id, uid):
+        execom_member = CampusExecom.objects.filter(campus_id=campus_id, user_id=uid).first()
+        if not execom_member:
+            return CustomResponse(general_message="Member not found").get_failure_response()
+            
+        execom_member.delete()
+        return CustomResponse(general_message="Execom member removed successfully").get_success_response()
+
