@@ -84,6 +84,9 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "interest_groups",
             "is_public",
             "percentile",
+            "bio",
+            "projects",
+            "experience",
         )
 
     def _get_user_org_link(self, obj, org_type):
@@ -396,6 +399,16 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "gender",
             "dob",
             "district",
+        ]
+
+
+class UserProfileUpdateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = [
+            "bio",
+            "projects",
+            "experience",
         ]
 
 

@@ -166,6 +166,25 @@ class UserProfileAPI(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
+    def patch(self, request, muid=None):
+        if muid:
+            return CustomResponse(
+                general_message="Cannot edit another user's profile"
+            ).get_failure_response()
+
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.get(id=user_id)
+
+        serializer = profile_serializer.UserProfileUpdateSerializer(
+            user, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(response=serializer.data).get_success_response()
+
+        return CustomResponse(response=serializer.errors).get_failure_response()
+
 
 class UserLogAPI(APIView):
     def get(self, request, muid=None):

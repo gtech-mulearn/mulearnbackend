@@ -31,6 +31,9 @@ class User(models.Model):
     suspended_at = models.DateTimeField(blank=True, null=True)
     interested_in_work = models.BooleanField(default=False)
     interested_in_gig_work = models.BooleanField(default=False)
+    bio = models.CharField(max_length=255, blank=True, null=True)
+    projects = models.JSONField(blank=True, null=True)
+    experience = models.JSONField(blank=True, null=True)
     suspended_by = models.ForeignKey("self", on_delete=models.SET(settings.SYSTEM_ADMIN_ID), blank=True, null=True,
                                      related_name="user_suspended_by_user", db_column="suspended_by", default=None)
     objects = user_manager.ActiveUserManager()
