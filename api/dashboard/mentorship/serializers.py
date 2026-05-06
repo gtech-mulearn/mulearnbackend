@@ -1,11 +1,11 @@
 import uuid
 
-from django.utils import timezone
+from django.db import transaction
 from rest_framework import serializers
 
 from db.user import User, UserMentor
 from db.task import (
-    KarmaActivityLog, InterestGroup,
+    KarmaActivityLog,
     MentorshipSession, MentorshipSessionUserLink,
 )
 
@@ -85,35 +85,36 @@ class MentorSessionCreateSerializer(serializers.Serializer):
         mentee_id = validated_data.pop("mentee_id")
         ig_id = validated_data.pop("ig_id", None)
 
-        session = MentorshipSession.objects.create(
-            id=str(uuid.uuid4()),
-            ig_id=ig_id,
-            title=validated_data["title"],
-            description=validated_data.get("description"),
-            mode=validated_data.get("mode", MentorshipSession.Mode.ONLINE),
-            starts_at=validated_data["starts_at"],
-            ends_at=validated_data["ends_at"],
-            meeting_link=validated_data.get("meeting_link"),
-            status=MentorshipSession.Status.SCHEDULED,
-            created_by_id=user_id,
-            updated_by_id=user_id,
-        )
+        with transaction.atomic():
+            session = MentorshipSession.objects.create(
+                id=str(uuid.uuid4()),
+                ig_id=ig_id,
+                title=validated_data["title"],
+                description=validated_data.get("description"),
+                mode=validated_data.get("mode", MentorshipSession.Mode.ONLINE),
+                starts_at=validated_data["starts_at"],
+                ends_at=validated_data["ends_at"],
+                meeting_link=validated_data.get("meeting_link"),
+                status=MentorshipSession.Status.SCHEDULED,
+                created_by_id=user_id,
+                updated_by_id=user_id,
+            )
 
-        MentorshipSessionUserLink.objects.create(
-            id=str(uuid.uuid4()),
-            session=session,
-            user_id=user_id,
-            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
-            attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
-        )
+            MentorshipSessionUserLink.objects.create(
+                id=str(uuid.uuid4()),
+                session=session,
+                user_id=user_id,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
+            )
 
-        MentorshipSessionUserLink.objects.create(
-            id=str(uuid.uuid4()),
-            session=session,
-            user_id=mentee_id,
-            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
-            attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
-        )
+            MentorshipSessionUserLink.objects.create(
+                id=str(uuid.uuid4()),
+                session=session,
+                user_id=mentee_id,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+                attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
+            )
 
         return session
 
@@ -151,6 +152,20 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
         return SessionParticipantSerializer(links, many=True).data
 
 
+class ParticipantUpdateSerializer(serializers.Serializer):
+    user_id = serializers.CharField()
+    participant_role = serializers.ChoiceField(
+        choices=MentorshipSessionUserLink.ParticipantRole.choices,
+        required=False,
+    )
+    attendance_status = serializers.ChoiceField(
+        choices=MentorshipSessionUserLink.AttendanceStatus.choices,
+        required=False,
+    )
+    progress_note = serializers.CharField(max_length=500, required=False, allow_null=True)
+    contributed_minutes = serializers.IntegerField(min_value=1, required=False, allow_null=True)
+
+
 class MentorSessionUpdateSerializer(serializers.Serializer):
     status = serializers.ChoiceField(
         choices=[
@@ -160,7 +175,7 @@ class MentorSessionUpdateSerializer(serializers.Serializer):
         ],
         required=False,
     )
-    participants = serializers.ListField(child=serializers.DictField(), required=False)
+    participants = ParticipantUpdateSerializer(many=True, required=False)
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
@@ -176,9 +191,12 @@ class MentorSessionUpdateSerializer(serializers.Serializer):
                 p_user_id = p.get("user_id")
                 if not p_user_id:
                     continue
-                link = MentorshipSessionUserLink.objects.filter(
-                    session=instance, user_id=p_user_id
-                ).first()
+
+                filters = {"session": instance, "user_id": p_user_id}
+                if "participant_role" in p:
+                    filters["participant_role"] = p["participant_role"]
+
+                link = MentorshipSessionUserLink.objects.filter(**filters).first()
                 if link:
                     if "attendance_status" in p:
                         link.attendance_status = p["attendance_status"]

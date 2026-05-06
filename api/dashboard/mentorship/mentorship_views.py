@@ -318,13 +318,13 @@ class MentorTaskQueueAPI(APIView):
         if ig_id := params.get("ig_id"):
             logs = logs.filter(task__ig_id=ig_id)
 
+        allowed_statuses = {"PENDING", "APPROVED", "REJECTED"}
         status_filter = params.get("status", "PENDING").upper()
-        if status_filter == "PENDING":
-            logs = logs.filter(mentor_review_status="PENDING")
-        elif status_filter == "APPROVED":
-            logs = logs.filter(mentor_review_status="APPROVED")
-        elif status_filter == "REJECTED":
-            logs = logs.filter(mentor_review_status="REJECTED")
+        if status_filter not in allowed_statuses:
+            return CustomResponse(
+                general_message="Invalid status filter. Must be PENDING, APPROVED, or REJECTED"
+            ).get_failure_response()
+        logs = logs.filter(mentor_review_status=status_filter)
 
         logs = logs.order_by("-created_at")
 
@@ -397,13 +397,23 @@ class MentorTaskQueueAPI(APIView):
                     http_status_code=403,
                 )
 
-        action_status = request.data.get("status", "").upper()
+        raw_status = request.data.get("status")
+        action_status = str(raw_status).upper() if raw_status else ""
         if action_status not in ("APPROVED", "REJECTED"):
             return CustomResponse(
                 general_message="status is required and must be 'APPROVED' or 'REJECTED'"
             ).get_failure_response()
 
         feedback = request.data.get("feedback")
+        if feedback is not None:
+            if not isinstance(feedback, str):
+                return CustomResponse(
+                    general_message="feedback must be a string"
+                ).get_failure_response()
+            if len(feedback) > 500:
+                return CustomResponse(
+                    general_message="feedback must be 500 characters or less"
+                ).get_failure_response()
 
         log_entry.mentor_review_status = action_status
         log_entry.mentor_reviewed_by_id = user_id
