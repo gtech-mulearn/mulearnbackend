@@ -5,7 +5,6 @@ from rest_framework.views import APIView
 from db.user import User, UserMentor
 from db.task import (
     KarmaActivityLog, UserIgLink, UserIgLvlLink,
-    Wallet, UserLvlLink, InterestGroup,
     MentorshipSession, MentorshipSessionUserLink,
 )
 from db.achievement import UserIgKarma
