@@ -212,7 +212,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
             ).get_success_response()
             
         except Exception as e:
-            
+            print(f"Error listing company jobs: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong in listing company jobs",
                 message={"error_code": "SERVER_ERROR"}
@@ -247,7 +247,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
              
               
             except Company.DoesNotExist:
-                
+                print(f"No company found for user: {user}")
            
                 return CustomResponse(
                     general_message="No active company found for user",
@@ -258,7 +258,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                 )
 
             # 2. Validate request data
-            
+            print(f"Request data: {request.data}")
             serializer = CompanyJobCreateSerializer(data=request.data)
             if not serializer.is_valid():
            
@@ -284,9 +284,9 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
                 'min_level': serializer.validated_data.get('min_level', 0),
                 'status': 'Active'
             }
-           
+            print(f"Job data before creation: {job_data}")
             job = CompanyJob.objects.create(**job_data)
-            
+            print(f"Job created successfully: {job.id}")  # D
             # 6. Prepare response
             response_data = {
                 "job": {
@@ -305,7 +305,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             ).get_success_response()
         
         except Exception as e:
-            
+            print(e)
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
@@ -374,7 +374,7 @@ class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
             ).get_success_response()
 
         except Exception as e:
-            
+            print(f"Error fetching job details: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
@@ -454,7 +454,8 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             ).get_success_response()
             
         except Exception as e:
-            
+            # Log the actual error for debugging
+            print(f"Error updating company job: {str(e)}")
   
             return CustomResponse(
                 general_message="Something went wrong in updating the job",
@@ -512,7 +513,8 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             ).get_success_response()
             
         except Exception as e:
-            
+            # Log the actual error for debugging
+            print(f"Error deleting company job: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
                
@@ -609,7 +611,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
             ).get_success_response()
 
         except Exception as e:
-            
+            print(f"Error creating job rule: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
@@ -740,7 +742,8 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
 
         except Exception as e:
             import traceback
-            
+            print(f"Error updating job rule: {str(e)}")
+            print(f"Full traceback: {traceback.format_exc()}")
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR", "details": str(e)}
@@ -813,7 +816,7 @@ class DeleteJobRuleAPIView(BaseCompanyJobView):
             ).get_success_response()
 
         except Exception as e:
-            
+            print(f"Error deleting job rule: {str(e)}")
             return CustomResponse(
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
