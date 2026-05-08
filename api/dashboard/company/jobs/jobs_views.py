@@ -42,24 +42,21 @@ class BaseCompanyJobView(APIView):
         except Company.DoesNotExist:
             error_response = CustomResponse(
                 general_message="Company does not exist",
-            #     status_code=status.HTTP_404_NOT_FOUND,
-                error_code="COMPANY_NOT_FOUND"
-            # ).get_failure_response()
+                message={"error_code": "COMPANY_NOT_FOUND"},
             ).get_failure_response(
-                    status_code=404,
-                    http_status_code=status.HTTP_404_NOT_FOUND
-                )
+                status_code=404,
+                http_status_code=status.HTTP_404_NOT_FOUND
+            )
             return False, None, error_response
         
         if company.company_user_id.id != user.id:
             error_response = CustomResponse(
                 general_message="You are not authorized to access this company",
-                # status_code=status.HTTP_403_FORBIDDEN,
-                error_code="UNAUTHORIZED"
+                message={"error_code": "UNAUTHORIZED"},
             ).get_failure_response(
-                    status_code=403,
-                    http_status_code=status.HTTP_403_FORBIDDEN
-                )
+                status_code=403,
+                http_status_code=status.HTTP_403_FORBIDDEN
+            )
             
             return False, company, error_response
             
@@ -827,3 +824,27 @@ class DeleteJobRuleAPIView(BaseCompanyJobView):
                 status_code=500,
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
+
+class PublicJobsListAPIView(APIView):
+    """Public API to browse active jobs across all companies. No auth required."""
+    permission_classes = []  # No authentication needed
+
+    def get(self, request):
+        jobs_qs = CompanyJob.objects.filter(
+            is_deleted=False,
+            status='Active'
+        ).select_related('company_id').prefetch_related('rules').order_by('-created_at')
+
+        paginated_data = CommonUtils.get_paginated_queryset(
+            queryset=jobs_qs,
+            request=request,
+            search_fields=["title", "location", "job_type"],
+            sort_fields={"title": "title", "createdAt": "created_at"},
+            is_pagination=True
+        )
+
+        serializer = CompanyJobListSerializer(list(paginated_data["queryset"]), many=True)
+        return CustomResponse(
+            response={"jobs": serializer.data, "pagination": paginated_data["pagination"]},
+            general_message="Jobs fetched successfully"
+        ).get_success_response()
