@@ -190,6 +190,12 @@ class KarmaActivityLog(models.Model):
     appraiser_approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="appraiser_approved_by",
                                                   blank=True, null=True,
                                               related_name="karma_activity_log_appraiser_approved_by")
+    mentor_review_status = models.CharField(max_length=10, default='PENDING')
+    mentor_reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, db_column="mentor_reviewed_by",
+                                           blank=True, null=True,
+                                           related_name="karma_activity_log_mentor_reviewed_by")
+    mentor_reviewed_at = models.DateTimeField(blank=True, null=True)
+    mentor_review_feedback = models.CharField(max_length=500, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="karma_activity_log_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
@@ -238,9 +244,14 @@ class UserIgLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_ig_link_user")
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name="user_ig_link_ig")
+    assignment_type = models.CharField(max_length=10, default='LEARNER')
+    is_active = models.BooleanField(default=True)
+    assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True,
+                                    db_column='assigned_by', related_name='user_ig_link_assigned_by')
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="user_ig_link_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
+    unassigned_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         managed = False
@@ -338,3 +349,101 @@ class TaskReport(models.Model):
     class Meta:
         managed = False
         db_table = "task_report"
+
+
+class MentorshipSession(models.Model):
+    class Status(models.TextChoices):
+        SCHEDULED = 'SCHEDULED'
+        COMPLETED = 'COMPLETED'
+        CANCELLED = 'CANCELLED'
+        NO_SHOW = 'NO_SHOW'
+
+    class Mode(models.TextChoices):
+        ONLINE = 'ONLINE'
+        OFFLINE = 'OFFLINE'
+        HYBRID = 'HYBRID'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    ig = models.ForeignKey(InterestGroup, on_delete=models.SET_NULL,
+                           null=True, blank=True, related_name='mentorship_session_ig')
+    title = models.CharField(max_length=150)
+    description = models.TextField(null=True, blank=True)
+    mode = models.CharField(max_length=10, choices=Mode.choices, default=Mode.ONLINE)
+    starts_at = models.DateTimeField()
+    ends_at = models.DateTimeField()
+    meeting_link = models.CharField(max_length=500, null=True, blank=True)
+    status = models.CharField(max_length=20, choices=Status.choices,
+                              default=Status.SCHEDULED)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   db_column='created_by',
+                                   related_name='mentorship_session_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   db_column='updated_by',
+                                   related_name='mentorship_session_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentorship_session'
+
+
+class MentorshipSessionUserLink(models.Model):
+    class ParticipantRole(models.TextChoices):
+        MENTOR = 'MENTOR'
+        MENTEE = 'MENTEE'
+        CO_MENTOR = 'CO_MENTOR'
+
+    class AttendanceStatus(models.TextChoices):
+        INVITED = 'INVITED'
+        ATTENDED = 'ATTENDED'
+        ABSENT = 'ABSENT'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    session = models.ForeignKey(MentorshipSession, on_delete=models.CASCADE,
+                                related_name='session_user_links')
+    user = models.ForeignKey(User, on_delete=models.CASCADE,
+                             related_name='mentorship_session_user_links')
+    participant_role = models.CharField(max_length=10, choices=ParticipantRole.choices)
+    attendance_status = models.CharField(max_length=10, choices=AttendanceStatus.choices,
+                                        default=AttendanceStatus.INVITED)
+    progress_note = models.CharField(max_length=500, null=True, blank=True)
+    contributed_minutes = models.IntegerField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentorship_session_user_link'
+        constraints = [
+            models.UniqueConstraint(
+                fields=['session', 'user', 'participant_role'],
+                name='uq_session_user_role'
+            )
+        ]
+
+
+class MentorAvailabilitySlot(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    mentor_user = models.ForeignKey(User, on_delete=models.CASCADE,
+                                    related_name='mentor_availability_slots')
+    ig = models.ForeignKey(InterestGroup, on_delete=models.SET_NULL,
+                           null=True, blank=True, related_name='mentor_availability_ig')
+    weekday = models.SmallIntegerField()
+    start_time = models.TimeField()
+    end_time = models.TimeField()
+    timezone = models.CharField(max_length=64, default='Asia/Kolkata')
+    is_active = models.BooleanField(default=True)
+    valid_from = models.DateField(null=True, blank=True)
+    valid_to = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   db_column='created_by',
+                                   related_name='mentor_avail_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE,
+                                   db_column='updated_by',
+                                   related_name='mentor_avail_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_availability_slot'

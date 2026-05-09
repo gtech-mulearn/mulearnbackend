@@ -101,8 +101,15 @@ class UserMentor(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_mentor_user')
     about = models.CharField(max_length=1000, blank=True, null=True)
+    expertise = models.TextField(blank=True, null=True)
     reason = models.CharField(max_length=1000, blank=True, null=True)
     hours = models.IntegerField()
+    mentor_tier = models.CharField(max_length=10, default='NORMAL')
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True,
+                                    db_column='verified_by', related_name='user_mentor_verified_by')
+    verified_at = models.DateTimeField(blank=True, null=True)
+    verification_note = models.CharField(max_length=500, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
                                    related_name='user_mentor_updated_by_set')
     updated_at = models.DateTimeField(blank=True, null=True)
@@ -152,10 +159,16 @@ class UserRoleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_role_link_user')
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
+    ig_id = models.CharField(max_length=36, blank=True, null=True, db_column='ig_id')
     verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    is_primary = models.BooleanField(default=False)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='user_role_link_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
+    revoked_at = models.DateTimeField(blank=True, null=True)
+    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True,
+                                   db_column='revoked_by', related_name='user_role_link_revoked_by')
 
     class Meta:
         managed = False
@@ -205,6 +218,11 @@ class UserSettings(models.Model):
     user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_settings_user")
     is_public = models.BooleanField(default=False)
     is_userterms_approved = models.BooleanField(default=False)
+    active_persona = models.CharField(max_length=10, default='learner')
+    active_role_link = models.ForeignKey('UserRoleLink', on_delete=models.SET_NULL, blank=True, null=True,
+                                        db_column='active_role_link_id', related_name='user_settings_active_role_link')
+    active_ig_id = models.CharField(max_length=36, blank=True, null=True, db_column='active_ig_id')
+    last_persona_switched_at = models.DateTimeField(blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
                                    related_name='user_settings_updated_by')
     updated_at = models.DateTimeField(auto_now=True)
