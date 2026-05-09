@@ -273,16 +273,24 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             
             # 6. Create the job
             job_data = {
-                'company_id': company,
-                'title': serializer.validated_data['title'],
-                'experience': serializer.validated_data.get('experience'),
+                'company_id':    company,
+                'title':         serializer.validated_data['title'],
+                'experience':    serializer.validated_data.get('experience'),
                 'job_description': serializer.validated_data.get('job_description'),
-                'location': serializer.validated_data.get('location'),
-                'salary_range': serializer.validated_data.get('salary_range'),
-                'job_type': serializer.validated_data['job_type'],
-                'min_karma': serializer.validated_data.get('min_karma', 0),
-                'min_level': serializer.validated_data.get('min_level', 0),
-                'status': 'Active'
+                'location':      serializer.validated_data.get('location'),
+                'salary_range':  serializer.validated_data.get('salary_range'),
+                'job_type':      serializer.validated_data['job_type'],
+                'min_karma':     serializer.validated_data.get('min_karma', 0),
+                'min_level':     serializer.validated_data.get('min_level', 0),
+                'status':        'Active',
+                # Enhancement fields
+                'karma_reward':         serializer.validated_data.get('karma_reward'),
+                'duration_value':       serializer.validated_data.get('duration_value'),
+                'duration_unit':        serializer.validated_data.get('duration_unit'),
+                'hourly_rate':          serializer.validated_data.get('hourly_rate'),
+                'deliverables':         serializer.validated_data.get('deliverables'),
+                'stipend':              serializer.validated_data.get('stipend'),
+                'certificate_provided': serializer.validated_data.get('certificate_provided'),
             }
             print(f"Job data before creation: {job_data}")
             job = CompanyJob.objects.create(**job_data)
