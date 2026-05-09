@@ -5,6 +5,7 @@ from . import public_views, manage_views, admin_views, scoped_views, meta_views
 urlpatterns = [
 
     # ── Meta (BEFORE wildcards) ───────────────────────────────
+    path('meta/categories/', meta_views.EventCategoriesAPI.as_view()),
     path('meta/organizer-options/', meta_views.OrganizerOptionsAPI.as_view()),
     path('meta/collaboration-targets/', meta_views.CollaborationTargetsAPI.as_view()),
 
@@ -39,8 +40,12 @@ urlpatterns = [
     # Manage event detail (GET / PUT / PATCH / DELETE)
     path('manage/<str:event_id>/', manage_views.ManageEventDetailAPI.as_view()),
 
+    # ── User Dashboard ───────────────────────────────
+    path('my-invites/', manage_views.MyEventInvitesAPI.as_view()),
+
     # ── Public (wildcards last) ───────────────────────────────
     path('featured/', public_views.EventFeaturedAPI.as_view()),
+    path('is-featured/', public_views.EventFeaturedAPI.as_view()),
     path('<str:event_id>/interest/', public_views.EventInterestAPI.as_view()),
     path('<str:event_id>/', public_views.EventDetailAPI.as_view()),
     path('', public_views.EventListAPI.as_view()),

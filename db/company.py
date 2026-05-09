@@ -107,3 +107,55 @@ class CompanyJobRule(models.Model):
             return InterestGroup.objects.get(id=self.rule_type_id)
         else:
             return Achievement.objects.get(id=self.rule_type_id)
+
+
+class CompanyJobApplication(models.Model):
+    """
+    Tracks a learner's application to a CompanyJob.
+
+    Status workflow:
+        applied → shortlisted → accepted  (terminal)
+                ↘            ↘ rejected   (terminal)
+                  → rejected
+        withdrawn — set by learner (terminal)
+    """
+
+    STATUS_CHOICES = [
+        ('applied',     'Applied'),
+        ('shortlisted', 'Shortlisted'),
+        ('accepted',    'Accepted'),
+        ('rejected',    'Rejected'),
+        ('withdrawn',   'Withdrawn'),
+    ]
+
+    # Allowed forward-transitions enforced at the API layer
+    VALID_TRANSITIONS = {
+        'applied':     ['shortlisted', 'rejected'],
+        'shortlisted': ['accepted', 'rejected'],
+        'accepted':    [],
+        'rejected':    [],
+        'withdrawn':   [],
+    }
+
+    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    job         = models.ForeignKey(
+                      CompanyJob, on_delete=models.CASCADE,
+                      related_name='applications', db_column='job_id')
+    applicant   = models.ForeignKey(
+                      User, on_delete=models.CASCADE,
+                      related_name='company_job_applications', db_column='applicant_id')
+    status      = models.CharField(max_length=15, choices=STATUS_CHOICES, default='applied')
+    cover_note  = models.TextField(blank=True, null=True)
+    reviewed_by = models.ForeignKey(
+                      User, on_delete=models.SET_NULL,
+                      null=True, blank=True,
+                      related_name='reviewed_applications',
+                      db_column='reviewed_by')
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+    created_at  = models.DateTimeField(auto_now_add=True)
+    updated_at  = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'company_job_applications'
+        unique_together = [('job', 'applicant')]

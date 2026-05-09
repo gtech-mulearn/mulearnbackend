@@ -80,13 +80,17 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
     institution = serializers.SerializerMethodField()
     total_karma = serializers.IntegerField(source="wallet_user.karma", default=0)
     full_name = serializers.CharField()
+    profile_pic = serializers.SerializerMethodField()
 
     def get_institution(self, user):
         return user.colleges[0].org.title if user.colleges else None
 
+    def get_profile_pic(self, user):
+        return str(user.profile_pic) if user.profile_pic else None
+
     class Meta:
         model = User
-        fields = ["full_name", "total_karma", "institution"]
+        fields = ["full_name", "total_karma", "institution", "profile_pic"]
 
 class WadhwaniCollegeLeaderboardSerializer(serializers.Serializer):
     code = serializers.CharField()
