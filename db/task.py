@@ -241,13 +241,25 @@ class MucoinInviteLog(models.Model):
 
 
 class UserIgLink(models.Model):
+
+    class AssignmentType(models.TextChoices):
+        MENTOR = 'MENTOR', 'Mentor'
+        LEARNER = 'LEARNER', 'Learner'
+        LEAD = 'LEAD', 'Lead'
+        MODERATOR = 'MODERATOR', 'Moderator'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_ig_link_user")
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name="user_ig_link_ig")
-    assignment_type = models.CharField(max_length=10, default='LEARNER')
+    assignment_type = models.CharField(
+        max_length=15, choices=AssignmentType.choices, default=AssignmentType.LEARNER
+    )
     is_active = models.BooleanField(default=True)
-    assigned_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True,
-                                    db_column='assigned_by', related_name='user_ig_link_assigned_by')
+    assigned_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='assigned_by', related_name='user_ig_link_assigned_by'
+    )
+    unassigned_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="user_ig_link_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
