@@ -47,65 +47,161 @@ class CompanyJobListSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyJob
         fields = [
-            'id', 'title', 'job_type', 'location', 'salary_range', 
+            'id', 'title', 'job_type', 'location', 'salary_range',
             'min_karma', 'min_level', 'status', 'created_at', 'updated_at',
-              'rules'
-
+            # Enhancement fields
+            'karma_reward',
+            'duration_value', 'duration_unit',
+            'hourly_rate', 'deliverables',
+            'stipend', 'certificate_provided',
+            'rules',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
 
 class CompanyJobCreateSerializer(serializers.ModelSerializer):
-    # company_id = serializers.CharField(max_length=36)
-    
+
     class Meta:
         model = CompanyJob
         fields = [
-             'title', 'experience', 'job_description', 
-            'location', 'salary_range', 'job_type', 'min_karma', 'min_level'
+            'title', 'experience', 'job_description',
+            'location', 'salary_range', 'job_type', 'min_karma', 'min_level',
+            # Enhancement fields
+            'karma_reward',
+            'duration_value', 'duration_unit',
+            'hourly_rate', 'deliverables',
+            'stipend', 'certificate_provided',
         ]
         extra_kwargs = {
-            'title': {'required': True, 'max_length': 75},
+            'title':    {'required': True, 'max_length': 75},
             'job_type': {'required': True},
         }
-    
+
     def validate_job_type(self, value):
         valid_types = [choice[0] for choice in CompanyJob.JOB_TYPE_CHOICES]
         if value not in valid_types:
             raise serializers.ValidationError("job_type must be one of the allowed values")
         return value
+
+    def validate_karma_reward(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("karma_reward must be a non-negative integer")
+        return value
+
+    def validate_hourly_rate(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("hourly_rate must be greater than 0")
+        return value
+
+    def validate_deliverables(self, value):
+        """Must be a list of non-empty strings."""
+        if value is not None:
+            if not isinstance(value, list):
+                raise serializers.ValidationError("deliverables must be a JSON array of strings")
+            for item in value:
+                if not isinstance(item, str) or not item.strip():
+                    raise serializers.ValidationError(
+                        "Each deliverable must be a non-empty string"
+                    )
+        return value
+
+    def validate(self, data):
+        """Cross-field validation for structured and type-specific fields."""
+        duration_value = data.get('duration_value')
+        duration_unit  = data.get('duration_unit')
+
+        # duration_value and duration_unit must come together
+        if duration_value is not None and not duration_unit:
+            raise serializers.ValidationError(
+                {"duration_unit": "duration_unit is required when duration_value is provided"}
+            )
+        if duration_unit and duration_value is None:
+            raise serializers.ValidationError(
+                {"duration_value": "duration_value is required when duration_unit is provided"}
+            )
+
+        return data
 
 
 class CompanyJobUpdateSerializer(serializers.ModelSerializer):
-    
+
     class Meta:
         model = CompanyJob
         fields = [
-            'title', 'experience', 'job_description', 
-            'location', 'salary_range', 'job_type', 'min_karma', 'min_level'
+            'title', 'experience', 'job_description',
+            'location', 'salary_range', 'job_type', 'min_karma', 'min_level',
+            # Enhancement fields
+            'karma_reward',
+            'duration_value', 'duration_unit',
+            'hourly_rate', 'deliverables',
+            'stipend', 'certificate_provided',
         ]
         extra_kwargs = {
-            'title': {'required': False, 'max_length': 75},
-            'experience': {'required': False},
-            'job_description': {'required': False},
-            'location': {'required': False},
-            'salary_range': {'required': False},
-            'job_type': {'required': False},
-            'min_karma': {'required': False},
-            'min_level': {'required': False},
+            'title':               {'required': False, 'max_length': 75},
+            'experience':          {'required': False},
+            'job_description':     {'required': False},
+            'location':            {'required': False},
+            'salary_range':        {'required': False},
+            'job_type':            {'required': False},
+            'min_karma':           {'required': False},
+            'min_level':           {'required': False},
+            'karma_reward':        {'required': False},
+            'duration_value':      {'required': False},
+            'duration_unit':       {'required': False},
+            'hourly_rate':         {'required': False},
+            'deliverables':        {'required': False},
+            'stipend':             {'required': False},
+            'certificate_provided':{'required': False},
         }
-    
+
     def validate_job_type(self, value):
         valid_types = [choice[0] for choice in CompanyJob.JOB_TYPE_CHOICES]
         if value not in valid_types:
             raise serializers.ValidationError("job_type must be one of the allowed values")
         return value
-    
-    def validate(self, attrs):
-        # Ensure at least one field is provided for update
-        if not attrs:
+
+    def validate_karma_reward(self, value):
+        if value is not None and value < 0:
+            raise serializers.ValidationError("karma_reward must be a non-negative integer")
+        return value
+
+    def validate_hourly_rate(self, value):
+        if value is not None and value <= 0:
+            raise serializers.ValidationError("hourly_rate must be greater than 0")
+        return value
+
+    def validate_deliverables(self, value):
+        if value is not None:
+            if not isinstance(value, list):
+                raise serializers.ValidationError("deliverables must be a JSON array of strings")
+            for item in value:
+                if not isinstance(item, str) or not item.strip():
+                    raise serializers.ValidationError(
+                        "Each deliverable must be a non-empty string"
+                    )
+        return value
+
+    def validate(self, data):
+        """Ensure at least one field is provided, and duration fields are consistent."""
+        if not data:
             raise serializers.ValidationError("At least one valid field must be provided for update")
-        return attrs
+
+        duration_value = data.get('duration_value')
+        duration_unit  = data.get('duration_unit')
+
+        # Allow partial updates: only validate pairing when BOTH are in this request
+        if duration_value is not None and duration_unit is not None:
+            pass  # both provided — valid
+        elif duration_value is not None and 'duration_unit' in data and data['duration_unit'] is None:
+            raise serializers.ValidationError(
+                {"duration_unit": "duration_unit cannot be null when duration_value is provided"}
+            )
+        elif duration_unit and 'duration_value' in data and data['duration_value'] is None:
+            raise serializers.ValidationError(
+                {"duration_value": "duration_value cannot be null when duration_unit is provided"}
+            )
+
+        return data
 
 class JobRuleCreateSerializer(serializers.ModelSerializer):
     """Serializer for creating job rules."""
