@@ -76,6 +76,30 @@ class CompanyJob(models.Model):
     is_deleted = models.BooleanField(default=False)
     min_karma = models.IntegerField(blank=True, null=True)
     min_level = models.SmallIntegerField(blank=True, null=True)  # TINYINT
+
+    # --- Job Enhancement Fields ---
+    # Applicable to all job types (display only, no automatic karma crediting)
+    karma_reward = models.IntegerField(blank=True, null=True)
+
+    # Applicable to Gig and Internship types
+    DURATION_UNIT_CHOICES = [
+        ('days',   'Days'),
+        ('weeks',  'Weeks'),
+        ('months', 'Months'),
+    ]
+    duration_value = models.PositiveSmallIntegerField(blank=True, null=True)
+    duration_unit  = models.CharField(
+        max_length=10, choices=DURATION_UNIT_CHOICES, blank=True, null=True
+    )
+
+    # Applicable to Gig type only
+    hourly_rate  = models.DecimalField(max_digits=10, decimal_places=2, blank=True, null=True)
+    deliverables = models.JSONField(blank=True, null=True)  # list of strings
+
+    # Applicable to Internship type only
+    stipend              = models.CharField(max_length=75, blank=True, null=True)
+    certificate_provided = models.BooleanField(blank=True, null=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
