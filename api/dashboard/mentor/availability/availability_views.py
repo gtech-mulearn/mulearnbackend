@@ -147,10 +147,9 @@ class MentorAvailabilitySlotDeleteView(APIView):
                 general_message="Slot not found or access denied.",
             ).get_failure_response()
 
-        # Soft delete: mark inactive instead of hard delete
         slot.is_active = False
         slot.updated_by_id = user_id
-        slot.save(update_fields=['is_active', 'updated_by', 'updated_at'])
+        slot.save(update_fields=['is_active', 'updated_by_id'])
 
         return CustomResponse(
             general_message="Availability slot removed.",

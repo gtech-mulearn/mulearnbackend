@@ -221,9 +221,6 @@ class UserRoleLink(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='user_role_link_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-    revoked_at = models.DateTimeField(blank=True, null=True)
-    revoked_by = models.ForeignKey(User, on_delete=models.SET_NULL, blank=True, null=True,
-                                   db_column='revoked_by', related_name='user_role_link_revoked_by')
 
     class Meta:
         managed = False
