@@ -1,7 +1,7 @@
 from rest_framework.views import APIView
 
 from db.user import User, UserRoleLink, UserMentor, UserSettings
-from db.task import InterestGroup
+from db.task import InterestGroup, KarmaActivityLog
 from db.mentor import MentorshipSession, MentorshipSessionUserLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.mentor_permissions import IsIGMentor, _get_persona_context
@@ -49,11 +49,21 @@ class MentorOverviewView(APIView):
 
         active_ig_id = persona_ctx['ig_id']
 
-        # Stats scoped to current active IG
+        # Stats scoped to current active IG — only sessions this mentor ran
+        mentor_session_ids = (
+            MentorshipSessionUserLink.objects
+            .filter(
+                user_id=user_id,
+                participant_role='MENTOR',
+                session__ig_id=active_ig_id,
+            )
+            .values_list('session_id', flat=True)
+        )
+
         total_mentees = (
             MentorshipSessionUserLink.objects
             .filter(
-                session__ig_id=active_ig_id,
+                session_id__in=mentor_session_ids,
                 participant_role='MENTEE',
             )
             .values('user_id').distinct().count()
@@ -70,9 +80,10 @@ class MentorOverviewView(APIView):
             .count()
         )
 
-        # mentor_review_status is a planned column not yet added to KarmaActivityLog.
-        # Returns 0 safely until the ALTER TABLE migration is executed.
-        pending_approvals = 0
+        pending_approvals = KarmaActivityLog.objects.filter(
+            task__ig_id=active_ig_id,
+            mentor_review_status='PENDING',
+        ).count()
 
         return CustomResponse(
             general_message="Mentor overview fetched.",

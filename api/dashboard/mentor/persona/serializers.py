@@ -5,22 +5,21 @@ from db.task import InterestGroup
 
 class PersonaSwitchSerializer(serializers.Serializer):
     active_role_link_id = serializers.CharField(max_length=36)
-    active_ig_id = serializers.CharField(max_length=36)
 
     def validate(self, data):
         user = self.context['user']
 
-        # Ownership + activity check in a single query
+        # Ownership + activity check — IG is derived from the role_link FK
         role_link = UserRoleLink.objects.select_related('ig', 'role').filter(
             id=data['active_role_link_id'],
             user=user,
-            ig_id=data['active_ig_id'],
+            ig__isnull=False,
             is_active=True,
         ).first()
 
         if not role_link:
             raise serializers.ValidationError(
-                "No active mentor role found for this IG, "
+                "No active IG-scoped mentor role found for this role link, "
                 "or you do not own this role assignment."
             )
 
@@ -30,6 +29,7 @@ class PersonaSwitchSerializer(serializers.Serializer):
             )
 
         data['role_link'] = role_link
+        data['ig_id'] = role_link.ig_id   # derived server-side, not from client
         return data
 
 

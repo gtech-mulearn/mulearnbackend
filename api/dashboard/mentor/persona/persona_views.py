@@ -50,11 +50,21 @@ class PersonaSwitchView(APIView):
         user_settings.last_persona_switched_at = timezone.now()
         user_settings.updated_by = user
         user_settings.save(update_fields=[
-            'active_persona', 'active_role_link', 'active_ig',
-            'last_persona_switched_at', 'updated_by', 'updated_at',
+            'active_persona', 'active_role_link_id', 'active_ig_id',
+            'last_persona_switched_at', 'updated_by_id', 'updated_at',
         ])
 
-        mentor_profile = UserMentor.objects.filter(user=user).first()
+        # Auto-create mentor profile on first switch — ensures profile always exists
+        # after a successful persona activation. No separate POST endpoint needed.
+        mentor_profile, profile_created = UserMentor.objects.get_or_create(
+            user=user,
+            defaults={
+                'mentor_tier': UserMentor.MentorTier.NORMAL,
+                'is_verified': False,
+                'created_by': user,
+                'updated_by': user,
+            }
+        )
 
         return CustomResponse(
             general_message="Persona switched to mentor successfully.",
@@ -63,8 +73,9 @@ class PersonaSwitchView(APIView):
                 "active_role_link_id": str(role_link.id),
                 "active_ig_id": str(ig.id),
                 "ig_name": ig.name,
-                "is_verified": mentor_profile.is_verified if mentor_profile else False,
-                "mentor_tier": mentor_profile.mentor_tier if mentor_profile else "NORMAL",
+                "is_verified": mentor_profile.is_verified,
+                "mentor_tier": mentor_profile.mentor_tier,
+                "profile_created": profile_created,   # True = first time, prompt onboarding
                 "last_persona_switched_at": user_settings.last_persona_switched_at.isoformat(),
                 # JWT reissue is optional; key always present for schema consistency
                 "access": None,
@@ -100,8 +111,8 @@ class PersonaResetView(APIView):
         user_settings.last_persona_switched_at = timezone.now()
         user_settings.updated_by = user
         user_settings.save(update_fields=[
-            'active_persona', 'active_role_link', 'active_ig',
-            'last_persona_switched_at', 'updated_by', 'updated_at',
+            'active_persona', 'active_role_link_id', 'active_ig_id',
+            'last_persona_switched_at', 'updated_by_id', 'updated_at',
         ])
 
         return CustomResponse(

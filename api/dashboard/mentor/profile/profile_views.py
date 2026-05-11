@@ -26,6 +26,7 @@ class MentorProfileView(APIView):
         return CustomResponse(
             general_message="Mentor profile fetched.",
             response={
+                "id": profile.id,
                 "about": profile.about,
                 "reason": profile.reason,
                 "expertise": profile.expertise,
@@ -65,6 +66,7 @@ class MentorProfileView(APIView):
         return CustomResponse(
             general_message="Mentor profile updated.",
             response={
+                "id": profile.id,
                 "about": profile.about,
                 "reason": profile.reason,
                 "expertise": profile.expertise,

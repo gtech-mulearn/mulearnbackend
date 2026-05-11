@@ -4,59 +4,11 @@ from django.db import transaction
 from rest_framework import serializers
 
 from db.user import User, UserMentor
-from db.task import (
-    KarmaActivityLog,
-    MentorshipSession, MentorshipSessionUserLink,
-)
-
-
-class MentorStatusSerializer(serializers.ModelSerializer):
-    is_mentor = serializers.SerializerMethodField()
-
-    class Meta:
-        model = UserMentor
-        fields = [
-            "is_mentor",
-            "is_verified",
-            "mentor_tier",
-            "hours",
-            "about",
-            "expertise",
-            "reason",
-            "verified_at",
-            "verification_note",
-        ]
-
-    def get_is_mentor(self, obj):
-        return True
-
-
-class MentorProfileUpdateSerializer(serializers.ModelSerializer):
-
-    class Meta:
-        model = UserMentor
-        fields = ["about", "expertise", "reason", "hours"]
-        extra_kwargs = {
-            "about": {"required": False},
-            "expertise": {"required": False},
-            "reason": {"required": False},
-            "hours": {"required": False},
-        }
-
-    def update(self, instance, validated_data):
-        user_id = self.context.get("user_id")
-        instance.about = validated_data.get("about", instance.about)
-        instance.expertise = validated_data.get("expertise", instance.expertise)
-        instance.reason = validated_data.get("reason", instance.reason)
-        instance.hours = validated_data.get("hours", instance.hours)
-        instance.updated_by_id = user_id
-        instance.save()
-        return instance
+from db.mentor import MentorshipSession, MentorshipSessionUserLink
 
 
 class MentorSessionCreateSerializer(serializers.Serializer):
     mentee_id = serializers.CharField()
-    ig_id = serializers.CharField(required=False, allow_null=True)
     title = serializers.CharField(max_length=150)
     description = serializers.CharField(required=False, allow_null=True, allow_blank=True)
     mode = serializers.ChoiceField(
@@ -71,19 +23,23 @@ class MentorSessionCreateSerializer(serializers.Serializer):
     def validate_mentee_id(self, value):
         if not User.objects.filter(id=value).exists():
             raise serializers.ValidationError("Mentee not found")
+        user_id = self.context.get("user_id")
+        if value == user_id:
+            raise serializers.ValidationError("You cannot schedule a session with yourself")
         return value
 
     def validate(self, data):
         if data["ends_at"] <= data["starts_at"]:
             raise serializers.ValidationError(
-                {"ends_at": "ends_at must be greater than starts_at"}
+                {"ends_at": "ends_at must be after starts_at"}
             )
         return data
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
+        # ig_id is injected from the active persona context — not supplied by client
+        ig_id = self.context.get("ig_id")
         mentee_id = validated_data.pop("mentee_id")
-        ig_id = validated_data.pop("ig_id", None)
 
         with transaction.atomic():
             session = MentorshipSession.objects.create(
@@ -148,7 +104,8 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
         return obj.ig.name if obj.ig else None
 
     def get_participants(self, obj):
-        links = obj.session_user_links.select_related("user").all()
+        # related_name on MentorshipSessionUserLink.session is 'participants'
+        links = obj.participants.select_related("user").all()
         return SessionParticipantSerializer(links, many=True).data
 
 
@@ -207,34 +164,3 @@ class MentorSessionUpdateSerializer(serializers.Serializer):
                     link.save()
 
         return instance
-
-
-class TaskQueueSerializer(serializers.ModelSerializer):
-    mentee_id = serializers.CharField(source="user.id")
-    mentee_name = serializers.CharField(source="user.full_name")
-    task_id = serializers.CharField(source="task.id")
-    task_title = serializers.CharField(source="task.title")
-    task_hashtag = serializers.CharField(source="task.hashtag")
-    task_karma = serializers.IntegerField(source="task.karma")
-    ig_name = serializers.SerializerMethodField()
-
-    class Meta:
-        model = KarmaActivityLog
-        fields = [
-            "id",
-            "mentee_id",
-            "mentee_name",
-            "task_id",
-            "task_title",
-            "task_hashtag",
-            "task_karma",
-            "ig_name",
-            "mentor_review_status",
-            "mentor_review_feedback",
-            "created_at",
-        ]
-
-    def get_ig_name(self, obj):
-        if obj.task and obj.task.ig:
-            return obj.task.ig.name
-        return None
