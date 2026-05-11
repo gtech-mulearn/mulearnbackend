@@ -275,15 +275,23 @@ class UserRole(APIView):
                 general_message=serializer.errors
             ).get_failure_response()
 
-        serializer.save()
+        role_link = serializer.save()
 
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_ROLE.value,
             WebHookActions.UPDATE.value,
             request.data.get("user_id"),
         )
+
+        response_data = {"message": "Role Added Successfully"}
+        # If this was a Mentor role assignment, tell the admin whether
+        # the UserMentor profile was freshly created or already existed.
+        if hasattr(role_link, '_mentor_profile_created'):
+            response_data["mentor_profile_created"] = role_link._mentor_profile_created
+
         return CustomResponse(
-            general_message="Role Added Successfully"
+            general_message="Role Added Successfully",
+            response=response_data,
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])

@@ -98,16 +98,68 @@ class UserEndgoals(models.Model):
         
 
 class UserMentor(models.Model):
+
+    class MentorTier(models.TextChoices):
+        NORMAL = 'NORMAL', 'Normal'
+        VERIFIED = 'VERIFIED', 'Verified'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_mentor_user')
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='user_mentor_user'
+    )
+
     about = models.CharField(max_length=1000, blank=True, null=True)
+
+    expertise = models.TextField(blank=True, null=True)
+
     reason = models.CharField(max_length=1000, blank=True, null=True)
-    hours = models.IntegerField()
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='updated_by',
-                                   related_name='user_mentor_updated_by_set')
+
+    hours = models.PositiveIntegerField(default=0)
+
+    mentor_tier = models.CharField(
+        max_length=10,
+        choices=MentorTier.choices,
+        default=MentorTier.NORMAL
+    )
+
+    is_verified = models.BooleanField(default=False)
+
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='verified_by',
+        related_name='user_mentor_verified_by_set'
+    )
+
+    verified_at = models.DateTimeField(blank=True, null=True)
+
+    verification_note = models.CharField(
+        max_length=500,
+        blank=True,
+        null=True
+    )
+
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='updated_by',
+        related_name='user_mentor_updated_by_set'
+    )
+
     updated_at = models.DateTimeField(blank=True, null=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column='created_by',
-                                   related_name='user_mentor_created_by_set')
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='created_by',
+        related_name='user_mentor_created_by_set'
+    )
+
     created_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
@@ -152,7 +204,20 @@ class UserRoleLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_role_link_user')
     role = models.ForeignKey(Role, on_delete=models.CASCADE)
+    # IG-scoped role support: NULL = global platform role, SET = IG-specific role
+    ig = models.ForeignKey(
+        'db.InterestGroup', on_delete=models.CASCADE,
+        null=True, blank=True, db_column='ig_id',
+        related_name='user_role_link_ig'
+    )
     verified = models.BooleanField(default=False)
+    is_active = models.BooleanField(default=True)
+    is_primary = models.BooleanField(default=False)
+    revoked_at = models.DateTimeField(null=True, blank=True)
+    revoked_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='revoked_by', related_name='user_role_link_revoked_by'
+    )
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='user_role_link_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
@@ -160,9 +225,6 @@ class UserRoleLink(models.Model):
     class Meta:
         managed = False
         db_table = 'user_role_link'
-        constraints = [
-            models.UniqueConstraint(fields=['role', 'user'], name="UserToRole")
-        ]
 
 
 class Socials(models.Model):
@@ -201,15 +263,69 @@ class ForgotPassword(models.Model):
 
 
 class UserSettings(models.Model):
+
+    class PersonaType(models.TextChoices):
+        LEARNER = 'learner', 'Learner'
+        MENTOR = 'mentor', 'Mentor'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.OneToOneField(User, on_delete=models.CASCADE, related_name="user_settings_user")
+
+    user = models.OneToOneField(
+        User,
+        on_delete=models.CASCADE,
+        related_name='user_settings_user'
+    )
+
     is_public = models.BooleanField(default=False)
+
     is_userterms_approved = models.BooleanField(default=False)
-    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
-                                   related_name='user_settings_updated_by')
+
+    # Active contextual persona state
+    active_persona = models.CharField(
+        max_length=10,
+        choices=PersonaType.choices,
+        default=PersonaType.LEARNER
+    )
+
+    active_role_link = models.ForeignKey(
+        'UserRoleLink',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='active_role_link_id',
+        related_name='user_settings_active_role_link'
+    )
+
+    active_ig = models.ForeignKey(
+        'db.InterestGroup',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='active_ig_id',
+        related_name='user_settings_active_ig'
+    )
+
+    last_persona_switched_at = models.DateTimeField(
+        null=True,
+        blank=True
+    )
+
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+        db_column='updated_by',
+        related_name='user_settings_updated_by'
+    )
+
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
-                                   related_name='user_settings_created_by')
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+        db_column='created_by',
+        related_name='user_settings_created_by'
+    )
+
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

@@ -190,6 +190,12 @@ class KarmaActivityLog(models.Model):
     appraiser_approved_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="appraiser_approved_by",
                                                   blank=True, null=True,
                                               related_name="karma_activity_log_appraiser_approved_by")
+    mentor_review_status = models.CharField(max_length=10, default='PENDING')
+    mentor_reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, db_column="mentor_reviewed_by",
+                                           blank=True, null=True,
+                                           related_name="karma_activity_log_mentor_reviewed_by")
+    mentor_reviewed_at = models.DateTimeField(blank=True, null=True)
+    mentor_review_feedback = models.CharField(max_length=500, blank=True, null=True)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="updated_by",
                                    related_name="karma_activity_log_updated_by")
     updated_at = models.DateTimeField(auto_now=True)
@@ -235,12 +241,29 @@ class MucoinInviteLog(models.Model):
 
 
 class UserIgLink(models.Model):
+
+    class AssignmentType(models.TextChoices):
+        MENTOR = 'MENTOR', 'Mentor'
+        LEARNER = 'LEARNER', 'Learner'
+        LEAD = 'LEAD', 'Lead'
+        MODERATOR = 'MODERATOR', 'Moderator'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="user_ig_link_user")
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name="user_ig_link_ig")
+    assignment_type = models.CharField(
+        max_length=15, choices=AssignmentType.choices, default=AssignmentType.LEARNER
+    )
+    is_active = models.BooleanField(default=True)
+    assigned_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='assigned_by', related_name='user_ig_link_assigned_by'
+    )
+    unassigned_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="user_ig_link_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
+    unassigned_at = models.DateTimeField(blank=True, null=True)
 
     class Meta:
         managed = False
@@ -338,3 +361,7 @@ class TaskReport(models.Model):
     class Meta:
         managed = False
         db_table = "task_report"
+
+
+
+
