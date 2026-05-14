@@ -1,5 +1,10 @@
 from django.urls import path,include
+
+from .analytics_views import CompanyDashboardSummaryAPIView, CompanyTalentPoolAnalyticsAPIView
+
 urlpatterns = [
+    path("home-summary/", CompanyDashboardSummaryAPIView.as_view(), name="company-home-summary"),
+    path("talent-pool/analytics/", CompanyTalentPoolAnalyticsAPIView.as_view(), name="company-talent-pool-analytics"),
     path("", include("api.dashboard.company.onboarding.urls")),
     path("profile/", include("api.dashboard.company.profile.urls")),
     path("jobs/", include("api.dashboard.company.jobs.urls")),
