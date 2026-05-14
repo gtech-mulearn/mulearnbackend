@@ -1,9 +1,30 @@
 from django.urls import path
 
 from . import campus_views
+from . import dashboard_views
 from . import events_views
 
 urlpatterns = [
+    path(
+        "home-summary/",
+        dashboard_views.CampusDashboardSummaryAPIView.as_view(),
+        name="campus-home-summary",
+    ),
+    path(
+        "member-funnel/",
+        dashboard_views.CampusMemberFunnelAPIView.as_view(),
+        name="campus-member-funnel",
+    ),
+    path(
+        "circle-health/",
+        dashboard_views.CampusCircleHealthAPIView.as_view(),
+        name="campus-circle-health",
+    ),
+    path(
+        "recent-activity/",
+        dashboard_views.CampusRecentActivityAPIView.as_view(),
+        name="campus-recent-activity",
+    ),
     path(
         "campus-list/",
         campus_views.CampusListAPI.as_view(),
