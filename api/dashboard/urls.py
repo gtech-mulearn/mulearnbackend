@@ -2,6 +2,7 @@ from django.urls import path, include
 
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
+    path("home/", include("api.dashboard.home.urls")),
     path("user/", include("api.dashboard.user.urls")),
     path("zonal/", include("api.dashboard.zonal.urls")),
     path("district/", include("api.dashboard.district.urls")),

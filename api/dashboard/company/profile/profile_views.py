@@ -3,17 +3,19 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny
 from rest_framework.views import APIView
 
-from db.company import Company
+from db.company import Company, CompanyJob
 from db.user import User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+from utils.utils import CommonUtils
 
 from .serializers import (
     CompanyProfileCreateUpdateSerializer,
     CompanyProfileSerializer,
     PublicCompanyProfileSerializer,
 )
+from api.dashboard.company.jobs.serializers import CompanyJobListSerializer
 
 
 class BaseCompanyProfileView(APIView):
@@ -321,4 +323,50 @@ class PublicCompanyProfileAPIView(APIView):
         return CustomResponse(
             general_message="Public company profile fetched successfully",
             response=serializer.data,
+        ).get_success_response()
+
+
+class PublicCompanyJobsAPIView(APIView):
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request, slug):
+        company = Company.objects.filter(
+            slug=slug,
+            status="active",
+            deleted_at__isnull=True,
+        ).first()
+        if not company:
+            return CustomResponse(
+                general_message="Company profile not found",
+                message={"error_code": "COMPANY_NOT_FOUND"},
+            ).get_failure_response(
+                status_code=404,
+                http_status_code=status.HTTP_404_NOT_FOUND,
+            )
+
+        jobs_qs = CompanyJob.objects.filter(
+            company_id=company,
+            is_deleted=False,
+            status="Active",
+        ).prefetch_related("rules").order_by("-created_at")
+        paginated = CommonUtils.get_paginated_queryset(
+            queryset=jobs_qs,
+            request=request,
+            search_fields=["title", "location", "job_type"],
+            sort_fields={"title": "title", "createdAt": "created_at"},
+            is_pagination=True,
+        )
+
+        return CustomResponse(
+            general_message="Public company jobs fetched successfully",
+            response={
+                "company": {
+                    "id": str(company.id),
+                    "name": company.name,
+                    "slug": company.slug,
+                },
+                "jobs": CompanyJobListSerializer(list(paginated["queryset"]), many=True).data,
+                "pagination": paginated["pagination"],
+            },
         ).get_success_response()
