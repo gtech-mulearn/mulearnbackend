@@ -89,6 +89,87 @@ class UserProfileEditView(APIView):
         ).get_success_response()
 
 
+class UserProfileCoverView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    MAX_COVER_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        return CustomResponse(
+            response={"cover_pic": user.cover_pic}
+        ).get_success_response()
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        cover = request.FILES.get("cover")
+
+        if cover is None:
+            return CustomResponse(
+                general_message="No cover image provided"
+            ).get_failure_response()
+
+        if not cover.content_type.startswith("image/"):
+            return CustomResponse(
+                general_message="Expected an image file"
+            ).get_failure_response()
+
+        if cover.size > self.MAX_COVER_SIZE_BYTES:
+            return CustomResponse(
+                general_message="Cover image must be under 5 MB"
+            ).get_failure_response()
+
+        fs = FileSystemStorage()
+        filename = f"user/cover/{user_id}.png"
+
+        if fs.exists(filename):
+            fs.delete(filename)
+
+        fs.save(filename, cover)
+        uploaded_url = user.cover_pic
+
+        return CustomResponse(
+            response={"cover_pic": uploaded_url}
+        ).get_success_response()
+
+    def delete(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        fs = FileSystemStorage()
+        filename = f"user/cover/{user_id}.png"
+
+        if not fs.exists(filename):
+            return CustomResponse(
+                general_message="No cover image found"
+            ).get_failure_response()
+
+        fs.delete(filename)
+
+        return CustomResponse(
+            general_message="Cover image removed successfully"
+        ).get_success_response()
+
+
 class UserIgEditView(APIView):
     authentication_classes = [CustomizePermission]
 
