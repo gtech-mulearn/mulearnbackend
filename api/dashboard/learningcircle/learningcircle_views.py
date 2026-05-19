@@ -1,12 +1,21 @@
-﻿from datetime import datetime, timedelta, timezone
-import requests
-from rest_framework.views import APIView
-from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink, KarmaActivityLog
-from utils.utils import CommonUtils
+from datetime import timedelta
+import uuid
 
-# from db.user import UserInterests
+import requests
+from django.db import transaction
+from django.db.models import Sum, Q
+from rest_framework.views import APIView
+
+from db.learning_circle import (
+    LearningCircle,
+    CircleMeetingLog,
+    CircleMeetingAttendees,
+    UserCircleLink,
+)
+from db.task import KarmaActivityLog
 from db.user import UserDomains, User
-from utils.karma import add_karma
+from utils.karma import add_karma, remove_karma
+from utils.utils import CommonUtils
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import Lc
@@ -21,12 +30,6 @@ from .learningcircle_serializer import (
     LearningCircleListMinSerializer,
 )
 
-from django.db.models import Sum, Q
-from db.user import User
-from db.task import (
-    KarmaActivityLog,
-    
-)
 
 
 class LearningCircleView(APIView):
@@ -120,7 +123,12 @@ class LearningCircleView(APIView):
 
     def delete(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        learning_circle = LearningCircle.objects.get(id=circle_id)
+        try:
+            learning_circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+                general_message="Learning Circle not found"
+            ).get_failure_response()
         if learning_circle.created_by_id != user_id:
             return CustomResponse(
                 general_message="You do not have permission to delete this Learning Circle"
@@ -132,11 +140,15 @@ class LearningCircleView(APIView):
 
 
 class LearningCircleMeetingInfoAPI(APIView):
+    permission_classes = [CustomizePermission]
+
     def get(self, request, meet_id: str):
-        # user_id = None
-        # if JWTUtils.is_jwt_authenticated(request):
         user_id = JWTUtils.fetch_user_id(request)
-        meet = CircleMeetingLog.objects.get(id=meet_id)
+        meet = CircleMeetingLog.objects.filter(id=meet_id).first()
+        if not meet:
+            return CustomResponse(
+                general_message="Meeting not found"
+            ).get_failure_response()
         serializer = CircleMeetupInfoSerializer(meet, context={"user_id": user_id})
         return CustomResponse(
             general_message="Meeting fetched successfully",
@@ -146,7 +158,11 @@ class LearningCircleMeetingInfoAPI(APIView):
 
 class LearningCircleMeetingListView(APIView):
     def get(self, request, circle_id: str):
-        learning_circle = LearningCircle.objects.get(id=circle_id)
+        learning_circle = LearningCircle.objects.filter(id=circle_id).first()
+        if not learning_circle:
+            return CustomResponse(
+                general_message="Learning Circle not found"
+            ).get_failure_response()
         circle_meetings = CircleMeetingLog.objects.filter(circle_id=learning_circle)
         serializer = CircleMeetupMinSerializer(circle_meetings, many=True)
         return CustomResponse(
@@ -194,7 +210,7 @@ class LearningCircleMeetingView(APIView):
                 general_message="Circle Meeting update failed",
                 response=serializer.errors,
             ).get_failure_response()
-        serializer.update(circle_meeting, serializer.validated_data)
+        serializer.save()
         return CustomResponse(
             general_message="Circle Meeting updated successfully"
         ).get_success_response()
@@ -220,15 +236,16 @@ class LearningCircleRSVPAPI(APIView):
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
-        is_meet_started = (
-            circle_meeting.meet_time <= DateTimeUtils.get_current_utc_time()
-        )
-        is_meet_ended = (
-            circle_meeting.meet_time + timedelta(hours=circle_meeting.duration + 2)
-        ) <= DateTimeUtils.get_current_utc_time()
-        if is_meet_started or is_meet_ended:
+        now = DateTimeUtils.get_current_utc_time()
+        if circle_meeting.meet_time <= now:
             return CustomResponse(
-                general_message="Meeting has already started or ended"
+                general_message="Meeting has already started"
+            ).get_failure_response()
+        if (
+            circle_meeting.meet_time + timedelta(hours=circle_meeting.duration)
+        ) <= now:
+            return CustomResponse(
+                general_message="Meeting has already ended"
             ).get_failure_response()
         attendee = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, user_id_id=user_id
@@ -254,16 +271,14 @@ class LearningCircleJoinAPI(APIView):
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
-        is_meet_started = circle_meeting.meet_time <= (
-            DateTimeUtils.get_current_utc_time() + timedelta(hours=2)
-        )
-        if not is_meet_started:
+        now = DateTimeUtils.get_current_utc_time()
+        if circle_meeting.meet_time > now:
             return CustomResponse(
                 general_message="You can only join the Circle Meeting after it has started"
             ).get_failure_response()
         is_meet_ended = (
-            circle_meeting.meet_time + timedelta(hours=circle_meeting.duration + 2)
-        ) <= DateTimeUtils.get_current_utc_time()
+            circle_meeting.meet_time + timedelta(hours=circle_meeting.duration)
+        ) <= now
         if is_meet_ended:
             return CustomResponse(
                 general_message="The Circle Meeting has already ended"
@@ -328,6 +343,8 @@ class LearningCircleJoinAPI(APIView):
 
 
 class LearningCircleAttendeeReportAPI(APIView):
+    permission_classes = [CustomizePermission]
+
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
@@ -406,6 +423,11 @@ class LearningCircleAttendeeReportAPI(APIView):
         attendee.report_text = None
         attendee.report_link = None
         attendee.save()
+        remove_karma(
+            user_id,
+            Lc.ATTENDEE_REPORT_SUBMIT_HASHTAG.value,
+            Lc.ATTENDEE_REPORT_SUBMIT_KARMA.value,
+        )
         return CustomResponse(
             general_message="You have successfully deleted the report"
         ).get_success_response()
@@ -417,7 +439,10 @@ class LearningCircleReportAPI(APIView):
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
-        if circle_meeting.created_by_id != user_id:
+        circle = circle_meeting.circle_id
+        if circle_meeting.created_by_id != user_id and not _is_lead_or_creator(
+            circle, user_id
+        ):
             return CustomResponse(
                 general_message="You do not have permission to view the report"
             ).get_failure_response()
@@ -464,7 +489,6 @@ class LearningCircleReportAPI(APIView):
             return CustomResponse(
                 general_message="Please provide the report"
             ).get_failure_response()
-        karma_user_ids = []
         for attendee_id, approved in attendees.items():
             attendee = CircleMeetingAttendees.objects.filter(
                 meet_id=circle_meeting, user_id_id=attendee_id
@@ -477,19 +501,26 @@ class LearningCircleReportAPI(APIView):
                 return CustomResponse(
                     general_message="Attendee has not submitted the report"
                 ).get_failure_response()
-            attendee.is_lc_approved = approved
-            attendee.save()
-            if attendee.is_lc_approved:
-                karma_user_ids.append(attendee_id)
-        circle_meeting.is_report_submitted = True
-        circle_meeting.report_text = report
-        circle_meeting.save()
-        add_karma(
-            karma_user_ids,
-            Lc.LC_REPORT_HASHTAG.value,
-            user_id,
-            Lc.LC_REPORT_KARMA.value,
-        )
+        karma_user_ids = []
+        with transaction.atomic():
+            for attendee_id, approved in attendees.items():
+                attendee = CircleMeetingAttendees.objects.filter(
+                    meet_id=circle_meeting, user_id_id=attendee_id
+                ).first()
+                attendee.is_lc_approved = approved
+                attendee.save()
+                if approved:
+                    karma_user_ids.append(attendee_id)
+            circle_meeting.is_report_submitted = True
+            circle_meeting.report_text = report
+            circle_meeting.save()
+            if karma_user_ids:
+                add_karma(
+                    karma_user_ids,
+                    Lc.LC_REPORT_HASHTAG.value,
+                    user_id,
+                    Lc.LC_REPORT_KARMA.value,
+                )
         return CustomResponse(
             general_message="The report has been submitted successfully"
         ).get_success_response()
@@ -512,12 +543,21 @@ class LearningCircleReportAPI(APIView):
         attendees = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, is_joined=True
         )
+        karma_user_ids = list(
+            attendees.filter(is_lc_approved=True).values_list("user_id_id", flat=True)
+        )
         for attendee in attendees:
             attendee.is_lc_approved = False
             attendee.save()
         circle_meeting.is_report_submitted = False
         circle_meeting.report_text = None
         circle_meeting.save()
+        if karma_user_ids:
+            remove_karma(
+                karma_user_ids,
+                Lc.LC_REPORT_HASHTAG.value,
+                Lc.LC_REPORT_KARMA.value,
+            )
         return CustomResponse(
             general_message="The report has been deleted successfully"
         ).get_success_response()
@@ -571,10 +611,6 @@ class LearningCircleMeetingListAPI(APIView):
                 general_message="User not authenticated"
             ).get_failure_response(status_code=401)
         if saved or participated:
-            if not user_id:
-                return CustomResponse(
-                    general_message="User not authenticated"
-                ).get_failure_response()
             category = "all"
         if saved and participated:
             return CustomResponse(
@@ -642,7 +678,6 @@ class LearningCircleMemberDetailsView(APIView):
             member_links = UserCircleLink.objects.filter(
                 circle=circle_id,
                 accepted=True,
-                accepted__isnull=False  # Exclude None values
             ).select_related('user')
             
             leaders = set(link.user_id for link in member_links if link.lead)
@@ -772,7 +807,6 @@ class CircleJoinAPI(APIView):
                 general_message="You have a previous link to this circle that prevents joining. Contact the circle lead."
             ).get_failure_response()
 
-        import uuid
         UserCircleLink.objects.create(
             id=str(uuid.uuid4()),
             user_id=user_id,
@@ -894,7 +928,6 @@ class CircleMemberAddAPI(APIView):
                 general_message="User is already a member of this circle"
             ).get_failure_response()
 
-        import uuid
         # Remove any pending invite if exists to avoid duplicate
         UserCircleLink.objects.filter(
             circle=circle, user_id=target_user_id, accepted__isnull=True
@@ -956,7 +989,6 @@ class CircleInviteAPI(APIView):
                 general_message="An invitation is already pending for this user"
             ).get_failure_response()
 
-        import uuid
         UserCircleLink.objects.create(
             id=str(uuid.uuid4()),
             user_id=target_user_id,

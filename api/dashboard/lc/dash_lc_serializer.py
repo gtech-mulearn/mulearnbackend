@@ -1,5 +1,6 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
+
 from django.conf import settings
 from decouple import config
 from django.db.models import Sum
@@ -22,6 +23,43 @@ from utils.types import Lc
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
 from .dash_ig_helper import get_today_start_end, get_week_start_end
+
+
+def _aware_meet_time(meet_time):
+    if meet_time is None:
+        return None
+    if meet_time.tzinfo is None:
+        return meet_time.replace(tzinfo=timezone.utc)
+    return meet_time
+
+
+def meeting_is_started(meet_time):
+    aware_time = _aware_meet_time(meet_time)
+    if aware_time is None:
+        return False
+    return aware_time <= DateTimeUtils.get_current_utc_time()
+
+
+def meeting_is_ended(meet_time, duration_hours):
+    aware_time = _aware_meet_time(meet_time)
+    if aware_time is None:
+        return False
+    duration = duration_hours if duration_hours is not None else 0
+    return (
+        aware_time + timedelta(hours=duration)
+    ) <= DateTimeUtils.get_current_utc_time()
+
+
+class CircleMeetTimeFieldsMixin:
+    is_started = serializers.SerializerMethodField()
+    is_ended = serializers.SerializerMethodField()
+
+    def get_is_started(self, obj):
+        return meeting_is_started(obj.meet_time)
+
+    def get_is_ended(self, obj):
+        duration = getattr(obj, "duration", None)
+        return meeting_is_ended(obj.meet_time, duration)
 
 
 class LearningCircleSerializer(serializers.ModelSerializer):
@@ -651,8 +689,7 @@ class AddMemberSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.create(**validated_data)
 
 
-class CircleMeetDetailSerializer(serializers.ModelSerializer):
-    is_started = serializers.BooleanField(read_only=True)
+class CircleMeetDetailSerializer(CircleMeetTimeFieldsMixin, serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     title = serializers.CharField(required=True)
     location = serializers.CharField(required=True)
@@ -752,6 +789,7 @@ class CircleMeetDetailSerializer(serializers.ModelSerializer):
             "pre_requirements",
             "is_public",
             "is_started",
+            "is_ended",
             "max_attendees",
             "report_text",
             "meet_code",
@@ -847,8 +885,7 @@ class CircleAttendeeReportSerializer(serializers.ModelSerializer):
         ]
 
 
-class CircleMeetSerializer(serializers.ModelSerializer):
-    is_started = serializers.BooleanField(read_only=True)
+class CircleMeetSerializer(CircleMeetTimeFieldsMixin, serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     title = serializers.CharField(required=True)
     location = serializers.CharField(required=True)
@@ -900,6 +937,7 @@ class CircleMeetSerializer(serializers.ModelSerializer):
             "pre_requirements",
             "is_public",
             "is_started",
+            "is_ended",
             "max_attendees",
             "report_text",
             "meet_code",
@@ -909,7 +947,7 @@ class CircleMeetSerializer(serializers.ModelSerializer):
         ]
 
 
-class CircleMeetBasicDetails(serializers.ModelSerializer):
+class CircleMeetBasicDetails(CircleMeetTimeFieldsMixin, serializers.ModelSerializer):
     id = serializers.CharField(read_only=True)
     title = serializers.CharField(required=True)
     location = serializers.CharField(read_only=True)
@@ -987,6 +1025,7 @@ class CircleMeetBasicDetails(serializers.ModelSerializer):
             "pre_requirements",
             "is_public",
             "is_started",
+            "is_ended",
             "max_attendees",
             "report_text",
             "meet_code",

@@ -1,6 +1,30 @@
-﻿from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytz
+
+
+def _aware_meet_time(meet_time):
+    if meet_time is None:
+        return None
+    if meet_time.tzinfo is None:
+        return meet_time.replace(tzinfo=timezone.utc)
+    return meet_time
+
+
+def meeting_is_started(meet_time):
+    aware_time = _aware_meet_time(meet_time)
+    if aware_time is None:
+        return False
+    return aware_time <= DateTimeUtils.get_current_utc_time()
+
+
+def meeting_is_ended(meet_time, duration_hours):
+    aware_time = _aware_meet_time(meet_time)
+    if aware_time is None:
+        return False
+    return (
+        aware_time + timedelta(hours=duration_hours or 0)
+    ) <= DateTimeUtils.get_current_utc_time()
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink
 from rest_framework import serializers
 
@@ -105,7 +129,6 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.filter(
             circle=obj.id,
             accepted=True,
-            accepted__isnull=False
         ).count()
 
     @property
@@ -244,7 +267,6 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.filter(
             circle=obj.id,
             accepted=True,
-            accepted__isnull=False
         ).count()
 
     # def get_attendees(self, obj):
@@ -280,10 +302,6 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         #     )
         # return data
         # return []
-
-    class Meta:
-        model = LearningCircle
-        fields = ["id", "ig", "title", "org", "total_members"]
 
 
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
@@ -472,14 +490,10 @@ class CircleMeetingLogListSerializer(serializers.ModelSerializer):
     is_ended = serializers.SerializerMethodField()
 
     def get_is_started(self, obj):
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     class Meta:
         model = CircleMeetingLog
@@ -559,7 +573,15 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
 
     def get_is_member(self, obj):
         user_id = self.context.get("user_id")
-        return obj.created_by_id == user_id
+        if not user_id:
+            return False
+        if obj.created_by_id == user_id:
+            return True
+        return UserCircleLink.objects.filter(
+            circle_id=obj.circle_id_id,
+            user_id=user_id,
+            accepted=True,
+        ).exists()
 
     def get_meet_code(self, obj):
         user_id = self.context.get("user_id")
@@ -568,14 +590,10 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
         return obj.meet_code
 
     def get_is_started(self, obj):
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     def get_attendees(self, obj):
         query = (
@@ -592,17 +610,24 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
         data = []
         user_id = self.context.get("user_id")
         cur_user_org = None
+        cur_user_orgs = set()
         if user_id:
             try:
-                cur_user = (
-                    User.objects.prefetch_related("user_organization_link_user")
-                    .only("user_organization_link_user__org_id")
-                    .get(id=user_id)
+                from db.organization import UserOrganizationLink
+
+                cur_user_orgs = set(
+                    UserOrganizationLink.objects.filter(user_id=user_id).values_list(
+                        "org_id", flat=True
+                    )
                 )
-                cur_user_org = cur_user.user_organization_link_user__org_id
-            except:
+            except Exception:
                 pass
         for attendee in query:
+            attendee_orgs = set(
+                attendee.user_id.user_organization_link_user.all().values_list(
+                    "org_id", flat=True
+                )
+            )
             data.append(
                 {
                     "user_id": attendee.user_id.id,
@@ -610,10 +635,7 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
                     "is_joined": attendee.is_joined,
                     "is_report_submitted": attendee.is_report_submitted,
                     "profile_pic": attendee.user_id.profile_pic,
-                    "is_same_org": cur_user_org
-                    in attendee.user_id.user_organization_link_user.all().values_list(
-                        "org_id", flat=True
-                    ),
+                    "is_same_org": bool(cur_user_orgs & attendee_orgs),
                 }
             )
         return data
@@ -630,15 +652,11 @@ class CircleMeetupPublicSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
 
-    def get_is_started(self, obj):  
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+    def get_is_started(self, obj):
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     class Meta:
         model = CircleMeetingLog
@@ -683,14 +701,10 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
 
     def get_is_started(self, obj):
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     def get_is_joined(self, obj):
         if user_id := self.context.get("user_id"):
