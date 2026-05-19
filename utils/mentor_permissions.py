@@ -9,6 +9,7 @@ the DB is the source of truth, not the JWT payload.
 """
 
 from rest_framework.permissions import BasePermission
+from rest_framework.exceptions import PermissionDenied
 
 from db.user import UserRoleLink, UserMentor, UserSettings
 from utils.permission import JWTUtils
@@ -85,7 +86,9 @@ class IsIGMentor(BasePermission):
 
     def has_permission(self, request, view):
         context = _get_persona_context(request)
-        return context is not None
+        if context is None:
+            raise PermissionDenied(self.message)
+        return True
 
 
 class IsVerifiedIGMentor(BasePermission):
@@ -101,13 +104,18 @@ class IsVerifiedIGMentor(BasePermission):
     def has_permission(self, request, view):
         context = _get_persona_context(request)
         if not context:
-            return False
+            raise PermissionDenied(self.message)
 
-        return UserMentor.objects.filter(
+        has_verified_mentor = UserMentor.objects.filter(
             user_id=context['user_id'],
             is_verified=True,
             mentor_tier=UserMentor.MentorTier.VERIFIED,
         ).exists()
+
+        if not has_verified_mentor:
+            raise PermissionDenied(self.message)
+        
+        return True
 
 
 class HasIGAccess(BasePermission):
@@ -122,11 +130,14 @@ class HasIGAccess(BasePermission):
     def has_permission(self, request, view):
         context = _get_persona_context(request)
         if not context:
-            return False
+            raise PermissionDenied(self.message)
 
         url_ig_id = view.kwargs.get('ig_id')
         if not url_ig_id:
             # No IG in URL means not IG-restricted; allow if persona is valid
             return True
 
-        return context['ig_id'] == url_ig_id
+        if context['ig_id'] != url_ig_id:
+            raise PermissionDenied(self.message)
+            
+        return True

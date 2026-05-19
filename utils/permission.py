@@ -15,6 +15,7 @@ from .exception import UnauthorizedAccessException
 from .response import CustomResponse
 
 from db.user import DynamicRole, DynamicUser
+from utils.types import RoleType
 
 
 # def get_current_utc_time():
@@ -37,6 +38,13 @@ class CustomizePermission(BasePermission):
 
     token_prefix = "Bearer"
     secret_key = SECRET_KEY
+
+    def has_permission(self, request, view):
+        try:
+            JWTUtils.is_jwt_authenticated(request)
+            return True
+        except Exception as e:
+            raise UnauthorizedAccessException(str(e))
 
     def authenticate(self, request):
         """
