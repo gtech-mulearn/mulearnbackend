@@ -97,8 +97,8 @@ class LearningCircleMainApi(APIView):
                 serializer = LearningCircleMainSerializer(all_circles, many=True)
             else:
                 random_circles = all_circles.exclude(
-                    Q(meet_time__isnull=True) | Q(meet_time="")
-                    and Q(meet_place__isnull=True) | Q(meet_place="")
+                    (Q(meet_time__isnull=True) | Q(meet_time=""))
+                    & (Q(meet_place__isnull=True) | Q(meet_place=""))
                 ).order_by("?")[:9]
 
                 # random_circles = all_circles.order_by('?')[:9]
@@ -110,9 +110,8 @@ class LearningCircleMainApi(APIView):
             return CustomResponse(response=sorted_data).get_success_response()
         else:
             random_circles = all_circles.exclude(
-                Q(meet_time__isnull=True)
-                | Q(meet_time="") & Q(meet_place__isnull=True)
-                | Q(meet_place="")
+                (Q(meet_time__isnull=True) | Q(meet_time=""))
+                & (Q(meet_place__isnull=True) | Q(meet_place=""))
             ).order_by("?")[:9]
 
             serializer = LearningCircleMainSerializer(random_circles, many=True)
@@ -167,7 +166,7 @@ class LearningCircleListMembersApi(APIView):
         # )
         user_learning_circle = UserCircleLink.objects.filter(circle_id=circle_id)
 
-        if user_learning_circle is None:
+        if not user_learning_circle.exists():
             return CustomResponse(
                 general_message="Learning Circle Not Exists"
             ).get_failure_response()
@@ -225,15 +224,18 @@ class LearningCircleJoinApi(APIView):
         )
         if serializer.is_valid():
             serializer.save()
-            lead = UserCircleLink.objects.filter(circle_id=circle_id, lead=True).first()
-            NotificationUtils.insert_notification(
-                user=lead.user,
-                title="Member Request",
-                description=f"{full_name} has requested to join your learning circle",
-                button="LC",
-                url=f"{settings.FR_DOMAIN_NAME}/api/v1/dashboard/lc/{circle_id}/{user_id}/",
-                created_by=user,
-            )
+            lead = UserCircleLink.objects.filter(
+                circle_id=circle_id, lead=True
+            ).first()
+            if lead:
+                NotificationUtils.insert_notification(
+                    user=lead.user,
+                    title="Member Request",
+                    description=f"{full_name} has requested to join your learning circle",
+                    button="LC",
+                    url=f"{settings.FR_DOMAIN_NAME}/api/v1/dashboard/lc/{circle_id}/{user_id}/",
+                    created_by=user,
+                )
 
             return CustomResponse(general_message="Request sent").get_success_response()
 
@@ -265,6 +267,17 @@ class LearningCircleDetailsApi(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     def post(self, request, member_id, circle_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        circle = LearningCircle.objects.filter(id=circle_id).first()
+        is_creator = circle and circle.created_by_id == user_id
+        is_lead = UserCircleLink.objects.filter(
+            circle_id=circle_id, user_id=user_id, lead=True, accepted=True
+        ).exists()
+        if not is_creator and not is_lead:
+            return CustomResponse(
+                general_message="Only circle leads can remove members"
+            ).get_failure_response()
+
         learning_circle_link = UserCircleLink.objects.filter(
             user_id=member_id, circle_id=circle_id
         ).first()
@@ -509,6 +522,10 @@ class LearningCircleInviteLeadAPI(APIView):
             )
             return CustomResponse(general_message="User Invited").get_success_response()
 
+        return CustomResponse(
+            general_message="Only circle leads can invite users"
+        ).get_failure_response()
+
 
 class LearningCircleInviteMemberAPI(APIView):
     """
@@ -566,7 +583,7 @@ class LearningCircleInviteMemberAPI(APIView):
                 circle_id=circle_id,
                 user=user,
                 is_invited=True,
-                accepted=False,
+                accepted=None,
                 created_at=DateTimeUtils.get_current_utc_time(),
             )
 
@@ -752,20 +769,19 @@ class CircleMeetAPI(APIView):
 
     def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
+        now = DateTimeUtils.get_current_utc_time()
         up_coming_meeting = CircleMeetingLog.objects.filter(
-            meet_time__gte=DateTimeUtils.get_current_utc_time(),
+            meet_time__gt=now,
             circle_id=circle_id,
             is_report_submitted=False,
-            is_started=False,
         ).order_by("-created_at")
         report_pending = CircleMeetingLog.objects.filter(
+            meet_time__lte=now,
             circle_id=circle_id,
             is_report_submitted=False,
-            is_started=True,
         ).order_by("-created_at")
         past_meeting = CircleMeetingLog.objects.filter(
             circle_id=circle_id,
-            is_started=True,
             is_report_submitted=True,
         ).order_by("-created_at")[:2]
 
@@ -969,10 +985,12 @@ class CircleMeetJoinAPI(APIView):
             return CustomResponse(
                 general_message="Invalid meeting code"
             ).get_failure_response()
-        if not meet.is_started:
-            meet.is_started = True
-            meet.save()
+        if not is_learning_circle_member(user_id, meet.circle_id_id):
+            return CustomResponse(
+                general_message="You must be an accepted member of the learning circle to join"
+            ).get_failure_response()
         attendee = CircleMeetAttendees.objects.filter(meet=meet, user=user).first()
+        award_karma = False
         if attendee:
             if attendee.joined_at:
                 return CustomResponse(
@@ -980,6 +998,7 @@ class CircleMeetJoinAPI(APIView):
                 ).get_failure_response()
             attendee.joined_at = DateTimeUtils.get_current_utc_time()
             attendee.save()
+            award_karma = True
         else:
             attendee = CircleMeetAttendees.objects.create(
                 id=uuid.uuid4(),
@@ -989,6 +1008,7 @@ class CircleMeetJoinAPI(APIView):
                 created_at=DateTimeUtils.get_current_utc_time(),
                 updated_at=DateTimeUtils.get_current_utc_time(),
             )
+            award_karma = True
         task = TaskList.objects.filter(hashtag=Lc.MEET_JOIN_HASHTAG.value).first()
         KarmaActivityLog.objects.create(
             id=uuid.uuid4(),
@@ -1019,11 +1039,33 @@ class CircleMeetAttendeesListAPI(APIView):
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         if meet_id:
+            attendee_rows = list(
+                CircleMeetAttendees.objects.filter(
+                    meet_id=meet_id, joined_at__isnull=False
+                )
+                .select_related("user")
+                .values_list(
+                    "id",
+                    "user__full_name",
+                    "user_id",
+                    "user__muid",
+                    "report",
+                )
+                .distinct()
+            )
+            users_by_id = {
+                u.id: u
+                for u in User.objects.filter(
+                    id__in=[row[2] for row in attendee_rows]
+                )
+            }
             attendees = [
                 {
                     "attendee_id": attendee[0],
                     "fullname": attendee[1],
-                    "profile_pic": f"{BE_DOMAIN}/{settings.MEDIA_URL}{attendee[2]}",
+                    "profile_pic": users_by_id[attendee[2]].profile_pic
+                    if attendee[2] in users_by_id
+                    else None,
                     "muid": attendee[3],
                     "proof_of_work": CircleAttendeeReportSerializer(
                         CircleMeetAttendeeReport.objects.filter(
@@ -1033,31 +1075,17 @@ class CircleMeetAttendeesListAPI(APIView):
                     ).data,
                     "report": attendee[4],
                 }
-                for attendee in (
-                    CircleMeetAttendees.objects.filter(
-                        meet_id=meet_id, joined_at__isnull=False
-                    )
-                    .select_related("user")
-                    .values_list(
-                        "id",
-                        "user__full_name",
-                        "user_id",
-                        "user__muid",
-                        "report",
-                    )
-                    .distinct()
-                )
+                for attendee in attendee_rows
             ]
             return CustomResponse(response=attendees).get_success_response()
         return CustomResponse(general_message="Invalid meeting").get_failure_response()
 
 
 class CircleAttendeeReportAPI(APIView):
+    permission_classes = [CustomizePermission]
+
     def post(self, request, meet_id):
-        if not (user_id := JWTUtils.fetch_user_id(request)):
-            return CustomResponse(
-                general_message="Unauthorized access"
-            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
         if not (meet := CircleMeetingLog.objects.filter(id=meet_id).first()):
             return CustomResponse(
                 general_message="Invalid meeting"
@@ -1096,11 +1124,10 @@ class CircleAttendeeReportAPI(APIView):
 
 
 class CircleMeetTaskPOWAPI(APIView):
+    permission_classes = [CustomizePermission]
+
     def post(self, request, meet_id, task_id):
-        if not (user_id := JWTUtils.fetch_user_id(request)):
-            return CustomResponse(
-                general_message="Unauthorized access"
-            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
         if not (CircleMeetingLog.objects.filter(id=meet_id).exists()):
             return CustomResponse(
                 general_message="Invalid meeting"
@@ -1163,13 +1190,7 @@ class CircleMeetVerifyAPI(APIView):
         ]
     )
     def post(self, request, meet_id):
-        return CustomResponse(
-            general_message="This endpoint only supports GET requests."
-        ).get_failure_response()
-        if not (user_id := JWTUtils.fetch_user_id(request)):
-            return CustomResponse(
-                general_message="Unauthorized access"
-            ).get_failure_response()
+        user_id = JWTUtils.fetch_user_id(request)
         attendees_karma = request.data.get("attendees_karma")
         if (
             not attendees_karma
@@ -1215,7 +1236,7 @@ class CircleMeetVerifyAPI(APIView):
                     id=uuid.uuid4(),
                     user_id=attendee.user_id,
                     karma=karma,
-                    task_id=task,
+                    task=task,
                     updated_by=user,
                     created_by=user,
                     appraiser_approved=True,
