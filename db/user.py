@@ -47,6 +47,13 @@ class User(models.Model):
         if fs.exists(path):
             return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
 
+    @property
+    def cover_pic(self):
+        fs = FileSystemStorage()
+        path = f'user/cover/{self.id}.png'
+        if fs.exists(path):
+            return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+
     def save(self, *args, **kwargs):
         if self.muid is None:
             full_name = self.full_name.replace(" ", "-").lower()

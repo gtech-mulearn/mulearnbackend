@@ -48,6 +48,12 @@ class UserShareQrcode(serializers.ModelSerializer):
         fields = ["profile_pic"]
 
 
+class UserCoverPicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["cover_pic"]
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
@@ -81,6 +87,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "karma_distribution",
             "level",
             "profile_pic",
+            "cover_pic",
             "interest_groups",
             "is_public",
             "percentile",
