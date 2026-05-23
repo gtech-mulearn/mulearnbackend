@@ -188,3 +188,16 @@ class ProjectUpdateSerializer(serializers.ModelSerializer):
         if missing:
             raise serializers.ValidationError(f"unknown skill ids: {sorted(missing)}")
         return data
+
+    def create(self, validated_data):
+        # links_json and skill_ids_json are handled in the view after save();
+        # strip them here so they never reach Model.objects.create().
+        validated_data.pop("links_json", None)
+        validated_data.pop("skill_ids_json", None)
+        return super().create(validated_data)
+
+    def update(self, instance, validated_data):
+        # Same reason — strip the synthetic fields before the ORM update.
+        validated_data.pop("links_json", None)
+        validated_data.pop("skill_ids_json", None)
+        return super().update(instance, validated_data)
