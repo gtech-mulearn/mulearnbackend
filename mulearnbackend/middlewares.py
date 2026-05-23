@@ -107,7 +107,7 @@ class UniversalErrorHandlerMiddleware:
 
         """
 
-        body = request._body.decode("utf-8") if hasattr(request, "_body") else "No body"
+        body = request._body.decode("utf-8", errors="replace") if hasattr(request, "_body") else "No body"
         auth = request.auth if hasattr(request, "auth") else "No Auth data"
 
         with suppress(json.JSONDecodeError):
