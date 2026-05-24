@@ -33,4 +33,5 @@ urlpatterns = [
     path("list/country/", common_views.LcCountryAPI.as_view()),
     path("external/user/", ExternalUserDetailsAPI.as_view()),
     path('jobs/', jobs_views.PublicJobsListAPIView.as_view(), name='public-jobs-list'),
+    path('ig/<str:pk>/', common_views.IGDetailAPI.as_view()),
 ]
