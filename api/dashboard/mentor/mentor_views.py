@@ -14,7 +14,7 @@ from db.mentor import (
 from db.mentor_task_request import MentorTaskRequest
 from db.notification import Notification
 from db.task import InterestGroup, KarmaActivityLog, TaskList, TaskType, UserIgLink
-from db.user import User, UserMentor
+from db.user import Role, User, UserMentor, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -177,7 +177,21 @@ class MentorListAPI(APIView):
 
 
 class MentorVerifyAPI(APIView):
-    """PATCH — admin verifies or updates a mentor's tier/verification status."""
+    """
+    PATCH /<mentor_id>/verify/
+
+    Required body field:
+        action : "approve" | "reject"
+
+    Optional:
+        note        : str  — shown to mentor in notification
+        mentor_tier : "NORMAL" | "VERIFIED"  (approve only, default NORMAL)
+
+    Approve:
+        • is_verified = True, role assigned, IG links created, mentor notified ✅
+    Reject:
+        • user_mentor row deleted (user can reapply), mentor notified ❌
+    """
     authentication_classes = [CustomizePermission]
 
     @role_required([ADMIN])
@@ -189,19 +203,76 @@ class MentorVerifyAPI(APIView):
                 general_message="Mentor not found."
             ).get_failure_response()
 
-        data = request.data.copy()
-        data["verified_by"] = admin_id
-        data["verified_at"] = DateTimeUtils.get_current_utc_time()
-        data["updated_by"] = admin_id
+        action = request.data.get("action", "").lower()
+        note   = request.data.get("note", "")
 
-        serializer = MentorVerifySerializer(data=data, instance=mentor, partial=True)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        if action not in ("approve", "reject"):
+            return CustomResponse(
+                general_message="'action' must be 'approve' or 'reject'."
+            ).get_failure_response()
 
-        serializer.save()
+        mentor_user = mentor.user  # cache before possible deletion
 
-        # Feature 5: auto-create UserIgLink for preferred IGs on verification approval
-        if data.get("is_verified") and mentor.preferred_ig_ids:
+        # ── REJECT ─────────────────────────────────────────────────────────
+        if action == "reject":
+            mentor.delete()
+
+            Notification.objects.create(
+                user=mentor_user,
+                title="Mentor Application Not Approved",
+                description=(
+                    f"Your mentor application was reviewed and not approved. "
+                    f"Reason: {note}"
+                    if note
+                    else "Your mentor application was reviewed and not approved. "
+                         "You may reapply after updating your profile."
+                ),
+                created_by_id=admin_id,
+            )
+
+            _log_action(
+                action_type=SystemActionLog.ActionType.TASK_REVIEW,
+                actor_user_id=admin_id,
+                entity_name="user_mentor",
+                entity_id=pk,
+                subject_user=mentor_user,
+                new_data={"action": "reject", "note": note},
+            )
+
+            return CustomResponse(
+                general_message="Mentor application rejected. User notified and may reapply."
+            ).get_success_response()
+
+        # ── APPROVE ────────────────────────────────────────────────────────
+        now         = DateTimeUtils.get_current_utc_time()
+        mentor_tier = request.data.get("mentor_tier", mentor.mentor_tier)
+
+        mentor.is_verified       = True
+        mentor.verified_by_id    = admin_id
+        mentor.verified_at       = now
+        mentor.verification_note = note
+        mentor.mentor_tier       = mentor_tier
+        mentor.updated_by_id     = admin_id
+        mentor.save()
+
+        # Assign Mentor role (idempotent)
+        mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+        if mentor_role:
+            already_has_role = UserRoleLink.objects.filter(
+                user_id=mentor.user_id,
+                role=mentor_role,
+                is_active=True,
+            ).exists()
+            if not already_has_role:
+                UserRoleLink.objects.create(
+                    user_id=mentor.user_id,
+                    role=mentor_role,
+                    verified=True,
+                    created_by_id=admin_id,
+                )
+
+        # Create UserIgLink rows for preferred IGs (Feature 5)
+        if mentor.preferred_ig_ids:
             for ig_uuid in mentor.preferred_ig_ids:
                 if InterestGroup.objects.filter(id=ig_uuid).exists():
                     UserIgLink.objects.get_or_create(
@@ -210,12 +281,32 @@ class MentorVerifyAPI(APIView):
                         assignment_type=UserIgLink.AssignmentType.MENTOR,
                         defaults={
                             "assigned_by_id": admin_id,
-                            "created_by_id": admin_id,
+                            "created_by_id":  admin_id,
                         },
                     )
 
+        # Notify mentor of approval
+        Notification.objects.create(
+            user=mentor_user,
+            title="🎉 Mentor Application Approved!",
+            description=(
+                f"Congratulations! Your mentor application has been approved. "
+                f"You are now a {mentor_tier.capitalize()} mentor on muLearn."
+            ),
+            created_by_id=admin_id,
+        )
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.TASK_REVIEW,
+            actor_user_id=admin_id,
+            entity_name="user_mentor",
+            entity_id=pk,
+            subject_user=mentor_user,
+            new_data={"action": "approve", "mentor_tier": mentor_tier},
+        )
+
         return CustomResponse(
-            general_message="Mentor verification updated.",
+            general_message="Mentor application approved. Mentor role assigned.",
             response={"mentor": MentorListSerializer(mentor).data},
         ).get_success_response()
 
