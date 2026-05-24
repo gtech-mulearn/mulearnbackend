@@ -578,6 +578,27 @@ class ListIGAPI(APIView):
 
     def get(self, request):
         return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
+
+
+class IGDetailAPI(APIView):
+    def get(self, request, pk):
+        from api.dashboard.ig.dash_ig_serializer import InterestGroupSerializer
+
+        ig_data = (
+            InterestGroup.objects.prefetch_related("user_ig_link_ig")
+            .filter(id=pk)
+            .first()
+        )
+
+        if not ig_data:
+            return CustomResponse(
+                general_message="Interest Group Not Found"
+            ).get_failure_response()
+
+        serializer = InterestGroupSerializer(ig_data, many=False)
+        return CustomResponse(
+            response={"interestGroup": serializer.data}
+        ).get_success_response()
 class ListAllLevelInfo(APIView):
     def get(self, request):
 

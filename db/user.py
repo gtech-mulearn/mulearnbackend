@@ -107,8 +107,8 @@ class UserEndgoals(models.Model):
 class UserMentor(models.Model):
 
     class MentorTier(models.TextChoices):
-        NORMAL = 'NORMAL', 'Normal'
-        VERIFIED = 'VERIFIED', 'Verified'
+        IG_MENTOR = 'IG_MENTOR', 'IG Mentor'   # linked to specific IG(s)
+        MENTOR    = 'MENTOR',    'Mentor'        # platform-wide global mentor
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
 
@@ -129,10 +129,14 @@ class UserMentor(models.Model):
     mentor_tier = models.CharField(
         max_length=10,
         choices=MentorTier.choices,
-        default=MentorTier.NORMAL
+        default=MentorTier.IG_MENTOR
     )
 
     is_verified = models.BooleanField(default=False)
+
+    # JSON list of IG UUIDs mentor expressed interest in during onboarding.
+    # On admin approval, UserIgLink rows are auto-created for each.
+    preferred_ig_ids = models.JSONField(null=True, blank=True)
 
     verified_by = models.ForeignKey(
         User,
