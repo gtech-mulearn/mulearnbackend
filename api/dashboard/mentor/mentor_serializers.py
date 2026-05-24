@@ -36,8 +36,11 @@ class MentorOnboardingUpdateSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserMentor
-        fields = ["about", "expertise", "reason", "updated_by"]
-        extra_kwargs = {"updated_by": {"required": True}}
+        fields = ["about", "expertise", "reason", "preferred_ig_ids", "updated_by"]
+        extra_kwargs = {
+            "updated_by": {"required": True},
+            "preferred_ig_ids": {"required": False},
+        }
 
 
 # ─────────────────────────────────────────────────────────────────────────────
