@@ -14,7 +14,7 @@ from db.mentor import (
 from db.mentor_task_request import MentorTaskRequest
 from db.notification import Notification
 from db.task import InterestGroup, KarmaActivityLog, TaskList, TaskType, UserIgLink
-from db.user import User, UserMentor
+from db.user import Role, User, UserMentor, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -68,6 +68,33 @@ def _log_action(action_type, actor_user_id, entity_name, entity_id,
         old_data=old_data,
         new_data=new_data,
         remarks=remarks,
+    )
+
+
+def _is_ig_mentor_for(user_id: str, ig_id: str) -> bool:
+    """True if the user is a verified IG_MENTOR actively linked to this IG."""
+    return (
+        UserMentor.objects.filter(
+            user_id=user_id,
+            is_verified=True,
+            mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+        ).exists()
+        and UserIgLink.objects.filter(
+            user_id=user_id,
+            ig_id=ig_id,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=True,
+        ).exists()
+    )
+
+
+def _get_ig_lead_user_ids(ig_code: str) -> list:
+    """Return user_ids of all active IG Leads for the given IG code."""
+    return list(
+        UserRoleLink.objects.filter(
+            role__title=RoleType.IG_LEAD_ROLE(ig_code),
+            is_active=True,
+        ).values_list("user_id", flat=True)
     )
 
 
@@ -136,6 +163,47 @@ class MentorOnboardingAPI(APIView):
             return CustomResponse(general_message=serializer.errors).get_failure_response()
 
         serializer.save()
+
+        # If verified mentor added new preferred IGs → create pending UserIgLink + notify IG Leads
+        if mentor.is_verified:
+            new_ig_ids = data.get("preferred_ig_ids", [])
+            if new_ig_ids:
+                existing_ig_ids = set(
+                    UserIgLink.objects.filter(
+                        user_id=user_id,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                    ).values_list("ig_id", flat=True)
+                )
+                for ig_uuid in new_ig_ids:
+                    if ig_uuid in existing_ig_ids:
+                        continue  # already linked (active or pending)
+                    ig_obj = InterestGroup.objects.filter(id=ig_uuid).first()
+                    if not ig_obj:
+                        continue
+                    # Create pending link (is_active=False = awaiting IG Lead approval)
+                    UserIgLink.objects.get_or_create(
+                        user_id=user_id,
+                        ig_id=ig_uuid,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        defaults={
+                            "is_active":    False,
+                            "assigned_by_id": user_id,
+                            "created_by_id": user_id,
+                        },
+                    )
+                    # Notify all IG Leads of this IG
+                    lead_ids = _get_ig_lead_user_ids(ig_obj.code)
+                    for lead_id in lead_ids:
+                        Notification.objects.create(
+                            user_id=lead_id,
+                            title=f"Mentor IG Link Request — {ig_obj.name}",
+                            description=(
+                                f"{mentor.user.full_name} has requested to be linked as a "
+                                f"mentor for {ig_obj.name}. Please review and approve or reject."
+                            ),
+                            created_by_id=user_id,
+                        )
+
         return CustomResponse(
             general_message="Mentor profile updated.",
             response={"mentor": MentorListSerializer(mentor).data},
@@ -177,7 +245,21 @@ class MentorListAPI(APIView):
 
 
 class MentorVerifyAPI(APIView):
-    """PATCH — admin verifies or updates a mentor's tier/verification status."""
+    """
+    PATCH /<mentor_id>/verify/
+
+    Required body field:
+        action : "approve" | "reject"
+
+    Optional:
+        note        : str  — shown to mentor in notification
+        mentor_tier : "NORMAL" | "VERIFIED"  (approve only, default NORMAL)
+
+    Approve:
+        • is_verified = True, role assigned, IG links created, mentor notified ✅
+    Reject:
+        • user_mentor row deleted (user can reapply), mentor notified ❌
+    """
     authentication_classes = [CustomizePermission]
 
     @role_required([ADMIN])
@@ -189,19 +271,76 @@ class MentorVerifyAPI(APIView):
                 general_message="Mentor not found."
             ).get_failure_response()
 
-        data = request.data.copy()
-        data["verified_by"] = admin_id
-        data["verified_at"] = DateTimeUtils.get_current_utc_time()
-        data["updated_by"] = admin_id
+        action = request.data.get("action", "").lower()
+        note   = request.data.get("note", "")
 
-        serializer = MentorVerifySerializer(data=data, instance=mentor, partial=True)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        if action not in ("approve", "reject"):
+            return CustomResponse(
+                general_message="'action' must be 'approve' or 'reject'."
+            ).get_failure_response()
 
-        serializer.save()
+        mentor_user = mentor.user  # cache before possible deletion
 
-        # Feature 5: auto-create UserIgLink for preferred IGs on verification approval
-        if data.get("is_verified") and mentor.preferred_ig_ids:
+        # ── REJECT ─────────────────────────────────────────────────────────
+        if action == "reject":
+            mentor.delete()
+
+            Notification.objects.create(
+                user=mentor_user,
+                title="Mentor Application Not Approved",
+                description=(
+                    f"Your mentor application was reviewed and not approved. "
+                    f"Reason: {note}"
+                    if note
+                    else "Your mentor application was reviewed and not approved. "
+                         "You may reapply after updating your profile."
+                ),
+                created_by_id=admin_id,
+            )
+
+            _log_action(
+                action_type=SystemActionLog.ActionType.TASK_REVIEW,
+                actor_user_id=admin_id,
+                entity_name="user_mentor",
+                entity_id=pk,
+                subject_user=mentor_user,
+                new_data={"action": "reject", "note": note},
+            )
+
+            return CustomResponse(
+                general_message="Mentor application rejected. User notified and may reapply."
+            ).get_success_response()
+
+        # ── APPROVE ────────────────────────────────────────────────────────
+        now         = DateTimeUtils.get_current_utc_time()
+        mentor_tier = request.data.get("mentor_tier", UserMentor.MentorTier.IG_MENTOR)
+
+        mentor.is_verified       = True
+        mentor.verified_by_id    = admin_id
+        mentor.verified_at       = now
+        mentor.verification_note = note
+        mentor.mentor_tier       = mentor_tier
+        mentor.updated_by_id     = admin_id
+        mentor.save()
+
+        # Assign Mentor role (idempotent)
+        mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+        if mentor_role:
+            already_has_role = UserRoleLink.objects.filter(
+                user_id=mentor.user_id,
+                role=mentor_role,
+                is_active=True,
+            ).exists()
+            if not already_has_role:
+                UserRoleLink.objects.create(
+                    user_id=mentor.user_id,
+                    role=mentor_role,
+                    verified=True,
+                    created_by_id=admin_id,
+                )
+
+        # Create UserIgLink rows for preferred IGs (Feature 5)
+        if mentor.preferred_ig_ids:
             for ig_uuid in mentor.preferred_ig_ids:
                 if InterestGroup.objects.filter(id=ig_uuid).exists():
                     UserIgLink.objects.get_or_create(
@@ -210,12 +349,32 @@ class MentorVerifyAPI(APIView):
                         assignment_type=UserIgLink.AssignmentType.MENTOR,
                         defaults={
                             "assigned_by_id": admin_id,
-                            "created_by_id": admin_id,
+                            "created_by_id":  admin_id,
                         },
                     )
 
+        # Notify mentor of approval
+        Notification.objects.create(
+            user=mentor_user,
+            title="🎉 Mentor Application Approved!",
+            description=(
+                f"Congratulations! Your mentor application has been approved. "
+                f"You are now a {mentor_tier.capitalize()} mentor on muLearn."
+            ),
+            created_by_id=admin_id,
+        )
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.TASK_REVIEW,
+            actor_user_id=admin_id,
+            entity_name="user_mentor",
+            entity_id=pk,
+            subject_user=mentor_user,
+            new_data={"action": "approve", "mentor_tier": mentor_tier},
+        )
+
         return CustomResponse(
-            general_message="Mentor verification updated.",
+            general_message="Mentor application approved. Mentor role assigned.",
             response={"mentor": MentorListSerializer(mentor).data},
         ).get_success_response()
 
@@ -487,18 +646,38 @@ class MentorSessionAPI(APIView):
 
     @role_required([ADMIN, MENTOR])
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        roles = JWTUtils.fetch_role(request)
+        user_id  = JWTUtils.fetch_user_id(request)
+        roles    = JWTUtils.fetch_role(request)
         is_admin = ADMIN in roles
 
-        ig_id = request.data.get("ig")
-        is_global_req = not ig_id  # no IG → global session
+        ig_id      = request.data.get("ig")
+        is_global  = not ig_id  # no IG supplied → treat as global
 
-        # Only admin can create IG-scoped sessions
-        if ig_id and not is_admin:
-            return CustomResponse(
-                general_message="Only admins can create IG-scoped sessions."
-            ).get_failure_response()
+        if not is_admin:
+            mentor = UserMentor.objects.filter(user_id=user_id, is_verified=True).first()
+            if not mentor:
+                return CustomResponse(
+                    general_message="A verified mentor profile is required to create sessions."
+                ).get_failure_response()
+
+            if mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                if ig_id:
+                    # IG session — must be linked to that IG
+                    if not _is_ig_mentor_for(user_id, ig_id):
+                        return CustomResponse(
+                            general_message="You are not an IG Mentor for this interest group."
+                        ).get_failure_response()
+                    is_global = False
+                else:
+                    # IG_MENTOR creating a global session — allowed, goes to PENDING_APPROVAL
+                    is_global = True
+
+            elif mentor.mentor_tier == UserMentor.MentorTier.MENTOR:
+                if ig_id:
+                    return CustomResponse(
+                        general_message="Global Mentors cannot create IG-scoped sessions."
+                    ).get_failure_response()
+                is_global = True
 
         # Validate IG exists if provided
         if ig_id and not InterestGroup.objects.filter(id=ig_id).exists():
@@ -509,13 +688,12 @@ class MentorSessionAPI(APIView):
         data = request.data.copy()
         data["created_by"] = user_id
         data["updated_by"] = user_id
-        data["is_global"] = is_global_req
-
-        # Set status based on session type
-        if is_global_req:
-            data["status"] = MentorshipSession.Status.PENDING_APPROVAL
-        else:
-            data["status"] = MentorshipSession.Status.SCHEDULED
+        data["is_global"]  = is_global
+        data["status"] = (
+            MentorshipSession.Status.PENDING_APPROVAL
+            if is_global
+            else MentorshipSession.Status.SCHEDULED
+        )
 
         serializer = MentorSessionCreateSerializer(data=data)
         if not serializer.is_valid():
@@ -543,7 +721,7 @@ class MentorSessionAPI(APIView):
         return CustomResponse(
             general_message=(
                 "Global session submitted for admin approval."
-                if is_global_req
+                if is_global
                 else "Session created successfully."
             ),
             response={"session": MentorSessionDetailSerializer(session).data},
@@ -1785,3 +1963,176 @@ def _send_session_reminders(session, triggered_by_id):
     ]
     Notification.objects.bulk_create(notifications, ignore_conflicts=True)
     return len(notifications)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# My IGs — mentor sees their own active IG links
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorMyIgsAPI(APIView):
+    """
+    GET /mentor/my-igs/
+    Returns all IGs the authenticated mentor is actively linked to
+    (UserIgLink with assignment_type=MENTOR, is_active=True).
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([ADMIN, MENTOR])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        links = UserIgLink.objects.filter(
+            user_id=user_id,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=True,
+        ).select_related("ig")
+
+        data = [
+            {
+                "ig_id":    str(link.ig_id),
+                "ig_name":  link.ig.name,
+                "ig_code":  link.ig.code,
+            }
+            for link in links
+        ]
+        return CustomResponse(response={"igs": data}).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# IG Mentor Link Requests — IG Lead reviews pending requests
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorIgRequestListAPI(APIView):
+    """
+    GET /mentor/ig-requests/?ig_id=<uuid>
+    IG Lead (or Admin) views pending mentor-to-IG link requests for their IG.
+    Pending = UserIgLink(assignment_type=MENTOR, is_active=False).
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([ADMIN, MENTOR])
+    def get(self, request):
+        user_id  = JWTUtils.fetch_user_id(request)
+        roles    = JWTUtils.fetch_role(request)
+        is_admin = ADMIN in roles
+        ig_id    = request.query_params.get("ig_id")
+
+        if not ig_id:
+            return CustomResponse(
+                general_message="ig_id query param is required."
+            ).get_failure_response()
+
+        ig = InterestGroup.objects.filter(id=ig_id).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group not found.").get_failure_response()
+
+        # Permission: admin OR IG Lead for this specific IG
+        ig_lead_role = RoleType.IG_LEAD_ROLE(ig.code)
+        if not is_admin and ig_lead_role not in roles:
+            return CustomResponse(
+                general_message="You are not an IG Lead for this interest group."
+            ).get_failure_response()
+
+        pending = UserIgLink.objects.filter(
+            ig_id=ig_id,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=False,
+        ).select_related("user", "ig")
+
+        data = [
+            {
+                "id":           str(link.id),
+                "user_id":      str(link.user_id),
+                "full_name":    link.user.full_name,
+                "email":        link.user.email,
+                "muid":         link.user.muid,
+                "ig_id":        str(link.ig_id),
+                "ig_name":      link.ig.name,
+                "requested_at": link.created_at,
+            }
+            for link in pending
+        ]
+        return CustomResponse(response={"requests": data}).get_success_response()
+
+
+class MentorIgRequestDetailAPI(APIView):
+    """
+    PATCH /mentor/ig-requests/<uil_pk>/
+    IG Lead approves or rejects a pending mentor IG link request.
+
+    Body:
+        action : "approve" | "reject"
+        note   : str (optional, shown to mentor on reject)
+
+    Approve → UserIgLink.is_active = True, mentor notified
+    Reject  → UserIgLink row deleted, mentor notified
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([ADMIN, MENTOR])
+    def patch(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        roles    = JWTUtils.fetch_role(request)
+        is_admin = ADMIN in roles
+
+        link = UserIgLink.objects.filter(
+            id=pk,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=False,
+        ).select_related("user", "ig").first()
+
+        if not link:
+            return CustomResponse(
+                general_message="Pending request not found."
+            ).get_failure_response()
+
+        # Permission: admin OR IG Lead for this IG
+        ig_lead_role = RoleType.IG_LEAD_ROLE(link.ig.code)
+        if not is_admin and ig_lead_role not in roles:
+            return CustomResponse(
+                general_message="You are not an IG Lead for this interest group."
+            ).get_failure_response()
+
+        action = request.data.get("action", "").lower()
+        note   = request.data.get("note", "")
+
+        if action not in ("approve", "reject"):
+            return CustomResponse(
+                general_message="'action' must be 'approve' or 'reject'."
+            ).get_failure_response()
+
+        mentor_user = link.user
+        ig_name     = link.ig.name
+
+        if action == "approve":
+            link.is_active     = True
+            link.assigned_by_id = user_id
+            link.save()
+
+            Notification.objects.create(
+                user=mentor_user,
+                title=f"✅ IG Mentor Request Approved — {ig_name}",
+                description=(
+                    f"Your request to be linked as a mentor for {ig_name} "
+                    f"has been approved. You can now create sessions for this IG."
+                ),
+                created_by_id=user_id,
+            )
+            return CustomResponse(
+                general_message=f"Mentor approved for {ig_name}."
+            ).get_success_response()
+
+        # reject
+        link.delete()
+        Notification.objects.create(
+            user=mentor_user,
+            title=f"❌ IG Mentor Request Not Approved — {ig_name}",
+            description=(
+                f"Your request to be linked as a mentor for {ig_name} was not approved."
+                + (f" Reason: {note}" if note else "")
+            ),
+            created_by_id=user_id,
+        )
+        return CustomResponse(
+            general_message=f"Mentor request for {ig_name} rejected."
+        ).get_success_response()
+

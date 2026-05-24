@@ -47,4 +47,10 @@ urlpatterns = [
     # ── Aggregates ────────────────────────────────────────────────────────────
     path("mentees/", mentor_views.MentorMenteesAPI.as_view()),
     path("activity-log/", mentor_views.MentorActivityLogAPI.as_view()),
+
+    # ── IG Links (new) ────────────────────────────────────────────────────────
+    path("my-igs/", mentor_views.MentorMyIgsAPI.as_view()),
+    path("ig-requests/", mentor_views.MentorIgRequestListAPI.as_view()),
+    path("ig-requests/<str:pk>/", mentor_views.MentorIgRequestDetailAPI.as_view()),
 ]
+
