@@ -362,29 +362,18 @@ class CampusExecomRoleAPI(APIView):
         roles.add(RoleType.CAMPUS_LEAD.value)
         roles.add(RoleType.LEAD_ENABLER.value)
         roles.add(RoleType.ENABLER.value)
+        roles.add(RoleType.IG_LEAD.value)
+        
 
-        # Active IGs
+        # Active IG roles for this campus
         active_chapters = CampusIGChapter.objects.filter(org=org, is_active=True).select_related("ig")
         for chapter in active_chapters:
             if chapter.ig:
                 roles.add(f"{chapter.ig.code} CampusLead")
                 roles.add(f"{chapter.ig.name} Design Lead")
                 roles.add(f"{chapter.ig.name} Tech Lead")
-
-        # Global Custom Roles (exclude blacklisted system roles)
-        blacklist = [
-            RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
-            RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value,
-            RoleType.MENTOR.value, RoleType.COMPANY.value, RoleType.BOT_DEV.value,
-            RoleType.TECH_TEAM.value, RoleType.CAMPUS_ACTIVATION_TEAM.value,
-            RoleType.DISCORD_MANAGER.value, RoleType.EX_OFFICIAL.value,
-            RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
-            RoleType.MULEARNER.value
-        ]
-
-        custom_roles = Role.objects.exclude(title__in=blacklist).values_list("title", flat=True)
-        for cr in custom_roles:
-            roles.add(cr)
+                roles.add(f"{chapter.ig.name} IG Lead")
+                roles.add(f"{chapter.ig.name} IGLead")
 
         return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
 

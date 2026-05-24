@@ -134,6 +134,10 @@ class UserMentor(models.Model):
 
     is_verified = models.BooleanField(default=False)
 
+    # JSON list of IG UUIDs mentor expressed interest in during onboarding.
+    # On admin approval, UserIgLink rows are auto-created for each.
+    preferred_ig_ids = models.JSONField(null=True, blank=True)
+
     verified_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
