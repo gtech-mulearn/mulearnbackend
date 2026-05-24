@@ -13,8 +13,8 @@ from .task import InterestGroup
 class MentorAvailabilitySlot(models.Model):
     """
     Mentor's recurring weekly availability windows.
-    ig_id is nullable: NULL means the slot applies across all mentor IGs.
-    When NULL, the slot is returned for whatever IG is active in the persona context.
+    ig_id is nullable: NULL means the slot is not tied to a specific IG
+    and applies globally across all of the mentor's IGs.
     """
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
@@ -59,10 +59,12 @@ class MentorshipSession(models.Model):
         HYBRID = 'HYBRID', 'Hybrid'
 
     class Status(models.TextChoices):
-        SCHEDULED = 'SCHEDULED', 'Scheduled'
-        COMPLETED = 'COMPLETED', 'Completed'
-        CANCELLED = 'CANCELLED', 'Cancelled'
-        NO_SHOW = 'NO_SHOW', 'No Show'
+        # Global sessions start here until an admin approves them
+        PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending Approval'
+        SCHEDULED        = 'SCHEDULED',        'Scheduled'
+        COMPLETED        = 'COMPLETED',        'Completed'
+        CANCELLED        = 'CANCELLED',        'Cancelled'
+        NO_SHOW          = 'NO_SHOW',          'No Show'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     ig = models.ForeignKey(
@@ -76,7 +78,22 @@ class MentorshipSession(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     meeting_link = models.CharField(max_length=500, null=True, blank=True)
-    status = models.CharField(max_length=15, choices=Status.choices, default=Status.SCHEDULED)
+    # is_global=True when ig is NULL and the session was submitted by a mentor
+    # for cross-IG or platform-wide reach; requires admin approval.
+    is_global = models.BooleanField(default=False)
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        # IG sessions default to SCHEDULED; global sessions default to PENDING_APPROVAL
+        default=Status.SCHEDULED,
+    )
+    # Populated by admin when approving or rejecting a global session
+    approved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='approved_by', related_name='mentorship_session_approved_by'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
     created_by = models.ForeignKey(
         User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='mentorship_session_created_by'
@@ -169,15 +186,48 @@ class IgOpportunity(models.Model):
         db_table = 'ig_opportunity'
 
 
+class MentorKarmaAward(models.Model):
+    """
+    Tracks karma awarded by an admin to a mentor after a completed session.
+    One award per (session, mentor) pair — enforced by unique_together.
+    The kal_id FK is set after the KarmaActivityLog row is created.
+    """
+    id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    session    = models.ForeignKey(
+        MentorshipSession, on_delete=models.CASCADE,
+        db_column='session_id', related_name='karma_awards'
+    )
+    mentor     = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='mentor_id', related_name='mentor_karma_awards'
+    )
+    karma      = models.IntegerField()
+    note       = models.CharField(max_length=500, null=True, blank=True)
+    awarded_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='awarded_by', related_name='mentor_karma_awards_given'
+    )
+    awarded_at = models.DateTimeField()
+    # Linked KarmaActivityLog row — set after KAL is created
+    kal_id     = models.CharField(max_length=36, null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_karma_award'
+        unique_together = [('session', 'mentor')]
+
+
 class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
-        PERSONA_SWITCH = 'PERSONA_SWITCH', 'Persona Switch'
-        TASK_REVIEW = 'TASK_REVIEW', 'Task Review'
-        EVENT_REVIEW = 'EVENT_REVIEW', 'Event Review'
-        SESSION_CREATE = 'SESSION_CREATE', 'Session Create'
-        SESSION_UPDATE = 'SESSION_UPDATE', 'Session Update'
-        SESSION_STATUS = 'SESSION_STATUS', 'Session Status'
+        PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
+        TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
+        EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'
+        SESSION_CREATE   = 'SESSION_CREATE',   'Session Create'
+        SESSION_UPDATE   = 'SESSION_UPDATE',   'Session Update'
+        SESSION_STATUS   = 'SESSION_STATUS',   'Session Status'
+        KARMA_AWARD      = 'KARMA_AWARD',      'Karma Award'
         MANUAL_HOURS_LOG = 'MANUAL_HOURS_LOG', 'Manual Hours Log'
         IG_CONTENT_UPDATE = 'IG_CONTENT_UPDATE', 'IG Content Update'
         OPPORTUNITY_POST = 'OPPORTUNITY_POST', 'Opportunity Post'

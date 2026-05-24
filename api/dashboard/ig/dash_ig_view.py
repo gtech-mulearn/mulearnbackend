@@ -14,9 +14,15 @@ from .dash_ig_serializer import (
     InterestGroupRequestSerializer,
 )
 import json
+import uuid
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
+from db.task import UserIgLink
+from db.user import Role, UserMentor, UserRoleLink
+from db.notification import Notification
+from utils.types import RoleType
+from utils.utils import DateTimeUtils
 
 
 def _validate_muids(request_data, fields=("leads", "mentors")):
@@ -376,6 +382,84 @@ class InterestGroupGetAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            # ── Side-effect: assign Mentor role + UserIgLink for new mentors ────
+            raw_mentors = request.data.get("mentors")
+            if raw_mentors:
+                if isinstance(raw_mentors, str):
+                    try:
+                        raw_mentors = json.loads(raw_mentors)
+                    except Exception:
+                        raw_mentors = []
+
+                mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+                for item in (raw_mentors or []):
+                    muid = item.get("muid") if isinstance(item, dict) else item
+                    if not muid:
+                        continue
+                    target_user = User.objects.filter(muid=muid).first()
+                    if not target_user:
+                        continue
+
+                    # 1. Ensure UserMentor exists and is verified as IG_MENTOR
+                    mentor_profile, created = UserMentor.objects.get_or_create(
+                        user=target_user,
+                        defaults={
+                            "is_verified":   True,
+                            "mentor_tier":   UserMentor.MentorTier.IG_MENTOR,
+                            "verified_by_id": user_id,
+                            "verified_at":   DateTimeUtils.get_current_utc_time(),
+                            "created_by_id": user_id,
+                            "updated_by_id": user_id,
+                        },
+                    )
+                    if not created and not mentor_profile.is_verified:
+                        mentor_profile.is_verified  = True
+                        mentor_profile.mentor_tier  = UserMentor.MentorTier.IG_MENTOR
+                        mentor_profile.verified_by_id = user_id
+                        mentor_profile.verified_at  = DateTimeUtils.get_current_utc_time()
+                        mentor_profile.updated_by_id = user_id
+                        mentor_profile.save()
+
+                    # 2. Assign Mentor role (idempotent)
+                    if mentor_role:
+                        UserRoleLink.objects.get_or_create(
+                            user=target_user,
+                            role=mentor_role,
+                            defaults={"verified": True, "created_by_id": user_id},
+                        )
+
+                    # 3. Create active UserIgLink (idempotent)
+                    link, link_created = UserIgLink.objects.get_or_create(
+                        user=target_user,
+                        ig=ig,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        defaults={
+                            "is_active":      True,
+                            "assigned_by_id": user_id,
+                            "created_by_id":  user_id,
+                        },
+                    )
+                    if not link_created and not link.is_active:
+                        link.is_active = True
+                        link.assigned_by_id = user_id
+                        link.save()
+
+                    # 4. Notify the newly assigned mentor
+                    if created or link_created:
+                        caller = User.objects.filter(id=user_id).first()
+                        caller_name = caller.full_name if caller else "An IG Lead"
+                        Notification.objects.create(
+                            user=target_user,
+                            title=f"🎓 You've been assigned as an IG Mentor — {ig.name}",
+                            description=(
+                                f"{caller_name} has assigned you as an IG Mentor for "
+                                f"{ig.name}. You can now create sessions and manage "
+                                f"tasks within this interest group."
+                            ),
+                            created_by_id=user_id,
+                        )
+
             return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
         return CustomResponse(message=serializer.errors).get_failure_response()
