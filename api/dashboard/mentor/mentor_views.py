@@ -1,3 +1,4 @@
+from django.db import transaction, IntegrityError
 from django.db.models import Count, F as models_F, Q, Sum, Value, IntegerField
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -49,8 +50,6 @@ from .mentor_serializers import (
 )
 
 # ─── Role shorthand ──────────────────────────────────────────────────────────
-ADMIN = RoleType.ADMIN.value
-MENTOR = RoleType.MENTOR.value
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -217,8 +216,8 @@ class MentorOnboardingAPI(APIView):
 class MentorListAPI(APIView):
     """GET — paginated list of all mentor applications (admin only)."""
     authentication_classes = [CustomizePermission]
-
-    @role_required([ADMIN])
+    
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         is_verified = request.query_params.get("is_verified")
         mentor_qs = (
@@ -262,7 +261,7 @@ class MentorVerifyAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         mentor = UserMentor.objects.filter(id=pk).select_related("user").first()
@@ -410,11 +409,11 @@ class MentorOverviewAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
         ig_id = request.query_params.get("ig_id")
         now = DateTimeUtils.get_current_utc_time()
 
@@ -482,7 +481,7 @@ class MentorOverviewAPI(APIView):
                 "scheduled": status_counts.get(MentorshipSession.Status.SCHEDULED, 0),
                 "completed": status_counts.get(MentorshipSession.Status.COMPLETED, 0),
                 "cancelled": status_counts.get(MentorshipSession.Status.CANCELLED, 0),
-                "no_show": status_counts.get(MentorshipSession.Status.NO_SHOW, 0),
+                "rejected": status_counts.get(MentorshipSession.Status.REJECTED, 0),
                 "total": session_total,
             },
             "upcoming": upcoming,
@@ -599,11 +598,11 @@ class MentorSessionAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         session_qs = (
             MentorshipSession.objects
@@ -644,11 +643,11 @@ class MentorSessionAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         ig_id      = request.data.get("ig")
         is_global  = not ig_id  # no IG supplied → treat as global
@@ -732,7 +731,7 @@ class MentorSessionDetailAPI(APIView):
     """GET / PUT / PATCH / DELETE for a single session."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         session = (
             MentorshipSession.objects
@@ -747,11 +746,11 @@ class MentorSessionDetailAPI(APIView):
         serializer = MentorSessionDetailSerializer(session)
         return CustomResponse(response={"session": serializer.data}).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         session = MentorshipSession.objects.filter(id=pk).first()
         if not session:
@@ -789,7 +788,7 @@ class MentorSessionDetailAPI(APIView):
             response={"session": MentorSessionDetailSerializer(session).data},
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -823,15 +822,14 @@ class MentorSessionStatusAPI(APIView):
         MentorshipSession.Status.SCHEDULED: [
             MentorshipSession.Status.COMPLETED,
             MentorshipSession.Status.CANCELLED,
-            MentorshipSession.Status.NO_SHOW,
         ],
         MentorshipSession.Status.COMPLETED: [],
         MentorshipSession.Status.CANCELLED: [],
-        MentorshipSession.Status.NO_SHOW: [],
+        MentorshipSession.Status.REJECTED: [],
         MentorshipSession.Status.PENDING_APPROVAL: [],  # use /approve/ endpoint instead
     }
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -841,6 +839,13 @@ class MentorSessionStatusAPI(APIView):
         new_status = request.data.get("status")
         if not new_status:
             return CustomResponse(general_message="'status' field is required.").get_failure_response()
+
+        data = {"status": new_status, "updated_by": user_id}
+        serializer = MentorSessionStatusSerializer(data=data, instance=session, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        new_status = serializer.validated_data["status"]
 
         if new_status == MentorshipSession.Status.PENDING_APPROVAL:
             return CustomResponse(
@@ -852,11 +857,6 @@ class MentorSessionStatusAPI(APIView):
             return CustomResponse(
                 general_message=f"Cannot transition from '{session.status}' to '{new_status}'."
             ).get_failure_response()
-
-        data = {"status": new_status, "updated_by": user_id}
-        serializer = MentorSessionStatusSerializer(data=data, instance=session, partial=True)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
 
         serializer.save()
 
@@ -878,7 +878,7 @@ class MentorSessionParticipantsAPI(APIView):
     """GET / POST / DELETE participants on a session."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         session = MentorshipSession.objects.filter(id=pk).first()
         if not session:
@@ -894,47 +894,93 @@ class MentorSessionParticipantsAPI(APIView):
             response={"participants": serializer.data}
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
-        session = MentorshipSession.objects.filter(id=pk).first()
-        if not session:
-            return CustomResponse(general_message="Session not found.").get_failure_response()
+        
+        with transaction.atomic():
+            session = MentorshipSession.objects.select_for_update().filter(id=pk).first()
+            if not session:
+                return CustomResponse(general_message="Session not found.").get_failure_response()
 
-        data = request.data.copy()
-        data["session"] = pk
+            data = request.data.copy()
+            data["session"] = pk
 
-        # Validate participant user exists
-        participant_user_id = data.get("user")
-        if not User.objects.filter(id=participant_user_id).exists():
-            return CustomResponse(
-                general_message="Participant user not found."
-            ).get_failure_response()
+            # Validate participant user exists
+            participant_user_id = data.get("user")
+            if not User.objects.filter(id=participant_user_id).exists():
+                return CustomResponse(
+                    general_message="Participant user not found."
+                ).get_failure_response()
 
-        # Check for duplicate
-        role = data.get("participant_role")
-        if MentorshipSessionUserLink.objects.filter(
-            session_id=pk, user_id=participant_user_id, participant_role=role
-        ).exists():
-            return CustomResponse(
-                general_message="This user already has this role in the session."
-            ).get_failure_response()
+            # Check for duplicate
+            role = data.get("participant_role")
+            if MentorshipSessionUserLink.objects.filter(
+                session_id=pk, user_id=participant_user_id, participant_role=role
+            ).exists():
+                return CustomResponse(
+                    general_message="This user already has this role in the session."
+                ).get_failure_response()
 
-        serializer = MentorSessionParticipantAddSerializer(data=data)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+            # Enforce max_participants for mentees
+            if role == MentorshipSessionUserLink.ParticipantRole.MENTEE and session.max_participants is not None:
+                current_mentees = MentorshipSessionUserLink.objects.filter(
+                    session_id=pk,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE
+                ).count()
+                
+                if current_mentees >= session.max_participants:
+                    return CustomResponse(
+                        general_message=f"Session capacity reached ({session.max_participants} mentees)."
+                    ).get_failure_response()
 
-        link = serializer.save()
+            serializer = MentorSessionParticipantAddSerializer(data=data)
+            if not serializer.is_valid():
+                return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+            link = serializer.save()
+
         return CustomResponse(
             general_message="Participant added.",
             response={"participant": MentorSessionParticipantSerializer(link).data},
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
-    def delete(self, request, pk, user_pk):
-        MentorshipSessionUserLink.objects.filter(
-            session_id=pk, user_id=user_pk
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def delete(self, request, pk=None, session_pk=None, user_pk=None):
+        session_id = session_pk or pk
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        session = MentorshipSession.objects.filter(id=session_id).first()
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+
+        if not is_admin and str(session.created_by_id) != user_id:
+            return CustomResponse(
+                general_message="You do not have permission to modify this session."
+            ).get_failure_response()
+
+        participant_role = request.query_params.get("participant_role")
+        if not participant_role:
+            return CustomResponse(
+                general_message="participant_role query parameter is required."
+            ).get_failure_response()
+
+        if participant_role not in [r.value for r in MentorshipSessionUserLink.ParticipantRole]:
+            return CustomResponse(
+                general_message="Invalid participant_role."
+            ).get_failure_response()
+
+        deleted, _ = MentorshipSessionUserLink.objects.filter(
+            session_id=session_id, user_id=user_pk, participant_role=participant_role
         ).delete()
+
+        if deleted == 0:
+            return CustomResponse(
+                general_message="Participant not found."
+            ).get_failure_response()
+
         return CustomResponse(
             general_message="Participant removed."
         ).get_success_response()
@@ -948,7 +994,7 @@ class GlobalSessionPendingAPI(APIView):
     """GET — paginated list of global sessions awaiting admin approval."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         pending_qs = (
             MentorshipSession.objects
@@ -999,7 +1045,7 @@ class GlobalSessionApproveAPI(APIView):
     """PATCH — admin approves or rejects a pending global session."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -1025,7 +1071,7 @@ class GlobalSessionApproveAPI(APIView):
             new_status = MentorshipSession.Status.SCHEDULED
             message = "Global session approved and scheduled."
         elif action == "reject":
-            new_status = MentorshipSession.Status.CANCELLED
+            new_status = MentorshipSession.Status.REJECTED
             message = "Global session rejected."
         else:
             return CustomResponse(
@@ -1071,11 +1117,11 @@ class MentorAvailabilityAPI(APIView):
     """GET — list slots; POST — create a new slot."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         mentor_user_id = request.query_params.get("mentor_user_id")
         ig_id = request.query_params.get("ig_id")
@@ -1104,7 +1150,7 @@ class MentorAvailabilityAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
@@ -1127,7 +1173,7 @@ class MentorAvailabilityDetailAPI(APIView):
     """PUT — full replace; DELETE — soft-delete."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         slot = MentorAvailabilitySlot.objects.filter(
@@ -1153,11 +1199,11 @@ class MentorAvailabilityDetailAPI(APIView):
             response={"slot": MentorAvailabilitySerializer(slot).data},
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         slot_qs = MentorAvailabilitySlot.objects.filter(id=pk)
         if not is_admin:
@@ -1185,11 +1231,11 @@ class MentorTaskRequestAPI(APIView):
     """GET — list; POST — submit a task proposal."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         status_filter = request.query_params.get("status")
         qs = MentorTaskRequest.objects.select_related(
@@ -1215,7 +1261,7 @@ class MentorTaskRequestAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
@@ -1224,10 +1270,17 @@ class MentorTaskRequestAPI(APIView):
         data["updated_by"] = user_id
 
         serializer = MentorTaskRequestCreateSerializer(data=data)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        
+        try:
+            with transaction.atomic():
+                if not serializer.is_valid():
+                    return CustomResponse(general_message=serializer.errors).get_failure_response()
+                task_req = serializer.save()
+        except IntegrityError:
+            return CustomResponse(
+                general_message={"hashtag": ["A task/request with this hashtag already exists."]}
+            ).get_failure_response()
 
-        task_req = serializer.save()
         return CustomResponse(
             general_message="Task proposal submitted. Awaiting admin review.",
             response={"task_request": MentorTaskRequestSerializer(task_req).data},
@@ -1238,11 +1291,11 @@ class MentorTaskRequestDetailAPI(APIView):
     """GET — detail; PATCH — admin review (approve/reject)."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         qs = MentorTaskRequest.objects.select_related(
             "mentor", "ig", "reviewed_by", "created_task"
@@ -1261,7 +1314,7 @@ class MentorTaskRequestDetailAPI(APIView):
             response={"task_request": MentorTaskRequestSerializer(task_req).data}
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         task_req = MentorTaskRequest.objects.select_related(
@@ -1292,34 +1345,40 @@ class MentorTaskRequestDetailAPI(APIView):
             "updated_by": admin_id,
         }
 
-        serializer = MentorTaskRequestReviewSerializer(
-            data=data, instance=task_req, partial=True
-        )
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        try:
+            with transaction.atomic():
+                serializer = MentorTaskRequestReviewSerializer(
+                    data=data, instance=task_req, partial=True
+                )
+                if not serializer.is_valid():
+                    return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-        task_req = serializer.save()
+                task_req = serializer.save()
 
-        # On APPROVED — auto-create the TaskList entry
-        if new_status == MentorTaskRequest.Status.APPROVED:
-            task_type = TaskType.objects.first()  # default type — adjust as needed
-            if not task_type:
-                return CustomResponse(
-                    general_message="No TaskType found. Cannot create task."
-                ).get_failure_response()
+                # On APPROVED — auto-create the TaskList entry
+                if new_status == MentorTaskRequest.Status.APPROVED:
+                    task_type = TaskType.objects.first()  # default type — adjust as needed
+                    if not task_type:
+                        return CustomResponse(
+                            general_message="No TaskType found. Cannot create task."
+                        ).get_failure_response()
 
-            new_task = TaskList.objects.create(
-                hashtag=task_req.hashtag,
-                title=task_req.title,
-                description=task_req.description,
-                karma=task_req.karma,
-                ig=task_req.ig,
-                type=task_type,
-                created_by_id=admin_id,
-                updated_by_id=admin_id,
-            )
-            task_req.created_task = new_task
-            task_req.save(update_fields=["created_task"])
+                    new_task = TaskList.objects.create(
+                        hashtag=task_req.hashtag,
+                        title=task_req.title,
+                        description=task_req.description,
+                        karma=task_req.karma,
+                        ig=task_req.ig,
+                        type=task_type,
+                        created_by_id=admin_id,
+                        updated_by_id=admin_id,
+                    )
+                    task_req.created_task = new_task
+                    task_req.save(update_fields=["created_task"])
+        except IntegrityError:
+            return CustomResponse(
+                general_message={"hashtag": ["A task with this hashtag already exists in the published task list."]}
+            ).get_failure_response()
 
         return CustomResponse(
             general_message=f"Task request {new_status.lower()}.",
@@ -1335,7 +1394,7 @@ class MentorOpportunityAPI(APIView):
     """GET — list; POST — create opportunity."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
         opp_type = request.query_params.get("type")
@@ -1364,7 +1423,7 @@ class MentorOpportunityAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_id = request.data.get("ig")
@@ -1402,7 +1461,7 @@ class MentorOpportunityDetailAPI(APIView):
     """GET / PUT / PATCH / DELETE a single opportunity."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         opp = IgOpportunity.objects.select_related("ig", "created_by").filter(id=pk).first()
         if not opp:
@@ -1411,7 +1470,7 @@ class MentorOpportunityDetailAPI(APIView):
             response={"opportunity": IgOpportunitySerializer(opp).data}
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = IgOpportunity.objects.filter(id=pk).first()
@@ -1441,7 +1500,7 @@ class MentorOpportunityDetailAPI(APIView):
             response={"opportunity": IgOpportunitySerializer(opp).data},
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = IgOpportunity.objects.filter(id=pk).first()
@@ -1464,11 +1523,11 @@ class MentorMenteesAPI(APIView):
     """GET — distinct mentees across sessions."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         ig_id = request.query_params.get("ig_id")
         mentor_user_id = request.query_params.get("mentor_user_id")
@@ -1539,11 +1598,11 @@ class MentorActivityLogAPI(APIView):
     """GET — recent SystemActionLog entries."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         ig_id = request.query_params.get("ig_id")
         action_type = request.query_params.get("action_type")
@@ -1581,7 +1640,7 @@ class MentorSessionKarmaAwardAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         awards = (
             MentorKarmaAward.objects
@@ -1593,7 +1652,7 @@ class MentorSessionKarmaAwardAPI(APIView):
             response={"awards": serializer.data}
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def post(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).select_related("ig").first()
@@ -1693,11 +1752,11 @@ class MentorTaskReviewQueueAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         status_filter = request.query_params.get("status", "PENDING")
         ig_id = request.query_params.get("ig_id")
@@ -1742,7 +1801,7 @@ class MentorTaskReviewDetailAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def patch(self, request, pk):
         mentor_id = JWTUtils.fetch_user_id(request)
 
@@ -1801,7 +1860,7 @@ class MentorLeaderboardAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
 
@@ -1916,7 +1975,7 @@ class MentorSessionRemindAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -1930,6 +1989,22 @@ class MentorSessionRemindAPI(APIView):
             return CustomResponse(
                 general_message="Reminders can only be sent for SCHEDULED or PENDING_APPROVAL sessions."
             ).get_failure_response()
+
+        # Enforce 12-hour cooldown
+        last_reminder = Notification.objects.filter(
+            url=f"/sessions/{session.id}/",
+            title__contains="Session Reminder"
+        ).order_by("-created_at").first()
+
+        if last_reminder:
+            now = DateTimeUtils.get_current_utc_time()
+            time_diff = now - last_reminder.created_at
+            if time_diff.total_seconds() < 12 * 3600:
+                remaining_hours = int(12 - time_diff.total_seconds() / 3600)
+                wait_msg = f"{remaining_hours} hours" if remaining_hours > 0 else "less than an hour"
+                return CustomResponse(
+                    general_message=f"Cooldown active. Please wait {wait_msg} before sending another reminder."
+                ).get_failure_response()
 
         count = _send_session_reminders(session, triggered_by_id=user_id)
         return CustomResponse(
@@ -1977,7 +2052,7 @@ class MentorMyIgsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         links = UserIgLink.objects.filter(
@@ -2009,11 +2084,11 @@ class MentorIgRequestListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
         ig_id    = request.query_params.get("ig_id")
 
         if not ig_id:
@@ -2068,11 +2143,11 @@ class MentorIgRequestDetailAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def patch(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         link = UserIgLink.objects.filter(
             id=pk,
@@ -2136,3 +2211,49 @@ class MentorIgRequestDetailAPI(APIView):
             general_message=f"Mentor request for {ig_name} rejected."
         ).get_success_response()
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Availability Calendar
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorAvailabilityCalendarAPI(APIView):
+    """GET - Return slots formatted for calendar consumption."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        slots = MentorAvailabilitySlot.objects.filter(is_active=True).select_related("mentor_user", "ig")
+        if not is_admin:
+            slots = slots.filter(mentor_user_id=user_id)
+            
+        serializer = MentorAvailabilitySerializer(slots, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorCardAPI(APIView):
+    """GET /mentor/<muid>/public/ - Public read-only mentor profile."""
+    # No auth for public endpoints
+    def get(self, request, muid):
+        from .mentor_serializers import PublicMentorCardSerializer
+        mentor = UserMentor.objects.select_related("user").filter(
+            user__muid=muid, is_verified=True
+        ).first()
+
+        if not mentor:
+            return CustomResponse(
+                general_message="Verified mentor profile not found."
+            ).get_failure_response()
+
+        serializer = PublicMentorCardSerializer(mentor)
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
