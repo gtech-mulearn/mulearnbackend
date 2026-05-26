@@ -34,6 +34,7 @@ urlpatterns = [
 
     # ── Availability ──────────────────────────────────────────────────────────
     path("availability/", mentor_views.MentorAvailabilityAPI.as_view()),
+    path("availability/calendar/", mentor_views.MentorAvailabilityCalendarAPI.as_view()),
     path("availability/<str:pk>/", mentor_views.MentorAvailabilityDetailAPI.as_view()),
 
     # ── Task requests ─────────────────────────────────────────────────────────
@@ -52,5 +53,8 @@ urlpatterns = [
     path("my-igs/", mentor_views.MentorMyIgsAPI.as_view()),
     path("ig-requests/", mentor_views.MentorIgRequestListAPI.as_view()),
     path("ig-requests/<str:pk>/", mentor_views.MentorIgRequestDetailAPI.as_view()),
+
+    # ── Public Endpoints ──────────────────────────────────────────────────────
+    path("<str:muid>/public/", mentor_views.PublicMentorCardAPI.as_view()),
 ]
 
