@@ -1,6 +1,7 @@
 import datetime
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 import jwt
 from django.conf import settings
 from django.http import HttpRequest
@@ -215,7 +216,7 @@ class RoleRequired:
     Class-based view that restricts access to views based on user roles.
 
     Usage:
-    @method_decorator(RoleRequired(['admin']))
+    @method_decorator(RoleRequired([RoleType.ADMIN.value]))
     def my_view(request, arg1, arg2):
         ...
     """
