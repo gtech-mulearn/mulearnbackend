@@ -22,11 +22,13 @@ from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 
 from .mentor_serializers import (
+    AttendanceEntrySerializer,
     GlobalSessionPendingSerializer,
     IgOpportunitySerializer,
     IgOpportunityWriteSerializer,
     KarmaReviewQueueSerializer,
     KarmaReviewSerializer,
+    MenteeDetailSerializer,
     MentorAvailabilitySerializer,
     MentorAvailabilityWriteSerializer,
     MentorKarmaAwardSerializer,
@@ -35,6 +37,7 @@ from .mentor_serializers import (
     MentorListSerializer,
     MentorOnboardingSerializer,
     MentorOnboardingUpdateSerializer,
+    MentorSessionAttendanceSerializer,
     MentorSessionCreateSerializer,
     MentorSessionDetailSerializer,
     MentorSessionListSerializer,
@@ -45,7 +48,9 @@ from .mentor_serializers import (
     MentorTaskRequestCreateSerializer,
     MentorTaskRequestReviewSerializer,
     MentorTaskRequestSerializer,
+    MentorTierUpdateSerializer,
     MentorVerifySerializer,
+    PublicMentorSessionSerializer,
     SystemActionLogSerializer,
 )
 
@@ -1288,7 +1293,7 @@ class MentorTaskRequestAPI(APIView):
 
 
 class MentorTaskRequestDetailAPI(APIView):
-    """GET — detail; PATCH — admin review (approve/reject)."""
+    """GET — detail; PATCH — admin review (approve/reject); DELETE — mentor withdraws pending request."""
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
@@ -1383,6 +1388,32 @@ class MentorTaskRequestDetailAPI(APIView):
         return CustomResponse(
             general_message=f"Task request {new_status.lower()}.",
             response={"task_request": MentorTaskRequestSerializer(task_req).data},
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        """Mentor withdraws their own PENDING task request before admin review."""
+        user_id = JWTUtils.fetch_user_id(request)
+
+        task_req = MentorTaskRequest.objects.filter(
+            id=pk, mentor_id=user_id
+        ).first()
+        if not task_req:
+            return CustomResponse(
+                general_message="Task request not found."
+            ).get_failure_response()
+
+        if task_req.status != MentorTaskRequest.Status.PENDING:
+            return CustomResponse(
+                general_message=(
+                    f"Cannot withdraw a task request with status '{task_req.status}'. "
+                    "Only PENDING requests can be withdrawn."
+                )
+            ).get_failure_response()
+
+        task_req.delete()
+        return CustomResponse(
+            general_message="Task request withdrawn successfully."
         ).get_success_response()
 
 
@@ -1796,10 +1827,42 @@ class MentorTaskReviewQueueAPI(APIView):
 
 class MentorTaskReviewDetailAPI(APIView):
     """
+    GET   /mentor/review-queue/<kal_id>/ — single KAL entry detail
     PATCH /mentor/review-queue/<kal_id>/ — mentor approves or rejects a task submission
     Karma is NOT credited here; admin finalises via the existing appraiser flow.
     """
     authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles   = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        kal = KarmaActivityLog.objects.select_related(
+            "user", "task__ig"
+        ).filter(id=pk).first()
+        if not kal:
+            return CustomResponse(general_message="Task submission not found.").get_failure_response()
+
+        # Mentors can only see items from their own IGs
+        if not is_admin:
+            mentor_ig_ids = (
+                MentorshipSessionUserLink.objects
+                .filter(
+                    user_id=user_id,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                )
+                .values_list("session__ig_id", flat=True)
+                .distinct()
+            )
+            if kal.task and kal.task.ig_id not in mentor_ig_ids:
+                return CustomResponse(
+                    general_message="Task submission not found."
+                ).get_failure_response()
+
+        serializer = KarmaReviewQueueSerializer(kal)
+        return CustomResponse(response={"submission": serializer.data}).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
     def patch(self, request, pk):
@@ -2256,4 +2319,506 @@ class PublicMentorCardAPI(APIView):
         serializer = PublicMentorCardSerializer(mentor)
         return CustomResponse(
             response=serializer.data
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 1 — Mentee Detail
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorMenteeDetailAPI(APIView):
+    """
+    GET /mentor/mentees/<user_pk>/
+
+    Returns a full profile of a single mentee:
+    - User info
+    - Sessions shared with the requesting mentor (or all sessions for admin)
+    - Karma earned by the mentee from tasks within the mentor's IGs
+    - Task review stats (reviewed / approved / rejected by this mentor)
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, user_pk):
+        caller_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        # Verify the target user exists
+        mentee_user = User.objects.filter(id=user_pk).first()
+        if not mentee_user:
+            return CustomResponse(general_message="User not found.").get_failure_response()
+
+        # Determine which session IDs to scope to
+        if is_admin:
+            # Admin sees all sessions this person attended as MENTEE
+            session_links = MentorshipSessionUserLink.objects.filter(
+                user_id=user_pk,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            )
+        else:
+            # Mentor sees only sessions they were MENTOR/CO_MENTOR in
+            mentor_session_ids = (
+                MentorshipSessionUserLink.objects
+                .filter(
+                    user_id=caller_id,
+                    participant_role__in=[
+                        MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                        MentorshipSessionUserLink.ParticipantRole.CO_MENTOR,
+                    ],
+                )
+                .values_list("session_id", flat=True)
+            )
+            session_links = MentorshipSessionUserLink.objects.filter(
+                user_id=user_pk,
+                session_id__in=mentor_session_ids,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            )
+
+        if not session_links.exists():
+            return CustomResponse(
+                general_message="Mentee has no sessions with you."
+            ).get_failure_response()
+
+        attended_session_ids = list(session_links.values_list("session_id", flat=True))
+
+        # Fetch session details
+        sessions_qs = (
+            MentorshipSession.objects
+            .filter(id__in=attended_session_ids)
+            .select_related("ig")
+            .order_by("-starts_at")
+        )
+        sessions_data = [
+            {
+                "session_id": str(s.id),
+                "title": s.title,
+                "ig_name": s.ig.name if s.ig else None,
+                "status": s.status,
+                "starts_at": s.starts_at,
+                "ends_at": s.ends_at,
+            }
+            for s in sessions_qs
+        ]
+
+        total_sessions = len(attended_session_ids)
+        completed_sessions = sessions_qs.filter(
+            status=MentorshipSession.Status.COMPLETED
+        ).count()
+
+        # Karma earned by this mentee from tasks in the mentor's IGs
+        if is_admin:
+            karma_qs = KarmaActivityLog.objects.filter(user_id=user_pk)
+        else:
+            mentor_ig_ids = (
+                MentorshipSession.objects
+                .filter(id__in=mentor_session_ids)
+                .values_list("ig_id", flat=True)
+                .distinct()
+            )
+            karma_qs = KarmaActivityLog.objects.filter(
+                user_id=user_pk,
+                task__ig_id__in=mentor_ig_ids,
+            )
+
+        total_karma_earned = karma_qs.aggregate(
+            total=Coalesce(Sum("karma"), Value(0, output_field=IntegerField()))
+        )["total"]
+
+        # Task review stats (reviews submitted by this mentor on this mentee's submissions)
+        if is_admin:
+            reviewed_qs = KarmaActivityLog.objects.filter(user_id=user_pk)
+        else:
+            reviewed_qs = KarmaActivityLog.objects.filter(
+                user_id=user_pk,
+                mentor_reviewed_by_id=caller_id,
+            )
+
+        tasks_reviewed = reviewed_qs.exclude(mentor_review_status="PENDING").count()
+        tasks_approved = reviewed_qs.filter(mentor_review_status="APPROVED").count()
+        tasks_rejected = reviewed_qs.filter(mentor_review_status="REJECTED").count()
+
+        data = {
+            "user_id": str(mentee_user.id),
+            "full_name": mentee_user.full_name,
+            "email": mentee_user.email,
+            "muid": mentee_user.muid,
+            "total_sessions": total_sessions,
+            "completed_sessions": completed_sessions,
+            "total_karma_earned": total_karma_earned,
+            "tasks_reviewed": tasks_reviewed,
+            "tasks_approved": tasks_approved,
+            "tasks_rejected": tasks_rejected,
+            "sessions": sessions_data,
+        }
+
+        serializer = MenteeDetailSerializer(data=data)
+        serializer.is_valid()   # data is already clean; validation is a no-op here
+        return CustomResponse(response={"mentee": data}).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 2 — Bulk Attendance Update
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorSessionAttendanceAPI(APIView):
+    """
+    PATCH /mentor/sessions/<pk>/attendance/
+
+    Bulk-update attendance_status for multiple participants in one request.
+
+    Body:
+        {
+          "participants": [
+            { "user_id": "<uuid>", "attendance_status": "ATTENDED" },
+            { "user_id": "<uuid>", "attendance_status": "NO_SHOW" },
+            ...
+          ]
+        }
+
+    - Admin: can update any session.
+    - Mentor: can only update sessions they created.
+    - Validates that every user_id is actually a participant in the session.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        session = MentorshipSession.objects.filter(id=pk).first()
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+
+        if not is_admin and str(session.created_by_id) != user_id:
+            return CustomResponse(
+                general_message="You can only update attendance for sessions you created."
+            ).get_failure_response()
+
+        serializer = MentorSessionAttendanceSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        participant_updates = serializer.validated_data["participants"]
+
+        # Build map of user_id → attendance_status for fast lookup
+        update_map = {entry["user_id"]: entry["attendance_status"] for entry in participant_updates}
+        requested_user_ids = set(update_map.keys())
+
+        # Fetch existing links for validation
+        existing_links = MentorshipSessionUserLink.objects.filter(
+            session_id=pk,
+            user_id__in=requested_user_ids,
+        )
+        found_user_ids = {str(link.user_id) for link in existing_links}
+        missing = requested_user_ids - found_user_ids
+        if missing:
+            return CustomResponse(
+                general_message=f"The following users are not participants in this session: {', '.join(missing)}"
+            ).get_failure_response()
+
+        # Bulk update inside a transaction
+        with transaction.atomic():
+            updated_count = 0
+            for link in existing_links:
+                new_status = update_map[str(link.user_id)]
+                if link.attendance_status != new_status:
+                    link.attendance_status = new_status
+                    link.save(update_fields=["attendance_status"])
+                    updated_count += 1
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.SESSION_UPDATE,
+            actor_user_id=user_id,
+            entity_name="mentorship_session",
+            entity_id=session.id,
+            ig=session.ig,
+            new_data={"attendance_bulk_update": list(participant_updates)},
+        )
+
+        return CustomResponse(
+            general_message=f"Attendance updated for {updated_count} participant(s)."
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 5 — Public Session History
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorSessionsAPI(APIView):
+    """
+    GET /mentor/<muid>/public/sessions/
+
+    No authentication required.
+    Returns a paginated list of COMPLETED sessions where the mentor was
+    MENTOR or CO_MENTOR.
+
+    Optional query params:
+        ig_id  — filter by interest group
+        mode   — filter by session mode (ONLINE / OFFLINE / HYBRID)
+    """
+
+    def get(self, request, muid):
+        mentor = UserMentor.objects.select_related("user").filter(
+            user__muid=muid, is_verified=True
+        ).first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Verified mentor profile not found."
+            ).get_failure_response()
+
+        ig_id = request.query_params.get("ig_id")
+        mode  = request.query_params.get("mode")
+
+        # Sessions where this user was the MENTOR or CO_MENTOR
+        mentor_session_ids = (
+            MentorshipSessionUserLink.objects
+            .filter(
+                user_id=mentor.user_id,
+                participant_role__in=[
+                    MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                    MentorshipSessionUserLink.ParticipantRole.CO_MENTOR,
+                ],
+            )
+            .values_list("session_id", flat=True)
+        )
+
+        sessions_qs = (
+            MentorshipSession.objects
+            .filter(
+                id__in=mentor_session_ids,
+                status=MentorshipSession.Status.COMPLETED,
+            )
+            .select_related("ig")
+            .prefetch_related("participants")
+        )
+
+        if ig_id:
+            sessions_qs = sessions_qs.filter(ig_id=ig_id)
+        if mode:
+            sessions_qs = sessions_qs.filter(mode=mode)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            sessions_qs, request,
+            search_fields=["title", "ig__name"],
+            sort_fields={"starts_at": "starts_at", "title": "title"},
+        )
+        serializer = PublicMentorSessionSerializer(paginated["queryset"], many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated["pagination"]
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 6 — Session Clone
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorSessionCloneAPI(APIView):
+    """
+    POST /mentor/sessions/<pk>/clone/
+
+    Deep-copies a session with the following rules:
+    - title     → "Copy of <original title>"
+    - status    → PENDING_APPROVAL (global) or SCHEDULED (IG-scoped)
+    - starts_at / ends_at → cleared (null); caller must PATCH afterwards
+    - All other fields (description, mode, ig, max_participants,
+      meeting_link, venue, is_global) are preserved
+    - Creator is automatically added as MENTOR participant
+    - Original participants are NOT copied
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def post(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        original = MentorshipSession.objects.filter(id=pk).select_related("ig").first()
+        if not original:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+
+        # Mentors can only clone their own sessions
+        if not is_admin and str(original.created_by_id) != user_id:
+            return CustomResponse(
+                general_message="You can only clone sessions you created."
+            ).get_failure_response()
+
+        new_status = (
+            MentorshipSession.Status.PENDING_APPROVAL
+            if original.is_global
+            else MentorshipSession.Status.SCHEDULED
+        )
+
+        clone = MentorshipSession.objects.create(
+            title=f"Copy of {original.title}",
+            description=original.description,
+            mode=original.mode,
+            ig=original.ig,
+            is_global=original.is_global,
+            max_participants=original.max_participants,
+            meeting_link=original.meeting_link,
+            venue=original.venue,
+            status=new_status,
+            starts_at=None,
+            ends_at=None,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+        )
+
+        # Auto-add creator as MENTOR participant
+        MentorshipSessionUserLink.objects.create(
+            session=clone,
+            user_id=user_id,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+            attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
+        )
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.SESSION_CREATE,
+            actor_user_id=user_id,
+            entity_name="mentorship_session",
+            entity_id=clone.id,
+            ig=clone.ig,
+            new_data={
+                "cloned_from": str(original.id),
+                "title": clone.title,
+                "is_global": clone.is_global,
+            },
+        )
+
+        return CustomResponse(
+            general_message="Session cloned successfully. Update starts_at and ends_at before publishing.",
+            response={"session": MentorSessionDetailSerializer(clone).data},
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 9 — Public Availability Slots
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorAvailabilityAPI(APIView):
+    """
+    GET /mentor/availability/public/?mentor_muid=<muid>
+
+    No authentication required.
+    Returns active availability slots for a verified mentor.
+    Useful for mentee scheduling flows.
+
+    Required query param:
+        mentor_muid — the mentor's muid
+
+    Optional query param:
+        ig_id — filter slots by interest group
+    """
+
+    def get(self, request):
+        mentor_muid = request.query_params.get("mentor_muid")
+        if not mentor_muid:
+            return CustomResponse(
+                general_message="'mentor_muid' query parameter is required."
+            ).get_failure_response()
+
+        mentor = UserMentor.objects.select_related("user").filter(
+            user__muid=mentor_muid, is_verified=True
+        ).first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Verified mentor profile not found."
+            ).get_failure_response()
+
+        ig_id = request.query_params.get("ig_id")
+        slots_qs = MentorAvailabilitySlot.objects.filter(
+            mentor_user_id=mentor.user_id,
+            is_active=True,
+        ).select_related("mentor_user", "ig")
+
+        if ig_id:
+            slots_qs = slots_qs.filter(ig_id=ig_id)
+
+        serializer = MentorAvailabilitySerializer(slots_qs, many=True)
+        return CustomResponse(
+            response={
+                "mentor": {
+                    "full_name": mentor.user.full_name,
+                    "muid": mentor.user.muid,
+                },
+                "availability": serializer.data,
+            }
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 10 — Admin Mentor Tier Update
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorTierUpdateAPI(APIView):
+    """
+    PATCH /mentor/list/<pk>/tier/
+
+    Admin-only. Changes the mentor_tier of a verified mentor after they
+    have already been approved. Sends a notification to the mentor.
+
+    Body:
+        { "mentor_tier": "IG_MENTOR" | "MENTOR" }
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        admin_id = JWTUtils.fetch_user_id(request)
+
+        mentor = UserMentor.objects.filter(id=pk).select_related("user").first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Mentor not found."
+            ).get_failure_response()
+
+        if not mentor.is_verified:
+            return CustomResponse(
+                general_message="Cannot change the tier of an unverified mentor. Approve the application first."
+            ).get_failure_response()
+
+        serializer = MentorTierUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        old_tier = mentor.mentor_tier
+        new_tier = serializer.validated_data["mentor_tier"]
+
+        if old_tier == new_tier:
+            return CustomResponse(
+                general_message=f"Mentor is already at tier '{new_tier}'. No change made."
+            ).get_success_response()
+
+        mentor.mentor_tier = new_tier
+        mentor.updated_by_id = admin_id
+        mentor.save(update_fields=["mentor_tier", "updated_by_id"])
+
+        Notification.objects.create(
+            user=mentor.user,
+            title="Mentor Tier Updated",
+            description=(
+                f"Your mentor tier has been updated from '{old_tier}' to '{new_tier}' "
+                f"by the muLearn admin team."
+            ),
+            created_by_id=admin_id,
+        )
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.TASK_REVIEW,
+            actor_user_id=admin_id,
+            entity_name="user_mentor",
+            entity_id=mentor.id,
+            subject_user=mentor.user,
+            old_data={"mentor_tier": old_tier},
+            new_data={"mentor_tier": new_tier},
+            remarks="Admin tier change",
+        )
+
+        return CustomResponse(
+            general_message=f"Mentor tier updated from '{old_tier}' to '{new_tier}'.",
+            response={"mentor": MentorListSerializer(mentor).data},
         ).get_success_response()
