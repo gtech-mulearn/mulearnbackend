@@ -64,7 +64,7 @@ class MentorshipSession(models.Model):
         SCHEDULED        = 'SCHEDULED',        'Scheduled'
         COMPLETED        = 'COMPLETED',        'Completed'
         CANCELLED        = 'CANCELLED',        'Cancelled'
-        NO_SHOW          = 'NO_SHOW',          'No Show'
+        REJECTED         = 'REJECTED',         'Rejected'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     ig = models.ForeignKey(
@@ -78,6 +78,8 @@ class MentorshipSession(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     meeting_link = models.CharField(max_length=500, null=True, blank=True)
+    venue = models.CharField(max_length=255, null=True, blank=True)
+    max_participants = models.IntegerField(null=True, blank=True)
     # is_global=True when ig is NULL and the session was submitted by a mentor
     # for cross-IG or platform-wide reach; requires admin approval.
     is_global = models.BooleanField(default=False)
@@ -150,6 +152,8 @@ class IgOpportunity(models.Model):
     class OpportunityType(models.TextChoices):
         CHALLENGE = 'CHALLENGE', 'Challenge'
         INTERNSHIP = 'INTERNSHIP', 'Internship'
+        HACKATHON = 'HACKATHON', 'Hackathon'
+        JOB = 'JOB', 'Job'
 
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Draft'
@@ -222,6 +226,7 @@ class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
         PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
+        MENTOR_VERIFY    = 'MENTOR_VERIFY',    'Mentor Verify'
         TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
         EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'
         SESSION_CREATE   = 'SESSION_CREATE',   'Session Create'

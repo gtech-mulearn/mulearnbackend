@@ -30,6 +30,11 @@ class MentorOnboardingSerializer(serializers.ModelSerializer):
             "updated_by": {"required": True},
         }
 
+    def validate_preferred_ig_ids(self, value):
+        if value is not None and not isinstance(value, list):
+            raise serializers.ValidationError("preferred_ig_ids must be a list of UUIDs.")
+        return value
+
 
 class MentorOnboardingUpdateSerializer(serializers.ModelSerializer):
     """Partial update of mentor's own profile fields."""
@@ -41,6 +46,11 @@ class MentorOnboardingUpdateSerializer(serializers.ModelSerializer):
             "updated_by": {"required": True},
             "preferred_ig_ids": {"required": False},
         }
+
+    def validate_preferred_ig_ids(self, value):
+        if value is not None and not isinstance(value, list):
+            raise serializers.ValidationError("preferred_ig_ids must be a list of UUIDs.")
+        return value
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -148,6 +158,7 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
             "starts_at",
             "ends_at",
             "meeting_link",
+            "venue",
             "status",
             "is_global",
             "ig_id",
@@ -155,6 +166,7 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
             "created_by_name",
             "created_at",
             "participant_count",
+            "max_participants",
         ]
 
     def get_ig_name(self, obj):
@@ -183,6 +195,7 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
             "starts_at",
             "ends_at",
             "meeting_link",
+            "venue",
             "status",
             "is_global",
             "ig_id",
@@ -193,6 +206,7 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
             "created_at",
             "updated_by_name",
             "updated_at",
+            "max_participants",
             "participants",
         ]
 
@@ -216,8 +230,10 @@ class MentorSessionCreateSerializer(serializers.ModelSerializer):
             "starts_at",
             "ends_at",
             "meeting_link",
+            "venue",
             "is_global",
             "status",
+            "max_participants",
             "created_by",
             "updated_by",
         ]
@@ -225,9 +241,39 @@ class MentorSessionCreateSerializer(serializers.ModelSerializer):
             "ig": {"required": False, "allow_null": True},
             "is_global": {"required": False},
             "status": {"required": False},
+            "venue": {"required": False, "allow_null": True},
+            "max_participants": {"required": False, "allow_null": True},
             "created_by": {"required": True},
             "updated_by": {"required": True},
         }
+
+    def validate(self, attrs):
+        from utils.utils import DateTimeUtils
+        starts_at = attrs.get("starts_at")
+        ends_at = attrs.get("ends_at")
+        now = DateTimeUtils.get_current_utc_time()
+        
+        if starts_at and ends_at:
+            if starts_at >= ends_at:
+                raise serializers.ValidationError("starts_at must be before ends_at.")
+        if starts_at and starts_at < now:
+            raise serializers.ValidationError("starts_at cannot be in the past.")
+
+        mode = attrs.get("mode", MentorshipSession.Mode.ONLINE)
+        venue = attrs.get("venue")
+        meeting_link = attrs.get("meeting_link")
+
+        if mode == MentorshipSession.Mode.ONLINE:
+            if not meeting_link:
+                raise serializers.ValidationError({"meeting_link": "Meeting link is required for ONLINE sessions."})
+        elif mode == MentorshipSession.Mode.OFFLINE:
+            if not venue:
+                raise serializers.ValidationError({"venue": "Venue is required for OFFLINE sessions."})
+        elif mode == MentorshipSession.Mode.HYBRID:
+            if not meeting_link and not venue:
+                raise serializers.ValidationError("At least one of meeting_link or venue is required for HYBRID sessions.")
+
+        return attrs
 
 
 class MentorSessionUpdateSerializer(serializers.ModelSerializer):
@@ -242,9 +288,40 @@ class MentorSessionUpdateSerializer(serializers.ModelSerializer):
             "starts_at",
             "ends_at",
             "meeting_link",
+            "venue",
+            "max_participants",
             "updated_by",
         ]
-        extra_kwargs = {"updated_by": {"required": True}}
+        extra_kwargs = {
+            "updated_by": {"required": True},
+            "venue": {"required": False, "allow_null": True},
+            "max_participants": {"required": False, "allow_null": True},
+        }
+
+    def validate(self, attrs):
+
+        starts_at = attrs.get("starts_at", self.instance.starts_at if self.instance else None)
+        ends_at = attrs.get("ends_at", self.instance.ends_at if self.instance else None)
+        
+        if starts_at and ends_at:
+            if starts_at >= ends_at:
+                raise serializers.ValidationError("starts_at must be before ends_at.")
+
+        mode = attrs.get("mode", getattr(self.instance, "mode", MentorshipSession.Mode.ONLINE))
+        venue = attrs.get("venue", getattr(self.instance, "venue", None))
+        meeting_link = attrs.get("meeting_link", getattr(self.instance, "meeting_link", None))
+
+        if mode == MentorshipSession.Mode.ONLINE:
+            if not meeting_link:
+                raise serializers.ValidationError({"meeting_link": "Meeting link is required for ONLINE sessions."})
+        elif mode == MentorshipSession.Mode.OFFLINE:
+            if not venue:
+                raise serializers.ValidationError({"venue": "Venue is required for OFFLINE sessions."})
+        elif mode == MentorshipSession.Mode.HYBRID:
+            if not meeting_link and not venue:
+                raise serializers.ValidationError("At least one of meeting_link or venue is required for HYBRID sessions.")
+
+        return attrs
 
 
 class MentorSessionStatusSerializer(serializers.ModelSerializer):
@@ -327,6 +404,15 @@ class MentorAvailabilityWriteSerializer(serializers.ModelSerializer):
             "updated_by": {"required": True},
         }
 
+    def validate(self, attrs):
+        start_time = attrs.get("start_time", self.instance.start_time if self.instance else None)
+        end_time = attrs.get("end_time", self.instance.end_time if self.instance else None)
+        
+        if start_time and end_time:
+            if start_time >= end_time:
+                raise serializers.ValidationError("start_time must be before end_time.")
+        return attrs
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Task Requests
@@ -388,9 +474,32 @@ class MentorTaskRequestCreateSerializer(serializers.ModelSerializer):
             "updated_by": {"required": True},
         }
 
+    def validate_hashtag(self, value):
+        if not value:
+            raise serializers.ValidationError("Hashtag cannot be empty.")
+            
+        value = value.strip().lower()
+        if not value.startswith("#"):
+            value = f"#{value}"
+
+        if TaskList.objects.filter(hashtag=value).exists():
+            raise serializers.ValidationError("A task/request with this hashtag already exists.")
+            
+        if MentorTaskRequest.objects.filter(hashtag=value, status__in=[MentorTaskRequest.Status.PENDING, MentorTaskRequest.Status.APPROVED]).select_for_update().exists():
+            raise serializers.ValidationError("A task/request with this hashtag already exists.")
+            
+        return value
+
 
 class MentorTaskRequestReviewSerializer(serializers.ModelSerializer):
     """Admin approves or rejects a mentor task request."""
+
+    status = serializers.ChoiceField(
+        choices=[
+            MentorTaskRequest.Status.APPROVED.value,
+            MentorTaskRequest.Status.REJECTED.value,
+        ]
+    )
 
     class Meta:
         model = MentorTaskRequest
@@ -459,6 +568,15 @@ class IgOpportunityWriteSerializer(serializers.ModelSerializer):
             "created_by": {"required": True},
             "updated_by": {"required": True},
         }
+
+    def validate(self, attrs):
+        starts_at = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
+        ends_at = attrs.get("ends_at", getattr(self.instance, "ends_at", None))
+        
+        if starts_at and ends_at:
+            if starts_at >= ends_at:
+                raise serializers.ValidationError("starts_at must be before ends_at.")
+        return attrs
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -606,3 +724,137 @@ class GlobalSessionPendingSerializer(MentorSessionListSerializer):
         """Top-3 IGs by keyword overlap with session title+description."""
         suggestions = self.context.get("ig_suggestions", {})
         return suggestions.get(obj.id, [])
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Mentee Detail (endpoint 1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MenteeDetailSerializer(serializers.Serializer):
+    """Full profile of a single mentee as seen by a mentor or admin."""
+
+    user_id = serializers.UUIDField()
+    full_name = serializers.CharField()
+    email = serializers.EmailField()
+    muid = serializers.CharField()
+    total_sessions = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    total_karma_earned = serializers.IntegerField()
+    tasks_reviewed = serializers.IntegerField()
+    tasks_approved = serializers.IntegerField()
+    tasks_rejected = serializers.IntegerField()
+    sessions = serializers.ListField(child=serializers.DictField())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk Attendance Update (endpoint 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AttendanceEntrySerializer(serializers.Serializer):
+    """Single participant attendance update entry."""
+
+    user_id = serializers.CharField(max_length=36)
+    attendance_status = serializers.ChoiceField(
+        choices=[s.value for s in MentorshipSessionUserLink.AttendanceStatus]
+    )
+
+
+class MentorSessionAttendanceSerializer(serializers.Serializer):
+    """Bulk attendance update — list of (user_id, attendance_status) pairs."""
+
+    participants = AttendanceEntrySerializer(many=True, min_length=1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin Tier Update (endpoint 10)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorTierUpdateSerializer(serializers.Serializer):
+    """Admin changes a verified mentor's tier."""
+
+    mentor_tier = serializers.ChoiceField(
+        choices=[t.value for t in UserMentor.MentorTier]
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public Session List (endpoint 5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorSessionSerializer(serializers.ModelSerializer):
+    """Completed session entry for a mentor's public profile."""
+
+    ig_name = serializers.SerializerMethodField()
+    participant_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MentorshipSession
+        fields = [
+            "id",
+            "title",
+            "mode",
+            "ig_name",
+            "starts_at",
+            "ends_at",
+            "participant_count",
+        ]
+
+    def get_ig_name(self, obj):
+        return obj.ig.name if obj.ig else None
+
+    def get_participant_count(self, obj):
+        return obj.participants.count()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorCardSerializer(serializers.ModelSerializer):
+    """Public read-only profile for frontend mentor discovery pages."""
+    full_name = serializers.CharField(source="user.full_name")
+    muid = serializers.CharField(source="user.muid")
+    profile_pic = serializers.CharField(source="user.profile_pic", allow_null=True)
+    linked_igs = serializers.SerializerMethodField()
+    availability_slots = serializers.SerializerMethodField()
+    session_stats = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserMentor
+        fields = [
+            "full_name",
+            "muid",
+            "profile_pic",
+            "about",
+            "expertise",
+            "mentor_tier",
+            "linked_igs",
+            "availability_slots",
+            "session_stats",
+        ]
+
+    def get_linked_igs(self, obj):
+        from db.task import UserIgLink
+        links = UserIgLink.objects.filter(
+            user_id=obj.user_id,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=True
+        ).select_related("ig")
+        return [{"ig_id": link.ig_id, "name": link.ig.name} for link in links if link.ig]
+
+    def get_availability_slots(self, obj):
+        from db.mentor import MentorAvailabilitySlot
+        slots = MentorAvailabilitySlot.objects.filter(mentor_user_id=obj.user_id, is_active=True)
+        return MentorAvailabilitySerializer(slots, many=True).data
+
+    def get_session_stats(self, obj):
+        from db.mentor import MentorshipSessionUserLink, MentorshipSession
+        links = MentorshipSessionUserLink.objects.filter(
+            user_id=obj.user_id,
+            participant_role__in=[
+                MentorshipSessionUserLink.ParticipantRole.MENTOR, 
+                MentorshipSessionUserLink.ParticipantRole.CO_MENTOR
+            ]
+        ).values_list("session_id", flat=True)
+        completed = MentorshipSession.objects.filter(id__in=links, status=MentorshipSession.Status.COMPLETED).count()
+        return {"completed_sessions": completed, "hours": obj.hours}
