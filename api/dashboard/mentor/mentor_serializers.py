@@ -727,6 +727,86 @@ class GlobalSessionPendingSerializer(MentorSessionListSerializer):
 
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Mentee Detail (endpoint 1)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MenteeDetailSerializer(serializers.Serializer):
+    """Full profile of a single mentee as seen by a mentor or admin."""
+
+    user_id = serializers.UUIDField()
+    full_name = serializers.CharField()
+    email = serializers.EmailField()
+    muid = serializers.CharField()
+    total_sessions = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    total_karma_earned = serializers.IntegerField()
+    tasks_reviewed = serializers.IntegerField()
+    tasks_approved = serializers.IntegerField()
+    tasks_rejected = serializers.IntegerField()
+    sessions = serializers.ListField(child=serializers.DictField())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Bulk Attendance Update (endpoint 2)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class AttendanceEntrySerializer(serializers.Serializer):
+    """Single participant attendance update entry."""
+
+    user_id = serializers.CharField(max_length=36)
+    attendance_status = serializers.ChoiceField(
+        choices=[s.value for s in MentorshipSessionUserLink.AttendanceStatus]
+    )
+
+
+class MentorSessionAttendanceSerializer(serializers.Serializer):
+    """Bulk attendance update — list of (user_id, attendance_status) pairs."""
+
+    participants = AttendanceEntrySerializer(many=True, min_length=1)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Admin Tier Update (endpoint 10)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorTierUpdateSerializer(serializers.Serializer):
+    """Admin changes a verified mentor's tier."""
+
+    mentor_tier = serializers.ChoiceField(
+        choices=[t.value for t in UserMentor.MentorTier]
+    )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public Session List (endpoint 5)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorSessionSerializer(serializers.ModelSerializer):
+    """Completed session entry for a mentor's public profile."""
+
+    ig_name = serializers.SerializerMethodField()
+    participant_count = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MentorshipSession
+        fields = [
+            "id",
+            "title",
+            "mode",
+            "ig_name",
+            "starts_at",
+            "ends_at",
+            "participant_count",
+        ]
+
+    def get_ig_name(self, obj):
+        return obj.ig.name if obj.ig else None
+
+    def get_participant_count(self, obj):
+        return obj.participants.count()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Public endpoints
 # ─────────────────────────────────────────────────────────────────────────────
 
