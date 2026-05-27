@@ -145,6 +145,7 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
     """Session list with ig name and participant count."""
 
     ig_name = serializers.SerializerMethodField()
+    org_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.full_name")
     participant_count = serializers.SerializerMethodField()
 
@@ -163,6 +164,8 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
             "is_global",
             "ig_id",
             "ig_name",
+            "org_id",
+            "org_name",
             "created_by_name",
             "created_at",
             "participant_count",
@@ -172,6 +175,9 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
 
+    def get_org_name(self, obj):
+        return obj.org.title if obj.org else None
+
     def get_participant_count(self, obj):
         return obj.participants.count()
 
@@ -180,6 +186,7 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
     """Session detail with all participants embedded."""
 
     ig_name = serializers.SerializerMethodField()
+    org_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.full_name")
     updated_by_name = serializers.CharField(source="updated_by.full_name")
     approved_by_name = serializers.SerializerMethodField()
@@ -200,6 +207,8 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
             "is_global",
             "ig_id",
             "ig_name",
+            "org_id",
+            "org_name",
             "approved_by_name",
             "approved_at",
             "created_by_name",
@@ -212,6 +221,9 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
+
+    def get_org_name(self, obj):
+        return obj.org.title if obj.org else None
 
     def get_approved_by_name(self, obj):
         return obj.approved_by.full_name if obj.approved_by else None
@@ -950,7 +962,7 @@ class OrgMentorListSerializer(serializers.ModelSerializer):
         return obj.user.profile_pic
 
     def get_org_name(self, obj):
-        return obj.org.org_name if obj.org else None
+        return obj.org.title if obj.org else None
 
     def get_org_type(self, obj):
         return obj.org.org_type if obj.org else None
@@ -1032,7 +1044,7 @@ class OrgOpportunitySerializer(serializers.ModelSerializer):
         ]
 
     def get_org_name(self, obj):
-        return obj.org.org_name if obj.org else None
+        return obj.org.title if obj.org else None
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
