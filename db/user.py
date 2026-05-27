@@ -107,8 +107,10 @@ class UserEndgoals(models.Model):
 class UserMentor(models.Model):
 
     class MentorTier(models.TextChoices):
-        IG_MENTOR = 'IG_MENTOR', 'IG Mentor'   # linked to specific IG(s)
-        MENTOR    = 'MENTOR',    'Mentor'        # platform-wide global mentor
+        IG_MENTOR      = 'IG_MENTOR',      'IG Mentor'       # linked to specific IG(s)
+        MENTOR         = 'MENTOR',         'Mentor'           # platform-wide global mentor
+        COMPANY_MENTOR = 'COMPANY_MENTOR', 'Company Mentor'  # scoped to a Company org
+        CAMPUS_MENTOR  = 'CAMPUS_MENTOR',  'Campus Mentor'   # scoped to a College org
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
 
@@ -127,9 +129,9 @@ class UserMentor(models.Model):
     hours = models.PositiveIntegerField(default=0)
 
     mentor_tier = models.CharField(
-        max_length=10,
+        max_length=14,                        # 14 chars fits 'COMPANY_MENTOR'
         choices=MentorTier.choices,
-        default=MentorTier.IG_MENTOR
+        default=MentorTier.MENTOR             # default changed from IG_MENTOR → MENTOR
     )
 
     is_verified = models.BooleanField(default=False)
@@ -137,6 +139,17 @@ class UserMentor(models.Model):
     # JSON list of IG UUIDs mentor expressed interest in during onboarding.
     # On admin approval, UserIgLink rows are auto-created for each.
     preferred_ig_ids = models.JSONField(null=True, blank=True)
+
+    # Organisation this mentor row is scoped to.
+    # NULL for IG_MENTOR and MENTOR (global) tiers.
+    # Set to a Company org for COMPANY_MENTOR, College org for CAMPUS_MENTOR.
+    org = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='org_id',
+        related_name='org_mentors'
+    )
 
     verified_by = models.ForeignKey(
         User,

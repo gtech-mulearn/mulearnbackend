@@ -62,5 +62,36 @@ urlpatterns = [
     # ── Public Endpoints ──────────────────────────────────────────────────────
     path("<str:muid>/public/", mentor_views.PublicMentorCardAPI.as_view()),
     path("<str:muid>/public/sessions/", mentor_views.PublicMentorSessionsAPI.as_view()),  # [5] public session history
-]
 
+    # ── Company Mentor ────────────────────────────────────────────────────────
+    path("company/onboarding/",                    mentor_views.CompanyMentorOnboardingAPI.as_view()),
+    path("company/onboarding/<str:pk>/",           mentor_views.CompanyMentorOnboardingAPI.as_view()),
+    path("company/list/",                          mentor_views.CompanyMentorListAPI.as_view()),
+    path("company/<str:pk>/verify/",               mentor_views.CompanyMentorVerifyAPI.as_view()),
+    path("company/sessions/",                      mentor_views.CompanyMentorSessionAPI.as_view()),
+    path("company/sessions/<str:pk>/",             mentor_views.CompanyMentorSessionDetailAPI.as_view()),
+    path("company/opportunities/",                 mentor_views.CompanyMentorOpportunityAPI.as_view()),
+    path("company/opportunities/<str:pk>/",        mentor_views.CompanyMentorOpportunityDetailAPI.as_view()),
+    path("company/mentees/",                       mentor_views.CompanyMentorMenteesAPI.as_view()),
+    path("company/review-queue/",                  mentor_views.CompanyMentorTaskReviewAPI.as_view()),
+    path("company/review-queue/<str:pk>/",         mentor_views.CompanyMentorTaskReviewDetailAPI.as_view()),
+    path("company/my-orgs/",                       mentor_views.CompanyMentorMyOrgsAPI.as_view()),
+    path("company/availability/",                  mentor_views.CompanyMentorAvailabilityAPI.as_view()),
+
+    # ── Campus Mentor ─────────────────────────────────────────────────────────
+    path("campus-mentor/onboarding/",              mentor_views.CampusMentorOnboardingAPI.as_view()),
+    path("campus-mentor/onboarding/<str:pk>/",     mentor_views.CampusMentorOnboardingAPI.as_view()),
+    path("campus-mentor/list/",                    mentor_views.CampusMentorListAPI.as_view()),
+    path("campus-mentor/<str:pk>/verify/",         mentor_views.CampusMentorVerifyAPI.as_view()),
+    path("campus-mentor/sessions/",                mentor_views.CampusMentorSessionAPI.as_view()),
+    path("campus-mentor/sessions/<str:pk>/",       mentor_views.CampusMentorSessionDetailAPI.as_view()),
+    path("campus-mentor/opportunities/",           mentor_views.CampusMentorOpportunityAPI.as_view()),
+    path("campus-mentor/opportunities/<str:pk>/",  mentor_views.CampusMentorOpportunityDetailAPI.as_view()),
+    path("campus-mentor/mentees/",                 mentor_views.CampusMentorMenteesAPI.as_view()),
+    path("campus-mentor/review-queue/",            mentor_views.CampusMentorTaskReviewAPI.as_view()),
+    path("campus-mentor/review-queue/<str:pk>/",   mentor_views.CampusMentorTaskReviewDetailAPI.as_view()),
+    path("campus-mentor/events/",                  mentor_views.CampusMentorEventsAPI.as_view()),
+    path("campus-mentor/events/<str:pk>/",         mentor_views.CampusMentorEventDetailAPI.as_view()),
+    path("campus-mentor/my-orgs/",                 mentor_views.CampusMentorMyOrgsAPI.as_view()),
+    path("campus-mentor/availability/",            mentor_views.CampusMentorAvailabilityAPI.as_view()),
+]
