@@ -1,0 +1,2917 @@
+{
+    "info": {
+        "name": "muLearn Mentor Dashboard API",
+        "description": "Complete collection of all Mentor Dashboard endpoints based on mentor_dashboard.md",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "onboarding",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "onboarding"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "onboarding",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "onboarding"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"about\": \"Senior software engineer with 5 years in web development.\",\n  \"expertise\": [\"JavaScript\", \"React\", \"Node.js\"],\n  \"reason\": \"I want to mentor students on modern web development.\",\n  \"preferred_ig_ids\": [\"ig-uuid-001\", \"ig-uuid-003\"]\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "onboarding",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "onboarding"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "list",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/list",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "list"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "{{mentor_id}}/verify",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/{{mentor_id}}/verify",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "{{mentor_id}}",
+                        "verify"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"action\": \"approve\",\n  \"note\": \"Background verified. Welcome aboard!\",\n  \"mentor_tier\": \"IG_MENTOR\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "overview",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/overview",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "overview"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "stats",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/stats",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "stats"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "leaderboard",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/leaderboard",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "leaderboard"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/status",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/status",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "status"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/participants",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/participants",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "participants"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/participants",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/participants",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "participants"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/participants/{{user_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/participants/{{user_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "participants",
+                        "{{user_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/pending",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/pending",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "pending"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/approve",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/approve",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "approve"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "review-queue",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/review-queue",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "review-queue"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "review-queue/{{kal_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/review-queue/{{kal_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "review-queue",
+                        "{{kal_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "review-queue/{{kal_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/review-queue/{{kal_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "review-queue",
+                        "{{kal_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "availability",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/availability",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "availability"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "availability",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/availability",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "availability"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "availability/{{slot_id}}",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/availability/{{slot_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "availability",
+                        "{{slot_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "availability/{{slot_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/availability/{{slot_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "availability",
+                        "{{slot_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "task-requests",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/task-requests",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "task-requests"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "task-requests",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/task-requests",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "task-requests"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "task-requests/{{task_request_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/task-requests/{{task_request_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "task-requests",
+                        "{{task_request_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "task-requests/{{task_request_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/task-requests/{{task_request_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "task-requests",
+                        "{{task_request_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "task-requests/{{task_request_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/task-requests/{{task_request_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "task-requests",
+                        "{{task_request_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "opportunities",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/opportunities",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "opportunities"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "opportunities",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/opportunities",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "opportunities"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "mentees",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/mentees",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "mentees"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "mentees/{{user_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/mentees/{{user_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "mentees",
+                        "{{user_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "activity-log",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/activity-log",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "activity-log"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/karma-award",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/karma-award",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "karma-award"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/karma-award",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/karma-award",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "karma-award"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/remind",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/remind",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "remind"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "my-igs",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/my-igs",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "my-igs"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "ig-requests",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/ig-requests",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "ig-requests"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "ig-requests/{{request_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/ig-requests/{{request_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "ig-requests",
+                        "{{request_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "list/{{mentor_id}}/tier",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/list/{{mentor_id}}/tier",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "list",
+                        "{{mentor_id}}",
+                        "tier"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{ \"mentor_tier\": \"MENTOR\" }",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/attendance",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/attendance",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "attendance"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "sessions/{{session_id}}/clone",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/sessions/{{session_id}}/clone",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "sessions",
+                        "{{session_id}}",
+                        "clone"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "availability/calendar",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/availability/calendar",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "availability",
+                        "calendar"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "{{muid}}/public",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/{{muid}}/public",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "{{muid}}",
+                        "public"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "{{muid}}/public/sessions",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/{{muid}}/public/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "{{muid}}",
+                        "public",
+                        "sessions"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "availability/public/?mentor_muid={{muid}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/availability/public/?mentor_muid={{muid}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "availability",
+                        "public",
+                        "?mentor_muid={{muid}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/onboarding",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "onboarding"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/onboarding",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "onboarding"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-acme\",\n  \"about\": \"10 years in backend engineering at Acme Corp.\",\n  \"expertise\": [\"Go\", \"Kubernetes\", \"gRPC\"],\n  \"reason\": \"Want to hire and mentor the next generation of engineers.\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "company/onboarding/{{mentor_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/onboarding/{{mentor_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "onboarding",
+                        "{{mentor_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/list",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/list",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "list"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/{{mentor_id}}/verify",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/{{mentor_id}}/verify",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "{{mentor_id}}",
+                        "verify"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/sessions",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "sessions"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/sessions",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "sessions"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-acme\",\n  \"title\": \"System Design for Freshers\",\n  \"description\": \"Covers scalability, databases, and microservices.\",\n  \"mode\": \"ONLINE\",\n  \"starts_at\": \"2026-06-01T10:00:00Z\",\n  \"ends_at\": \"2026-06-01T12:00:00Z\",\n  \"meeting_link\": \"https://meet.google.com/acme-sysdesign\",\n  \"max_participants\": 20\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "company/sessions/{{session_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/sessions/{{session_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/sessions/{{session_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/opportunities",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/opportunities",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "opportunities"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/opportunities",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/opportunities",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "opportunities"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-acme\",\n  \"type\": \"INTERNSHIP\",\n  \"title\": \"Backend Engineer Intern \u2014 Summer 2026\",\n  \"description\": \"3-month paid internship at Acme Corp.\",\n  \"eligibility\": \"Final year CS students only.\",\n  \"application_url\": \"https://acmecorp.com/intern/apply\",\n  \"starts_at\": \"2026-07-01T00:00:00Z\",\n  \"ends_at\": \"2026-09-30T00:00:00Z\",\n  \"status\": \"PUBLISHED\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "company/opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/mentees",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/mentees",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "mentees"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/review-queue",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/review-queue",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "review-queue"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/review-queue/{{kal_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/review-queue/{{kal_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "review-queue",
+                        "{{kal_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/review-queue/{{kal_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/review-queue/{{kal_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "review-queue",
+                        "{{kal_id}}"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"status\": \"APPROVED\",\n  \"feedback\": \"Clean implementation with proper error handling.\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "company/my-orgs",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/my-orgs",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "my-orgs"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/availability",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/availability",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "availability"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "company/availability",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/company/availability",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "company",
+                        "availability"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"weekday\": 2,\n  \"start_time\": \"09:00:00\",\n  \"end_time\": \"11:00:00\",\n  \"timezone\": \"Asia/Kolkata\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/onboarding",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "onboarding"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/onboarding",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/onboarding",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "onboarding"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-gec\",\n  \"about\": \"CS faculty with 5 years of teaching experience at GEC Kerala.\",\n  \"expertise\": [\"Data Structures\", \"Algorithms\", \"C++\"],\n  \"reason\": \"Want to bridge the gap between academics and industry.\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/onboarding/{{mentor_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/onboarding/{{mentor_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "onboarding",
+                        "{{mentor_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/list",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/list",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "list"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/{{mentor_id}}/verify",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/{{mentor_id}}/verify",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "{{mentor_id}}",
+                        "verify"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/sessions",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "sessions"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/sessions",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/sessions",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "sessions"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-gec\",\n  \"title\": \"DSA Workshop \u2014 Arrays & Sorting\",\n  \"description\": \"Hands-on session on array manipulation and sorting algorithms.\",\n  \"mode\": \"OFFLINE\",\n  \"venue\": \"CS Lab 2, GEC Kerala\",\n  \"starts_at\": \"2026-06-05T09:00:00Z\",\n  \"ends_at\": \"2026-06-05T12:00:00Z\",\n  \"max_participants\": 40,\n  \"ig\": \"ig-uuid-dsa\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/sessions/{{session_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/sessions/{{session_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/sessions/{{session_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/sessions/{{session_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "sessions",
+                        "{{session_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/opportunities",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/opportunities",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "opportunities"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/opportunities",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/opportunities",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "opportunities"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-gec\",\n  \"type\": \"HACKATHON\",\n  \"title\": \"GEC Internal Hackathon 2026\",\n  \"description\": \"48-hour hackathon for all GEC students.\",\n  \"eligibility\": \"Currently enrolled GEC students only.\",\n  \"application_url\": \"https://gec.ac.in/hackathon/register\",\n  \"starts_at\": \"2026-07-15T09:00:00Z\",\n  \"ends_at\": \"2026-07-17T09:00:00Z\",\n  \"status\": \"PUBLISHED\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/opportunities/{{opportunity_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/opportunities/{{opportunity_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "opportunities",
+                        "{{opportunity_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/mentees",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/mentees",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "mentees"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/review-queue",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/review-queue",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "review-queue"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/review-queue/{{kal_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/review-queue/{{kal_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "review-queue",
+                        "{{kal_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/review-queue/{{kal_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/review-queue/{{kal_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "review-queue",
+                        "{{kal_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/events",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/events",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "events"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/events",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/events",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "events"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"org\": \"org-uuid-gec\",\n  \"title\": \"CS Department Tech Fest 2026\",\n  \"start_datetime\": \"2026-06-20T09:00:00Z\",\n  \"end_datetime\": \"2026-06-20T18:00:00Z\",\n  \"venue\": \"GEC Main Auditorium\",\n  \"description\": \"Annual department-level tech fest with workshops and competitions.\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/events/{{event_id}}",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/events/{{event_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "events",
+                        "{{event_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/events/{{event_id}}",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/events/{{event_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "events",
+                        "{{event_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/events/{{event_id}}",
+            "request": {
+                "method": "DELETE",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/events/{{event_id}}",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "events",
+                        "{{event_id}}"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/my-orgs",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/my-orgs",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "my-orgs"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/availability",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/availability",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "availability"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-mentor/availability",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/mentor/campus-mentor/availability",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "mentor",
+                        "campus-mentor",
+                        "availability"
+                    ]
+                },
+                "body": {
+                    "mode": "raw",
+                    "raw": "{\n  \"weekday\": 1,\n  \"start_time\": \"14:00:00\",\n  \"end_time\": \"16:00:00\",\n  \"timezone\": \"Asia/Kolkata\",\n  \"ig\": \"ig-uuid-dsa\"\n}",
+                    "options": {
+                        "raw": {
+                            "language": "json"
+                        }
+                    }
+                }
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "YOUR_JWT_TOKEN",
+            "type": "string"
+        },
+        {
+            "key": "org_id",
+            "value": "ORG_UUID",
+            "type": "string"
+        },
+        {
+            "key": "mentor_id",
+            "value": "MENTOR_UUID",
+            "type": "string"
+        },
+        {
+            "key": "session_id",
+            "value": "SESSION_UUID",
+            "type": "string"
+        },
+        {
+            "key": "task_id",
+            "value": "TASK_UUID",
+            "type": "string"
+        },
+        {
+            "key": "user_id",
+            "value": "USER_UUID",
+            "type": "string"
+        },
+        {
+            "key": "log_id",
+            "value": "LOG_UUID",
+            "type": "string"
+        },
+        {
+            "key": "muid",
+            "value": "user@mulearn",
+            "type": "string"
+        }
+    ]
+}

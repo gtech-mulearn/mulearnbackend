@@ -1,0 +1,636 @@
+{
+    "info": {
+        "name": "muLearn Campus Dashboard API",
+        "description": "Complete collection of all Campus Dashboard endpoints based on campus.md",
+        "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+    },
+    "item": [
+        {
+            "name": "home-summary",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/home-summary",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "home-summary"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "showcase",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/showcase",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "showcase"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "showcase",
+            "request": {
+                "method": "PATCH",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/showcase",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "showcase"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "participation/ig",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/participation/ig",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "participation",
+                        "ig"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "participation/circles",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/participation/circles",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "participation",
+                        "circles"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "participation/programs",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/participation/programs",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "participation",
+                        "programs"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "students/{{{muid}}}/activity",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/students/{{{muid}}}/activity",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "students",
+                        "{{{muid}}}",
+                        "activity"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "learning-initiatives/summary",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/learning-initiatives/summary",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "learning-initiatives",
+                        "summary"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "events/analytics",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/events/analytics",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "events",
+                        "analytics"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campus-details",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/campus-details",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "campus-details"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "student-details",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/student-details",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "student-details"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "{{{org_id}}}/leaderboard",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/{{{org_id}}}/leaderboard",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "{{{org_id}}}",
+                        "leaderboard"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "{{{org_id}}}/karma-by-cluster",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/{{{org_id}}}/karma-by-cluster",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "{{{org_id}}}",
+                        "karma-by-cluster"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "ig-chapters",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/ig-chapters",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "ig-chapters"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "ig-chapters",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/ig-chapters",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "ig-chapters"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "social-links",
+            "request": {
+                "method": "PUT",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/social-links",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "social-links"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "events",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/campus/events",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "campus",
+                        "events"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "home-summary",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/enabler/home-summary",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "enabler",
+                        "home-summary"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campuses",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/enabler/campuses",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "enabler",
+                        "campuses"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campuses/{{{campus_id}}}/review",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/enabler/campuses/{{{campus_id}}}/review",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "enabler",
+                        "campuses",
+                        "{{{campus_id}}}",
+                        "review"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "campuses/{{{campus_id}}}/notes",
+            "request": {
+                "method": "POST",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/enabler/campuses/{{{campus_id}}}/notes",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "enabler",
+                        "campuses",
+                        "{{{campus_id}}}",
+                        "notes"
+                    ]
+                }
+            }
+        },
+        {
+            "name": "reports",
+            "request": {
+                "method": "GET",
+                "header": [
+                    {
+                        "key": "Authorization",
+                        "value": "Bearer {{token}}",
+                        "type": "text"
+                    }
+                ],
+                "url": {
+                    "raw": "{{base_url}}/api/v1/dashboard/enabler/reports",
+                    "host": [
+                        "{{base_url}}"
+                    ],
+                    "path": [
+                        "api",
+                        "v1",
+                        "dashboard",
+                        "enabler",
+                        "reports"
+                    ]
+                }
+            }
+        }
+    ],
+    "variable": [
+        {
+            "key": "base_url",
+            "value": "http://localhost:8000",
+            "type": "string"
+        },
+        {
+            "key": "token",
+            "value": "YOUR_JWT_TOKEN",
+            "type": "string"
+        },
+        {
+            "key": "enabler_id",
+            "value": "ENABLER_UUID",
+            "type": "string"
+        },
+        {
+            "key": "room_id",
+            "value": "ROOM_UUID",
+            "type": "string"
+        },
+        {
+            "key": "schedule_id",
+            "value": "SCHEDULE_UUID",
+            "type": "string"
+        },
+        {
+            "key": "id",
+            "value": "UUID",
+            "type": "string"
+        },
+        {
+            "key": "ig_id",
+            "value": "IG_UUID",
+            "type": "string"
+        },
+        {
+            "key": "org_id",
+            "value": "ORG_UUID",
+            "type": "string"
+        }
+    ]
+}

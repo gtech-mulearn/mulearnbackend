@@ -56,6 +56,7 @@ class OrganizerInfoSerializer(serializers.Serializer):
     ig = serializers.SerializerMethodField()
     campus = serializers.SerializerMethodField()
     company = serializers.SerializerMethodField()
+    mentor = serializers.SerializerMethodField()
     campus_ig_id = serializers.CharField(source='organiser_ci_id', allow_null=True)
 
     def get_ig(self, obj):
@@ -71,6 +72,11 @@ class OrganizerInfoSerializer(serializers.Serializer):
     def get_company(self, obj):
         if obj.organiser_type == Event.OrganiserType.COMPANY and obj.organiser_org:
             return MinimalCampusSerializer(obj.organiser_org).data
+        return None
+
+    def get_mentor(self, obj):
+        if obj.organiser_type == Event.OrganiserType.MENTOR and obj.created_by:
+            return MinimalUserSerializer(obj.created_by).data
         return None
 
 
@@ -231,6 +237,8 @@ class EventCalendarItemSerializer(serializers.ModelSerializer):
             return obj.organiser_org.title if obj.organiser_org else "muLearn"
         elif obj.organiser_type in [Event.OrganiserType.GLOBAL_IG, Event.OrganiserType.CAMPUS_IG]:
             return obj.organiser_ig.name if obj.organiser_ig else "muLearn"
+        elif obj.organiser_type == Event.OrganiserType.MENTOR:
+            return obj.created_by.full_name if obj.created_by else "muLearn"
         return "muLearn"
 
 

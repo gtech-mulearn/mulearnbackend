@@ -38,6 +38,7 @@ class Event(models.Model):
         CAMPUS = 'campus', 'Campus'
         COMPANY = 'company', 'Company'
         ADMIN = 'admin', 'Admin'
+        MENTOR = 'mentor', 'Mentor'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)

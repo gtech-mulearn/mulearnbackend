@@ -90,7 +90,7 @@ def _public_events_queryset(request, *, featured_only=False):
     user_id = _get_viewer_id(request)
 
     scope_filter = _build_scope_filter(user_id)
-    events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(scope_filter)
+    events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org', 'created_by').filter(scope_filter)
 
     events = events.filter(
         status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING]
@@ -368,7 +368,7 @@ class EventCalendarAPI(APIView):
         
         events = (
             get_live_events()
-            .select_related('category', 'organiser_ig', 'organiser_org')
+            .select_related('category', 'organiser_ig', 'organiser_org', 'created_by')
             .filter(scope_filter)
             .filter(
                 status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED],

@@ -46,6 +46,7 @@ class OrganizerOptionsAPI(APIView):
             'can_create_as_campus': [],         # Campus orgs the user leads
             'can_create_as_company': [],        # Companies the user belongs to with Company role
             'can_create_as_admin': False,       # True if user is admin
+            'can_create_as_mentor': [],         # True if user is mentor
         }
 
         # Admin can create events as admin
@@ -103,6 +104,16 @@ class OrganizerOptionsAPI(APIView):
                         'id': link.org.id,
                         'title': link.org.title,
                     })
+
+        # Mentor: user with Mentor role
+        if RoleType.MENTOR.value in roles:
+            from db.user import User
+            user = User.objects.filter(id=user_id).first()
+            if user:
+                options['can_create_as_mentor'].append({
+                    'id': user.id,
+                    'name': user.full_name,
+                })
 
         return CustomResponse(
             general_message='Organiser options retrieved.',
