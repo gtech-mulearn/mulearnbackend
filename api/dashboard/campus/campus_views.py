@@ -1072,7 +1072,7 @@ class CampusStudentActivityAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(activity_logs, request, ["task__title", "task__ig__name"])
         serializer = serializers.StudentActivityTimelineSerializer(paginated_queryset.get('queryset'), many=True)
         
-        return CustomResponse(
-            response=serializer.data,
+        return CustomResponse().paginated_response(
+            data=serializer.data,
             pagination=paginated_queryset.get('pagination')
-        ).get_success_response()
+        )
