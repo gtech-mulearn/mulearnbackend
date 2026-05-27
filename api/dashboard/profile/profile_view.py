@@ -208,6 +208,12 @@ class UserIgEditView(APIView):
 
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
+        if not muid:
+            JWTUtils.is_jwt_authenticated(request)
+            user_muid = JWTUtils.fetch_muid(request)
+        else:
+            user_muid = muid
+
         user = (
             User.objects.prefetch_related(
                 Prefetch(
@@ -218,10 +224,8 @@ class UserProfileAPI(APIView):
                 ),
                 Prefetch(
                     "user_role_link_user",
-                    queryset=UserRoleLink.objects.select_related("role").filter(
-                        verified=True
-                    ),
-                    to_attr="verified_roles",
+                    queryset=UserRoleLink.objects.select_related("role"),
+                    to_attr="prefetched_roles",
                 ),
                 Prefetch(
                     "user_ig_link_user",
@@ -229,19 +233,15 @@ class UserProfileAPI(APIView):
                 ),
             )
             .select_related("wallet_user")
-            .get(muid=muid or JWTUtils.fetch_muid(request))
+            .get(muid=user_muid)
         )
 
         if muid:
             user_settings = UserSettings.objects.filter(user_id=user).first()
-
             if not user_settings.is_public:
                 return CustomResponse(
                     general_message="Private Profile"
                 ).get_failure_response()
-
-        else:
-            JWTUtils.is_jwt_authenticated(request)
 
         serializer = profile_serializer.UserProfileSerializer(user, many=False)
 

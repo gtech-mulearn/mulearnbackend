@@ -1,5 +1,6 @@
 from django.db.models import Count, F,Sum, Subquery, OuterRef
 from django.db.models import Q
+from django.db import transaction
 from rest_framework.views import APIView
 from collections import defaultdict
 from db.organization import Organization, UserOrganizationLink
@@ -482,6 +483,11 @@ class TransferLeadRoleAPI(APIView):
                 general_message="Can't find the user in your college"
             ).get_failure_response()
 
+        if user_id == new_lead.id:
+            return CustomResponse(
+                general_message="User already has this role."
+            ).get_failure_response()
+
         role_id = Role.objects.filter(title=RoleType.CAMPUS_LEAD.value).first()
         if role_id is None:
             return CustomResponse(
@@ -489,24 +495,33 @@ class TransferLeadRoleAPI(APIView):
             ).get_failure_response()
         role_id = role_id.id
 
-        UserRoleLink.objects.filter(
-            user__id=user_id,
-            role__id=role_id,
-        ).delete()
-
-        serializer = serializers.UserRoleLinkSerializer(
-            data={
-                "user": new_lead.id,
-                "role": role_id,
-            },
-            context={"user_id": user_id},
-        )
-        if serializer.is_valid():
-            serializer.save()
+        if UserRoleLink.objects.filter(user=new_lead, role_id=role_id).exists():
             return CustomResponse(
-                general_message="Assigned new Campus Lead successfully"
-            ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+                general_message="User already has this role."
+            ).get_failure_response()
+
+        with transaction.atomic():
+            UserRoleLink.objects.filter(
+                user__id=user_id,
+                role__id=role_id,
+            ).delete()
+
+            serializer = serializers.UserRoleLinkSerializer(
+                data={
+                    "user": new_lead.id,
+                    "role": role_id,
+                },
+                context={"user_id": user_id},
+            )
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(
+                    general_message="Assigned new Campus Lead successfully"
+                ).get_success_response()
+            
+            # This should realistically not happen as validation occurs before, but if it does, 
+            # transaction.atomic() handles the rollback safely
+            return CustomResponse(message=serializer.errors).get_failure_response()
 
 
 class TransferEnablerRoleAPI(APIView):
@@ -543,6 +558,11 @@ class TransferEnablerRoleAPI(APIView):
                 general_message="Can't find the user in your college"
             ).get_failure_response()
 
+        if user_id == new_enabler.id:
+            return CustomResponse(
+                general_message="User already has this role."
+            ).get_failure_response()
+
         role_id = Role.objects.filter(title=RoleType.LEAD_ENABLER.value).first()
         if role_id is None:
             return CustomResponse(
@@ -550,27 +570,34 @@ class TransferEnablerRoleAPI(APIView):
             ).get_failure_response()
         role_id = role_id.id
 
-        current_enabler = UserRoleLink.objects.filter(
-            user__user_organization_link_user__org=user_org_link.org,
-            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            role__id=role_id,
-        ).first()
-        if current_enabler:
-            current_enabler.delete()
-
-        serializer = serializers.UserRoleLinkSerializer(
-            data={
-                "user": new_enabler.id,
-                "role": role_id,
-            },
-            context={"user_id": user_id},
-        )
-        if serializer.is_valid():
-            serializer.save()
+        if UserRoleLink.objects.filter(user=new_enabler, role_id=role_id).exists():
             return CustomResponse(
-                general_message="Assigned new Enabler Lead successfully"
-            ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+                general_message="User already has this role."
+            ).get_failure_response()
+
+        with transaction.atomic():
+            current_enabler = UserRoleLink.objects.filter(
+                user__user_organization_link_user__org=user_org_link.org,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                role__id=role_id,
+            ).first()
+            if current_enabler:
+                current_enabler.delete()
+
+            serializer = serializers.UserRoleLinkSerializer(
+                data={
+                    "user": new_enabler.id,
+                    "role": role_id,
+                },
+                context={"user_id": user_id},
+            )
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(
+                    general_message="Assigned new Enabler Lead successfully"
+                ).get_success_response()
+                
+            return CustomResponse(message=serializer.errors).get_failure_response()
 
 
 class TransferIGRoleAPI(APIView):
@@ -626,36 +653,45 @@ class TransferIGRoleAPI(APIView):
                 general_message="Can't find the user in your college"
             ).get_failure_response()
 
+        if user_id == new_ig.id:
+            return CustomResponse(
+                general_message="User already has this role."
+            ).get_failure_response()
+
         # need to change title according to the ig role
-        # below code filter role for title=ig_code+CampusLead
-        role_id = Role.objects.filter(title=f"{ig_code}CampusLead").first()
+        # below code filter role for title=ig_code + ' CampusLead'
+        role_id = Role.objects.filter(title=f"{ig_code} CampusLead").first()
         if role_id is None:
             return CustomResponse(
                 general_message="Can't find the role"
             ).get_failure_response()
         role_id = role_id.id
 
-        current_ig = UserRoleLink.objects.filter(
-            user__user_organization_link_user__org=user_org_link.org,
-            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            role__id=role_id,
-        ).first()
-        if current_ig:
-            current_ig.delete()
-
-        serializer = serializers.UserRoleLinkSerializer(
-            data={
-                "user": new_ig.id,
-                "role": role_id,
-            },
-            context={"user_id": user_id},
-        )
-        if serializer.is_valid():
-            serializer.save()
+        if UserRoleLink.objects.filter(user=new_ig, role_id=role_id).exists():
             return CustomResponse(
-                general_message="Assigned new Ig lead successfully"
-            ).get_success_response()
-        return CustomResponse(message=serializer.errors).get_failure_response()
+                general_message="User already has this role."
+            ).get_failure_response()
+
+        with transaction.atomic():
+            UserRoleLink.objects.filter(
+                user__user_organization_link_user__org=user_org_link.org,
+                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                role__id=role_id,
+            ).delete()
+
+            serializer = serializers.UserRoleLinkSerializer(
+                data={
+                    "user": new_ig.id,
+                    "role": role_id,
+                },
+                context={"user_id": user_id},
+            )
+            if serializer.is_valid():
+                serializer.save()
+                return CustomResponse(
+                    general_message="Assigned new IG Campus Lead successfully"
+                ).get_success_response()
+            return CustomResponse(message=serializer.errors).get_failure_response()
 
 # ...existing code...
 
