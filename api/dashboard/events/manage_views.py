@@ -95,7 +95,7 @@ class ManageEventListCreateAPI(APIView):
             events = events.filter(status=status)
 
         paginated = CommonUtils.get_paginated_queryset(
-            events, request,
+            events.select_related('category', 'organiser_ig', 'organiser_org'), request,
             search_fields=['title', 'venue_city'],
             sort_fields={'created_at': '-created_at', 'start_datetime': 'start_datetime'},
         )

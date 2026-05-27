@@ -64,7 +64,7 @@ class MentorshipSession(models.Model):
         SCHEDULED        = 'SCHEDULED',        'Scheduled'
         COMPLETED        = 'COMPLETED',        'Completed'
         CANCELLED        = 'CANCELLED',        'Cancelled'
-        NO_SHOW          = 'NO_SHOW',          'No Show'
+        REJECTED         = 'REJECTED',         'Rejected'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     ig = models.ForeignKey(
@@ -78,6 +78,8 @@ class MentorshipSession(models.Model):
     starts_at = models.DateTimeField()
     ends_at = models.DateTimeField()
     meeting_link = models.CharField(max_length=500, null=True, blank=True)
+    venue = models.CharField(max_length=255, null=True, blank=True)
+    max_participants = models.IntegerField(null=True, blank=True)
     # is_global=True when ig is NULL and the session was submitted by a mentor
     # for cross-IG or platform-wide reach; requires admin approval.
     is_global = models.BooleanField(default=False)
@@ -104,6 +106,16 @@ class MentorshipSession(models.Model):
         db_column='updated_by', related_name='mentorship_session_updated_by'
     )
     updated_at = models.DateTimeField(auto_now=True)
+
+    # Org-scoped sessions (COMPANY_MENTOR / CAMPUS_MENTOR).
+    # NULL for global and IG-scoped sessions.
+    org = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='org_id',
+        related_name='mentorship_sessions'
+    )
 
     class Meta:
         managed = False
@@ -150,6 +162,8 @@ class IgOpportunity(models.Model):
     class OpportunityType(models.TextChoices):
         CHALLENGE = 'CHALLENGE', 'Challenge'
         INTERNSHIP = 'INTERNSHIP', 'Internship'
+        HACKATHON = 'HACKATHON', 'Hackathon'
+        JOB = 'JOB', 'Job'
 
     class Status(models.TextChoices):
         DRAFT = 'DRAFT', 'Draft'
@@ -159,8 +173,18 @@ class IgOpportunity(models.Model):
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     ig = models.ForeignKey(
-        InterestGroup, on_delete=models.CASCADE,
+        InterestGroup, on_delete=models.SET_NULL,
+        null=True, blank=True,
         db_column='ig_id', related_name='ig_opportunities'
+    )
+    # Org-scoped opportunity (COMPANY_MENTOR / CAMPUS_MENTOR).
+    # Either ig or org must be set; both can be set for campus+IG opps.
+    org = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='org_id',
+        related_name='org_opportunities'
     )
     type = models.CharField(max_length=15, choices=OpportunityType.choices)
     title = models.CharField(max_length=150)
@@ -222,6 +246,7 @@ class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
         PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
+        MENTOR_VERIFY    = 'MENTOR_VERIFY',    'Mentor Verify'
         TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
         EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'
         SESSION_CREATE   = 'SESSION_CREATE',   'Session Create'

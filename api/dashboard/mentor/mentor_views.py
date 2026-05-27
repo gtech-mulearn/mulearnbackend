@@ -1,3 +1,4 @@
+from django.db import transaction, IntegrityError
 from django.db.models import Count, F as models_F, Q, Sum, Value, IntegerField
 from django.db.models.functions import Coalesce
 from django.utils import timezone
@@ -21,11 +22,13 @@ from utils.types import RoleType
 from utils.utils import CommonUtils, DateTimeUtils
 
 from .mentor_serializers import (
+    AttendanceEntrySerializer,
     GlobalSessionPendingSerializer,
     IgOpportunitySerializer,
     IgOpportunityWriteSerializer,
     KarmaReviewQueueSerializer,
     KarmaReviewSerializer,
+    MenteeDetailSerializer,
     MentorAvailabilitySerializer,
     MentorAvailabilityWriteSerializer,
     MentorKarmaAwardSerializer,
@@ -34,6 +37,7 @@ from .mentor_serializers import (
     MentorListSerializer,
     MentorOnboardingSerializer,
     MentorOnboardingUpdateSerializer,
+    MentorSessionAttendanceSerializer,
     MentorSessionCreateSerializer,
     MentorSessionDetailSerializer,
     MentorSessionListSerializer,
@@ -44,13 +48,13 @@ from .mentor_serializers import (
     MentorTaskRequestCreateSerializer,
     MentorTaskRequestReviewSerializer,
     MentorTaskRequestSerializer,
+    MentorTierUpdateSerializer,
     MentorVerifySerializer,
+    PublicMentorSessionSerializer,
     SystemActionLogSerializer,
 )
 
 # ─── Role shorthand ──────────────────────────────────────────────────────────
-ADMIN = RoleType.ADMIN.value
-MENTOR = RoleType.MENTOR.value
 
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -217,8 +221,8 @@ class MentorOnboardingAPI(APIView):
 class MentorListAPI(APIView):
     """GET — paginated list of all mentor applications (admin only)."""
     authentication_classes = [CustomizePermission]
-
-    @role_required([ADMIN])
+    
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         is_verified = request.query_params.get("is_verified")
         mentor_qs = (
@@ -262,7 +266,7 @@ class MentorVerifyAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         mentor = UserMentor.objects.filter(id=pk).select_related("user").first()
@@ -410,11 +414,11 @@ class MentorOverviewAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
         ig_id = request.query_params.get("ig_id")
         now = DateTimeUtils.get_current_utc_time()
 
@@ -482,7 +486,7 @@ class MentorOverviewAPI(APIView):
                 "scheduled": status_counts.get(MentorshipSession.Status.SCHEDULED, 0),
                 "completed": status_counts.get(MentorshipSession.Status.COMPLETED, 0),
                 "cancelled": status_counts.get(MentorshipSession.Status.CANCELLED, 0),
-                "no_show": status_counts.get(MentorshipSession.Status.NO_SHOW, 0),
+                "rejected": status_counts.get(MentorshipSession.Status.REJECTED, 0),
                 "total": session_total,
             },
             "upcoming": upcoming,
@@ -599,11 +603,11 @@ class MentorSessionAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         session_qs = (
             MentorshipSession.objects
@@ -644,11 +648,11 @@ class MentorSessionAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         ig_id      = request.data.get("ig")
         is_global  = not ig_id  # no IG supplied → treat as global
@@ -732,7 +736,7 @@ class MentorSessionDetailAPI(APIView):
     """GET / PUT / PATCH / DELETE for a single session."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         session = (
             MentorshipSession.objects
@@ -747,11 +751,11 @@ class MentorSessionDetailAPI(APIView):
         serializer = MentorSessionDetailSerializer(session)
         return CustomResponse(response={"session": serializer.data}).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         session = MentorshipSession.objects.filter(id=pk).first()
         if not session:
@@ -789,7 +793,7 @@ class MentorSessionDetailAPI(APIView):
             response={"session": MentorSessionDetailSerializer(session).data},
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -823,15 +827,14 @@ class MentorSessionStatusAPI(APIView):
         MentorshipSession.Status.SCHEDULED: [
             MentorshipSession.Status.COMPLETED,
             MentorshipSession.Status.CANCELLED,
-            MentorshipSession.Status.NO_SHOW,
         ],
         MentorshipSession.Status.COMPLETED: [],
         MentorshipSession.Status.CANCELLED: [],
-        MentorshipSession.Status.NO_SHOW: [],
+        MentorshipSession.Status.REJECTED: [],
         MentorshipSession.Status.PENDING_APPROVAL: [],  # use /approve/ endpoint instead
     }
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -841,6 +844,13 @@ class MentorSessionStatusAPI(APIView):
         new_status = request.data.get("status")
         if not new_status:
             return CustomResponse(general_message="'status' field is required.").get_failure_response()
+
+        data = {"status": new_status, "updated_by": user_id}
+        serializer = MentorSessionStatusSerializer(data=data, instance=session, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        new_status = serializer.validated_data["status"]
 
         if new_status == MentorshipSession.Status.PENDING_APPROVAL:
             return CustomResponse(
@@ -852,11 +862,6 @@ class MentorSessionStatusAPI(APIView):
             return CustomResponse(
                 general_message=f"Cannot transition from '{session.status}' to '{new_status}'."
             ).get_failure_response()
-
-        data = {"status": new_status, "updated_by": user_id}
-        serializer = MentorSessionStatusSerializer(data=data, instance=session, partial=True)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
 
         serializer.save()
 
@@ -878,7 +883,7 @@ class MentorSessionParticipantsAPI(APIView):
     """GET / POST / DELETE participants on a session."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         session = MentorshipSession.objects.filter(id=pk).first()
         if not session:
@@ -894,47 +899,93 @@ class MentorSessionParticipantsAPI(APIView):
             response={"participants": serializer.data}
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
-        session = MentorshipSession.objects.filter(id=pk).first()
-        if not session:
-            return CustomResponse(general_message="Session not found.").get_failure_response()
+        
+        with transaction.atomic():
+            session = MentorshipSession.objects.select_for_update().filter(id=pk).first()
+            if not session:
+                return CustomResponse(general_message="Session not found.").get_failure_response()
 
-        data = request.data.copy()
-        data["session"] = pk
+            data = request.data.copy()
+            data["session"] = pk
 
-        # Validate participant user exists
-        participant_user_id = data.get("user")
-        if not User.objects.filter(id=participant_user_id).exists():
-            return CustomResponse(
-                general_message="Participant user not found."
-            ).get_failure_response()
+            # Validate participant user exists
+            participant_user_id = data.get("user")
+            if not User.objects.filter(id=participant_user_id).exists():
+                return CustomResponse(
+                    general_message="Participant user not found."
+                ).get_failure_response()
 
-        # Check for duplicate
-        role = data.get("participant_role")
-        if MentorshipSessionUserLink.objects.filter(
-            session_id=pk, user_id=participant_user_id, participant_role=role
-        ).exists():
-            return CustomResponse(
-                general_message="This user already has this role in the session."
-            ).get_failure_response()
+            # Check for duplicate
+            role = data.get("participant_role")
+            if MentorshipSessionUserLink.objects.filter(
+                session_id=pk, user_id=participant_user_id, participant_role=role
+            ).exists():
+                return CustomResponse(
+                    general_message="This user already has this role in the session."
+                ).get_failure_response()
 
-        serializer = MentorSessionParticipantAddSerializer(data=data)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+            # Enforce max_participants for mentees
+            if role == MentorshipSessionUserLink.ParticipantRole.MENTEE and session.max_participants is not None:
+                current_mentees = MentorshipSessionUserLink.objects.filter(
+                    session_id=pk,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE
+                ).count()
+                
+                if current_mentees >= session.max_participants:
+                    return CustomResponse(
+                        general_message=f"Session capacity reached ({session.max_participants} mentees)."
+                    ).get_failure_response()
 
-        link = serializer.save()
+            serializer = MentorSessionParticipantAddSerializer(data=data)
+            if not serializer.is_valid():
+                return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+            link = serializer.save()
+
         return CustomResponse(
             general_message="Participant added.",
             response={"participant": MentorSessionParticipantSerializer(link).data},
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
-    def delete(self, request, pk, user_pk):
-        MentorshipSessionUserLink.objects.filter(
-            session_id=pk, user_id=user_pk
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def delete(self, request, pk=None, session_pk=None, user_pk=None):
+        session_id = session_pk or pk
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        session = MentorshipSession.objects.filter(id=session_id).first()
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+
+        if not is_admin and str(session.created_by_id) != user_id:
+            return CustomResponse(
+                general_message="You do not have permission to modify this session."
+            ).get_failure_response()
+
+        participant_role = request.query_params.get("participant_role")
+        if not participant_role:
+            return CustomResponse(
+                general_message="participant_role query parameter is required."
+            ).get_failure_response()
+
+        if participant_role not in [r.value for r in MentorshipSessionUserLink.ParticipantRole]:
+            return CustomResponse(
+                general_message="Invalid participant_role."
+            ).get_failure_response()
+
+        deleted, _ = MentorshipSessionUserLink.objects.filter(
+            session_id=session_id, user_id=user_pk, participant_role=participant_role
         ).delete()
+
+        if deleted == 0:
+            return CustomResponse(
+                general_message="Participant not found."
+            ).get_failure_response()
+
         return CustomResponse(
             general_message="Participant removed."
         ).get_success_response()
@@ -948,7 +999,7 @@ class GlobalSessionPendingAPI(APIView):
     """GET — paginated list of global sessions awaiting admin approval."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def get(self, request):
         pending_qs = (
             MentorshipSession.objects
@@ -999,7 +1050,7 @@ class GlobalSessionApproveAPI(APIView):
     """PATCH — admin approves or rejects a pending global session."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -1025,7 +1076,7 @@ class GlobalSessionApproveAPI(APIView):
             new_status = MentorshipSession.Status.SCHEDULED
             message = "Global session approved and scheduled."
         elif action == "reject":
-            new_status = MentorshipSession.Status.CANCELLED
+            new_status = MentorshipSession.Status.REJECTED
             message = "Global session rejected."
         else:
             return CustomResponse(
@@ -1071,11 +1122,11 @@ class MentorAvailabilityAPI(APIView):
     """GET — list slots; POST — create a new slot."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         mentor_user_id = request.query_params.get("mentor_user_id")
         ig_id = request.query_params.get("ig_id")
@@ -1104,7 +1155,7 @@ class MentorAvailabilityAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
@@ -1127,7 +1178,7 @@ class MentorAvailabilityDetailAPI(APIView):
     """PUT — full replace; DELETE — soft-delete."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         slot = MentorAvailabilitySlot.objects.filter(
@@ -1153,11 +1204,11 @@ class MentorAvailabilityDetailAPI(APIView):
             response={"slot": MentorAvailabilitySerializer(slot).data},
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         slot_qs = MentorAvailabilitySlot.objects.filter(id=pk)
         if not is_admin:
@@ -1185,11 +1236,11 @@ class MentorTaskRequestAPI(APIView):
     """GET — list; POST — submit a task proposal."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         status_filter = request.query_params.get("status")
         qs = MentorTaskRequest.objects.select_related(
@@ -1215,7 +1266,7 @@ class MentorTaskRequestAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([MENTOR])
+    @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
@@ -1224,10 +1275,17 @@ class MentorTaskRequestAPI(APIView):
         data["updated_by"] = user_id
 
         serializer = MentorTaskRequestCreateSerializer(data=data)
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        
+        try:
+            with transaction.atomic():
+                if not serializer.is_valid():
+                    return CustomResponse(general_message=serializer.errors).get_failure_response()
+                task_req = serializer.save()
+        except IntegrityError:
+            return CustomResponse(
+                general_message={"hashtag": ["A task/request with this hashtag already exists."]}
+            ).get_failure_response()
 
-        task_req = serializer.save()
         return CustomResponse(
             general_message="Task proposal submitted. Awaiting admin review.",
             response={"task_request": MentorTaskRequestSerializer(task_req).data},
@@ -1235,14 +1293,14 @@ class MentorTaskRequestAPI(APIView):
 
 
 class MentorTaskRequestDetailAPI(APIView):
-    """GET — detail; PATCH — admin review (approve/reject)."""
+    """GET — detail; PATCH — admin review (approve/reject); DELETE — mentor withdraws pending request."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         qs = MentorTaskRequest.objects.select_related(
             "mentor", "ig", "reviewed_by", "created_task"
@@ -1261,7 +1319,7 @@ class MentorTaskRequestDetailAPI(APIView):
             response={"task_request": MentorTaskRequestSerializer(task_req).data}
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         task_req = MentorTaskRequest.objects.select_related(
@@ -1292,38 +1350,70 @@ class MentorTaskRequestDetailAPI(APIView):
             "updated_by": admin_id,
         }
 
-        serializer = MentorTaskRequestReviewSerializer(
-            data=data, instance=task_req, partial=True
-        )
-        if not serializer.is_valid():
-            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        try:
+            with transaction.atomic():
+                serializer = MentorTaskRequestReviewSerializer(
+                    data=data, instance=task_req, partial=True
+                )
+                if not serializer.is_valid():
+                    return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-        task_req = serializer.save()
+                task_req = serializer.save()
 
-        # On APPROVED — auto-create the TaskList entry
-        if new_status == MentorTaskRequest.Status.APPROVED:
-            task_type = TaskType.objects.first()  # default type — adjust as needed
-            if not task_type:
-                return CustomResponse(
-                    general_message="No TaskType found. Cannot create task."
-                ).get_failure_response()
+                # On APPROVED — auto-create the TaskList entry
+                if new_status == MentorTaskRequest.Status.APPROVED:
+                    task_type = TaskType.objects.first()  # default type — adjust as needed
+                    if not task_type:
+                        return CustomResponse(
+                            general_message="No TaskType found. Cannot create task."
+                        ).get_failure_response()
 
-            new_task = TaskList.objects.create(
-                hashtag=task_req.hashtag,
-                title=task_req.title,
-                description=task_req.description,
-                karma=task_req.karma,
-                ig=task_req.ig,
-                type=task_type,
-                created_by_id=admin_id,
-                updated_by_id=admin_id,
-            )
-            task_req.created_task = new_task
-            task_req.save(update_fields=["created_task"])
+                    new_task = TaskList.objects.create(
+                        hashtag=task_req.hashtag,
+                        title=task_req.title,
+                        description=task_req.description,
+                        karma=task_req.karma,
+                        ig=task_req.ig,
+                        type=task_type,
+                        created_by_id=admin_id,
+                        updated_by_id=admin_id,
+                    )
+                    task_req.created_task = new_task
+                    task_req.save(update_fields=["created_task"])
+        except IntegrityError:
+            return CustomResponse(
+                general_message={"hashtag": ["A task with this hashtag already exists in the published task list."]}
+            ).get_failure_response()
 
         return CustomResponse(
             general_message=f"Task request {new_status.lower()}.",
             response={"task_request": MentorTaskRequestSerializer(task_req).data},
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        """Mentor withdraws their own PENDING task request before admin review."""
+        user_id = JWTUtils.fetch_user_id(request)
+
+        task_req = MentorTaskRequest.objects.filter(
+            id=pk, mentor_id=user_id
+        ).first()
+        if not task_req:
+            return CustomResponse(
+                general_message="Task request not found."
+            ).get_failure_response()
+
+        if task_req.status != MentorTaskRequest.Status.PENDING:
+            return CustomResponse(
+                general_message=(
+                    f"Cannot withdraw a task request with status '{task_req.status}'. "
+                    "Only PENDING requests can be withdrawn."
+                )
+            ).get_failure_response()
+
+        task_req.delete()
+        return CustomResponse(
+            general_message="Task request withdrawn successfully."
         ).get_success_response()
 
 
@@ -1335,7 +1425,7 @@ class MentorOpportunityAPI(APIView):
     """GET — list; POST — create opportunity."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
         opp_type = request.query_params.get("type")
@@ -1364,7 +1454,7 @@ class MentorOpportunityAPI(APIView):
             data=serializer.data, pagination=paginated["pagination"]
         )
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_id = request.data.get("ig")
@@ -1402,7 +1492,7 @@ class MentorOpportunityDetailAPI(APIView):
     """GET / PUT / PATCH / DELETE a single opportunity."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         opp = IgOpportunity.objects.select_related("ig", "created_by").filter(id=pk).first()
         if not opp:
@@ -1411,7 +1501,7 @@ class MentorOpportunityDetailAPI(APIView):
             response={"opportunity": IgOpportunitySerializer(opp).data}
         ).get_success_response()
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = IgOpportunity.objects.filter(id=pk).first()
@@ -1441,7 +1531,7 @@ class MentorOpportunityDetailAPI(APIView):
             response={"opportunity": IgOpportunitySerializer(opp).data},
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = IgOpportunity.objects.filter(id=pk).first()
@@ -1464,11 +1554,11 @@ class MentorMenteesAPI(APIView):
     """GET — distinct mentees across sessions."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         ig_id = request.query_params.get("ig_id")
         mentor_user_id = request.query_params.get("mentor_user_id")
@@ -1539,11 +1629,11 @@ class MentorActivityLogAPI(APIView):
     """GET — recent SystemActionLog entries."""
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         ig_id = request.query_params.get("ig_id")
         action_type = request.query_params.get("action_type")
@@ -1581,7 +1671,7 @@ class MentorSessionKarmaAwardAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request, pk):
         awards = (
             MentorKarmaAward.objects
@@ -1593,7 +1683,7 @@ class MentorSessionKarmaAwardAPI(APIView):
             response={"awards": serializer.data}
         ).get_success_response()
 
-    @role_required([ADMIN])
+    @role_required([RoleType.ADMIN.value])
     def post(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).select_related("ig").first()
@@ -1693,11 +1783,11 @@ class MentorTaskReviewQueueAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         status_filter = request.query_params.get("status", "PENDING")
         ig_id = request.query_params.get("ig_id")
@@ -1737,12 +1827,44 @@ class MentorTaskReviewQueueAPI(APIView):
 
 class MentorTaskReviewDetailAPI(APIView):
     """
+    GET   /mentor/review-queue/<kal_id>/ — single KAL entry detail
     PATCH /mentor/review-queue/<kal_id>/ — mentor approves or rejects a task submission
     Karma is NOT credited here; admin finalises via the existing appraiser flow.
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles   = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        kal = KarmaActivityLog.objects.select_related(
+            "user", "task__ig"
+        ).filter(id=pk).first()
+        if not kal:
+            return CustomResponse(general_message="Task submission not found.").get_failure_response()
+
+        # Mentors can only see items from their own IGs
+        if not is_admin:
+            mentor_ig_ids = (
+                MentorshipSessionUserLink.objects
+                .filter(
+                    user_id=user_id,
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                )
+                .values_list("session__ig_id", flat=True)
+                .distinct()
+            )
+            if kal.task and kal.task.ig_id not in mentor_ig_ids:
+                return CustomResponse(
+                    general_message="Task submission not found."
+                ).get_failure_response()
+
+        serializer = KarmaReviewQueueSerializer(kal)
+        return CustomResponse(response={"submission": serializer.data}).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
     def patch(self, request, pk):
         mentor_id = JWTUtils.fetch_user_id(request)
 
@@ -1801,7 +1923,7 @@ class MentorLeaderboardAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
 
@@ -1916,7 +2038,7 @@ class MentorSessionRemindAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -1930,6 +2052,22 @@ class MentorSessionRemindAPI(APIView):
             return CustomResponse(
                 general_message="Reminders can only be sent for SCHEDULED or PENDING_APPROVAL sessions."
             ).get_failure_response()
+
+        # Enforce 12-hour cooldown
+        last_reminder = Notification.objects.filter(
+            url=f"/sessions/{session.id}/",
+            title__contains="Session Reminder"
+        ).order_by("-created_at").first()
+
+        if last_reminder:
+            now = DateTimeUtils.get_current_utc_time()
+            time_diff = now - last_reminder.created_at
+            if time_diff.total_seconds() < 12 * 3600:
+                remaining_hours = int(12 - time_diff.total_seconds() / 3600)
+                wait_msg = f"{remaining_hours} hours" if remaining_hours > 0 else "less than an hour"
+                return CustomResponse(
+                    general_message=f"Cooldown active. Please wait {wait_msg} before sending another reminder."
+                ).get_failure_response()
 
         count = _send_session_reminders(session, triggered_by_id=user_id)
         return CustomResponse(
@@ -1977,7 +2115,7 @@ class MentorMyIgsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         links = UserIgLink.objects.filter(
@@ -2009,11 +2147,11 @@ class MentorIgRequestListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
         ig_id    = request.query_params.get("ig_id")
 
         if not ig_id:
@@ -2068,11 +2206,11 @@ class MentorIgRequestDetailAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([ADMIN, MENTOR])
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     def patch(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
-        is_admin = ADMIN in roles
+        is_admin = RoleType.ADMIN.value in roles
 
         link = UserIgLink.objects.filter(
             id=pk,
@@ -2136,3 +2274,1989 @@ class MentorIgRequestDetailAPI(APIView):
             general_message=f"Mentor request for {ig_name} rejected."
         ).get_success_response()
 
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Availability Calendar
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorAvailabilityCalendarAPI(APIView):
+    """GET - Return slots formatted for calendar consumption."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        slots = MentorAvailabilitySlot.objects.filter(is_active=True).select_related("mentor_user", "ig")
+        if not is_admin:
+            slots = slots.filter(mentor_user_id=user_id)
+            
+        serializer = MentorAvailabilitySerializer(slots, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public Endpoints
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorCardAPI(APIView):
+    """GET /mentor/<muid>/public/ - Public read-only mentor profile."""
+    # No auth for public endpoints
+    def get(self, request, muid):
+        from .mentor_serializers import PublicMentorCardSerializer
+        mentor = UserMentor.objects.select_related("user").filter(
+            user__muid=muid, is_verified=True
+        ).first()
+
+        if not mentor:
+            return CustomResponse(
+                general_message="Verified mentor profile not found."
+            ).get_failure_response()
+
+        serializer = PublicMentorCardSerializer(mentor)
+        return CustomResponse(
+            response=serializer.data
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 1 — Mentee Detail
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorMenteeDetailAPI(APIView):
+    """
+    GET /mentor/mentees/<user_pk>/
+
+    Returns a full profile of a single mentee:
+    - User info
+    - Sessions shared with the requesting mentor (or all sessions for admin)
+    - Karma earned by the mentee from tasks within the mentor's IGs
+    - Task review stats (reviewed / approved / rejected by this mentor)
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, user_pk):
+        caller_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        # Verify the target user exists
+        mentee_user = User.objects.filter(id=user_pk).first()
+        if not mentee_user:
+            return CustomResponse(general_message="User not found.").get_failure_response()
+
+        # Determine which session IDs to scope to
+        if is_admin:
+            # Admin sees all sessions this person attended as MENTEE
+            session_links = MentorshipSessionUserLink.objects.filter(
+                user_id=user_pk,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            )
+        else:
+            # Mentor sees only sessions they were MENTOR/CO_MENTOR in
+            mentor_session_ids = (
+                MentorshipSessionUserLink.objects
+                .filter(
+                    user_id=caller_id,
+                    participant_role__in=[
+                        MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                        MentorshipSessionUserLink.ParticipantRole.CO_MENTOR,
+                    ],
+                )
+                .values_list("session_id", flat=True)
+            )
+            session_links = MentorshipSessionUserLink.objects.filter(
+                user_id=user_pk,
+                session_id__in=mentor_session_ids,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            )
+
+        if not session_links.exists():
+            return CustomResponse(
+                general_message="Mentee has no sessions with you."
+            ).get_failure_response()
+
+        attended_session_ids = list(session_links.values_list("session_id", flat=True))
+
+        # Fetch session details
+        sessions_qs = (
+            MentorshipSession.objects
+            .filter(id__in=attended_session_ids)
+            .select_related("ig")
+            .order_by("-starts_at")
+        )
+        sessions_data = [
+            {
+                "session_id": str(s.id),
+                "title": s.title,
+                "ig_name": s.ig.name if s.ig else None,
+                "status": s.status,
+                "starts_at": s.starts_at,
+                "ends_at": s.ends_at,
+            }
+            for s in sessions_qs
+        ]
+
+        total_sessions = len(attended_session_ids)
+        completed_sessions = sessions_qs.filter(
+            status=MentorshipSession.Status.COMPLETED
+        ).count()
+
+        # Karma earned by this mentee from tasks in the mentor's IGs
+        if is_admin:
+            karma_qs = KarmaActivityLog.objects.filter(user_id=user_pk)
+        else:
+            mentor_ig_ids = (
+                MentorshipSession.objects
+                .filter(id__in=mentor_session_ids)
+                .values_list("ig_id", flat=True)
+                .distinct()
+            )
+            karma_qs = KarmaActivityLog.objects.filter(
+                user_id=user_pk,
+                task__ig_id__in=mentor_ig_ids,
+            )
+
+        total_karma_earned = karma_qs.aggregate(
+            total=Coalesce(Sum("karma"), Value(0, output_field=IntegerField()))
+        )["total"]
+
+        # Task review stats (reviews submitted by this mentor on this mentee's submissions)
+        if is_admin:
+            reviewed_qs = KarmaActivityLog.objects.filter(user_id=user_pk)
+        else:
+            reviewed_qs = KarmaActivityLog.objects.filter(
+                user_id=user_pk,
+                mentor_reviewed_by_id=caller_id,
+            )
+
+        tasks_reviewed = reviewed_qs.exclude(mentor_review_status="PENDING").count()
+        tasks_approved = reviewed_qs.filter(mentor_review_status="APPROVED").count()
+        tasks_rejected = reviewed_qs.filter(mentor_review_status="REJECTED").count()
+
+        data = {
+            "user_id": str(mentee_user.id),
+            "full_name": mentee_user.full_name,
+            "email": mentee_user.email,
+            "muid": mentee_user.muid,
+            "total_sessions": total_sessions,
+            "completed_sessions": completed_sessions,
+            "total_karma_earned": total_karma_earned,
+            "tasks_reviewed": tasks_reviewed,
+            "tasks_approved": tasks_approved,
+            "tasks_rejected": tasks_rejected,
+            "sessions": sessions_data,
+        }
+
+        serializer = MenteeDetailSerializer(data=data)
+        serializer.is_valid()   # data is already clean; validation is a no-op here
+        return CustomResponse(response={"mentee": data}).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 2 — Bulk Attendance Update
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorSessionAttendanceAPI(APIView):
+    """
+    PATCH /mentor/sessions/<pk>/attendance/
+
+    Bulk-update attendance_status for multiple participants in one request.
+
+    Body:
+        {
+          "participants": [
+            { "user_id": "<uuid>", "attendance_status": "ATTENDED" },
+            { "user_id": "<uuid>", "attendance_status": "NO_SHOW" },
+            ...
+          ]
+        }
+
+    - Admin: can update any session.
+    - Mentor: can only update sessions they created.
+    - Validates that every user_id is actually a participant in the session.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        session = MentorshipSession.objects.filter(id=pk).first()
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+
+        if not is_admin and str(session.created_by_id) != user_id:
+            return CustomResponse(
+                general_message="You can only update attendance for sessions you created."
+            ).get_failure_response()
+
+        serializer = MentorSessionAttendanceSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        participant_updates = serializer.validated_data["participants"]
+
+        # Build map of user_id → attendance_status for fast lookup
+        update_map = {entry["user_id"]: entry["attendance_status"] for entry in participant_updates}
+        requested_user_ids = set(update_map.keys())
+
+        # Fetch existing links for validation
+        existing_links = MentorshipSessionUserLink.objects.filter(
+            session_id=pk,
+            user_id__in=requested_user_ids,
+        )
+        found_user_ids = {str(link.user_id) for link in existing_links}
+        missing = requested_user_ids - found_user_ids
+        if missing:
+            return CustomResponse(
+                general_message=f"The following users are not participants in this session: {', '.join(missing)}"
+            ).get_failure_response()
+
+        # Bulk update inside a transaction
+        with transaction.atomic():
+            updated_count = 0
+            for link in existing_links:
+                new_status = update_map[str(link.user_id)]
+                if link.attendance_status != new_status:
+                    link.attendance_status = new_status
+                    link.save(update_fields=["attendance_status"])
+                    updated_count += 1
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.SESSION_UPDATE,
+            actor_user_id=user_id,
+            entity_name="mentorship_session",
+            entity_id=session.id,
+            ig=session.ig,
+            new_data={"attendance_bulk_update": list(participant_updates)},
+        )
+
+        return CustomResponse(
+            general_message=f"Attendance updated for {updated_count} participant(s)."
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 5 — Public Session History
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorSessionsAPI(APIView):
+    """
+    GET /mentor/<muid>/public/sessions/
+
+    No authentication required.
+    Returns a paginated list of COMPLETED sessions where the mentor was
+    MENTOR or CO_MENTOR.
+
+    Optional query params:
+        ig_id  — filter by interest group
+        mode   — filter by session mode (ONLINE / OFFLINE / HYBRID)
+    """
+
+    def get(self, request, muid):
+        mentor = UserMentor.objects.select_related("user").filter(
+            user__muid=muid, is_verified=True
+        ).first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Verified mentor profile not found."
+            ).get_failure_response()
+
+        ig_id = request.query_params.get("ig_id")
+        mode  = request.query_params.get("mode")
+
+        # Sessions where this user was the MENTOR or CO_MENTOR
+        mentor_session_ids = (
+            MentorshipSessionUserLink.objects
+            .filter(
+                user_id=mentor.user_id,
+                participant_role__in=[
+                    MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                    MentorshipSessionUserLink.ParticipantRole.CO_MENTOR,
+                ],
+            )
+            .values_list("session_id", flat=True)
+        )
+
+        sessions_qs = (
+            MentorshipSession.objects
+            .filter(
+                id__in=mentor_session_ids,
+                status=MentorshipSession.Status.COMPLETED,
+            )
+            .select_related("ig")
+            .prefetch_related("participants")
+        )
+
+        if ig_id:
+            sessions_qs = sessions_qs.filter(ig_id=ig_id)
+        if mode:
+            sessions_qs = sessions_qs.filter(mode=mode)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            sessions_qs, request,
+            search_fields=["title", "ig__name"],
+            sort_fields={"starts_at": "starts_at", "title": "title"},
+        )
+        serializer = PublicMentorSessionSerializer(paginated["queryset"], many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated["pagination"]
+        )
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 6 — Session Clone
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorSessionCloneAPI(APIView):
+    """
+    POST /mentor/sessions/<pk>/clone/
+
+    Deep-copies a session with the following rules:
+    - title     → "Copy of <original title>"
+    - status    → PENDING_APPROVAL (global) or SCHEDULED (IG-scoped)
+    - starts_at / ends_at → cleared (null); caller must PATCH afterwards
+    - All other fields (description, mode, ig, max_participants,
+      meeting_link, venue, is_global) are preserved
+    - Creator is automatically added as MENTOR participant
+    - Original participants are NOT copied
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def post(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        original = MentorshipSession.objects.filter(id=pk).select_related("ig").first()
+        if not original:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+
+        # Mentors can only clone their own sessions
+        if not is_admin and str(original.created_by_id) != user_id:
+            return CustomResponse(
+                general_message="You can only clone sessions you created."
+            ).get_failure_response()
+
+        new_status = (
+            MentorshipSession.Status.PENDING_APPROVAL
+            if original.is_global
+            else MentorshipSession.Status.SCHEDULED
+        )
+
+        clone = MentorshipSession.objects.create(
+            title=f"Copy of {original.title}",
+            description=original.description,
+            mode=original.mode,
+            ig=original.ig,
+            is_global=original.is_global,
+            max_participants=original.max_participants,
+            meeting_link=original.meeting_link,
+            venue=original.venue,
+            status=new_status,
+            starts_at=None,
+            ends_at=None,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+        )
+
+        # Auto-add creator as MENTOR participant
+        MentorshipSessionUserLink.objects.create(
+            session=clone,
+            user_id=user_id,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+            attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
+        )
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.SESSION_CREATE,
+            actor_user_id=user_id,
+            entity_name="mentorship_session",
+            entity_id=clone.id,
+            ig=clone.ig,
+            new_data={
+                "cloned_from": str(original.id),
+                "title": clone.title,
+                "is_global": clone.is_global,
+            },
+        )
+
+        return CustomResponse(
+            general_message="Session cloned successfully. Update starts_at and ends_at before publishing.",
+            response={"session": MentorSessionDetailSerializer(clone).data},
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 9 — Public Availability Slots
+# ─────────────────────────────────────────────────────────────────────────────
+
+class PublicMentorAvailabilityAPI(APIView):
+    """
+    GET /mentor/availability/public/?mentor_muid=<muid>
+
+    No authentication required.
+    Returns active availability slots for a verified mentor.
+    Useful for mentee scheduling flows.
+
+    Required query param:
+        mentor_muid — the mentor's muid
+
+    Optional query param:
+        ig_id — filter slots by interest group
+    """
+
+    def get(self, request):
+        mentor_muid = request.query_params.get("mentor_muid")
+        if not mentor_muid:
+            return CustomResponse(
+                general_message="'mentor_muid' query parameter is required."
+            ).get_failure_response()
+
+        mentor = UserMentor.objects.select_related("user").filter(
+            user__muid=mentor_muid, is_verified=True
+        ).first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Verified mentor profile not found."
+            ).get_failure_response()
+
+        ig_id = request.query_params.get("ig_id")
+        slots_qs = MentorAvailabilitySlot.objects.filter(
+            mentor_user_id=mentor.user_id,
+            is_active=True,
+        ).select_related("mentor_user", "ig")
+
+        if ig_id:
+            slots_qs = slots_qs.filter(ig_id=ig_id)
+
+        serializer = MentorAvailabilitySerializer(slots_qs, many=True)
+        return CustomResponse(
+            response={
+                "mentor": {
+                    "full_name": mentor.user.full_name,
+                    "muid": mentor.user.muid,
+                },
+                "availability": serializer.data,
+            }
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Endpoint 10 — Admin Mentor Tier Update
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorTierUpdateAPI(APIView):
+    """
+    PATCH /mentor/list/<pk>/tier/
+
+    Admin-only. Changes the mentor_tier of a verified mentor after they
+    have already been approved. Sends a notification to the mentor.
+
+    Body:
+        { "mentor_tier": "IG_MENTOR" | "MENTOR" }
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        admin_id = JWTUtils.fetch_user_id(request)
+
+        mentor = UserMentor.objects.filter(id=pk).select_related("user").first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Mentor not found."
+            ).get_failure_response()
+
+        if not mentor.is_verified:
+            return CustomResponse(
+                general_message="Cannot change the tier of an unverified mentor. Approve the application first."
+            ).get_failure_response()
+
+        serializer = MentorTierUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        old_tier = mentor.mentor_tier
+        new_tier = serializer.validated_data["mentor_tier"]
+
+        if old_tier == new_tier:
+            return CustomResponse(
+                general_message=f"Mentor is already at tier '{new_tier}'. No change made."
+            ).get_success_response()
+
+        mentor.mentor_tier = new_tier
+        mentor.updated_by_id = admin_id
+        mentor.save(update_fields=["mentor_tier", "updated_by_id"])
+
+        Notification.objects.create(
+            user=mentor.user,
+            title="Mentor Tier Updated",
+            description=(
+                f"Your mentor tier has been updated from '{old_tier}' to '{new_tier}' "
+                f"by the muLearn admin team."
+            ),
+            created_by_id=admin_id,
+        )
+
+        _log_action(
+            action_type=SystemActionLog.ActionType.TASK_REVIEW,
+            actor_user_id=admin_id,
+            entity_name="user_mentor",
+            entity_id=mentor.id,
+            subject_user=mentor.user,
+            old_data={"mentor_tier": old_tier},
+            new_data={"mentor_tier": new_tier},
+            remarks="Admin tier change",
+        )
+
+        return CustomResponse(
+            general_message=f"Mentor tier updated from '{old_tier}' to '{new_tier}'.",
+            response={"mentor": MentorListSerializer(mentor).data},
+        ).get_success_response()
+
+
+# =============================================================================
+# ORG-MENTOR HELPERS
+# =============================================================================
+
+def _get_verified_mentor_for_org(user_id: str, tier: str, org_id: str):
+    """Return the verified UserMentor row for a (user, tier, org) triple.
+    Returns None if the user has no active/verified link for that scope — ensuring
+    no mentor can act beyond their own tier and organisation."""
+    return UserMentor.objects.filter(
+        user_id=user_id,
+        mentor_tier=tier,
+        org_id=org_id,
+        is_verified=True,
+    ).first()
+
+
+def _get_user_mentor_orgs(user_id: str, tier: str):
+    """Return a QS of verified UserMentor rows for a given tier (may be multiple orgs)."""
+    return UserMentor.objects.filter(
+        user_id=user_id,
+        mentor_tier=tier,
+        is_verified=True,
+    ).select_related("org")
+
+
+def _validate_org_type(org_id: str, expected_type: str):
+    """Return Organization if it exists and matches org_type, else None."""
+    from db.organization import Organization
+    return Organization.objects.filter(id=org_id, org_type=expected_type).first()
+
+
+def _assign_mentor_role_if_needed(user_id: str, admin_id: str):
+    """Idempotently assign the Mentor system role."""
+    mentor_role, _ = Role.objects.get_or_create(title=RoleType.MENTOR.value)
+    UserRoleLink.objects.get_or_create(
+        user_id=user_id,
+        role=mentor_role,
+        defaults={"created_by_id": admin_id, "updated_by_id": admin_id},
+    )
+
+
+# =============================================================================
+# COMPANY MENTOR
+# =============================================================================
+
+from .mentor_serializers import (
+    CompanyMentorOnboardingSerializer,
+    CampusMentorOnboardingSerializer,
+    OrgMentorProfileUpdateSerializer,
+    OrgMentorListSerializer,
+    OrgScopedSessionCreateSerializer,
+    OrgOpportunitySerializer,
+    OrgOpportunityWriteSerializer,
+)
+from db.organization import Organization
+from utils.types import OrganizationType
+
+
+class CompanyMentorOnboardingAPI(APIView):
+    """
+    GET   — list own COMPANY_MENTOR UserMentor rows.
+    POST  — apply as company mentor for an org (org_type must be Company).
+    PATCH — update profile for one row (pk = UserMentor.id).
+
+    Tier enforcement: each row is unique per (user, COMPANY_MENTOR, org).
+    A mentor CANNOT apply twice for the same company org.
+    """
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        rows = UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+        ).select_related("org", "verified_by")
+        return CustomResponse(
+            response={"mentors": OrgMentorListSerializer(rows, many=True).data}
+        ).get_success_response()
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org")
+
+        # --- Tier guard: org must exist and be a Company ---
+        if not org_id or not _validate_org_type(org_id, OrganizationType.COMPANY.value):
+            return CustomResponse(
+                general_message="A valid Company organisation id is required."
+            ).get_failure_response()
+
+        # --- Duplicate guard: one application per (user, tier, org) ---
+        if UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            org_id=org_id,
+        ).exists():
+            return CustomResponse(
+                general_message="You have already applied as a company mentor for this organisation."
+            ).get_failure_response()
+
+        data = request.data.copy()
+        data["mentor_tier"] = UserMentor.MentorTier.COMPANY_MENTOR
+        data["created_by"]  = user_id
+        data["updated_by"]  = user_id
+
+        serializer = CompanyMentorOnboardingSerializer(
+            data=data,
+            context={"expected_org_type": OrganizationType.COMPANY.value},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        mentor_row = serializer.save(user_id=user_id)
+        _log_action(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+            actor_user_id=user_id,
+            entity_name="user_mentor",
+            entity_id=mentor_row.id,
+            new_data={"mentor_tier": UserMentor.MentorTier.COMPANY_MENTOR, "org_id": org_id},
+            remarks="Company mentor application submitted",
+        )
+        return CustomResponse(
+            general_message="Company mentor application submitted. Awaiting admin approval.",
+            response={"mentor": OrgMentorListSerializer(mentor_row).data},
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk=None):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not pk:
+            return CustomResponse(general_message="pk (UserMentor id) is required.").get_failure_response()
+
+        # Tier enforcement: can only edit own COMPANY_MENTOR rows
+        row = UserMentor.objects.filter(
+            id=pk, user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+        ).first()
+        if not row:
+            return CustomResponse(general_message="Company mentor row not found.").get_failure_response()
+
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        serializer = OrgMentorProfileUpdateSerializer(data=data, instance=row, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Profile updated.").get_success_response()
+
+
+class CompanyMentorListAPI(APIView):
+    """GET — admin: paginated list of all COMPANY_MENTOR applications."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        qs = UserMentor.objects.filter(
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+        ).select_related("user", "org", "verified_by")
+
+        org_id       = request.query_params.get("org_id")
+        is_verified  = request.query_params.get("is_verified")
+        if org_id:
+            qs = qs.filter(org_id=org_id)
+        if is_verified is not None:
+            qs = qs.filter(is_verified=is_verified.lower() == "true")
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["user__full_name", "user__email", "org__org_name"],
+            sort_fields={"created_at": "created_at", "full_name": "user__full_name"},
+        )
+        return CustomResponse().paginated_response(
+            data=OrgMentorListSerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+
+class CompanyMentorVerifyAPI(APIView):
+    """PATCH <pk>/verify/ — admin approves or rejects a COMPANY_MENTOR application."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        admin_id = JWTUtils.fetch_user_id(request)
+        row = UserMentor.objects.filter(
+            id=pk, mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+        ).select_related("user").first()
+        if not row:
+            return CustomResponse(general_message="Company mentor application not found.").get_failure_response()
+
+        action = request.data.get("action", "").lower()
+        note   = request.data.get("verification_note", "")
+
+        if action == "approve":
+            row.is_verified      = True
+            row.verified_by_id   = admin_id
+            row.verified_at      = DateTimeUtils.get_current_utc_time()
+            row.verification_note = note
+            row.updated_by_id    = admin_id
+            row.save()
+            # Assign the existing "Mentor" system role (idempotent)
+            _assign_mentor_role_if_needed(row.user_id, admin_id)
+            _log_action(
+                action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+                actor_user_id=admin_id,
+                subject_user=row.user,
+                entity_name="user_mentor",
+                entity_id=row.id,
+                new_data={"action": "approve", "tier": UserMentor.MentorTier.COMPANY_MENTOR},
+            )
+            return CustomResponse(
+                general_message="Company mentor approved.",
+                response={"mentor": OrgMentorListSerializer(row).data},
+            ).get_success_response()
+
+        elif action == "reject":
+            row.is_verified      = False
+            row.verified_by_id   = admin_id
+            row.verified_at      = DateTimeUtils.get_current_utc_time()
+            row.verification_note = note
+            row.updated_by_id    = admin_id
+            row.save()
+            _log_action(
+                action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+                actor_user_id=admin_id,
+                subject_user=row.user,
+                entity_name="user_mentor",
+                entity_id=row.id,
+                new_data={"action": "reject"},
+            )
+            return CustomResponse(general_message="Company mentor application rejected.").get_success_response()
+
+        return CustomResponse(general_message="action must be 'approve' or 'reject'.").get_failure_response()
+
+
+class CompanyMentorSessionAPI(APIView):
+    """
+    GET  — list sessions scoped to any of the requesting mentor's verified company orgs.
+    POST — create a session scoped to a specific company org.
+
+    Tier enforcement: only COMPANY_MENTOR rows with is_verified=True can create sessions.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles   = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        qs = MentorshipSession.objects.select_related("ig", "org", "created_by").filter(
+            org__org_type=OrganizationType.COMPANY.value
+        )
+        if not is_admin:
+            # Only sessions whose org_id is one this mentor is verified for
+            verified_org_ids = _get_user_mentor_orgs(
+                user_id, UserMentor.MentorTier.COMPANY_MENTOR
+            ).values_list("org_id", flat=True)
+            qs = qs.filter(org_id__in=verified_org_ids)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["title", "org__org_name"],
+            sort_fields={"starts_at": "starts_at", "title": "title"},
+        )
+        from .mentor_serializers import MentorSessionListSerializer
+        return CustomResponse().paginated_response(
+            data=MentorSessionListSerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org")
+
+        # --- Tier enforcement: must have a verified COMPANY_MENTOR row for this org ---
+        if not org_id or not _get_verified_mentor_for_org(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR, org_id
+        ):
+            return CustomResponse(
+                general_message="You are not a verified company mentor for this organisation."
+            ).get_failure_response()
+
+        data = request.data.copy()
+        data["created_by"] = user_id
+        data["updated_by"] = user_id
+
+        serializer = OrgScopedSessionCreateSerializer(data=data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        session = serializer.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.SESSION_CREATE,
+            actor_user_id=user_id,
+            entity_name="mentorship_session",
+            entity_id=session.id,
+            new_data={"title": session.title, "org_id": org_id},
+        )
+        from .mentor_serializers import MentorSessionDetailSerializer
+        return CustomResponse(
+            general_message="Company session created.",
+            response={"session": MentorSessionDetailSerializer(session).data},
+        ).get_success_response()
+
+
+class CompanyMentorSessionDetailAPI(APIView):
+    """GET / PATCH / DELETE a single company-scoped session."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_session_for_user(self, pk, user_id, is_admin):
+        qs = MentorshipSession.objects.select_related("org", "ig", "created_by").filter(
+            id=pk, org__org_type=OrganizationType.COMPANY.value
+        )
+        if is_admin:
+            return qs.first()
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR
+        ).values_list("org_id", flat=True)
+        return qs.filter(org_id__in=verified_org_ids).first()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        session  = self._get_session_for_user(pk, user_id, is_admin)
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+        from .mentor_serializers import MentorSessionDetailSerializer
+        return CustomResponse(
+            response={"session": MentorSessionDetailSerializer(session).data}
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        session = self._get_session_for_user(pk, user_id, is_admin=False)
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+        if str(session.created_by_id) != user_id:
+            return CustomResponse(general_message="You can only edit sessions you created.").get_failure_response()
+
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        from .mentor_serializers import MentorSessionUpdateSerializer
+        serializer = MentorSessionUpdateSerializer(data=data, instance=session, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Session updated.").get_success_response()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        session  = self._get_session_for_user(pk, user_id, is_admin)
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+        if not is_admin and str(session.created_by_id) != user_id:
+            return CustomResponse(general_message="Permission denied.").get_failure_response()
+        session.status = MentorshipSession.Status.CANCELLED
+        session.updated_by_id = user_id
+        session.save()
+        return CustomResponse(general_message="Session cancelled.").get_success_response()
+
+
+class CompanyMentorOpportunityAPI(APIView):
+    """GET / POST — opportunities scoped to the mentor's company org."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+
+        qs = IgOpportunity.objects.select_related("org", "ig", "created_by").filter(
+            org__org_type=OrganizationType.COMPANY.value
+        )
+        if not is_admin:
+            verified_org_ids = _get_user_mentor_orgs(
+                user_id, UserMentor.MentorTier.COMPANY_MENTOR
+            ).values_list("org_id", flat=True)
+            qs = qs.filter(org_id__in=verified_org_ids)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["title", "org__org_name"],
+            sort_fields={"title": "title", "created_at": "created_at"},
+        )
+        return CustomResponse().paginated_response(
+            data=OrgOpportunitySerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org")
+
+        # Tier enforcement
+        if not org_id or not _get_verified_mentor_for_org(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR, org_id
+        ):
+            return CustomResponse(
+                general_message="You are not a verified company mentor for this organisation."
+            ).get_failure_response()
+
+        data = request.data.copy()
+        data["created_by"] = user_id
+        data["updated_by"] = user_id
+
+        serializer = OrgOpportunityWriteSerializer(
+            data=data,
+            context={"expected_org_type": OrganizationType.COMPANY.value},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        opp = serializer.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.OPPORTUNITY_POST,
+            actor_user_id=user_id,
+            entity_name="ig_opportunity",
+            entity_id=opp.id,
+            new_data={"title": opp.title, "org_id": org_id},
+        )
+        return CustomResponse(
+            general_message="Company opportunity created.",
+            response={"opportunity": OrgOpportunitySerializer(opp).data},
+        ).get_success_response()
+
+
+class CompanyMentorOpportunityDetailAPI(APIView):
+    """GET / PATCH / DELETE a single company opportunity."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_opp(self, pk, user_id, is_admin):
+        qs = IgOpportunity.objects.select_related("org", "ig", "created_by").filter(
+            id=pk, org__org_type=OrganizationType.COMPANY.value
+        )
+        if is_admin:
+            return qs.first()
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR
+        ).values_list("org_id", flat=True)
+        return qs.filter(org_id__in=verified_org_ids).first()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        opp = self._get_opp(pk, user_id, is_admin)
+        if not opp:
+            return CustomResponse(general_message="Opportunity not found.").get_failure_response()
+        return CustomResponse(response={"opportunity": OrgOpportunitySerializer(opp).data}).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        opp = self._get_opp(pk, user_id, is_admin=False)
+        if not opp:
+            return CustomResponse(general_message="Opportunity not found.").get_failure_response()
+        if str(opp.created_by_id) != user_id:
+            return CustomResponse(general_message="You can only edit opportunities you created.").get_failure_response()
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        serializer = OrgOpportunityWriteSerializer(data=data, instance=opp, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Opportunity updated.").get_success_response()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        opp = self._get_opp(pk, user_id, is_admin)
+        if not opp:
+            return CustomResponse(general_message="Opportunity not found.").get_failure_response()
+        opp.status = IgOpportunity.Status.ARCHIVED
+        opp.updated_by_id = user_id
+        opp.save()
+        return CustomResponse(general_message="Opportunity archived.").get_success_response()
+
+
+class CompanyMentorMenteesAPI(APIView):
+    """GET — distinct mentees from sessions in the mentor's company orgs."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        # Tier enforcement: only sessions in orgs this mentor is verified for
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR
+        ).values_list("org_id", flat=True)
+
+        if not verified_org_ids:
+            return CustomResponse(
+                general_message="You have no verified company mentor scopes."
+            ).get_failure_response()
+
+        session_ids = MentorshipSession.objects.filter(
+            org_id__in=verified_org_ids,
+            participants__user_id=user_id,
+            participants__participant_role__in=[
+                MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                MentorshipSessionUserLink.ParticipantRole.CO_MENTOR,
+            ],
+        ).distinct().values_list("id", flat=True)
+
+        mentees = (
+            MentorshipSessionUserLink.objects
+            .filter(
+                session_id__in=session_ids,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            )
+            .values("user_id", "user__full_name", "user__muid", "user__email")
+            .annotate(total_sessions=Count("session_id"))
+            .order_by("-total_sessions")
+        )
+        paginated = CommonUtils.get_paginated_queryset(
+            mentees, request,
+            search_fields=["user__full_name", "user__muid"],
+            sort_fields={"full_name": "user__full_name", "total_sessions": "total_sessions"},
+        )
+        return CustomResponse().paginated_response(
+            data=list(paginated["queryset"]),
+            pagination=paginated["pagination"],
+        )
+
+
+class CompanyMentorTaskReviewAPI(APIView):
+    """GET — KAL entries from company org users, pending mentor review."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR
+        ).values_list("org_id", flat=True)
+
+        if not verified_org_ids:
+            return CustomResponse(
+                general_message="You have no verified company mentor scopes."
+            ).get_failure_response()
+
+        from db.organization import UserOrganizationLink
+        org_user_ids = UserOrganizationLink.objects.filter(
+            org_id__in=verified_org_ids
+        ).values_list("user_id", flat=True)
+
+        qs = KarmaActivityLog.objects.filter(
+            user_id__in=org_user_ids,
+            mentor_review_status="PENDING",
+        ).select_related("user", "task", "task__ig")
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["user__full_name", "task__title"],
+            sort_fields={"created_at": "created_at"},
+        )
+        return CustomResponse().paginated_response(
+            data=KarmaReviewQueueSerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+
+class CompanyMentorTaskReviewDetailAPI(APIView):
+    """GET detail / PATCH to approve or reject a KAL entry (company org users only)."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_kal(self, pk, user_id):
+        from db.organization import UserOrganizationLink
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.COMPANY_MENTOR
+        ).values_list("org_id", flat=True)
+        org_user_ids = UserOrganizationLink.objects.filter(
+            org_id__in=verified_org_ids
+        ).values_list("user_id", flat=True)
+        return KarmaActivityLog.objects.filter(
+            id=pk, user_id__in=org_user_ids
+        ).select_related("user", "task").first()
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        kal = self._get_kal(pk, user_id)
+        if not kal:
+            return CustomResponse(general_message="Entry not found.").get_failure_response()
+        return CustomResponse(
+            response={"entry": KarmaReviewQueueSerializer(kal).data}
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        # Tier enforcement: can only review entries from own company org users
+        kal = self._get_kal(pk, user_id)
+        if not kal:
+            return CustomResponse(general_message="Entry not found.").get_failure_response()
+        if kal.mentor_review_status != "PENDING":
+            return CustomResponse(
+                general_message=f"Entry is already '{kal.mentor_review_status}'."
+            ).get_failure_response()
+
+        serializer = KarmaReviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        kal.mentor_review_status   = serializer.validated_data["status"]
+        kal.mentor_reviewed_by_id  = user_id
+        kal.mentor_reviewed_at     = DateTimeUtils.get_current_utc_time()
+        kal.mentor_review_feedback = serializer.validated_data.get("feedback", "")
+        kal.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.TASK_REVIEW,
+            actor_user_id=user_id,
+            subject_user=kal.user,
+            entity_name="karma_activity_log",
+            entity_id=kal.id,
+            new_data={"status": kal.mentor_review_status},
+        )
+        return CustomResponse(general_message="Review submitted.").get_success_response()
+
+
+class CompanyMentorMyOrgsAPI(APIView):
+    """GET — list the requesting mentor's own company mentor rows."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        rows = UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+        ).select_related("org", "verified_by")
+        return CustomResponse(
+            response={"orgs": OrgMentorListSerializer(rows, many=True).data}
+        ).get_success_response()
+
+
+class CompanyMentorAvailabilityAPI(APIView):
+    """GET / POST availability slots (reuses existing slot model, company context)."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        # Tier enforcement: only if user has at least one verified company mentor row
+        if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.COMPANY_MENTOR).exists():
+            return CustomResponse(
+                general_message="You have no verified company mentor scopes."
+            ).get_failure_response()
+        qs = MentorAvailabilitySlot.objects.filter(mentor_user_id=user_id, is_active=True)
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=[],
+            sort_fields={"weekday": "weekday", "start_time": "start_time"},
+        )
+        return CustomResponse().paginated_response(
+            data=MentorAvailabilitySerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.COMPANY_MENTOR).exists():
+            return CustomResponse(
+                general_message="You have no verified company mentor scopes."
+            ).get_failure_response()
+        data = request.data.copy()
+        data["mentor_user"] = user_id
+        data["created_by"]  = user_id
+        data["updated_by"]  = user_id
+        serializer = MentorAvailabilityWriteSerializer(data=data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        slot = serializer.save()
+        return CustomResponse(
+            general_message="Availability slot created.",
+            response={"slot": MentorAvailabilitySerializer(slot).data},
+        ).get_success_response()
+
+
+# =============================================================================
+# CAMPUS MENTOR
+# =============================================================================
+
+class CampusMentorOnboardingAPI(APIView):
+    """
+    GET   — list own CAMPUS_MENTOR UserMentor rows.
+    POST  — apply as campus mentor for a College org.
+    PATCH — update profile for one row (pk = UserMentor.id).
+
+    Tier enforcement: org must be org_type=College.
+    """
+    authentication_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        rows = UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        ).select_related("org", "verified_by")
+        return CustomResponse(
+            response={"mentors": OrgMentorListSerializer(rows, many=True).data}
+        ).get_success_response()
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org")
+
+        # --- Tier guard: org must be a College ---
+        if not org_id or not _validate_org_type(org_id, OrganizationType.COLLEGE.value):
+            return CustomResponse(
+                general_message="A valid College organisation id is required."
+            ).get_failure_response()
+
+        # --- Duplicate guard ---
+        if UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+            org_id=org_id,
+        ).exists():
+            return CustomResponse(
+                general_message="You have already applied as a campus mentor for this organisation."
+            ).get_failure_response()
+
+        data = request.data.copy()
+        data["mentor_tier"] = UserMentor.MentorTier.CAMPUS_MENTOR
+        data["created_by"]  = user_id
+        data["updated_by"]  = user_id
+
+        serializer = CampusMentorOnboardingSerializer(
+            data=data,
+            context={"expected_org_type": OrganizationType.COLLEGE.value},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        mentor_row = serializer.save(user_id=user_id)
+        _log_action(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+            actor_user_id=user_id,
+            entity_name="user_mentor",
+            entity_id=mentor_row.id,
+            new_data={"mentor_tier": UserMentor.MentorTier.CAMPUS_MENTOR, "org_id": org_id},
+            remarks="Campus mentor application submitted",
+        )
+        return CustomResponse(
+            general_message="Campus mentor application submitted. Awaiting admin approval.",
+            response={"mentor": OrgMentorListSerializer(mentor_row).data},
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk=None):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not pk:
+            return CustomResponse(general_message="pk (UserMentor id) is required.").get_failure_response()
+        row = UserMentor.objects.filter(
+            id=pk, user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        ).first()
+        if not row:
+            return CustomResponse(general_message="Campus mentor row not found.").get_failure_response()
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        serializer = OrgMentorProfileUpdateSerializer(data=data, instance=row, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Profile updated.").get_success_response()
+
+
+class CampusMentorListAPI(APIView):
+    """GET — admin: paginated list of all CAMPUS_MENTOR applications."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        qs = UserMentor.objects.filter(
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        ).select_related("user", "org", "verified_by")
+
+        org_id      = request.query_params.get("org_id")
+        is_verified = request.query_params.get("is_verified")
+        if org_id:
+            qs = qs.filter(org_id=org_id)
+        if is_verified is not None:
+            qs = qs.filter(is_verified=is_verified.lower() == "true")
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["user__full_name", "user__email", "org__org_name"],
+            sort_fields={"created_at": "created_at", "full_name": "user__full_name"},
+        )
+        return CustomResponse().paginated_response(
+            data=OrgMentorListSerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+
+class CampusMentorVerifyAPI(APIView):
+    """PATCH <pk>/verify/ — admin approves or rejects a CAMPUS_MENTOR application."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        admin_id = JWTUtils.fetch_user_id(request)
+        row = UserMentor.objects.filter(
+            id=pk, mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        ).select_related("user").first()
+        if not row:
+            return CustomResponse(general_message="Campus mentor application not found.").get_failure_response()
+
+        action = request.data.get("action", "").lower()
+        note   = request.data.get("verification_note", "")
+
+        if action == "approve":
+            row.is_verified       = True
+            row.verified_by_id    = admin_id
+            row.verified_at       = DateTimeUtils.get_current_utc_time()
+            row.verification_note = note
+            row.updated_by_id     = admin_id
+            row.save()
+            _assign_mentor_role_if_needed(row.user_id, admin_id)
+            _log_action(
+                action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+                actor_user_id=admin_id,
+                subject_user=row.user,
+                entity_name="user_mentor",
+                entity_id=row.id,
+                new_data={"action": "approve", "tier": UserMentor.MentorTier.CAMPUS_MENTOR},
+            )
+            return CustomResponse(
+                general_message="Campus mentor approved.",
+                response={"mentor": OrgMentorListSerializer(row).data},
+            ).get_success_response()
+
+        elif action == "reject":
+            row.is_verified       = False
+            row.verified_by_id    = admin_id
+            row.verified_at       = DateTimeUtils.get_current_utc_time()
+            row.verification_note = note
+            row.updated_by_id     = admin_id
+            row.save()
+            _log_action(
+                action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+                actor_user_id=admin_id,
+                subject_user=row.user,
+                entity_name="user_mentor",
+                entity_id=row.id,
+                new_data={"action": "reject"},
+            )
+            return CustomResponse(general_message="Campus mentor application rejected.").get_success_response()
+
+        return CustomResponse(general_message="action must be 'approve' or 'reject'.").get_failure_response()
+
+
+class CampusMentorSessionAPI(APIView):
+    """
+    GET  — list campus-scoped sessions for this mentor's orgs.
+    POST — create a session scoped to a campus org (ig optional for IG-chapter link).
+
+    Tier enforcement: only CAMPUS_MENTOR rows with is_verified=True can create sessions.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+
+        qs = MentorshipSession.objects.select_related("ig", "org", "created_by").filter(
+            org__org_type=OrganizationType.COLLEGE.value
+        )
+        if not is_admin:
+            verified_org_ids = _get_user_mentor_orgs(
+                user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+            ).values_list("org_id", flat=True)
+            qs = qs.filter(org_id__in=verified_org_ids)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["title", "org__org_name"],
+            sort_fields={"starts_at": "starts_at", "title": "title"},
+        )
+        from .mentor_serializers import MentorSessionListSerializer
+        return CustomResponse().paginated_response(
+            data=MentorSessionListSerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org")
+
+        # Tier enforcement
+        if not org_id or not _get_verified_mentor_for_org(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR, org_id
+        ):
+            return CustomResponse(
+                general_message="You are not a verified campus mentor for this organisation."
+            ).get_failure_response()
+
+        data = request.data.copy()
+        data["created_by"] = user_id
+        data["updated_by"] = user_id
+
+        serializer = OrgScopedSessionCreateSerializer(data=data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+
+        session = serializer.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.SESSION_CREATE,
+            actor_user_id=user_id,
+            entity_name="mentorship_session",
+            entity_id=session.id,
+            new_data={"title": session.title, "org_id": org_id},
+        )
+        from .mentor_serializers import MentorSessionDetailSerializer
+        return CustomResponse(
+            general_message="Campus session created.",
+            response={"session": MentorSessionDetailSerializer(session).data},
+        ).get_success_response()
+
+
+class CampusMentorSessionDetailAPI(APIView):
+    """GET / PATCH / DELETE a single campus-scoped session."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_session(self, pk, user_id, is_admin):
+        qs = MentorshipSession.objects.select_related("org", "ig", "created_by").filter(
+            id=pk, org__org_type=OrganizationType.COLLEGE.value
+        )
+        if is_admin:
+            return qs.first()
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+        return qs.filter(org_id__in=verified_org_ids).first()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        session  = self._get_session(pk, user_id, is_admin)
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+        from .mentor_serializers import MentorSessionDetailSerializer
+        return CustomResponse(
+            response={"session": MentorSessionDetailSerializer(session).data}
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        session = self._get_session(pk, user_id, is_admin=False)
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+        if str(session.created_by_id) != user_id:
+            return CustomResponse(general_message="You can only edit sessions you created.").get_failure_response()
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        from .mentor_serializers import MentorSessionUpdateSerializer
+        serializer = MentorSessionUpdateSerializer(data=data, instance=session, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Session updated.").get_success_response()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        session  = self._get_session(pk, user_id, is_admin)
+        if not session:
+            return CustomResponse(general_message="Session not found.").get_failure_response()
+        if not is_admin and str(session.created_by_id) != user_id:
+            return CustomResponse(general_message="Permission denied.").get_failure_response()
+        session.status = MentorshipSession.Status.CANCELLED
+        session.updated_by_id = user_id
+        session.save()
+        return CustomResponse(general_message="Session cancelled.").get_success_response()
+
+
+class CampusMentorOpportunityAPI(APIView):
+    """GET / POST — opportunities scoped to the mentor's campus org."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+
+        qs = IgOpportunity.objects.select_related("org", "ig", "created_by").filter(
+            org__org_type=OrganizationType.COLLEGE.value
+        )
+        if not is_admin:
+            verified_org_ids = _get_user_mentor_orgs(
+                user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+            ).values_list("org_id", flat=True)
+            qs = qs.filter(org_id__in=verified_org_ids)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["title", "org__org_name"],
+            sort_fields={"title": "title", "created_at": "created_at"},
+        )
+        return CustomResponse().paginated_response(
+            data=OrgOpportunitySerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org")
+
+        if not org_id or not _get_verified_mentor_for_org(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR, org_id
+        ):
+            return CustomResponse(
+                general_message="You are not a verified campus mentor for this organisation."
+            ).get_failure_response()
+
+        data = request.data.copy()
+        data["created_by"] = user_id
+        data["updated_by"] = user_id
+        serializer = OrgOpportunityWriteSerializer(
+            data=data,
+            context={"expected_org_type": OrganizationType.COLLEGE.value},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        opp = serializer.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.OPPORTUNITY_POST,
+            actor_user_id=user_id,
+            entity_name="ig_opportunity",
+            entity_id=opp.id,
+            new_data={"title": opp.title, "org_id": org_id},
+        )
+        return CustomResponse(
+            general_message="Campus opportunity created.",
+            response={"opportunity": OrgOpportunitySerializer(opp).data},
+        ).get_success_response()
+
+
+class CampusMentorOpportunityDetailAPI(APIView):
+    """GET / PATCH / DELETE a single campus opportunity."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_opp(self, pk, user_id, is_admin):
+        qs = IgOpportunity.objects.select_related("org", "ig", "created_by").filter(
+            id=pk, org__org_type=OrganizationType.COLLEGE.value
+        )
+        if is_admin:
+            return qs.first()
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+        return qs.filter(org_id__in=verified_org_ids).first()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        opp = self._get_opp(pk, user_id, is_admin)
+        if not opp:
+            return CustomResponse(general_message="Opportunity not found.").get_failure_response()
+        return CustomResponse(response={"opportunity": OrgOpportunitySerializer(opp).data}).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        opp = self._get_opp(pk, user_id, is_admin=False)
+        if not opp:
+            return CustomResponse(general_message="Opportunity not found.").get_failure_response()
+        if str(opp.created_by_id) != user_id:
+            return CustomResponse(general_message="You can only edit opportunities you created.").get_failure_response()
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        serializer = OrgOpportunityWriteSerializer(data=data, instance=opp, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Opportunity updated.").get_success_response()
+
+    @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        user_id  = JWTUtils.fetch_user_id(request)
+        is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
+        opp = self._get_opp(pk, user_id, is_admin)
+        if not opp:
+            return CustomResponse(general_message="Opportunity not found.").get_failure_response()
+        opp.status = IgOpportunity.Status.ARCHIVED
+        opp.updated_by_id = user_id
+        opp.save()
+        return CustomResponse(general_message="Opportunity archived.").get_success_response()
+
+
+class CampusMentorMenteesAPI(APIView):
+    """GET — distinct mentees from sessions in the mentor's campus orgs."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+
+        if not verified_org_ids:
+            return CustomResponse(
+                general_message="You have no verified campus mentor scopes."
+            ).get_failure_response()
+
+        session_ids = MentorshipSession.objects.filter(
+            org_id__in=verified_org_ids,
+            participants__user_id=user_id,
+            participants__participant_role__in=[
+                MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                MentorshipSessionUserLink.ParticipantRole.CO_MENTOR,
+            ],
+        ).distinct().values_list("id", flat=True)
+
+        mentees = (
+            MentorshipSessionUserLink.objects
+            .filter(
+                session_id__in=session_ids,
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            )
+            .values("user_id", "user__full_name", "user__muid", "user__email")
+            .annotate(total_sessions=Count("session_id"))
+            .order_by("-total_sessions")
+        )
+        paginated = CommonUtils.get_paginated_queryset(
+            mentees, request,
+            search_fields=["user__full_name", "user__muid"],
+            sort_fields={"full_name": "user__full_name", "total_sessions": "total_sessions"},
+        )
+        return CustomResponse().paginated_response(
+            data=list(paginated["queryset"]),
+            pagination=paginated["pagination"],
+        )
+
+
+class CampusMentorTaskReviewAPI(APIView):
+    """GET — KAL entries from campus org students, pending mentor review."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+
+        if not verified_org_ids:
+            return CustomResponse(
+                general_message="You have no verified campus mentor scopes."
+            ).get_failure_response()
+
+        from db.organization import UserOrganizationLink
+        org_user_ids = UserOrganizationLink.objects.filter(
+            org_id__in=verified_org_ids
+        ).values_list("user_id", flat=True)
+
+        qs = KarmaActivityLog.objects.filter(
+            user_id__in=org_user_ids,
+            mentor_review_status="PENDING",
+        ).select_related("user", "task", "task__ig")
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=["user__full_name", "task__title"],
+            sort_fields={"created_at": "created_at"},
+        )
+        return CustomResponse().paginated_response(
+            data=KarmaReviewQueueSerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+
+class CampusMentorTaskReviewDetailAPI(APIView):
+    """GET detail / PATCH to approve or reject a KAL entry (campus students only)."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_kal(self, pk, user_id):
+        from db.organization import UserOrganizationLink
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+        org_user_ids = UserOrganizationLink.objects.filter(
+            org_id__in=verified_org_ids
+        ).values_list("user_id", flat=True)
+        return KarmaActivityLog.objects.filter(
+            id=pk, user_id__in=org_user_ids
+        ).select_related("user", "task").first()
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        kal = self._get_kal(pk, user_id)
+        if not kal:
+            return CustomResponse(general_message="Entry not found.").get_failure_response()
+        return CustomResponse(
+            response={"entry": KarmaReviewQueueSerializer(kal).data}
+        ).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        kal = self._get_kal(pk, user_id)
+        if not kal:
+            return CustomResponse(general_message="Entry not found.").get_failure_response()
+        if kal.mentor_review_status != "PENDING":
+            return CustomResponse(
+                general_message=f"Entry is already '{kal.mentor_review_status}'."
+            ).get_failure_response()
+        serializer = KarmaReviewSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        kal.mentor_review_status   = serializer.validated_data["status"]
+        kal.mentor_reviewed_by_id  = user_id
+        kal.mentor_reviewed_at     = DateTimeUtils.get_current_utc_time()
+        kal.mentor_review_feedback = serializer.validated_data.get("feedback", "")
+        kal.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.TASK_REVIEW,
+            actor_user_id=user_id,
+            subject_user=kal.user,
+            entity_name="karma_activity_log",
+            entity_id=kal.id,
+            new_data={"status": kal.mentor_review_status},
+        )
+        return CustomResponse(general_message="Review submitted.").get_success_response()
+
+
+class CampusMentorEventsAPI(APIView):
+    """
+    GET  — list events scoped to the campus mentor's college org.
+    POST — create a new event for the campus.
+
+    Tier enforcement: only CAMPUS_MENTOR rows with is_verified=True can create events.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        from db.campus import CampusIGChapter
+        from api.dashboard.campus.dash_campus_helper import get_campus_events_qs
+
+        user_id = JWTUtils.fetch_user_id(request)
+        verified_orgs = _get_user_mentor_orgs(user_id, UserMentor.MentorTier.CAMPUS_MENTOR)
+        if not verified_orgs.exists():
+            return CustomResponse(
+                general_message="You have no verified campus mentor scopes."
+            ).get_failure_response()
+
+        # Aggregate events across all verified campus orgs
+        from db.organization import Organization
+        from django.db.models import Q
+        org_ids = verified_orgs.values_list("org_id", flat=True)
+        events_qs = None
+        for org in Organization.objects.filter(id__in=org_ids):
+            chunk = get_campus_events_qs(org)
+            events_qs = chunk if events_qs is None else events_qs | chunk
+
+        if events_qs is None:
+            return CustomResponse(response={"data": [], "pagination": {}}).get_success_response()
+
+        paginated = CommonUtils.get_paginated_queryset(
+            events_qs.distinct(), request,
+            search_fields=["title"],
+            sort_fields={"start_datetime": "start_datetime"},
+        )
+        from api.dashboard.campus.serializers import CampusEventListSerializer
+        return CustomResponse(response={
+            "data": CampusEventListSerializer(paginated["queryset"], many=True).data,
+            "pagination": paginated["pagination"],
+        }).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        org_id  = request.data.get("org_id") or request.data.get("org")
+
+        # Tier enforcement
+        if not org_id or not _get_verified_mentor_for_org(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR, org_id
+        ):
+            return CustomResponse(
+                general_message="You are not a verified campus mentor for this organisation."
+            ).get_failure_response()
+
+        from api.dashboard.campus.serializers import CampusEventCreateSerializer
+        data = request.data.copy()
+        data["org"]        = org_id
+        data["created_by"] = user_id
+        data["updated_by"] = user_id
+
+        serializer = CampusEventCreateSerializer(data=data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        event = serializer.save()
+        _log_action(
+            action_type=SystemActionLog.ActionType.EVENT_REVIEW,
+            actor_user_id=user_id,
+            entity_name="event",
+            entity_id=event.id,
+            new_data={"title": event.title, "org_id": org_id},
+            remarks="Created by campus mentor",
+        )
+        return CustomResponse(
+            general_message="Campus event created.",
+            response={"event_id": event.id},
+        ).get_success_response()
+
+
+class CampusMentorEventDetailAPI(APIView):
+    """GET / PATCH / DELETE a single campus event (campus mentor only)."""
+    authentication_classes = [CustomizePermission]
+
+    def _get_event(self, pk, user_id):
+        from db.organization import Event
+        verified_org_ids = _get_user_mentor_orgs(
+            user_id, UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+        try:
+            from db.organization import Organization
+            return Event.objects.filter(id=pk, org_id__in=verified_org_ids).first()
+        except Exception:
+            return None
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        event = self._get_event(pk, user_id)
+        if not event:
+            return CustomResponse(general_message="Event not found.").get_failure_response()
+        from api.dashboard.campus.serializers import CampusEventListSerializer
+        return CustomResponse(response={"event": CampusEventListSerializer(event).data}).get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def patch(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        event = self._get_event(pk, user_id)
+        if not event:
+            return CustomResponse(general_message="Event not found.").get_failure_response()
+        if str(event.created_by_id) != user_id:
+            return CustomResponse(general_message="You can only edit events you created.").get_failure_response()
+        from api.dashboard.campus.serializers import CampusEventCreateSerializer
+        data = request.data.copy()
+        data["updated_by"] = user_id
+        serializer = CampusEventCreateSerializer(data=data, instance=event, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        serializer.save()
+        return CustomResponse(general_message="Event updated.").get_success_response()
+
+    @role_required([RoleType.MENTOR.value])
+    def delete(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+        event = self._get_event(pk, user_id)
+        if not event:
+            return CustomResponse(general_message="Event not found.").get_failure_response()
+        if str(event.created_by_id) != user_id:
+            return CustomResponse(general_message="You can only delete events you created.").get_failure_response()
+        event.delete()
+        return CustomResponse(general_message="Event deleted.").get_success_response()
+
+
+class CampusMentorMyOrgsAPI(APIView):
+    """GET — list the requesting mentor's own campus mentor rows."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        rows = UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        ).select_related("org", "verified_by")
+        return CustomResponse(
+            response={"orgs": OrgMentorListSerializer(rows, many=True).data}
+        ).get_success_response()
+
+
+class CampusMentorAvailabilityAPI(APIView):
+    """GET / POST availability slots (campus mentor scope)."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.MENTOR.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.CAMPUS_MENTOR).exists():
+            return CustomResponse(
+                general_message="You have no verified campus mentor scopes."
+            ).get_failure_response()
+        qs = MentorAvailabilitySlot.objects.filter(mentor_user_id=user_id, is_active=True)
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=[],
+            sort_fields={"weekday": "weekday", "start_time": "start_time"},
+        )
+        return CustomResponse().paginated_response(
+            data=MentorAvailabilitySerializer(paginated["queryset"], many=True).data,
+            pagination=paginated["pagination"],
+        )
+
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.CAMPUS_MENTOR).exists():
+            return CustomResponse(
+                general_message="You have no verified campus mentor scopes."
+            ).get_failure_response()
+        data = request.data.copy()
+        data["mentor_user"] = user_id
+        data["created_by"]  = user_id
+        data["updated_by"]  = user_id
+        serializer = MentorAvailabilityWriteSerializer(data=data)
+        if not serializer.is_valid():
+            return CustomResponse(general_message=serializer.errors).get_failure_response()
+        slot = serializer.save()
+        return CustomResponse(
+            general_message="Availability slot created.",
+            response={"slot": MentorAvailabilitySerializer(slot).data},
+        ).get_success_response()
