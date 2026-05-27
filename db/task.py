@@ -148,6 +148,27 @@ class TaskList(models.Model):
     created_by = models.ForeignKey(User, models.DO_NOTHING, db_column="created_by", related_name="task_list_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
 
+    # Company task submission & admin approval workflow
+    APPROVAL_STATUS_CHOICES = [
+        ('approved', 'Approved'),
+        ('pending',  'Pending'),
+        ('rejected', 'Rejected'),
+    ]
+    approval_status = models.CharField(
+        max_length=20, choices=APPROVAL_STATUS_CHOICES, default='approved'
+    )
+    submitted_by_company = models.ForeignKey(
+        'db.Company', on_delete=models.SET_NULL,
+        null=True, blank=True, db_column='submitted_by_company_id',
+        related_name='company_submitted_tasks'
+    )
+    rejection_reason = models.TextField(null=True, blank=True)
+    reviewed_by_admin = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='reviewed_by_admin_id', related_name='task_list_reviewed_by'
+    )
+    reviewed_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         managed = False
         db_table = "task_list"

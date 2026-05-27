@@ -2,9 +2,10 @@ import uuid
 from django.db import models
 from django.conf import settings
 from .user import User
-from .skill import Skill             # import the Skill model
-from .task import InterestGroup  # import InterestGroup model
+from .skill import Skill
+from .task import InterestGroup, TaskList
 from .achievement import Achievement
+
 
 class Company(models.Model):
     STATUS_CHOICES = [
@@ -107,6 +108,14 @@ class CompanyJob(models.Model):
     stipend              = models.CharField(max_length=75, blank=True, null=True)
     certificate_provided = models.BooleanField(blank=True, null=True)
 
+    # Task-based hiring
+    linked_task = models.ForeignKey(
+        TaskList, on_delete=models.SET_NULL,
+        null=True, blank=True, db_column='linked_task_id',
+        related_name='company_jobs_linked'
+    )
+    requires_task_completion = models.BooleanField(default=False)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -190,3 +199,41 @@ class CompanyJobApplication(models.Model):
         managed = False
         db_table = 'company_job_applications'
         unique_together = [('job', 'applicant')]
+
+
+class CompanyUserLink(models.Model):
+    """
+    Links a muLearn user to a Company as an employee or mentor.
+    Managed by the company admin. Supports soft-delete via status='removed'.
+    """
+    ROLE_CHOICES = [
+        ('employee', 'Employee'),
+        ('mentor',   'Mentor'),
+    ]
+    STATUS_CHOICES = [
+        ('active',   'Active'),
+        ('removed',  'Removed'),
+    ]
+
+    id      = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    company = models.ForeignKey(
+        Company, on_delete=models.CASCADE,
+        db_column='company_id', related_name='company_user_links'
+    )
+    user    = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='user_id', related_name='company_link_user'
+    )
+    role    = models.CharField(max_length=20, choices=ROLE_CHOICES, default='employee')
+    status  = models.CharField(max_length=20, choices=STATUS_CHOICES, default='active')
+    added_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='added_by', related_name='company_links_added_by'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'company_user_link'
+        unique_together = [('company', 'user')]
