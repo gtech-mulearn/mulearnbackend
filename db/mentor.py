@@ -107,6 +107,16 @@ class MentorshipSession(models.Model):
     )
     updated_at = models.DateTimeField(auto_now=True)
 
+    # Org-scoped sessions (COMPANY_MENTOR / CAMPUS_MENTOR).
+    # NULL for global and IG-scoped sessions.
+    org = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='org_id',
+        related_name='mentorship_sessions'
+    )
+
     class Meta:
         managed = False
         db_table = 'mentorship_session'
@@ -163,8 +173,18 @@ class IgOpportunity(models.Model):
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     ig = models.ForeignKey(
-        InterestGroup, on_delete=models.CASCADE,
+        InterestGroup, on_delete=models.SET_NULL,
+        null=True, blank=True,
         db_column='ig_id', related_name='ig_opportunities'
+    )
+    # Org-scoped opportunity (COMPANY_MENTOR / CAMPUS_MENTOR).
+    # Either ig or org must be set; both can be set for campus+IG opps.
+    org = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='org_id',
+        related_name='org_opportunities'
     )
     type = models.CharField(max_length=15, choices=OpportunityType.choices)
     title = models.CharField(max_length=150)
