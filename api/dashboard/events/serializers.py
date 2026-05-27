@@ -213,6 +213,27 @@ class EventListItemSerializer(serializers.ModelSerializer):
         return 'interested' if exists else 'none'
 
 
+class EventCalendarItemSerializer(serializers.ModelSerializer):
+    start = serializers.DateTimeField(source='start_datetime', read_only=True)
+    end = serializers.DateTimeField(source='end_datetime', read_only=True)
+    category_name = serializers.CharField(source='category.name', allow_null=True, read_only=True)
+    organiser_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = Event
+        fields = [
+            'id', 'title', 'slug', 'status', 'start', 'end',
+            'venue_type', 'organiser_name', 'category_name', 'is_featured',
+        ]
+
+    def get_organiser_name(self, obj):
+        if obj.organiser_type in [Event.OrganiserType.CAMPUS, Event.OrganiserType.COMPANY]:
+            return obj.organiser_org.title if obj.organiser_org else "muLearn"
+        elif obj.organiser_type in [Event.OrganiserType.GLOBAL_IG, Event.OrganiserType.CAMPUS_IG]:
+            return obj.organiser_ig.name if obj.organiser_ig else "muLearn"
+        return "muLearn"
+
+
 # ─────────────────────────────────────────────────────────────
 # EVENT DETAIL  (full — for detail page)
 # ─────────────────────────────────────────────────────────────
@@ -393,6 +414,14 @@ class EventWriteSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         start = attrs.get('start_datetime')
         end = attrs.get('end_datetime')
+        
+        # In a partial update (PATCH), if only one is provided, compare against the existing instance
+        if self.instance:
+            if not start:
+                start = self.instance.start_datetime
+            if not end:
+                end = self.instance.end_datetime
+
         if start and end and end <= start:
             raise serializers.ValidationError({'end_datetime': 'Must be after start_datetime.'})
         return attrs

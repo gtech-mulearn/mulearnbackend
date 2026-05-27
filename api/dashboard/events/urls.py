@@ -44,6 +44,7 @@ urlpatterns = [
     path('my-invites/', manage_views.MyEventInvitesAPI.as_view()),
 
     # ── Public (wildcards last) ───────────────────────────────
+    path('calendar/', public_views.EventCalendarAPI.as_view()),
     path('featured/', public_views.EventFeaturedAPI.as_view()),
     path('is-featured/', public_views.EventFeaturedAPI.as_view()),
     path('<str:event_id>/interest/', public_views.EventInterestAPI.as_view()),
