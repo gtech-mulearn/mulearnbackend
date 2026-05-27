@@ -658,6 +658,23 @@ class CampusIGMemberSerializer(serializers.ModelSerializer):
         return level_link.level.name if level_link else None
 
 
+class StudentActivityTimelineSerializer(serializers.ModelSerializer):
+    task_name = serializers.CharField(source="task.title", read_only=True)
+    ig_name = serializers.CharField(source="task.ig.name", read_only=True)
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KarmaActivityLog
+        fields = ["id", "task_name", "ig_name", "karma", "status", "created_at"]
+
+    def get_status(self, obj):
+        if obj.appraiser_approved:
+            return "Approved"
+        elif obj.appraiser_approved is False:
+            return "Rejected"
+        return "Pending"
+
+
 class CampusShowcaseSerializer(serializers.ModelSerializer):
     class Meta:
         model = CollegeShowcase
@@ -677,7 +694,7 @@ class CampusShowcaseSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         org_id = self.context.get("org_id")
         user_id = self.context.get("user_id")
-        
+
         showcase, created = CollegeShowcase.objects.update_or_create(
             org_id=org_id,
             defaults={
