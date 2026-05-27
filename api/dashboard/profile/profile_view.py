@@ -12,6 +12,8 @@ from PIL import Image
 from rest_framework.views import APIView
 from django.db.models import Sum
 from django.core.cache import cache
+from db.user import Role, UserRoleLink
+
 from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
@@ -87,6 +89,87 @@ class UserProfileEditView(APIView):
         ).get_success_response()
 
 
+class UserProfileCoverView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    MAX_COVER_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        return CustomResponse(
+            response={"cover_pic": user.cover_pic}
+        ).get_success_response()
+
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        cover = request.FILES.get("cover")
+
+        if cover is None:
+            return CustomResponse(
+                general_message="No cover image provided"
+            ).get_failure_response()
+
+        if not cover.content_type.startswith("image/"):
+            return CustomResponse(
+                general_message="Expected an image file"
+            ).get_failure_response()
+
+        if cover.size > self.MAX_COVER_SIZE_BYTES:
+            return CustomResponse(
+                general_message="Cover image must be under 5 MB"
+            ).get_failure_response()
+
+        fs = FileSystemStorage()
+        filename = f"user/cover/{user_id}.png"
+
+        if fs.exists(filename):
+            fs.delete(filename)
+
+        fs.save(filename, cover)
+        uploaded_url = user.cover_pic
+
+        return CustomResponse(
+            response={"cover_pic": uploaded_url}
+        ).get_success_response()
+
+    def delete(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        user = User.objects.filter(id=user_id).first()
+
+        if not user:
+            return CustomResponse(
+                general_message="User not found"
+            ).get_failure_response()
+
+        fs = FileSystemStorage()
+        filename = f"user/cover/{user_id}.png"
+
+        if not fs.exists(filename):
+            return CustomResponse(
+                general_message="No cover image found"
+            ).get_failure_response()
+
+        fs.delete(filename)
+
+        return CustomResponse(
+            general_message="Cover image removed successfully"
+        ).get_success_response()
+
+
 class UserIgEditView(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -111,6 +194,8 @@ class UserIgEditView(APIView):
             return CustomResponse(response=serializer.errors).get_failure_response()
 
         serializer.save()
+        
+
         DiscordWebhooks.general_updates(
             WebHookCategory.USER.value,
             WebHookActions.UPDATE.value,
@@ -123,6 +208,12 @@ class UserIgEditView(APIView):
 
 class UserProfileAPI(APIView):
     def get(self, request, muid=None):
+        if not muid:
+            JWTUtils.is_jwt_authenticated(request)
+            user_muid = JWTUtils.fetch_muid(request)
+        else:
+            user_muid = muid
+
         user = (
             User.objects.prefetch_related(
                 Prefetch(
@@ -133,10 +224,8 @@ class UserProfileAPI(APIView):
                 ),
                 Prefetch(
                     "user_role_link_user",
-                    queryset=UserRoleLink.objects.select_related("role").filter(
-                        verified=True
-                    ),
-                    to_attr="verified_roles",
+                    queryset=UserRoleLink.objects.select_related("role"),
+                    to_attr="prefetched_roles",
                 ),
                 Prefetch(
                     "user_ig_link_user",
@@ -144,19 +233,15 @@ class UserProfileAPI(APIView):
                 ),
             )
             .select_related("wallet_user")
-            .get(muid=muid or JWTUtils.fetch_muid(request))
+            .get(muid=user_muid)
         )
 
         if muid:
             user_settings = UserSettings.objects.filter(user_id=user).first()
-
             if not user_settings.is_public:
                 return CustomResponse(
                     general_message="Private Profile"
                 ).get_failure_response()
-
-        else:
-            JWTUtils.is_jwt_authenticated(request)
 
         serializer = profile_serializer.UserProfileSerializer(user, many=False)
 

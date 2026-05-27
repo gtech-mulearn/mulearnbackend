@@ -44,6 +44,8 @@ class RoleType(Enum):
     IG_LEAD = "IG Lead"
     CAMPUS_ACTIVATION_TEAM = "Campus Activation Team"
     LEAD_ENABLER = "Lead Enabler"
+    MULEARNER = "Mulearner"
+    COMPANY = "Company"
 
     @classmethod
     def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):
@@ -192,6 +194,16 @@ class LearningCircleRecurrenceType(Enum):
         return [member.value for member in cls]
 
 
+class UnitType(Enum):
+    LEVEL = "level"
+    KARMA = "karma"
+    TASK = "task"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+
 DEFAULT_HACKATHON_FORM_FIELDS = {
     "name": "system",
     "gender": "system",
@@ -203,3 +215,19 @@ DEFAULT_HACKATHON_FORM_FIELDS = {
     "linkedin": "input",
     "bio": "input",
 }
+
+
+class SocialPlatformType(Enum):
+    INSTAGRAM = "instagram"
+    LINKEDIN = "linkedin"
+    TWITTER = "twitter"
+    FACEBOOK = "facebook"
+    YOUTUBE = "youtube"
+    DISCORD = "discord"
+    GITHUB = "github"
+    WEBSITE = "website"
+    OTHER = "other"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]

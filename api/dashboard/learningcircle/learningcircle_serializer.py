@@ -1,6 +1,30 @@
 from datetime import datetime, timedelta, timezone
 
 import pytz
+
+
+def _aware_meet_time(meet_time):
+    if meet_time is None:
+        return None
+    if meet_time.tzinfo is None:
+        return meet_time.replace(tzinfo=timezone.utc)
+    return meet_time
+
+
+def meeting_is_started(meet_time):
+    aware_time = _aware_meet_time(meet_time)
+    if aware_time is None:
+        return False
+    return aware_time <= DateTimeUtils.get_current_utc_time()
+
+
+def meeting_is_ended(meet_time, duration_hours):
+    aware_time = _aware_meet_time(meet_time)
+    if aware_time is None:
+        return False
+    return (
+        aware_time + timedelta(hours=duration_hours or 0)
+    ) <= DateTimeUtils.get_current_utc_time()
 from db.learning_circle import LearningCircle, CircleMeetingLog, CircleMeetingAttendees, UserCircleLink
 from rest_framework import serializers
 
@@ -83,11 +107,10 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         # Override to add calculated fields that don't exist on the model
         data = super().to_representation(instance)
-        
         data['rank'] = self.get_rank(instance)
         data['total_karma'] = self.get_total_karma(instance)
         data['total_members'] = self.get_total_members(instance)
-        
+        data['next_meetup'] = self.get_next_meetup(instance)
         return data
 
     def get_created_by(self, obj):
@@ -105,7 +128,6 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.filter(
             circle=obj.id,
             accepted=True,
-            accepted__isnull=False
         ).count()
 
     @property
@@ -170,57 +192,60 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
         karma_data = self._all_circle_rankings_data.get(obj.id)
         return karma_data['rank'] if karma_data else None
     
-    # next_meetup = serializers.SerializerMethodField()
+    def _get_next_weekday(self, target_day: int):
+        """Return the date of the next occurrence of target_day (1=Mon…7=Sun).
+        Always returns a future date — if today is the target day, returns next week."""
+        today = datetime.now()
+        days_until_next = (target_day - today.isoweekday() - 1) % 7 + 1
+        return (today + timedelta(days=days_until_next)).date()
 
-    # def _get_next_weekday(self, target_day: int):
-    #     today = datetime.now()
-    #     current_day = today.isoweekday() + 2
-    #     current_day = current_day if current_day <= 7 else 1
-    #     days_until_next = ((target_day - current_day + 7) % 7) + 1
-    #     days_until_next = days_until_next or 7
-    #     next_day_date = today + timedelta(days=days_until_next)
-    #     return next_day_date.date()
+    def _get_month_day(self, target_day: int):
+        """Return the date of the next occurrence of target_day (1-28) in the month.
+        If today is on or past that day, returns the same day next month."""
+        today = datetime.now()
+        month = today.month
+        year = today.year
+        if today.day >= target_day:
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+        return datetime(year, month, target_day).date()
 
-    # def _get_month_day(self, target_day: int):
-    #     today = datetime.now()
-    #     current_day = today.day
-    #     current_month = today.month
-    #     current_year = today.year
-    #     if current_day >= target_day:
-    #         current_month += 1
-    #         if current_month > 12:
-    #             current_month = 1
-    #             current_year += 1
-    #     return datetime(current_year, current_month, target_day).date()
+    def get_next_meetup(self, obj):
+        # If there's already a pending (not yet reported) meeting, return it.
+        pending = (
+            CircleMeetingLog.objects.filter(circle_id=obj.id, is_report_submitted=False)
+            .order_by("-meet_time")
+            .first()
+        )
+        if pending:
+            return {
+                **CircleMeetingLogListSerializer(pending).data,
+                "is_scheduled": True,
+            }
 
-    # def get_next_meetup(self, obj):
-    #     next_meetup = (
-    #         CircleMeetingLog.objects.filter(circle_id=obj.id)
-    #         .filter(
-    #             # meet_time__gte=DateTimeUtils.get_current_utc_time(),
-    #             is_report_submitted=False,
-    #         )
-    #         .order_by("-meet_time")
-    #         .first()
-    #     )
-    #     if next_meetup:
-    #         return {
-    #             **CircleMeetingLogListSerializer(next_meetup).data,
-    #             "is_scheduled": True,
-    #         }
-    #     if not obj.is_recurring:
-    #         return None
-    #     if obj.recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
-    #         return {
-    #             "is_scheduled": False,
-    #             "meet_time": self._get_next_weekday(obj.recurrence),
-    #         }
-    #     if obj.recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
-    #         return {
-    #             "is_scheduled": False,
-    #             "meet_time": self._get_month_day(obj.recurrence),
-    #         }
-    #     return {"is_scheduled": False, "meet_time": None}
+        # No pending meeting — check if the last meeting was recurring and
+        # suggest the next occurrence date so the lead can one-click schedule.
+        last = (
+            CircleMeetingLog.objects.filter(circle_id=obj.id)
+            .order_by("-meet_time")
+            .first()
+        )
+        if not last or not last.is_recurring:
+            return None
+
+        if last.recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
+            return {
+                "is_scheduled": False,
+                "meet_time": self._get_next_weekday(last.recurrence),
+            }
+        if last.recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
+            return {
+                "is_scheduled": False,
+                "meet_time": self._get_month_day(last.recurrence),
+            }
+        return {"is_scheduled": False, "meet_time": None}
 
 
 class LearningCircleListMinSerializer(serializers.ModelSerializer):
@@ -244,7 +269,6 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         return UserCircleLink.objects.filter(
             circle=obj.id,
             accepted=True,
-            accepted__isnull=False
         ).count()
 
     # def get_attendees(self, obj):
@@ -281,18 +305,35 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         # return data
         # return []
 
-    class Meta:
-        model = LearningCircle
-        fields = ["id", "ig", "title", "org", "total_members"]
-
 
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
-    ONLINE_MEET_PLACE_CHOICES = ("Zoom", "Google Meet", "Microsoft Teams", "Other")
+    ONLINE_PLATFORM_CHOICES = ("Zoom", "Google Meet", "Microsoft Teams","Discord", "Other")
+
     circle_id = serializers.PrimaryKeyRelatedField(
         queryset=LearningCircle.objects.all(), required=True
     )
-    meet_link = serializers.URLField(required=False, allow_null=True)
-    meet_place = serializers.CharField(required=True)
+    # Online fields
+    platform = serializers.ChoiceField(
+        choices=ONLINE_PLATFORM_CHOICES, required=False, allow_null=True,
+        help_text="Required for online meetings. One of: Zoom, Google Meet, Microsoft Teams, Other"
+    )
+    meet_link = serializers.URLField(
+        required=False, allow_null=True,
+        help_text="Required for online meetings. Full URL of the meeting."
+    )
+    # Offline fields
+    meet_place = serializers.CharField(
+        required=False, allow_null=True,
+        help_text="Required for offline meetings. Address/venue name."
+    )
+    coord_x = serializers.FloatField(
+        required=False, allow_null=True,
+        help_text="Required for offline meetings. Latitude coordinate."
+    )
+    coord_y = serializers.FloatField(
+        required=False, allow_null=True,
+        help_text="Required for offline meetings. Longitude coordinate."
+    )
 
     def update(self, instance, validated_data):
         instance.title = validated_data.get("title", instance.title)
@@ -309,6 +350,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         instance.coord_x = validated_data.get("coord_x", instance.coord_x)
         instance.coord_y = validated_data.get("coord_y", instance.coord_y)
         instance.meet_place = validated_data.get("meet_place", instance.meet_place)
+        instance.meet_link = validated_data.get("meet_link", instance.meet_link)
         instance.meet_time = validated_data.get("meet_time", instance.meet_time)
         instance.duration = validated_data.get("duration", instance.duration)
         instance.updated_at = DateTimeUtils.get_current_utc_time()
@@ -320,6 +362,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         meet_code = self.context.get("meet_code")
         validated_data["created_by_id"] = user_id
         validated_data["meet_code"] = meet_code
+        validated_data.pop("platform", None)  # platform is not a DB field; used only in validate()
         meet = CircleMeetingLog.objects.create(**validated_data)
         CircleMeetingAttendees.objects.create(
             meet_id=meet, user_id_id=user_id, is_joined=True, joined_at=datetime.now()
@@ -330,23 +373,52 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         is_report_needed = attrs.get("is_report_needed")
         report_description = attrs.get("report_description")
         mode = attrs.get("mode")
-        meet_place = attrs.get("meet_place")
+
+        # --- Report validation ---
         if not is_report_needed:
             attrs["report_description"] = None
         else:
             if not report_description:
-                raise serializers.ValidationError("Report description is required")
+                raise serializers.ValidationError("Report description is required when report is needed.")
+
+        # --- Mode-specific validation ---
         if mode == "online":
+            # Online: require platform + meet_link; clear offline-only fields
+            if not attrs.get("platform"):
+                raise serializers.ValidationError(
+                    "platform is required for online meetings. "
+                    "Choices: {}".format(", ".join(self.ONLINE_PLATFORM_CHOICES))
+                )
             if not attrs.get("meet_link"):
                 raise serializers.ValidationError(
-                    "Meeting link is required for online mode"
+                    "meet_link (meeting URL) is required for online meetings."
                 )
-            if meet_place not in self.ONLINE_MEET_PLACE_CHOICES:
+            # Clear offline fields — online meetings have no physical location
+            attrs["coord_x"] = 0.0
+            attrs["coord_y"] = 0.0
+            attrs["meet_place"] = attrs.get("platform")  # store platform name in meet_place
+
+        elif mode == "offline":
+            # Offline: require address, coordinates; clear online-only fields
+            if not attrs.get("meet_place"):
                 raise serializers.ValidationError(
-                    "Invalid meet place, meet place should be one of {}".format(
-                        self.ONLINE_MEET_PLACE_CHOICES
-                    )
+                    "meet_place (venue address) is required for offline meetings."
                 )
+            coord_x = attrs.get("coord_x")
+            coord_y = attrs.get("coord_y")
+            if coord_x is None or coord_y is None:
+                raise serializers.ValidationError(
+                    "coord_x (latitude) and coord_y (longitude) are required for offline meetings."
+                )
+            # Clear online fields
+            attrs["meet_link"] = None
+            attrs["platform"] = None
+        else:
+            raise serializers.ValidationError(
+                "mode must be either \"online\" or \"offline\"."
+            )
+
+        # --- Recurrence validation ---
         is_recurring = attrs.get("is_recurring")
         recurrence_type = attrs.get("recurrence_type")
         recurrence = attrs.get("recurrence")
@@ -356,21 +428,25 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         else:
             if not recurrence_type or not recurrence:
                 raise serializers.ValidationError(
-                    "Recurrence type and recurrence are required for recurring meetings"
+                    "recurrence_type and recurrence are required for recurring meetings."
                 )
             if recurrence_type not in LearningCircleRecurrenceType.get_all_values():
-                raise serializers.ValidationError("Invalid recurrence type.")
+                raise serializers.ValidationError(
+                    "Invalid recurrence_type. Valid values: {}".format(
+                        LearningCircleRecurrenceType.get_all_values()
+                    )
+                )
             if recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
                 if recurrence < 1 or recurrence > 7:
                     raise serializers.ValidationError(
-                        "Recurrence should be between 1 and 7 for weekly meetings"
+                        "recurrence must be between 1-7 for weekly meetings (day of week)."
                     )
             elif recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
                 if recurrence < 1 or recurrence > 28:
                     raise serializers.ValidationError(
-                        "Recurrence should be between 1 and 28 for monthly meetings"
+                        "recurrence must be between 1-28 for monthly meetings (day of month)."
                     )
-                    
+
         return super().validate(attrs)
 
     # def validate_circle_id(self, value):
@@ -387,19 +463,25 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         fields = [
             "circle_id",
             "title",
+            "description",
+            "mode",
+            # Online fields
+            "platform",
+            "meet_link",
+            # Offline fields
+            "meet_place",
+            "coord_x",
+            "coord_y",
+            # Scheduling
+            "meet_time",
+            "duration",
+            # Recurrence
             "is_recurring",
             "recurrence_type",
             "recurrence",
+            # Report
             "is_report_needed",
             "report_description",
-            "coord_x",
-            "coord_y",
-            "meet_place",
-            "meet_time",
-            "duration",
-            "meet_link",
-            "description",
-            "mode",
         ]
 
 
@@ -410,14 +492,10 @@ class CircleMeetingLogListSerializer(serializers.ModelSerializer):
     is_ended = serializers.SerializerMethodField()
 
     def get_is_started(self, obj):
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     class Meta:
         model = CircleMeetingLog
@@ -497,7 +575,15 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
 
     def get_is_member(self, obj):
         user_id = self.context.get("user_id")
-        return obj.created_by_id == user_id
+        if not user_id:
+            return False
+        if obj.created_by_id == user_id:
+            return True
+        return UserCircleLink.objects.filter(
+            circle_id=obj.circle_id_id,
+            user_id=user_id,
+            accepted=True,
+        ).exists()
 
     def get_meet_code(self, obj):
         user_id = self.context.get("user_id")
@@ -506,14 +592,10 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
         return obj.meet_code
 
     def get_is_started(self, obj):
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     def get_attendees(self, obj):
         query = (
@@ -530,17 +612,24 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
         data = []
         user_id = self.context.get("user_id")
         cur_user_org = None
+        cur_user_orgs = set()
         if user_id:
             try:
-                cur_user = (
-                    User.objects.prefetch_related("user_organization_link_user")
-                    .only("user_organization_link_user__org_id")
-                    .get(id=user_id)
+                from db.organization import UserOrganizationLink
+
+                cur_user_orgs = set(
+                    UserOrganizationLink.objects.filter(user_id=user_id).values_list(
+                        "org_id", flat=True
+                    )
                 )
-                cur_user_org = cur_user.user_organization_link_user__org_id
-            except:
+            except Exception:
                 pass
         for attendee in query:
+            attendee_orgs = set(
+                attendee.user_id.user_organization_link_user.all().values_list(
+                    "org_id", flat=True
+                )
+            )
             data.append(
                 {
                     "user_id": attendee.user_id.id,
@@ -548,10 +637,7 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
                     "is_joined": attendee.is_joined,
                     "is_report_submitted": attendee.is_report_submitted,
                     "profile_pic": attendee.user_id.profile_pic,
-                    "is_same_org": cur_user_org
-                    in attendee.user_id.user_organization_link_user.all().values_list(
-                        "org_id", flat=True
-                    ),
+                    "is_same_org": bool(cur_user_orgs & attendee_orgs),
                 }
             )
         return data
@@ -568,15 +654,11 @@ class CircleMeetupPublicSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
 
-    def get_is_started(self, obj):  
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+    def get_is_started(self, obj):
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     class Meta:
         model = CircleMeetingLog
@@ -621,14 +703,10 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     ig_name = serializers.CharField(source="circle_id.ig.name", read_only=True)
 
     def get_is_started(self, obj):
-        return (
-            obj.meet_time + timedelta(hours=1) <= DateTimeUtils.get_current_utc_time()
-        )
+        return meeting_is_started(obj.meet_time)
 
     def get_is_ended(self, obj):
-        return (obj.meet_time + timedelta(hours=obj.duration + 1)) <= datetime.now(
-            timezone.utc
-        )
+        return meeting_is_ended(obj.meet_time, obj.duration)
 
     def get_is_joined(self, obj):
         if user_id := self.context.get("user_id"):
@@ -727,3 +805,102 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
 #             meet_id__circle_id=obj,
 #             is_joined=True
 #         ).values('user_id').distinct().count()
+
+# --- New Serializers ---
+
+
+class UserCircleListSerializer(serializers.ModelSerializer):
+    """Serializes a UserCircleLink entry for the 'My Circles' list."""
+    circle_id = serializers.CharField(source='circle.id', read_only=True)
+    title = serializers.CharField(source='circle.title', read_only=True)
+    ig = serializers.CharField(source='circle.ig.name', read_only=True)
+    org = serializers.CharField(source='circle.org.title', read_only=True, allow_null=True)
+    is_lead = serializers.BooleanField(source='lead', read_only=True)
+    total_members = serializers.SerializerMethodField()
+    joined_at = serializers.DateTimeField(source='accepted_at', read_only=True)
+
+    def get_total_members(self, obj):
+        return UserCircleLink.objects.filter(circle=obj.circle_id, accepted=True).count()
+
+    class Meta:
+        model = UserCircleLink
+        fields = ['circle_id', 'title', 'ig', 'org', 'is_lead', 'total_members', 'joined_at']
+
+
+class CircleInviteSerializer(serializers.Serializer):
+    """Validates the invite request body for POST /invite/<circle_id>/."""
+    muid = serializers.CharField(required=True, help_text="muid of the user to invite, e.g. user@mulearn")
+    lead = serializers.BooleanField(required=False, default=False)
+
+    def validate_muid(self, value):
+        user = User.objects.filter(muid=value).first()
+        if not user:
+            raise serializers.ValidationError("No user found with this muid.")
+        return user.id  # Store resolved user_id under the 'muid' key
+
+    def to_internal_value(self, data):
+        ret = super().to_internal_value(data)
+        # Rename resolved muid -> user_id for use in the view
+        ret['user_id'] = ret.pop('muid')
+        return ret
+
+
+class CircleInviteStatusSerializer(serializers.ModelSerializer):
+    """Serializes a pending invitation from the invitee's perspective."""
+    link_id = serializers.CharField(source='id', read_only=True)
+    circle_id = serializers.CharField(source='circle.id', read_only=True)
+    circle_title = serializers.CharField(source='circle.title', read_only=True)
+    ig = serializers.CharField(source='circle.ig.name', read_only=True)
+    is_lead_invite = serializers.BooleanField(source='lead', read_only=True)
+    invited_by = serializers.SerializerMethodField()
+    created_at = serializers.DateTimeField(read_only=True)
+
+    def get_invited_by(self, obj):
+        if obj.invited_by:
+            return {
+                'user_id': obj.invited_by.id,
+                'full_name': obj.invited_by.full_name,
+                'profile_pic': obj.invited_by.profile_pic,
+            }
+        return None
+
+    class Meta:
+        model = UserCircleLink
+        fields = ['link_id', 'circle_id', 'circle_title', 'ig',
+                  'is_lead_invite', 'invited_by', 'created_at']
+
+
+class CircleSentInvitesSerializer(serializers.ModelSerializer):
+    """Serializes outgoing invites from the lead's perspective."""
+    link_id = serializers.CharField(source='id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
+    full_name = serializers.CharField(source='user.full_name', read_only=True)
+    profile_pic = serializers.CharField(source='user.profile_pic', read_only=True, allow_null=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
+    is_lead_invite = serializers.BooleanField(source='lead', read_only=True)
+    status = serializers.SerializerMethodField()
+    invited_at = serializers.DateTimeField(source='created_at', read_only=True)
+
+    def get_status(self, obj):
+        if obj.accepted is None:
+            return 'pending'
+        return 'accepted' if obj.accepted else 'rejected'
+
+    class Meta:
+        model = UserCircleLink
+        fields = ['link_id', 'user_id', 'full_name', 'profile_pic', 'muid',
+                  'is_lead_invite', 'status', 'invited_at']
+
+
+class CircleJoinRequestSerializer(serializers.ModelSerializer):
+    """Serializes a user-initiated join request (is_invited=False, accepted=None) from the lead's perspective."""
+    link_id = serializers.CharField(source='id', read_only=True)
+    user_id = serializers.CharField(source='user.id', read_only=True)
+    full_name = serializers.CharField(source='user.full_name', read_only=True)
+    profile_pic = serializers.CharField(source='user.profile_pic', read_only=True, allow_null=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
+    requested_at = serializers.DateTimeField(source='created_at', read_only=True)
+
+    class Meta:
+        model = UserCircleLink
+        fields = ['link_id', 'user_id', 'full_name', 'profile_pic', 'muid', 'requested_at']

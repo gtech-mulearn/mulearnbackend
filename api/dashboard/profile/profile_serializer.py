@@ -5,7 +5,7 @@ from django.db import transaction
 from django.db.models import F, Sum, Q
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-
+from db.task import UserIgLvlLink
 from db.organization import UserOrganizationLink, District
 from db.task import (
     InterestGroup,
@@ -15,6 +15,7 @@ from db.task import (
     Wallet,
     UserIgLink,
     UserLvlLink,
+    UserIgLvlLink,
 )
 from db.user import User, UserSettings, Socials
 from utils.exception import CustomException
@@ -25,6 +26,7 @@ from utils.types import (
     MainRoles,
     WebHookActions,
     WebHookCategory,
+    UnitType,
 )
 from utils.utils import DateTimeUtils, DiscordWebhooks
 
@@ -46,6 +48,12 @@ class UserShareQrcode(serializers.ModelSerializer):
         fields = ["profile_pic"]
 
 
+class UserCoverPicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["cover_pic"]
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
@@ -54,6 +62,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     )
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
+    role_verification = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -71,6 +80,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "gender",
             "muid",
             "roles",
+            "role_verification",
             "college_id",
             "college_code",
             "org_district_id",
@@ -79,6 +89,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "karma_distribution",
             "level",
             "profile_pic",
+            "cover_pic",
             "interest_groups",
             "is_public",
             "percentile",
@@ -113,9 +124,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         if "role_values" in self.context:
             return self.context["role_values"]
-        role_values = list({link.role.title for link in obj.user_role_link_user.all()})
+        
+        # Use explicitly prefetched roles to prevent lazy DB queries
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        role_values = list({link.role.title for link in role_links})
+        
         self.context["role_values"] = role_values
         return role_values
+
+    def get_role_verification(self, obj):
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        return [
+            {
+                "role": link.role.title,
+                "is_verified": link.verified
+            }
+            for link in role_links
+        ]
 
     def get_college_id(self, obj):
         org_type = self._get_org_type(obj)
@@ -178,25 +203,37 @@ class UserProfileSerializer(serializers.ModelSerializer):
         )
 
     def get_interest_groups(self, obj):
+        
+        # Get all IGs where user has a level entry (has interacted with this IG)
+        user_ig_levels = UserIgLvlLink.objects.filter(user=obj).select_related('ig', 'level')
+        
+        # Get user's currently selected IGs
+        selected_ig_ids = set(
+            UserIgLink.objects.filter(user=obj).values_list('ig_id', flat=True)
+        )
+        
         interest_groups = []
-        for ig_link in UserIgLink.objects.filter(user=obj):
+        for ig_level_link in user_ig_levels:
+            # Calculate IG-specific karma
             total_ig_karma = (
-                0
-                if KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, user=obj, appraiser_approved=True
+                KarmaActivityLog.objects.filter(
+                    task__ig=ig_level_link.ig, user=obj, appraiser_approved=True
                 )
                 .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
-                else KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, user=obj, appraiser_approved=True
-                )
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
+                .get("karma__sum") or 0
             )
-            interest_groups.append(
-                {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
-            )
+            
+            interest_groups.append({
+                "id": ig_level_link.ig.id,
+                "name": ig_level_link.ig.name,
+                "karma": total_ig_karma,
+                "selected": ig_level_link.ig.id in selected_ig_ids,
+                "level": {
+                    "count": ig_level_link.level.level_order,
+                    "unit": UnitType.LEVEL.value
+                }
+            })
+        
         return interest_groups
 
 
@@ -414,6 +451,31 @@ class UserIgEditSerializer(serializers.ModelSerializer):
             if len(user_ig_links) > 3:
                 raise CustomException("Cannot add more than 3 interest groups")
             UserIgLink.objects.bulk_create(user_ig_links)
+            
+            # Initialize IG levels for newly added IGs
+            from django.db import connection
+            for ig_id in ig_details:
+                # Get level 1 ID
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT id FROM level WHERE level_order = 1 LIMIT 1")
+                    level_1_id = cursor.fetchone()
+                    if level_1_id:
+                        # UPSERT: Insert level 1 if doesn't exist, do nothing if exists
+                        cursor.execute("""
+                            INSERT INTO user_ig_lvl_link (id, user_id, ig_id, level_id, created_by, created_at, updated_by, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            ON DUPLICATE KEY UPDATE updated_at = updated_at
+                        """, [
+                            str(uuid.uuid4()),
+                            str(instance.id),
+                            str(ig_id),
+                            level_1_id[0],
+                            str(instance.id),
+                            DateTimeUtils.get_current_utc_time(),
+                            str(instance.id),
+                            DateTimeUtils.get_current_utc_time()
+                        ])
+            
             return super().update(instance, validated_data)
 
     class Meta:

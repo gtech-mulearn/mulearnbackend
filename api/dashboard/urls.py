@@ -2,6 +2,7 @@ from django.urls import path, include
 
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
+    path("home/", include("api.dashboard.home.urls")),
     path("user/", include("api.dashboard.user.urls")),
     path("zonal/", include("api.dashboard.zonal.urls")),
     path("district/", include("api.dashboard.district.urls")),
@@ -28,4 +29,9 @@ urlpatterns = [
     path("coupon/", include("api.dashboard.coupon.urls")),
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
+    path("skill/", include("api.dashboard.skill.urls")),
+    path("company/", include("api.dashboard.company.urls")),
+    path("category/", include("api.dashboard.category.urls")),
+    path("mentor/", include("api.dashboard.mentor.urls")),
+    # mentorship/ has been consolidated into mentor/ — do not re-add
 ]

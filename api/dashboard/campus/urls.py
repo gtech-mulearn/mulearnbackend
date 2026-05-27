@@ -1,8 +1,38 @@
 from django.urls import path
 
 from . import campus_views
+from . import dashboard_views
+from . import events_views
+from . import ig_views
+from . import lc_views
+from . import analytics_views
 
 urlpatterns = [
+    path(
+        "home-summary/",
+        dashboard_views.CampusDashboardSummaryAPIView.as_view(),
+        name="campus-home-summary",
+    ),
+    path(
+        "member-funnel/",
+        dashboard_views.CampusMemberFunnelAPIView.as_view(),
+        name="campus-member-funnel",
+    ),
+    path(
+        "circle-health/",
+        dashboard_views.CampusCircleHealthAPIView.as_view(),
+        name="campus-circle-health",
+    ),
+    path(
+        "recent-activity/",
+        dashboard_views.CampusRecentActivityAPIView.as_view(),
+        name="campus-recent-activity",
+    ),
+    path(
+        "campus-list/",
+        campus_views.CampusListAPI.as_view(),
+        name="campus-list",
+    ),
     path(
         "campus-details/",
         campus_views.CampusDetailsAPI.as_view(),
@@ -39,11 +69,6 @@ urlpatterns = [
         name="weekly-karma-insights-individual",
     ),
     path(
-        "program-participation/",
-        campus_views.CampusProgramParticipationAPI.as_view(),
-        name="program-participation",
-    ),
-    path(
         "change-student-type/<str:member_id>/",
         campus_views.ChangeStudentTypeAPI.as_view(),
         name="change-student-type",
@@ -61,11 +86,105 @@ urlpatterns = [
     path(
         "transfer-ig-role/",
         campus_views.TransferIGRoleAPI.as_view(),
-        name="transfer-lead-role",
+        name="transfer-ig-role",
     ),
+    path(
+        "events/",
+        events_views.CampusEventsAPI.as_view(),
+        name="campus-events",
+    ),
+    path(
+        "events/distribution/",
+        events_views.CampusEventDistributionAPI.as_view(),
+        name="campus-event-distribution",
+    ),
+    path(
+        "execom/",
+        events_views.CampusExecomAPI.as_view(),
+        name="campus-execom",
+    ),
+    path(
+        "execom/roles/",
+        events_views.CampusExecomRoleAPI.as_view(),
+        name="campus-execom-roles",
+    ),
+    path(
+        "execom/<str:member_id>/",
+        events_views.CampusExecomAPI.as_view(),
+        name="campus-execom-delete",
+    ),
+    path(
+        "ig-chapters/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapters",
+    ),
+    path(
+        "ig-chapters/<str:chapter_id>/",
+        campus_views.CampusIGChapterAPI.as_view(),
+        name="campus-ig-chapter-detail",
+    ),
+    path(
+        "social-links/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-links",
+    ),
+    path(
+        "social-links/<str:link_id>/",
+        campus_views.CampusSocialLinkAPI.as_view(),
+        name="campus-social-link-detail",
+    ),
+
+    # New Analytics & Dashboard Routes
+    path(
+        "igs/",
+        ig_views.CampusIGsAPI.as_view(),
+        name="campus-igs-list",
+    ),
+    path(
+        "igs/<str:ig_id>/members/",
+        ig_views.CampusIGMembersAPI.as_view(),
+        name="campus-igs-members",
+    ),
+    path(
+        "learning-circles/",
+        lc_views.CampusLearningCirclesAPI.as_view(),
+        name="campus-lc-list",
+    ),
+    path(
+        "learning-circles/<str:circle_id>/members/",
+        lc_views.CampusLCMembersAPI.as_view(),
+        name="campus-lc-members",
+    ),
+    path(
+        "analytics/karma-trend/",
+        analytics_views.CampusKarmaTrendAPI.as_view(),
+        name="campus-karma-trend",
+    ),
+    path(
+        "analytics/growth/",
+        analytics_views.CampusGrowthAPI.as_view(),
+        name="campus-growth",
+    ),
+    path(
+        "program-participation/",
+        campus_views.CampusProgramParticipationAPI.as_view(),
+        name="program-participation",
+    ),
+
+    # Catch-all org_id routes MUST be last (they match any single-segment path)
     path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
         name="campus-details-individual",
+    ),
+    path(
+        "<str:org_id>/leaderboard/",
+        campus_views.CampusStudentLeaderboardAPI.as_view(),
+        name="campus-student-leaderboard",
+    ),
+    path(
+        "<str:org_id>/karma-by-cluster/",
+        campus_views.CampusKarmaByClusterAPI.as_view(),
+        name="campus-karma-by-cluster",
     ),
 ]

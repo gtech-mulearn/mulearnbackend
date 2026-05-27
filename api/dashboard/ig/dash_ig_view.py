@@ -1,10 +1,11 @@
 from datetime import datetime
 
-from django.db.models import Count, Sum, Q
+from django.db.models import Count, Q, Sum
 from django.db.models.functions import Coalesce
 from rest_framework.views import APIView
 
 from db.task import InterestGroup, KarmaActivityLog
+from db.user import User, Role
 from utils.permission import CustomizePermission
 from utils.permission import JWTUtils, role_required
 from utils.response import CustomResponse
@@ -13,13 +14,54 @@ from utils.utils import CommonUtils, DiscordWebhooks
 from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
+    InterestGroupRequestSerializer,
     IGTaskSummarySerializer,
 )
 import json
+import uuid
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
-from db.user import Role
+from db.task import UserIgLink
+from db.user import UserMentor, UserRoleLink
+from db.notification import Notification
+from utils.utils import DateTimeUtils
+
+
+def _validate_muids(request_data, fields=("leads", "mentors")):
+    """
+    Validate that every muid in the given fields actually exists in the User table.
+    Returns (is_valid, error_message).
+    """
+    for fld in fields:
+        raw = request_data.get(fld)
+        if not raw:
+            continue
+        # raw may already be a list (before json.dumps) or a string (already dumped)
+        if isinstance(raw, str):
+            try:
+                raw = json.loads(raw)
+            except Exception:
+                continue
+        if not isinstance(raw, list):
+            continue
+
+        muids = [
+            item.get("muid")
+            for item in raw
+            if isinstance(item, dict) and item.get("muid")
+        ]
+        if not muids:
+            continue
+
+        existing = set(
+            User.objects.filter(muid__in=muids).values_list("muid", flat=True)
+        )
+        invalid = [m for m in muids if m not in existing]
+        if invalid:
+            return False, f"Invalid MUIDs in '{fld}': {invalid}"
+
+    return True, None
 
 
 class InterestGroupAPI(APIView):
@@ -43,6 +85,7 @@ class InterestGroupAPI(APIView):
             {
                 "name": "name",
                 "members": "members",
+                "status": "status",
                 "updated_on": "updated_at",
                 "updated_by": "updated_by__full_name",
                 "created_on": "created_at",
@@ -63,6 +106,11 @@ class InterestGroupAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
 
         request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
 
         # serialize JSON-able fields to strings for DB storage
         for fld in [
@@ -162,6 +210,12 @@ class InterestGroupAPI(APIView):
         ig_old_code = ig.code
 
         request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
+
         for fld in [
             "prerequisites",
             "career_opportunities",
@@ -306,6 +360,12 @@ class InterestGroupGetAPI(APIView):
             return CustomResponse(general_message="You do not have permission to update this Interest Group").get_failure_response()
 
         request_data = request.data
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
+
         for fld in [
             "prerequisites",
             "career_opportunities",
@@ -325,9 +385,248 @@ class InterestGroupGetAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            # ── Side-effect: assign Mentor role + UserIgLink for new mentors ────
+            raw_mentors = request.data.get("mentors")
+            if raw_mentors:
+                if isinstance(raw_mentors, str):
+                    try:
+                        raw_mentors = json.loads(raw_mentors)
+                    except Exception:
+                        raw_mentors = []
+
+                mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+                for item in (raw_mentors or []):
+                    muid = item.get("muid") if isinstance(item, dict) else item
+                    if not muid:
+                        continue
+                    target_user = User.objects.filter(muid=muid).first()
+                    if not target_user:
+                        continue
+
+                    # 1. Ensure UserMentor exists and is verified as IG_MENTOR
+                    mentor_profile, created = UserMentor.objects.get_or_create(
+                        user=target_user,
+                        defaults={
+                            "is_verified":   True,
+                            "mentor_tier":   UserMentor.MentorTier.IG_MENTOR,
+                            "verified_by_id": user_id,
+                            "verified_at":   DateTimeUtils.get_current_utc_time(),
+                            "created_by_id": user_id,
+                            "updated_by_id": user_id,
+                        },
+                    )
+                    if not created and not mentor_profile.is_verified:
+                        mentor_profile.is_verified  = True
+                        mentor_profile.mentor_tier  = UserMentor.MentorTier.IG_MENTOR
+                        mentor_profile.verified_by_id = user_id
+                        mentor_profile.verified_at  = DateTimeUtils.get_current_utc_time()
+                        mentor_profile.updated_by_id = user_id
+                        mentor_profile.save()
+
+                    # 2. Assign Mentor role (idempotent)
+                    if mentor_role:
+                        UserRoleLink.objects.get_or_create(
+                            user=target_user,
+                            role=mentor_role,
+                            defaults={"verified": True, "created_by_id": user_id},
+                        )
+
+                    # 3. Create active UserIgLink (idempotent)
+                    link, link_created = UserIgLink.objects.get_or_create(
+                        user=target_user,
+                        ig=ig,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        defaults={
+                            "is_active":      True,
+                            "assigned_by_id": user_id,
+                            "created_by_id":  user_id,
+                        },
+                    )
+                    if not link_created and not link.is_active:
+                        link.is_active = True
+                        link.assigned_by_id = user_id
+                        link.save()
+
+                    # 4. Notify the newly assigned mentor
+                    if created or link_created:
+                        caller = User.objects.filter(id=user_id).first()
+                        caller_name = caller.full_name if caller else "An IG Lead"
+                        Notification.objects.create(
+                            user=target_user,
+                            title=f"🎓 You've been assigned as an IG Mentor — {ig.name}",
+                            description=(
+                                f"{caller_name} has assigned you as an IG Mentor for "
+                                f"{ig.name}. You can now create sessions and manage "
+                                f"tasks within this interest group."
+                            ),
+                            created_by_id=user_id,
+                        )
+
             return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()
 
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+
+class InterestGroupRequestAPI(APIView):
+    """API endpoint for users to submit and retrieve IG creation requests."""
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    def get(self, request):
+        """Retrieve Interest Group requests created by a company user.
+        
+        Query Parameters:
+            - user_id (optional): Filter by specific company user ID. 
+              If not provided, defaults to the authenticated user's ID.
+              Only admins can query other users' requests.
+            - status (optional): Filter by IG status (requested, active, rejected, cancelled)
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        target_user_id = request.query_params.get('user_id')
+        status_filter = request.query_params.get('status')
+        is_admin = RoleType.ADMIN.value in roles
+
+        ig_queryset = InterestGroup.objects.select_related(
+            "created_by", "updated_by"
+        ).prefetch_related(
+            "user_ig_link_ig"
+        )
+        
+        if target_user_id:
+            if target_user_id != user_id and not is_admin:
+                return CustomResponse(
+                    general_message="You can only view your own IG requests"
+                ).get_failure_response()
+            ig_queryset = ig_queryset.filter(created_by_id=target_user_id)
+        else:
+            if not is_admin:
+                ig_queryset = ig_queryset.filter(created_by_id=user_id)
+
+        if status_filter:
+            valid_statuses = ['active', 'requested', 'cancelled', 'rejected']
+            if status_filter not in valid_statuses:
+                return CustomResponse(
+                    general_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+                ).get_failure_response()
+            ig_queryset = ig_queryset.filter(status=status_filter)
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            ig_queryset,
+            request,
+            ["name", "code", "category"],
+            {
+                "name": "name",
+                "status": "status",
+                "ig_name": "name",
+                "user_full_name": "created_by__full_name",
+                "created_at": "created_at",
+                "created_on": "created_at",
+                "updated_on": "updated_at",
+            },
+        )
+
+        ig_serializer_data = InterestGroupSerializer(
+            paginated_queryset.get("queryset"), many=True
+        ).data
+        
+        return CustomResponse().paginated_response(
+            data=ig_serializer_data, 
+            pagination=paginated_queryset.get("pagination")
+        )
+
+    @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    def post(self, request):
+        """Submit a new Interest Group creation request."""
+        user_id = JWTUtils.fetch_user_id(request)
+
+        request_data = request.data.copy()
+
+        # Validate MUIDs for leads/mentors before serializing
+        is_valid, error_msg = _validate_muids(request_data)
+        if not is_valid:
+            return CustomResponse(general_message=error_msg).get_failure_response()
+
+        for fld in [
+            "prerequisites",
+            "career_opportunities",
+            "top_blogs",
+            "people_to_follow",
+            "leads",
+            "mentors",
+        ]:
+            if fld in request_data and not isinstance(request_data.get(fld), str):
+                try:
+                    request_data[fld] = json.dumps(request_data.get(fld))
+                except Exception:
+                    pass
+
+        request_data["created_by"] = request_data["updated_by"] = user_id
+        request_data["status"] = "requested"
+
+        serializer = InterestGroupRequestSerializer(data=request_data)
+
+        if serializer.is_valid():
+            ig_instance = serializer.save(
+                created_by_id=user_id,
+                updated_by_id=user_id,
+                status="requested"
+            )
+            response_serializer = InterestGroupSerializer(ig_instance)
+            
+            return CustomResponse(
+                response={"interestGroup": response_serializer.data},
+                general_message="Interest Group request submitted successfully. It will be reviewed by admins."
+            ).get_success_response()
+
+        return CustomResponse(
+            general_message=serializer.errors
+        ).get_failure_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, pk):
+        """Update Interest Group request status (Admin only).
+        
+        Allowed status transitions:
+            - requested → active
+            - requested → rejected
+            - requested → cancelled
+            - any status → any status (admin override)
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        
+        try:
+            ig = InterestGroup.objects.get(id=pk)
+        except InterestGroup.DoesNotExist:
+            return CustomResponse(
+                general_message="Interest Group not found"
+            ).get_failure_response()
+
+        new_status = request.data.get('status')
+
+        valid_statuses = ['active', 'requested', 'cancelled', 'rejected']
+        if not new_status:
+            return CustomResponse(
+                general_message="Status field is required"
+            ).get_failure_response()
+        
+        if new_status not in valid_statuses:
+            return CustomResponse(
+                general_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
+            ).get_failure_response()
+
+        ig.status = new_status
+        ig.updated_by_id = user_id
+        ig.save()
+
+        response_serializer = InterestGroupSerializer(ig)
+        
+        return CustomResponse(
+            response={"interestGroup": response_serializer.data},
+            general_message=f"Interest Group status updated to '{new_status}'"
+        ).get_success_response()
+
 
 
 class InterestGroupListApi(APIView):
@@ -350,11 +649,13 @@ class InterestGroupListApi(APIView):
 class IGTaskSummaryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([
-        RoleType.ADMIN.value,
-        RoleType.FELLOW.value,
-        RoleType.ASSOCIATE.value,
-    ])
+    @role_required(
+        [
+            RoleType.ADMIN.value,
+            RoleType.FELLOW.value,
+            RoleType.ASSOCIATE.value,
+        ]
+    )
     def get(self, request, ig_id):
         ig = (
             InterestGroup.objects.filter(id=ig_id)
@@ -418,9 +719,14 @@ class IGTaskSummaryAPI(APIView):
                 "ig_id": ig["id"],
                 "ig_name": ig["name"],
                 "ig_code": ig["code"],
-                "total_tasks_completed": summary_values.get("total_tasks", 0) or 0,
-                "total_karma_awarded": summary_values.get("total_karma", 0) or 0,
-                "unique_contributors": summary_values.get("unique_contributors", 0) or 0,
+                "total_tasks_completed": summary_values.get("total_tasks", 0)
+                or 0,
+                "total_karma_awarded": summary_values.get("total_karma", 0)
+                or 0,
+                "unique_contributors": summary_values.get(
+                    "unique_contributors", 0
+                )
+                or 0,
                 "top_contributors": top_contributors,
                 "date_range": {
                     "from_date": from_date,
