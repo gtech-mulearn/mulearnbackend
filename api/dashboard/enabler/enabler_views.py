@@ -46,10 +46,10 @@ class EnablerCampusListAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(campuses, request, ["title", "code"])
         
         serializer = serializers.EnablerCampusListSerializer(paginated_queryset.get('queryset'), many=True)
-        return CustomResponse(
-            response=serializer.data,
+        return CustomResponse().paginated_response(
+            data=serializer.data,
             pagination=paginated_queryset.get('pagination')
-        ).get_success_response()
+        )
 
 class EnablerCampusReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -88,10 +88,10 @@ class EnablerCampusNoteAPI(APIView):
         paginated_queryset = CommonUtils.get_paginated_queryset(notes, request, ["note"])
         serializer = serializers.EnablerCampusNoteSerializer(paginated_queryset.get('queryset'), many=True)
         
-        return CustomResponse(
-            response=serializer.data,
+        return CustomResponse().paginated_response(
+            data=serializer.data,
             pagination=paginated_queryset.get('pagination')
-        ).get_success_response()
+        )
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
     def post(self, request, campus_id):
