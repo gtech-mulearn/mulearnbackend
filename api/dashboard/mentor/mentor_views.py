@@ -2991,7 +2991,7 @@ class CompanyMentorListAPI(APIView):
 
         paginated = CommonUtils.get_paginated_queryset(
             qs, request,
-            search_fields=["user__full_name", "user__email", "org__org_name"],
+            search_fields=["user__full_name", "user__email", "org__title"],
             sort_fields={"created_at": "created_at", "full_name": "user__full_name"},
         )
         return CustomResponse().paginated_response(
@@ -3085,7 +3085,7 @@ class CompanyMentorSessionAPI(APIView):
 
         paginated = CommonUtils.get_paginated_queryset(
             qs, request,
-            search_fields=["title", "org__org_name"],
+            search_fields=["title", "org__title"],
             sort_fields={"starts_at": "starts_at", "title": "title"},
         )
         from .mentor_serializers import MentorSessionListSerializer
@@ -3210,7 +3210,7 @@ class CompanyMentorOpportunityAPI(APIView):
 
         paginated = CommonUtils.get_paginated_queryset(
             qs, request,
-            search_fields=["title", "org__org_name"],
+            search_fields=["title", "org__title"],
             sort_fields={"title": "title", "created_at": "created_at"},
         )
         return CustomResponse().paginated_response(
@@ -3620,7 +3620,7 @@ class CampusMentorListAPI(APIView):
 
         paginated = CommonUtils.get_paginated_queryset(
             qs, request,
-            search_fields=["user__full_name", "user__email", "org__org_name"],
+            search_fields=["user__full_name", "user__email", "org__title"],
             sort_fields={"created_at": "created_at", "full_name": "user__full_name"},
         )
         return CustomResponse().paginated_response(
@@ -3711,7 +3711,7 @@ class CampusMentorSessionAPI(APIView):
 
         paginated = CommonUtils.get_paginated_queryset(
             qs, request,
-            search_fields=["title", "org__org_name"],
+            search_fields=["title", "org__title"],
             sort_fields={"starts_at": "starts_at", "title": "title"},
         )
         from .mentor_serializers import MentorSessionListSerializer
@@ -3835,7 +3835,7 @@ class CampusMentorOpportunityAPI(APIView):
 
         paginated = CommonUtils.get_paginated_queryset(
             qs, request,
-            search_fields=["title", "org__org_name"],
+            search_fields=["title", "org__title"],
             sort_fields={"title": "title", "created_at": "created_at"},
         )
         return CustomResponse().paginated_response(
