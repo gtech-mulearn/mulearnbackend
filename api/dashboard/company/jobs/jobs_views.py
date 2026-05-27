@@ -4,6 +4,7 @@ from rest_framework import status
 from db.user import User
 from db.company import Company, CompanyJob,CompanyJobRule
 from utils.permission import JWTUtils, CustomizePermission
+from utils.permissions_drf import RequireCapability
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer, CompanyJobListSerializer,  JobRuleCreateSerializer,   JobRuleUpdateSerializer 
@@ -23,22 +24,41 @@ class BaseCompanyJobView(APIView):
         except User.DoesNotExist:
             return None
     
-    def check_company_authorization(self, user, company_id=None, job=None):
+    def check_company_authorization(self, request, company_id=None, job=None):
         """Check if user is authorized to access the company.
         
         Args:
-            user: The authenticated user
+            request: The request object containing auth_context
             company_id: Company ID (used when creating jobs)
             job: CompanyJob object (used when updating/deleting jobs)
             
         Returns:
             tuple: (authorized: bool, company: Company, error_response: dict)
         """
+        auth_context = getattr(request, 'auth_context', None)
+        if not auth_context or not auth_context.org_id:
+            error_response = CustomResponse(
+                general_message="Company profile or authorization missing",
+                message={"error_code": "COMPANY_AUTH_MISSING"},
+            ).get_failure_response(
+                status_code=403,
+                http_status_code=status.HTTP_403_FORBIDDEN
+            )
+            return False, None, error_response
+
+        if job and str(job.company_id_id) != str(auth_context.org_id):
+            error_response = CustomResponse(
+                general_message="You are not authorized to access this job",
+                message={"error_code": "UNAUTHORIZED"},
+            ).get_failure_response(
+                status_code=403,
+                http_status_code=status.HTTP_403_FORBIDDEN
+            )
+            return False, None, error_response
+
         try:
-            if job:
-                company = job.company_id
-            else:
-                company = Company.objects.get(id=company_id, status='active')
+            # We can rely on auth_context.org_id since the middleware resolves it correctly
+            company = Company.objects.get(id=auth_context.org_id, status='active')
         except Company.DoesNotExist:
             error_response = CustomResponse(
                 general_message="Company does not exist",
@@ -48,17 +68,6 @@ class BaseCompanyJobView(APIView):
                 http_status_code=status.HTTP_404_NOT_FOUND
             )
             return False, None, error_response
-        
-        if company.company_user_id.id != user.id:
-            error_response = CustomResponse(
-                general_message="You are not authorized to access this company",
-                message={"error_code": "UNAUTHORIZED"},
-            ).get_failure_response(
-                status_code=403,
-                http_status_code=status.HTTP_403_FORBIDDEN
-            )
-            
-            return False, company, error_response
             
         return True, company, None
 
@@ -111,6 +120,7 @@ class BaseCompanyJobView(APIView):
 
 class ListCompanyJobsAPIView(BaseCompanyJobView):
     """API to list jobs for a specific company."""
+    permission_classes = [CustomizePermission, RequireCapability('company:dashboard:view')]
     
     def get(self, request):
         try:
@@ -126,8 +136,11 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
 
             # 2. Get company AFTER user validation
             try:
+                auth_context = getattr(request, 'auth_context', None)
+                if not auth_context or not auth_context.org_id:
+                    raise Company.DoesNotExist
                 company = Company.objects.get(
-                    company_user_id=user,  # Use user object, not user.id
+                    id=auth_context.org_id,
                     status='active'  # Remove deleted_at filter based on our previous discussion
                 )
             except Company.DoesNotExist:
@@ -140,8 +153,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
                 )
 
             # 3. Get base queryset for pagination FIRST
-            jobs_qs = CompanyJob.objects.filter(
-                company_id=company,
+            jobs_qs = CompanyJob.objects.scoped_to(auth_context).filter(
                 is_deleted=False
             ).prefetch_related('rules').order_by('-created_at')
 
@@ -224,6 +236,7 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
 
 
 class CreateCompanyJobAPIView(BaseCompanyJobView):
+    permission_classes = [CustomizePermission, RequireCapability('company:job:manage')]
     
     def post(self, request):
         try:
@@ -240,8 +253,11 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
             
             
             try:
+                auth_context = getattr(request, 'auth_context', None)
+                if not auth_context or not auth_context.org_id:
+                    raise Company.DoesNotExist
                 company = Company.objects.get(
-                    company_user_id=user,
+                    id=auth_context.org_id,
                     status='active'
                 )
              
@@ -325,6 +341,7 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
 
 class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
     """API view for retrieving specific job posting details with optimized rules."""
+    permission_classes = [CustomizePermission, RequireCapability('company:dashboard:view')]
     
     def get(self, request, job_id):
         try:
@@ -393,6 +410,7 @@ class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
 
 
 class UpdateCompanyJobAPIView(BaseCompanyJobView):
+    permission_classes = [CustomizePermission, RequireCapability('company:job:manage')]
     
     def patch(self, request, job_id):
         try:
@@ -421,7 +439,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
                 )
             
             # 3. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            authorized, company, error_response = self.check_company_authorization(request, job=job)
             if not authorized:
                 return error_response
             
@@ -500,7 +518,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
             )
             
             # 3. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            authorized, company, error_response = self.check_company_authorization(request, job=job)
             if not authorized:
                 return error_response
             
@@ -534,6 +552,7 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
 
 class CreateJobRuleAPIView(BaseCompanyJobView):
     """API to create eligibility rules for a job."""
+    permission_classes = [CustomizePermission, RequireCapability('company:job:manage')]
     
     def post(self, request, job_id):
         try:
@@ -560,7 +579,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
                 )
 
             # 3. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            authorized, company, error_response = self.check_company_authorization(request, job=job)
             if not authorized:
                 return error_response
 
@@ -630,6 +649,7 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
     
 class UpdateJobRuleAPIView(BaseCompanyJobView):
     """API to update a specific job rule."""
+    permission_classes = [CustomizePermission, RequireCapability('company:job:manage')]
     
     def patch(self, request, job_id, rule_id):
         try:
@@ -656,7 +676,7 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
                 )
 
             # 3. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            authorized, company, error_response = self.check_company_authorization(request, job=job)
             if not authorized:
                 return error_response
 
@@ -763,6 +783,7 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
 
 class DeleteJobRuleAPIView(BaseCompanyJobView):
     """API to delete a specific job rule."""
+    permission_classes = [CustomizePermission, RequireCapability('company:job:manage')]
     
     def delete(self, request, job_id, rule_id):
         try:
@@ -789,7 +810,7 @@ class DeleteJobRuleAPIView(BaseCompanyJobView):
                 )
 
             # 3. Check company authorization
-            authorized, company, error_response = self.check_company_authorization(user, job=job)
+            authorized, company, error_response = self.check_company_authorization(request, job=job)
             if not authorized:
                 return error_response
 

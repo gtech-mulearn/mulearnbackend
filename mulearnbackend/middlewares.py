@@ -154,3 +154,36 @@ class UniversalErrorHandlerMiddleware:
         """
         self.log_exception(request, exception)
         raise exception
+
+
+class AuthContextMiddleware:
+    """
+    Middleware to resolve and attach AuthContext to the request.
+    This runs after standard authentication (if any) or can decode the JWT itself.
+    """
+    def __init__(self, get_response):
+        self.get_response = get_response
+
+    def __call__(self, request):
+        from utils.permission import JWTUtils
+        from utils.authorization import build_auth_context
+        from db.user import User
+        
+        request.auth_context = None
+        try:
+            # Attempt to fetch user_id from JWT if present
+            user_id = JWTUtils.fetch_user_id(request)
+            if user_id:
+                # Optimized query to fetch user with all related roles and orgs
+                user = User.objects.prefetch_related(
+                    'user_mentor_user', 
+                    'user_role_link_user__role',
+                    'user_organization_link_user__org'
+                ).get(id=user_id)
+                request.auth_context = build_auth_context(user)
+        except Exception:
+            # If no token, invalid token, or user not found, just proceed without auth_context
+            pass
+
+        return self.get_response(request)
+

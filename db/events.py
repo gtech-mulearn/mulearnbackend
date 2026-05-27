@@ -6,9 +6,10 @@ from django.conf import settings
 from .user import User
 from .task import Category, InterestGroup
 from .organization import Organization
+from utils.mixins import ScopedResourceMixin, ScopedQuerySet
 
 
-class Event(models.Model):
+class Event(ScopedResourceMixin, models.Model):
 
     class Status(models.TextChoices):
         DRAFT = 'draft', 'Draft'
@@ -38,6 +39,12 @@ class Event(models.Model):
         CAMPUS = 'campus', 'Campus'
         COMPANY = 'company', 'Company'
         ADMIN = 'admin', 'Admin'
+
+    objects = ScopedQuerySet.as_manager()
+    org_ownership_field = 'scope_org_id'
+
+    def get_owning_org_id(self):
+        return self.scope_org_id
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)

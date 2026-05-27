@@ -11,6 +11,7 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
+from utils.permissions_drf import RequireCapability
 from . import serializers
 from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
 
@@ -89,25 +90,27 @@ class CampusDetailsAPI(APIView):
     """
 
     authentication_classes = [CustomizePermission]
+    permission_classes = [RequireCapability('campus:dashboard:view')]
 
     # Use the role_required decorator to specify the allowed roles for this view
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def get(self, request):
-        # Fetch the user's ID from the request using JWTUtils
-        user_id = JWTUtils.fetch_user_id(request)
+        if not hasattr(request, 'auth_context') or not request.auth_context:
+            return CustomResponse(general_message="Auth context missing").get_failure_response()
+            
+        org_id = request.auth_context.org_id
+        if not org_id:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
 
-        # Get the user's organization link using the user ID
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(
-                general_message="User have no organization"
-            ).get_failure_response()
-
-        # Check if the user's organization link is None
-        if user_org_link.org is None:
-            # If it is None, return a failure response with a specific message
-            return CustomResponse(
-                general_message="Campus lead has no college"
-            ).get_failure_response()
+        user_id = request.auth_context.user_id
+        user_org_link = get_user_college_link(user_id)
+        
+        if not user_org_link:
+            # Mock UserOrganizationLink for Mentors
+            org = Organization.objects.filter(id=org_id).first()
+            if not org:
+                return CustomResponse(general_message="College not found").get_failure_response()
+            user_org_link = UserOrganizationLink(user_id=user_id, org=org)
 
         # # Serialize the user's organization link using the CampusDetailsSerializer
         serializer = serializers.CampusDetailsSerializer(user_org_link, many=False)
@@ -118,10 +121,13 @@ class CampusDetailsAPI(APIView):
 
 class CampusStudentInEachLevelAPI(APIView):
     authentication_classes = [CustomizePermission]
+    permission_classes = [RequireCapability('campus:analytics:view')]
 
-    # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def get(self, request, org_id=None):
         if org_id:
+            if not request.auth_context.is_global and request.auth_context.org_id != org_id:
+                return CustomResponse(general_message="You do not have permission to access this organization").get_failure_response()
             org = Organization.objects.filter(
                 id=org_id, org_type=OrganizationType.COLLEGE.value
             ).first()
@@ -130,18 +136,18 @@ class CampusStudentInEachLevelAPI(APIView):
                     general_message="College not found"
                 ).get_failure_response()
         else:
-            user_id = JWTUtils.fetch_user_id(request)
+            if not hasattr(request, 'auth_context') or not request.auth_context:
+                return CustomResponse(general_message="Auth context missing").get_failure_response()
 
-            if not (user_org_link := get_user_college_link(user_id)):
-                return CustomResponse(
-                    general_message="User have no organization"
-                ).get_failure_response()
-
-            if user_org_link.org is None:
+            org_id = request.auth_context.org_id
+            if not org_id:
                 return CustomResponse(
                     general_message="Campus lead has no college"
                 ).get_failure_response()
-            org = user_org_link.org
+                
+            org = Organization.objects.filter(
+                id=org_id, org_type=OrganizationType.COLLEGE.value
+            ).first()
 
         level_with_student_count = Level.objects.annotate(
             students=Count(
@@ -157,27 +163,26 @@ class CampusStudentInEachLevelAPI(APIView):
 
 class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
+    permission_classes = [RequireCapability('campus:students:view')]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(
-                general_message="User have no organization"
-            ).get_failure_response()
+        if not hasattr(request, 'auth_context') or not request.auth_context:
+            return CustomResponse(general_message="Auth context missing").get_failure_response()
+
+        org_id = request.auth_context.org_id
+        if not org_id:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
+            
         is_alumni = request.query_params.get("is_alumni")
         is_alumni_filter = None
         if is_alumni is not None:
             is_alumni_filter = str(is_alumni).lower() == "true"
 
-        if user_org_link.org is None:
-            return CustomResponse(
-                general_message="Campus lead has no college"
-            ).get_failure_response()
         if is_alumni_filter is not None:
             rank = (
                 Wallet.objects.filter(
-                    user__user_organization_link_user__org=user_org_link.org,
+                    user__user_organization_link_user__org_id=org_id,
                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                     user__user_organization_link_user__is_alumni=is_alumni_filter,
                 )
@@ -193,7 +198,7 @@ class CampusStudentDetailsAPI(APIView):
 
             user_org_links = (
                 User.objects.filter(
-                    user_organization_link_user__org=user_org_link.org,
+                    user_organization_link_user__org_id=org_id,
                     user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                     user_organization_link_user__is_alumni=is_alumni_filter,
                 )
@@ -214,7 +219,7 @@ class CampusStudentDetailsAPI(APIView):
         else:
             rank = (
                 Wallet.objects.filter(
-                    user__user_organization_link_user__org=user_org_link.org,
+                    user__user_organization_link_user__org_id=org_id,
                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 )
                 .distinct()
@@ -229,7 +234,7 @@ class CampusStudentDetailsAPI(APIView):
 
             user_org_links = (
                 User.objects.filter(
-                    user_organization_link_user__org=user_org_link.org,
+                    user_organization_link_user__org_id=org_id,
                     user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 )
                 .distinct()
@@ -696,20 +701,27 @@ class TransferIGRoleAPI(APIView):
 # ...existing code...
 
 class CampusStudentLeaderboardAPI(APIView):
-
     authentication_classes = [CustomizePermission]
+    permission_classes = [RequireCapability('campus:students:view')]
+    
     def get(self, request, org_id=None):
-
-        if not org_id:
-            return CustomResponse(
-                general_message="College not found"
-            ).get_failure_response()
-                                        
-  
-        org = Organization.objects.filter(
-            id=org_id,
-            org_type=OrganizationType.COLLEGE.value
-        ).first()
+        if org_id:
+            if not request.auth_context.is_global and request.auth_context.org_id != org_id:
+                return CustomResponse(general_message="You do not have permission to access this organization").get_failure_response()
+            org = Organization.objects.filter(
+                id=org_id, org_type=OrganizationType.COLLEGE.value
+            ).first()
+        else:
+            if not hasattr(request, 'auth_context') or not request.auth_context:
+                return CustomResponse(general_message="Auth context missing").get_failure_response()
+            
+            org_id = request.auth_context.org_id
+            if not org_id:
+                return CustomResponse(general_message="Campus lead has no college").get_failure_response()
+                
+            org = Organization.objects.filter(
+                id=org_id, org_type=OrganizationType.COLLEGE.value
+            ).first()
   
         if org is None:
             return CustomResponse(
@@ -896,30 +908,34 @@ class CampusKarmaByClusterAPI(APIView):
 
 class CampusIGChapterAPI(APIView):
     authentication_classes = [CustomizePermission]
+    permission_classes = [RequireCapability('campus:ig:manage')]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def get(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(
-                general_message="User have no organization"
-            ).get_failure_response()
+        if not hasattr(request, 'auth_context') or not request.auth_context:
+            return CustomResponse(general_message="Auth context missing").get_failure_response()
 
-        chapters = get_campus_ig_chapters(user_org_link.org.id)
+        org_id = request.auth_context.org_id
+        if not org_id:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
+
+        chapters = get_campus_ig_chapters(org_id)
         serializer = serializers.CampusIGChapterListSerializer(chapters, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(
-                general_message="User have no organization"
-            ).get_failure_response()
+        if not hasattr(request, 'auth_context') or not request.auth_context:
+            return CustomResponse(general_message="Auth context missing").get_failure_response()
+            
+        org_id = request.auth_context.org_id
+        if not org_id:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
 
+        org = Organization.objects.filter(id=org_id).first()
         serializer = serializers.CampusIGChapterCreateSerializer(
             data=request.data,
-            context={"user_id": user_id, "org": user_org_link.org},
+            context={"user_id": request.auth_context.user_id, "org": org},
         )
         if serializer.is_valid():
             serializer.save()
@@ -928,17 +944,18 @@ class CampusIGChapterAPI(APIView):
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def patch(self, request, chapter_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(
-                general_message="User have no organization"
-            ).get_failure_response()
+        if not hasattr(request, 'auth_context') or not request.auth_context:
+            return CustomResponse(general_message="Auth context missing").get_failure_response()
+            
+        org_id = request.auth_context.org_id
+        if not org_id:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
 
         chapter = CampusIGChapter.objects.filter(
             id=chapter_id,
-            org=user_org_link.org,
+            org_id=org_id,
         ).first()
         if chapter is None:
             return CustomResponse(
@@ -949,7 +966,7 @@ class CampusIGChapterAPI(APIView):
             chapter,
             data=request.data,
             partial=True,
-            context={"user_id": user_id},
+            context={"user_id": request.auth_context.user_id},
         )
         if serializer.is_valid():
             serializer.save()
@@ -958,17 +975,18 @@ class CampusIGChapterAPI(APIView):
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value, 'CAMPUS_MENTOR'])
     def delete(self, request, chapter_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        if not (user_org_link := get_user_college_link(user_id)):
-            return CustomResponse(
-                general_message="User have no organization"
-            ).get_failure_response()
+        if not hasattr(request, 'auth_context') or not request.auth_context:
+            return CustomResponse(general_message="Auth context missing").get_failure_response()
+            
+        org_id = request.auth_context.org_id
+        if not org_id:
+            return CustomResponse(general_message="Campus lead has no college").get_failure_response()
 
         chapter = CampusIGChapter.objects.filter(
             id=chapter_id,
-            org=user_org_link.org,
+            org_id=org_id,
         ).first()
         if chapter is None:
             return CustomResponse(
@@ -980,7 +998,7 @@ class CampusIGChapterAPI(APIView):
             if role:
                 UserRoleLink.objects.filter(
                     user=chapter.lead,
-                    user__user_organization_link_user__org=user_org_link.org,
+                    user__user_organization_link_user__org_id=org_id,
                     user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                     role=role,
                 ).delete()

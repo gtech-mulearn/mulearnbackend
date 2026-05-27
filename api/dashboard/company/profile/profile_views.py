@@ -44,10 +44,13 @@ class BaseCompanyProfileView(APIView):
         return Company.objects.filter(company_user_id=user, deleted_at__isnull=True).exists()
 
     @staticmethod
-    def get_editable_company_for_user(user):
+    def get_editable_company_for_request(request):
+        auth_context = getattr(request, 'auth_context', None)
+        if not auth_context or not auth_context.org_id:
+            return None
         return (
             Company.objects.filter(
-                company_user_id=user,
+                id=auth_context.org_id,
                 status__in=BaseCompanyProfileView.EDITABLE_STATUSES,
                 deleted_at__isnull=True,
             )
@@ -121,7 +124,7 @@ class CompanyProfileAPIView(BaseCompanyProfileView):
                 http_status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        company = self.get_editable_company_for_user(user)
+        company = self.get_editable_company_for_request(request)
         if not company:
             return CustomResponse(
                 general_message="No editable company profile found for user",
@@ -211,7 +214,7 @@ class CompanyProfileAPIView(BaseCompanyProfileView):
                 http_status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        company = self.get_editable_company_for_user(user)
+        company = self.get_editable_company_for_request(request)
         if not company:
             return CustomResponse(
                 general_message="No editable company profile found for user",
@@ -271,7 +274,7 @@ class CompanyProfileAPIView(BaseCompanyProfileView):
                 http_status_code=status.HTTP_403_FORBIDDEN,
             )
 
-        company = self.get_editable_company_for_user(user)
+        company = self.get_editable_company_for_request(request)
         if not company:
             return CustomResponse(
                 general_message="No editable company profile found for user",

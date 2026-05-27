@@ -11,40 +11,21 @@ from db.user import User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+from utils.permissions_drf import RequireCapability
 
 
 def _get_company_for_request(request):
-    try:
-        user_id = JWTUtils.fetch_user_id(request)
-    except Exception:
+    auth_context = getattr(request, 'auth_context', None)
+    if not auth_context or not auth_context.org_id:
         return None, CustomResponse(
-            general_message="User not found or token invalid",
-            message={"error_code": "USER_NOT_FOUND"},
-        ).get_failure_response(
-            status_code=401,
-            http_status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    user = User.objects.filter(id=user_id).first()
-    if not user:
-        return None, CustomResponse(
-            general_message="User not found",
-            message={"error_code": "USER_NOT_FOUND"},
-        ).get_failure_response(
-            status_code=401,
-            http_status_code=status.HTTP_401_UNAUTHORIZED,
-        )
-
-    if not UserRoleLink.objects.filter(user=user, role__title=RoleType.COMPANY.value).exists():
-        return None, CustomResponse(
-            general_message="Company role required",
-            message={"error_code": "COMPANY_ROLE_REQUIRED"},
+            general_message="Company profile or authorization missing",
+            message={"error_code": "COMPANY_AUTH_MISSING"},
         ).get_failure_response(
             status_code=403,
             http_status_code=status.HTTP_403_FORBIDDEN,
         )
 
-    company = Company.objects.filter(company_user_id=user, status="active").first()
+    company = Company.objects.filter(id=auth_context.org_id).first()
     if not company:
         return None, CustomResponse(
             general_message="No active company profile found for this user",
@@ -124,7 +105,7 @@ def _talent_pool_payload(request):
 
 
 class CompanyDashboardSummaryAPIView(APIView):
-    permission_classes = [CustomizePermission]
+    permission_classes = [CustomizePermission, RequireCapability('company:analytics:view')]
 
     def get(self, request):
         company, error = _get_company_for_request(request)
@@ -167,7 +148,7 @@ class CompanyDashboardSummaryAPIView(APIView):
 
 
 class CompanyTalentPoolAnalyticsAPIView(APIView):
-    permission_classes = [CustomizePermission]
+    permission_classes = [CustomizePermission, RequireCapability('company:analytics:view')]
 
     def get(self, request):
         _company, error = _get_company_for_request(request)

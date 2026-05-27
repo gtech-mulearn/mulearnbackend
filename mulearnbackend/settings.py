@@ -64,6 +64,7 @@ MIDDLEWARE = [
     "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.common.CommonMiddleware",
     "mulearnbackend.middlewares.UniversalErrorHandlerMiddleware",
+    "mulearnbackend.middlewares.AuthContextMiddleware",
 ]
 
 ROOT_URLCONF = "mulearnbackend.urls"

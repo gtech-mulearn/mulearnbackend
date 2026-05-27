@@ -5,6 +5,7 @@ from .user import User
 from .skill import Skill
 from .task import InterestGroup, TaskList
 from .achievement import Achievement
+from utils.mixins import ScopedResourceMixin, ScopedQuerySet
 
 
 class Company(models.Model):
@@ -55,7 +56,14 @@ class Company(models.Model):
         db_table = 'company'
 
 
-class CompanyJob(models.Model):
+class CompanyJob(ScopedResourceMixin):
+    org_ownership_field = 'company_id'
+
+    def get_owning_org_id(self) -> str:
+        return str(self.company_id_id) if getattr(self, 'company_id_id', None) else None
+
+    objects = ScopedQuerySet.as_manager()
+
     JOB_TYPE_CHOICES = [
         ('Hybrid', 'Hybrid'),
         ('Full-Time', 'Full-Time'),
@@ -149,7 +157,7 @@ class CompanyJobRule(models.Model):
             return Achievement.objects.get(id=self.rule_type_id)
 
 
-class CompanyJobApplication(models.Model):
+class CompanyJobApplication(ScopedResourceMixin):
     """
     Tracks a learner's application to a CompanyJob.
 
@@ -159,6 +167,15 @@ class CompanyJobApplication(models.Model):
                   → rejected
         withdrawn — set by learner (terminal)
     """
+    
+    org_ownership_field = 'job__company_id'
+
+    def get_owning_org_id(self) -> str:
+        if not hasattr(self, 'job'):
+            return None
+        return str(self.job.company_id_id) if getattr(self.job, 'company_id_id', None) else None
+
+    objects = ScopedQuerySet.as_manager()
 
     STATUS_CHOICES = [
         ('applied',     'Applied'),
@@ -201,11 +218,19 @@ class CompanyJobApplication(models.Model):
         unique_together = [('job', 'applicant')]
 
 
-class CompanyUserLink(models.Model):
+class CompanyUserLink(ScopedResourceMixin):
     """
     Links a muLearn user to a Company as an employee or mentor.
     Managed by the company admin. Supports soft-delete via status='removed'.
     """
+    
+    org_ownership_field = 'company_id'
+
+    def get_owning_org_id(self) -> str:
+        return str(self.company_id) if getattr(self, 'company_id', None) else None
+
+    objects = ScopedQuerySet.as_manager()
+
     ROLE_CHOICES = [
         ('employee', 'Employee'),
         ('mentor',   'Mentor'),

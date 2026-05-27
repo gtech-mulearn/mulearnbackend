@@ -7,6 +7,7 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
+from utils.permissions_drf import RequireCapability
 
 from .serializers import LearnerListSerializer
 
@@ -36,7 +37,7 @@ class LearnerDiscoveryAPIView(APIView):
         pageIndex, perPage, search, sortBy
     """
 
-    permission_classes = [CustomizePermission]
+    permission_classes = [CustomizePermission, RequireCapability('company:students:view')]
 
     # ------------------------------------------------------------------ #
     # Authorization helpers                                                #
@@ -129,16 +130,8 @@ class LearnerDiscoveryAPIView(APIView):
             )
 
         # 2. Authorise — must be a company user with an active company
-        if not self._is_company_user(user):
-            return CustomResponse(
-                general_message="Company role required to access learner discovery.",
-                message={"error_code": "COMPANY_ROLE_REQUIRED"},
-            ).get_failure_response(
-                status_code=403,
-                http_status_code=status.HTTP_403_FORBIDDEN,
-            )
-
-        if not self._has_active_company(user):
+        auth_context = getattr(request, 'auth_context', None)
+        if not auth_context or not auth_context.org_id:
             return CustomResponse(
                 general_message="No active company profile found for this user.",
                 message={"error_code": "NO_ACTIVE_COMPANY"},

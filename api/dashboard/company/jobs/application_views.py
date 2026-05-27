@@ -8,6 +8,7 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
+from utils.permissions_drf import RequireCapability
 
 from .application_serializers import (
     ApplicationCreateSerializer,
@@ -269,6 +270,7 @@ class CompanyJobApplicationsListAPIView(BaseCompanyJobView):
     Optional filter:  ?status=applied|shortlisted|accepted|rejected|withdrawn
     Sort fields:      karma, appliedAt, name
     """
+    permission_classes = [CustomizePermission, RequireCapability('company:dashboard:view')]
 
     def get(self, request, job_id):
         # 1. Authenticate
@@ -283,7 +285,7 @@ class CompanyJobApplicationsListAPIView(BaseCompanyJobView):
             return _not_found("Job not found.", "JOB_NOT_FOUND")
 
         # 3. Authorise — caller must own the company that posted this job
-        authorized, _company, error_response = self.check_company_authorization(user, job=job)
+        authorized, _company, error_response = self.check_company_authorization(request, job=job)
         if not authorized:
             return error_response
 
@@ -359,6 +361,7 @@ class CompanyUpdateApplicationStatusAPIView(BaseCompanyJobView):
     Body (required):
         status  (str)  — one of the values in CompanyJobApplication.STATUS_CHOICES
     """
+    permission_classes = [CustomizePermission, RequireCapability('company:job:manage')]
 
     def patch(self, request, job_id, app_id):
         # 1. Authenticate
@@ -373,7 +376,7 @@ class CompanyUpdateApplicationStatusAPIView(BaseCompanyJobView):
             return _not_found("Job not found.", "JOB_NOT_FOUND")
 
         # 3. Authorise
-        authorized, _company, error_response = self.check_company_authorization(user, job=job)
+        authorized, _company, error_response = self.check_company_authorization(request, job=job)
         if not authorized:
             return error_response
 

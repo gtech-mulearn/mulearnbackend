@@ -6,12 +6,20 @@ from django.conf import settings
 from .user import User
 from .organization import Organization
 from .task import InterestGroup
+from utils.mixins import ScopedResourceMixin, ScopedQuerySet
 
 # fmt: off
 # noinspection PyPep8
 
 
-class CampusIGChapter(models.Model):
+class CampusIGChapter(ScopedResourceMixin, models.Model):
+    
+    objects = ScopedQuerySet.as_manager()
+    org_ownership_field = 'org_id'
+    
+    def get_owning_org_id(self):
+        return self.org_id
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='campus_ig_chapter_org')
     ig = models.ForeignKey(InterestGroup, on_delete=models.CASCADE, related_name='campus_ig_chapter_ig')
@@ -31,7 +39,14 @@ class CampusIGChapter(models.Model):
         db_table = 'campus_ig_chapter'
 
 
-class CampusSocialLink(models.Model):
+class CampusSocialLink(ScopedResourceMixin, models.Model):
+
+    objects = ScopedQuerySet.as_manager()
+    org_ownership_field = 'org_id'
+    
+    def get_owning_org_id(self):
+        return self.org_id
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='campus_social_link_org')
     platform = models.CharField(max_length=30)

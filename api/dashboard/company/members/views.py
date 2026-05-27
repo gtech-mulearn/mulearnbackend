@@ -34,15 +34,16 @@ def _get_company_user(request):
             message={"error_code": "USER_NOT_FOUND"},
         ).get_failure_response(status_code=401, http_status_code=status.HTTP_401_UNAUTHORIZED)
 
-    if not UserRoleLink.objects.filter(user=user, role__title=RoleType.COMPANY.value).exists():
-        return None, None, CustomResponse(
-            general_message="Company role required.",
-            message={"error_code": "COMPANY_ROLE_REQUIRED"},
+    auth_context = getattr(request, 'auth_context', None)
+    if not auth_context or not auth_context.org_id:
+        return user, None, CustomResponse(
+            general_message="No active company found for this user.",
+            message={"error_code": "NO_ACTIVE_COMPANY"},
         ).get_failure_response(status_code=403, http_status_code=status.HTTP_403_FORBIDDEN)
 
-    company = Company.objects.filter(company_user_id=user, status="active", deleted_at__isnull=True).first()
+    company = Company.objects.filter(id=auth_context.org_id, status="active", deleted_at__isnull=True).first()
     if not company:
-        return None, None, CustomResponse(
+        return user, None, CustomResponse(
             general_message="No active company found for this user.",
             message={"error_code": "NO_ACTIVE_COMPANY"},
         ).get_failure_response(status_code=403, http_status_code=status.HTTP_403_FORBIDDEN)
