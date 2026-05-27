@@ -107,11 +107,10 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         # Override to add calculated fields that don't exist on the model
         data = super().to_representation(instance)
-        
         data['rank'] = self.get_rank(instance)
         data['total_karma'] = self.get_total_karma(instance)
         data['total_members'] = self.get_total_members(instance)
-        
+        data['next_meetup'] = self.get_next_meetup(instance)
         return data
 
     def get_created_by(self, obj):
@@ -193,57 +192,60 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
         karma_data = self._all_circle_rankings_data.get(obj.id)
         return karma_data['rank'] if karma_data else None
     
-    # next_meetup = serializers.SerializerMethodField()
+    def _get_next_weekday(self, target_day: int):
+        """Return the date of the next occurrence of target_day (1=Mon…7=Sun).
+        Always returns a future date — if today is the target day, returns next week."""
+        today = datetime.now()
+        days_until_next = (target_day - today.isoweekday() - 1) % 7 + 1
+        return (today + timedelta(days=days_until_next)).date()
 
-    # def _get_next_weekday(self, target_day: int):
-    #     today = datetime.now()
-    #     current_day = today.isoweekday() + 2
-    #     current_day = current_day if current_day <= 7 else 1
-    #     days_until_next = ((target_day - current_day + 7) % 7) + 1
-    #     days_until_next = days_until_next or 7
-    #     next_day_date = today + timedelta(days=days_until_next)
-    #     return next_day_date.date()
+    def _get_month_day(self, target_day: int):
+        """Return the date of the next occurrence of target_day (1-28) in the month.
+        If today is on or past that day, returns the same day next month."""
+        today = datetime.now()
+        month = today.month
+        year = today.year
+        if today.day >= target_day:
+            month += 1
+            if month > 12:
+                month = 1
+                year += 1
+        return datetime(year, month, target_day).date()
 
-    # def _get_month_day(self, target_day: int):
-    #     today = datetime.now()
-    #     current_day = today.day
-    #     current_month = today.month
-    #     current_year = today.year
-    #     if current_day >= target_day:
-    #         current_month += 1
-    #         if current_month > 12:
-    #             current_month = 1
-    #             current_year += 1
-    #     return datetime(current_year, current_month, target_day).date()
+    def get_next_meetup(self, obj):
+        # If there's already a pending (not yet reported) meeting, return it.
+        pending = (
+            CircleMeetingLog.objects.filter(circle_id=obj.id, is_report_submitted=False)
+            .order_by("-meet_time")
+            .first()
+        )
+        if pending:
+            return {
+                **CircleMeetingLogListSerializer(pending).data,
+                "is_scheduled": True,
+            }
 
-    # def get_next_meetup(self, obj):
-    #     next_meetup = (
-    #         CircleMeetingLog.objects.filter(circle_id=obj.id)
-    #         .filter(
-    #             # meet_time__gte=DateTimeUtils.get_current_utc_time(),
-    #             is_report_submitted=False,
-    #         )
-    #         .order_by("-meet_time")
-    #         .first()
-    #     )
-    #     if next_meetup:
-    #         return {
-    #             **CircleMeetingLogListSerializer(next_meetup).data,
-    #             "is_scheduled": True,
-    #         }
-    #     if not obj.is_recurring:
-    #         return None
-    #     if obj.recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
-    #         return {
-    #             "is_scheduled": False,
-    #             "meet_time": self._get_next_weekday(obj.recurrence),
-    #         }
-    #     if obj.recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
-    #         return {
-    #             "is_scheduled": False,
-    #             "meet_time": self._get_month_day(obj.recurrence),
-    #         }
-    #     return {"is_scheduled": False, "meet_time": None}
+        # No pending meeting — check if the last meeting was recurring and
+        # suggest the next occurrence date so the lead can one-click schedule.
+        last = (
+            CircleMeetingLog.objects.filter(circle_id=obj.id)
+            .order_by("-meet_time")
+            .first()
+        )
+        if not last or not last.is_recurring:
+            return None
+
+        if last.recurrence_type == LearningCircleRecurrenceType.WEEKLY.value:
+            return {
+                "is_scheduled": False,
+                "meet_time": self._get_next_weekday(last.recurrence),
+            }
+        if last.recurrence_type == LearningCircleRecurrenceType.MONTHLY.value:
+            return {
+                "is_scheduled": False,
+                "meet_time": self._get_month_day(last.recurrence),
+            }
+        return {"is_scheduled": False, "meet_time": None}
 
 
 class LearningCircleListMinSerializer(serializers.ModelSerializer):

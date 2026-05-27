@@ -13,6 +13,7 @@ from utils.types import RoleType, SocialPlatformType
 from utils.utils import DateTimeUtils
 from .dash_campus_helper import validate_campus_member, assign_ig_campus_lead
 from db.events import Event
+from db.learning_circle import LearningCircle, UserCircleLink
 
 class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     org_id = serializers.ReadOnlyField(source="id")
@@ -265,6 +266,8 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
     graduation_year = serializers.CharField()
     department = serializers.CharField()
     is_alumni = serializers.BooleanField()
+    ig_count = serializers.IntegerField(default=0)
+    lc_count = serializers.IntegerField(default=0)
 
     class Meta:
         fields = (
@@ -279,11 +282,15 @@ class CampusStudentDetailsSerializer(serializers.Serializer):
             "join_date",
             "is_alumni",
             "last_karma_update_at",
+            "ig_count",
+            "lc_count"
         )
 
     def get_rank(self, obj):
         ranks = self.context.get("ranks")
-        return ranks.get(obj.id, None)
+        if ranks:
+            return ranks.get(obj.id, None)
+        return getattr(obj, "rank", None)
 
     def get_full_name(self, obj):
         return obj.full_name
@@ -594,3 +601,59 @@ class CampusSocialLinkUpsertSerializer(serializers.Serializer):
                 updated_by_id=user_id,
             )
         return social_link
+
+class CampusLCListSerializer(serializers.ModelSerializer):
+    ig_name = serializers.CharField(source="ig.name", default=None)
+    member_count = serializers.IntegerField(default=0)
+    meeting_count = serializers.IntegerField(default=0)
+    last_meeting_time = serializers.DateTimeField(allow_null=True)
+
+    class Meta:
+        model = LearningCircle
+        fields = ["id", "name", "ig_name", "member_count", "meeting_count", "last_meeting_time"]
+        
+    name = serializers.CharField(source="title")
+
+class CampusLCMemberSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id")
+    full_name = serializers.CharField(source="user.full_name")
+    muid = serializers.CharField(source="user.muid")
+    karma = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserCircleLink
+        fields = ["user_id", "full_name", "muid", "karma", "level"]
+        
+    def get_karma(self, obj):
+        return getattr(obj.user.wallet_user, 'karma', 0) if hasattr(obj.user, 'wallet_user') else 0
+        
+    def get_level(self, obj):
+        level_link = obj.user.user_lvl_link_user.first()
+        return level_link.level.name if level_link else None
+
+class CampusIGListSerializer(serializers.ModelSerializer):
+    campus_member_count = serializers.IntegerField(default=0)
+
+    class Meta:
+        model = InterestGroup
+        fields = ["id", "name", "code", "campus_member_count"]
+
+class CampusIGMemberSerializer(serializers.ModelSerializer):
+    user_id = serializers.CharField(source="user.id")
+    full_name = serializers.CharField(source="user.full_name")
+    muid = serializers.CharField(source="user.muid")
+    karma = serializers.SerializerMethodField()
+    level = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserIgLink
+        fields = ["user_id", "full_name", "muid", "karma", "level"]
+        
+    def get_karma(self, obj):
+        return getattr(obj.user.wallet_user, 'karma', 0) if hasattr(obj.user, 'wallet_user') else 0
+        
+    def get_level(self, obj):
+        level_link = obj.user.user_lvl_link_user.first()
+        return level_link.level.name if level_link else None
+

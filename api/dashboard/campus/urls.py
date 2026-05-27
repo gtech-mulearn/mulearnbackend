@@ -3,6 +3,9 @@ from django.urls import path
 from . import campus_views
 from . import dashboard_views
 from . import events_views
+from . import ig_views
+from . import lc_views
+from . import analytics_views
 
 urlpatterns = [
     path(
@@ -130,6 +133,40 @@ urlpatterns = [
         campus_views.CampusSocialLinkAPI.as_view(),
         name="campus-social-link-detail",
     ),
+
+    # New Analytics & Dashboard Routes
+    path(
+        "igs/",
+        ig_views.CampusIGsAPI.as_view(),
+        name="campus-igs-list",
+    ),
+    path(
+        "igs/<str:ig_id>/members/",
+        ig_views.CampusIGMembersAPI.as_view(),
+        name="campus-igs-members",
+    ),
+    path(
+        "learning-circles/",
+        lc_views.CampusLearningCirclesAPI.as_view(),
+        name="campus-lc-list",
+    ),
+    path(
+        "learning-circles/<str:circle_id>/members/",
+        lc_views.CampusLCMembersAPI.as_view(),
+        name="campus-lc-members",
+    ),
+    path(
+        "analytics/karma-trend/",
+        analytics_views.CampusKarmaTrendAPI.as_view(),
+        name="campus-karma-trend",
+    ),
+    path(
+        "analytics/growth/",
+        analytics_views.CampusGrowthAPI.as_view(),
+        name="campus-growth",
+    ),
+
+    # Catch-all org_id routes MUST be last (they match any single-segment path)
     path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
@@ -144,6 +181,5 @@ urlpatterns = [
         "<str:org_id>/karma-by-cluster/",
         campus_views.CampusKarmaByClusterAPI.as_view(),
         name="campus-karma-by-cluster",
-),
-
+    ),
 ]
