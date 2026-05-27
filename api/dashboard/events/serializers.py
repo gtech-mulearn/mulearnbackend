@@ -424,6 +424,20 @@ class EventWriteSerializer(serializers.ModelSerializer):
 
         if start and end and end <= start:
             raise serializers.ValidationError({'end_datetime': 'Must be after start_datetime.'})
+            
+        # Enforce Campus Scope Ownership Validation
+        organiser_type = attrs.get('organiser_type', self.instance.organiser_type if self.instance else None)
+        scope = attrs.get('scope', self.instance.scope if self.instance else None)
+        
+        if organiser_type == Event.OrganiserType.CAMPUS and scope == Event.Scope.CAMPUS:
+            organiser_org = attrs.get('organiser_org', self.instance.organiser_org if self.instance else None)
+            scope_org = attrs.get('scope_org', self.instance.scope_org if self.instance else None)
+            
+            if scope_org != organiser_org:
+                raise serializers.ValidationError(
+                    {'scope_org': "Campus scoped events can only target the organiser's own campus."}
+                )
+
         return attrs
 
     def _generate_unique_slug(self, title):

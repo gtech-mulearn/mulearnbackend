@@ -136,6 +136,11 @@ urlpatterns = [
 
     # New Analytics & Dashboard Routes
     path(
+        "students/<str:muid>/activity/",
+        campus_views.CampusStudentActivityAPI.as_view(),
+        name="campus-student-activity",
+    ),
+    path(
         "igs/",
         ig_views.CampusIGsAPI.as_view(),
         name="campus-igs-list",
@@ -170,8 +175,13 @@ urlpatterns = [
         campus_views.CampusProgramParticipationAPI.as_view(),
         name="program-participation",
     ),
+    path(
+        "showcase/",
+        campus_views.CampusShowcaseAPI.as_view(),
+        name="campus-showcase",
+    ),
 
-    # Catch-all org_id routes MUST be last (they match any single-segment path)
+    # Catch-all org_id routes MUST be last
     path(
         "<str:org_id>/",
         campus_views.CampusDetailsPublicAPI.as_view(),
