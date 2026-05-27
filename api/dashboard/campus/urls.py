@@ -39,6 +39,11 @@ urlpatterns = [
         name="weekly-karma-insights-individual",
     ),
     path(
+        "program-participation/",
+        campus_views.CampusProgramParticipationAPI.as_view(),
+        name="program-participation",
+    ),
+    path(
         "change-student-type/<str:member_id>/",
         campus_views.ChangeStudentTypeAPI.as_view(),
         name="change-student-type",

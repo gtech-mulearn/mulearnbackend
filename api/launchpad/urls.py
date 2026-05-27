@@ -6,7 +6,7 @@ from .launchpad_views import (
     RefreshTokenAPI, CompanyVerifyAPI, ListJobsAPI, VerifyTaskAPI, ListLaunchpadStudentsAPI,
     SendJobInvitationsAPI, StudentJobInvitationsAPI, StudentApplyToJobAPI, AcceptedStudentsAPI,
     ScheduleInterviewAPI, ApplicationFinalDecisionAPI, CompanyListVerifiedAPI, DeleteCompanyAPI,JobAPI,ForgotPasswordAPI, ResetPasswordAPI, VerifyResetTokenAPI, ChangePasswordAPI,
-    DeleteCompanyAPI,
+    DeleteCompanyAPI, JobAnalyticsAPI, JobTrendsAnalyticsAPI, JobsSummaryAnalyticsAPI,
 )
 
 urlpatterns = [
@@ -34,6 +34,9 @@ urlpatterns = [
     path('schedule-interview/', ScheduleInterviewAPI.as_view(), name='schedule-interview'),
     path('application-final-decision/', ApplicationFinalDecisionAPI.as_view(), name='application-final-decision'),
     path('delete-company/', DeleteCompanyAPI.as_view()),
+    path('analytics/jobs-summary/', JobsSummaryAnalyticsAPI.as_view()),
+    path('analytics/jobs/<str:job_id>/', JobAnalyticsAPI.as_view()),
+    path('analytics/trends/', JobTrendsAnalyticsAPI.as_view()),
     #<----------------------- old launchpad -------------------------->
     path("leaderboard/", launchpad_views.Leaderboard.as_view()),
     path(

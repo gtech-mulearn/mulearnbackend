@@ -4,6 +4,8 @@ from datetime import timedelta
 from decouple import config
 from django.utils import timezone
 from django.db.models import Sum, Max, Prefetch, F, OuterRef, Subquery, IntegerField, Count, Q, Prefetch
+from django.db.models.functions import TruncDate
+from django.utils.dateparse import parse_date
 from rest_framework.views import APIView
 from django.core.files.storage import FileSystemStorage
 from decouple import config as decouple_config
@@ -544,6 +546,154 @@ class JobAPI(APIView):
             return CustomResponse(
                 general_message="Job not found."
             ).get_failure_response()
+
+
+class JobAnalyticsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+
+    def get(self, request, job_id):
+        user_type = request.auth.get("user_type")
+        company_id = request.auth.get("id")
+
+        if user_type != "company":
+            return CustomResponse(
+                general_message="Only companies can view job analytics."
+            ).get_unauthorized_response()
+
+        job = LaunchpadJobs.objects.filter(id=job_id).only("id", "title", "company_id").first()
+        if not job:
+            return CustomResponse(
+                general_message="Job not found."
+            ).get_failure_response(status_code=404, http_status_code=404)
+
+        if job.company_id != company_id:
+            return CustomResponse(
+                general_message="You can only view analytics for jobs posted by your company."
+            ).get_unauthorized_response()
+
+        application_stats = LaunchpadJobApplications.objects.filter(job_id=job_id).aggregate(
+            total_applications=Count("id"),
+            accepted=Count("id", filter=Q(status="accepted")),
+            rejected=Count("id", filter=Q(status="rejected")),
+            interview_scheduled=Count("id", filter=Q(status="interview_scheduled")),
+            invited=Count("id", filter=Q(status="invited")),
+            applied=Count("id", filter=Q(status="applied")),
+        )
+
+        return CustomResponse(
+            response={
+                "job_id": job.id,
+                "job_title": job.title,
+                "total_applications": application_stats.get("total_applications", 0) or 0,
+                "accepted": application_stats.get("accepted", 0) or 0,
+                "rejected": application_stats.get("rejected", 0) or 0,
+                "interview_scheduled": application_stats.get("interview_scheduled", 0) or 0,
+                "invited": application_stats.get("invited", 0) or 0,
+                "applied": application_stats.get("applied", 0) or 0,
+            },
+            general_message="Job analytics fetched successfully",
+        ).get_success_response()
+
+
+class JobTrendsAnalyticsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+
+    def get(self, request):
+        user_type = request.auth.get("user_type")
+        company_id = request.auth.get("id")
+
+        if user_type != "company":
+            return CustomResponse(
+                general_message="Only companies can view application trends."
+            ).get_unauthorized_response()
+
+        from_param = request.query_params.get("from_date")
+        to_param = request.query_params.get("to_date")
+        from_date = self._parse_date(from_param) if from_param else None
+        if from_param and from_date is None:
+            return CustomResponse(
+                general_message="Invalid date format. Use YYYY-MM-DD"
+            ).get_failure_response()
+
+        to_date = self._parse_date(to_param) if to_param else None
+        if to_param and to_date is None:
+            return CustomResponse(
+                general_message="Invalid date format. Use YYYY-MM-DD"
+            ).get_failure_response()
+
+        if from_date and to_date and from_date > to_date:
+            return CustomResponse(
+                general_message="from_date cannot be after to_date"
+            ).get_failure_response()
+
+        filters = Q(job__company_id=company_id)
+        if from_date:
+            filters &= Q(created_at__date__gte=from_date)
+        if to_date:
+            filters &= Q(created_at__date__lte=to_date)
+
+        trends = (
+            LaunchpadJobApplications.objects.filter(filters)
+            .annotate(date=TruncDate("created_at"))
+            .values("date")
+            .annotate(applications=Count("id"))
+            .order_by("date")
+        )
+
+        return CustomResponse(
+            response={
+                "trends": [
+                    {
+                        "date": item["date"].isoformat() if item["date"] else None,
+                        "applications": item["applications"],
+                    }
+                    for item in trends
+                ]
+            },
+            general_message="Application trends fetched successfully",
+        ).get_success_response()
+
+    @staticmethod
+    def _parse_date(value: str):
+        return parse_date(value)
+
+
+class JobsSummaryAnalyticsAPI(APIView):
+    authentication_classes = [LaunchpadJWTPermission]
+
+    def get(self, request):
+        user_type = request.auth.get("user_type")
+        user_id = request.auth.get("id")
+
+        if user_type != "company":
+            return CustomResponse(
+                general_message="Only companies can view jobs summary analytics."
+            ).get_unauthorized_response()
+
+        jobs = LaunchpadJobs.objects.filter(company_id=user_id)
+        applications = LaunchpadJobApplications.objects.filter(job__company_id=user_id)
+
+        summary = applications.aggregate(
+            total_applications=Count("id"),
+            accepted=Count("id", filter=Q(status="accepted")),
+            rejected=Count("id", filter=Q(status="rejected")),
+            interview_scheduled=Count("id", filter=Q(status="interview_scheduled")),
+            invited=Count("id", filter=Q(status="invited")),
+            applied=Count("id", filter=Q(status="applied")),
+        )
+
+        return CustomResponse(
+            response={
+                "total_jobs": jobs.count(),
+                "total_applications": summary.get("total_applications", 0) or 0,
+                "accepted": summary.get("accepted", 0) or 0,
+                "rejected": summary.get("rejected", 0) or 0,
+                "interview_scheduled": summary.get("interview_scheduled", 0) or 0,
+                "invited": summary.get("invited", 0) or 0,
+                "applied": summary.get("applied", 0) or 0,
+            },
+            general_message="Jobs summary analytics fetched successfully",
+        ).get_success_response()
         
 class ListJobsAPI(APIView):
     authentication_classes = [CustomizePermission, LaunchpadJWTPermission]

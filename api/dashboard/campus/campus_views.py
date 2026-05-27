@@ -394,6 +394,54 @@ class WeeklyKarmaAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 
+class CampusProgramParticipationAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
+
+        campus = (
+            Organization.objects.filter(
+                id=user_org_link.org.id,
+                org_type=OrganizationType.COLLEGE.value,
+            )
+            .values("id", "title", "code")
+            .annotate(
+                program_count=Count("learning_circle_org_id", distinct=True),
+                participant_count=Count(
+                    "learning_circle_org_id__user_circle_link_circle__user",
+                    filter=Q(
+                        learning_circle_org_id__user_circle_link_circle__accepted=True
+                    ),
+                    distinct=True,
+                ),
+                participation_count=Count(
+                    "learning_circle_org_id__user_circle_link_circle",
+                    filter=Q(
+                        learning_circle_org_id__user_circle_link_circle__accepted=True
+                    ),
+                ),
+            )
+            .first()
+        )
+
+        return CustomResponse(
+            response={"campuses": [campus] if campus else []},
+            general_message="Campus program participation fetched successfully",
+        ).get_success_response()
+
+
 class ChangeStudentTypeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
