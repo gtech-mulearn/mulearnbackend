@@ -15,10 +15,14 @@ from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 
+from datetime import datetime
+from django.utils import timezone
+
 from .serializers import (
     EventListItemSerializer,
     EventDetailSerializer,
     get_live_events,
+    EventCalendarItemSerializer,
 )
 
 
@@ -86,7 +90,7 @@ def _public_events_queryset(request, *, featured_only=False):
     user_id = _get_viewer_id(request)
 
     scope_filter = _build_scope_filter(user_id)
-    events = get_live_events().filter(scope_filter)
+    events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(scope_filter)
 
     events = events.filter(
         status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING]
@@ -314,3 +318,66 @@ class EventInterestAPI(APIView):
         return CustomResponse(
             general_message='Your interest has been removed.'
         ).get_success_response()
+
+
+class EventCalendarAPI(APIView):
+    """
+    GET /events/calendar/
+    Returns a list of events overlapping the requested date range, formatted for frontend calendar display.
+    Query Params:
+      - start_date (YYYY-MM-DD, mandatory)
+      - end_date   (YYYY-MM-DD, mandatory)
+    """
+
+    def get(self, request):
+        start_date = request.query_params.get('start_date')
+        end_date = request.query_params.get('end_date')
+
+        if not start_date or not end_date:
+            return CustomResponse(
+                general_message='Both start_date and end_date query parameters are required.'
+            ).get_failure_response()
+
+        try:
+            start_dt = datetime.strptime(start_date, '%Y-%m-%d')
+            end_dt = datetime.strptime(end_date, '%Y-%m-%d')
+            
+            from datetime import timedelta
+            # Add 1 day to end_dt to make it inclusive of the requested end date
+            end_dt = end_dt + timedelta(days=1)
+            
+            start_dt = timezone.make_aware(start_dt, timezone.utc)
+            end_dt = timezone.make_aware(end_dt, timezone.utc)
+        except ValueError:
+            return CustomResponse(
+                general_message='Invalid date format. Use YYYY-MM-DD.'
+            ).get_failure_response()
+
+        if start_dt >= end_dt:
+            return CustomResponse(
+                general_message='start_date must be before or equal to end_date.'
+            ).get_failure_response()
+
+        if (end_dt - start_dt).days > 94:
+            return CustomResponse(
+                general_message='Date range must not exceed 93 days.'
+            ).get_failure_response()
+
+        user_id = _get_viewer_id(request)
+        scope_filter = _build_scope_filter(user_id)
+        
+        events = (
+            get_live_events()
+            .select_related('category', 'organiser_ig', 'organiser_org')
+            .filter(scope_filter)
+            .filter(
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING, Event.Status.COMPLETED],
+                start_datetime__lt=end_dt,
+                end_datetime__gt=start_dt,
+            )
+            .order_by('start_datetime', 'end_datetime')
+        )
+
+        serializer = EventCalendarItemSerializer(events, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
