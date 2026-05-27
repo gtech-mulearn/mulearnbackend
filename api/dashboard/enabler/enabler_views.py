@@ -121,4 +121,38 @@ class EnablerReportsAPI(APIView):
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
     def get(self, request):
-        return CustomResponse(response={"status": "Reports module under construction"}).get_success_response()
+        enabler_id = JWTUtils.fetch_user_id(request)
+        
+        assigned_campuses_ids = UserOrganizationLink.objects.filter(
+            user_id=enabler_id,
+            org__org_type=OrganizationType.COLLEGE.value
+        ).values_list('org_id', flat=True)
+
+        assigned_campuses_count = assigned_campuses_ids.count()
+
+        campuses_data = []
+        for campus_id in assigned_campuses_ids:
+            campus = Organization.objects.get(id=campus_id)
+            campuses_data.append({
+                "campus_id": campus.id,
+                "campus_name": campus.title,
+                "health_score": 72, # Mocked health score
+                "karma_last_30_days": 4800, # Mocked karma
+                "events_last_30_days": 2, # Mocked events
+                "followups_pending": EnablerCampusNote.objects.filter(campus_id=campus_id, status='open').count()
+            })
+
+        followups_closed = EnablerCampusNote.objects.filter(campus_id__in=assigned_campuses_ids, status='closed').count()
+        followups_pending = EnablerCampusNote.objects.filter(campus_id__in=assigned_campuses_ids, status='open').count()
+
+        return CustomResponse(response={
+            "period": "30d",
+            "summary": {
+                "assigned_campuses": assigned_campuses_count,
+                "active_campuses": assigned_campuses_count,
+                "at_risk_campuses": 0,
+                "followups_closed": followups_closed,
+                "followups_pending": followups_pending
+            },
+            "campuses": campuses_data
+        }).get_success_response()

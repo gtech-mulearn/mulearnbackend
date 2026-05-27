@@ -16,7 +16,7 @@ class EnablerCampusNoteSerializer(serializers.ModelSerializer):
     
     class Meta:
         model = EnablerCampusNote
-        fields = ["id", "enabler_name", "note", "created_at", "updated_at"]
+        fields = ["id", "enabler_name", "note", "status", "priority", "follow_up_date", "created_at", "updated_at"]
         read_only_fields = ["id", "enabler_name", "created_at", "updated_at"]
 
     def create(self, validated_data):
