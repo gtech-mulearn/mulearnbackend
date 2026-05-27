@@ -702,3 +702,139 @@ class TaskTypeCrudAPI(APIView):
                 general_message=f"{taskType.title} updated successfully"
             ).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
+
+
+# ---------------------------------------------------------------------------
+# Admin: Task Approval Workflow (for company-submitted tasks)
+# ---------------------------------------------------------------------------
+
+class AdminTaskApprovalAPI(APIView):
+    """
+    GET  /dashboard/task/pending/              — list all tasks awaiting admin review
+    PATCH /dashboard/task/<task_id>/approve/   — approve a pending task (goes live)
+    PATCH /dashboard/task/<task_id>/reject/    — reject with a reason
+
+    All actions require the Admin role.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        """List all tasks with approval_status='pending'."""
+        from django.utils import timezone as tz
+
+        queryset = (
+            TaskList.objects
+            .filter(approval_status="pending")
+            .select_related("ig", "type", "submitted_by_company")
+            .order_by("created_at")
+        )
+
+        paginated = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            search_fields=["title", "hashtag", "submitted_by_company__name"],
+            sort_fields={"createdAt": "created_at", "title": "title"},
+            is_pagination=True,
+        )
+
+        data = []
+        for task in paginated["queryset"]:
+            data.append({
+                "id":                   str(task.id),
+                "title":                task.title,
+                "hashtag":              task.hashtag,
+                "description":          task.description,
+                "karma":                task.karma,
+                "approval_status":      task.approval_status,
+                "ig":                   {"id": str(task.ig.id), "name": task.ig.name} if task.ig else None,
+                "type":                 {"id": str(task.type.id), "title": task.type.title} if task.type else None,
+                "submitted_by_company": {
+                    "id": str(task.submitted_by_company.id),
+                    "name": task.submitted_by_company.name,
+                } if task.submitted_by_company else None,
+                "created_at":           task.created_at.isoformat(),
+            })
+
+        return CustomResponse(
+            general_message="Pending tasks fetched successfully.",
+            response={"tasks": data, "pagination": paginated["pagination"]},
+        ).get_success_response()
+
+    @role_required([RoleType.ADMIN.value])
+    def patch(self, request, task_id):
+        """
+        Approve or reject a pending task.
+        Body: { "action": "approve" | "reject", "reason": "<string — required for reject>" }
+        """
+        from django.utils import timezone as tz
+
+        action = request.data.get("action")
+        if action not in ("approve", "reject"):
+            return CustomResponse(
+                general_message="Invalid action. Must be 'approve' or 'reject'.",
+                message={"error_code": "INVALID_ACTION"},
+            ).get_failure_response()
+
+        try:
+            task = TaskList.objects.get(id=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found.",
+                message={"error_code": "TASK_NOT_FOUND"},
+            ).get_failure_response()
+
+        if task.approval_status != "pending":
+            return CustomResponse(
+                general_message=f"Only pending tasks can be reviewed. Current status: '{task.approval_status}'.",
+                message={"error_code": "INVALID_STATUS_TRANSITION"},
+            ).get_failure_response()
+
+        admin_user_id = JWTUtils.fetch_user_id(request)
+        from db.user import User as UserModel
+        admin_user = UserModel.objects.filter(id=admin_user_id).first()
+
+        now = tz.now()
+
+        if action == "approve":
+            task.approval_status = "approved"
+            task.active = True
+            task.rejection_reason = None
+            task.reviewed_by_admin = admin_user
+            task.reviewed_at = now
+            task.updated_by = admin_user
+            task.save(update_fields=[
+                "approval_status", "active", "rejection_reason",
+                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+            ])
+            message = "Task approved and is now live."
+        else:
+            reason = (request.data.get("reason") or "").strip()
+            if not reason:
+                return CustomResponse(
+                    general_message="A rejection reason is required.",
+                    message={"error_code": "REASON_REQUIRED"},
+                ).get_failure_response()
+            task.approval_status = "rejected"
+            task.active = False
+            task.rejection_reason = reason
+            task.reviewed_by_admin = admin_user
+            task.reviewed_at = now
+            task.updated_by = admin_user
+            task.save(update_fields=[
+                "approval_status", "active", "rejection_reason",
+                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+            ])
+            message = "Task rejected."
+
+        return CustomResponse(
+            general_message=message,
+            response={
+                "task_id":          str(task.id),
+                "approval_status":  task.approval_status,
+                "active":           task.active,
+                "rejection_reason": task.rejection_reason,
+                "reviewed_by":      str(admin_user.id) if admin_user else None,
+                "reviewed_at":      task.reviewed_at.isoformat() if task.reviewed_at else None,
+            },
+        ).get_success_response()
