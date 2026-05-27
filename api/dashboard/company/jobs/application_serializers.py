@@ -25,6 +25,7 @@ class ApplicationCreateSerializer(serializers.Serializer):
 
 class LearnerApplicationListSerializer(serializers.ModelSerializer):
     """Learner-facing view of their own application — includes job & company context."""
+    job_id       = serializers.SerializerMethodField()
     job_title    = serializers.SerializerMethodField()
     job_type     = serializers.SerializerMethodField()
     company_name = serializers.SerializerMethodField()
@@ -34,10 +35,13 @@ class LearnerApplicationListSerializer(serializers.ModelSerializer):
         model  = CompanyJobApplication
         fields = [
             'id', 'status', 'cover_note',
-            'job_title', 'job_type', 'company_name', 'company_id',
+            'job_id', 'job_title', 'job_type', 'company_name', 'company_id',
             'created_at', 'updated_at',
         ]
         read_only_fields = fields
+
+    def get_job_id(self, obj):
+        return str(obj.job.id)
 
     def get_job_title(self, obj):
         return obj.job.title
