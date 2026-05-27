@@ -62,6 +62,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     )
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
+    role_verification = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -79,6 +80,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "gender",
             "muid",
             "roles",
+            "role_verification",
             "college_id",
             "college_code",
             "org_district_id",
@@ -122,9 +124,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         if "role_values" in self.context:
             return self.context["role_values"]
-        role_values = list({link.role.title for link in obj.user_role_link_user.all()})
+        
+        # Use explicitly prefetched roles to prevent lazy DB queries
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        role_values = list({link.role.title for link in role_links})
+        
         self.context["role_values"] = role_values
         return role_values
+
+    def get_role_verification(self, obj):
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        return [
+            {
+                "role": link.role.title,
+                "is_verified": link.verified
+            }
+            for link in role_links
+        ]
 
     def get_college_id(self, obj):
         org_type = self._get_org_type(obj)

@@ -13,6 +13,30 @@ def get_user_college_link(user_id):
     ).first()
 
 
+def get_campus_context(request):
+    """
+    Standardized tenancy enforcement helper.
+    Returns (org, error_response).
+    """
+    from utils.permission import JWTUtils
+    from utils.response import CustomResponse
+    from rest_framework import status
+
+    user_id = JWTUtils.fetch_user_id(request)
+    link = get_user_college_link(user_id)
+    
+    if not link or not link.org:
+        return None, CustomResponse(
+            general_message="User is not linked to a campus",
+            message={"error_code": "CAMPUS_NOT_FOUND"},
+        ).get_failure_response(
+            status_code=404,
+            http_status_code=status.HTTP_404_NOT_FOUND,
+        )
+    
+    return link.org, None
+
+
 def validate_campus_member(user_id, org_id):
     """Confirm that a user is an active member of the given campus (not alumni)."""
     return UserOrganizationLink.objects.filter(

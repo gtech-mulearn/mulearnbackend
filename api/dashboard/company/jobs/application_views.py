@@ -146,7 +146,22 @@ class ApplyToJobAPIView(APIView):
                 "DUPLICATE_APPLICATION",
             )
 
-        # 5. Validate body
+        # 5. Task-completion gate — block if the job requires a completed task
+        if job.requires_task_completion and job.linked_task_id:
+            from db.task import KarmaActivityLog
+            task_completed = KarmaActivityLog.objects.filter(
+                user=user,
+                task_id=job.linked_task_id,
+                appraiser_approved=True,
+            ).exists()
+            if not task_completed:
+                return _bad_request(
+                    "You must complete the required task before applying to this job.",
+                    "TASK_NOT_COMPLETED",
+                    {"linked_task_id": str(job.linked_task_id)},
+                )
+
+        # 6. Validate body
         serializer = ApplicationCreateSerializer(data=request.data)
         if not serializer.is_valid():
             return _bad_request(
@@ -155,7 +170,7 @@ class ApplyToJobAPIView(APIView):
                 {"errors": serializer.errors},
             )
 
-        # 6. Create application
+        # 7. Create application
         application = CompanyJobApplication.objects.create(
             job=job,
             applicant=user,
@@ -401,5 +416,66 @@ class CompanyUpdateApplicationStatusAPIView(BaseCompanyJobView):
                 "new_status":     application.status,
                 "reviewed_by":    str(user.id),
                 "reviewed_at":    application.reviewed_at.isoformat(),
+            },
+        ).get_success_response()
+
+
+# ---------------------------------------------------------------------------
+# Learner: Withdraw own application
+# ---------------------------------------------------------------------------
+
+class LearnerWithdrawApplicationAPIView(APIView):
+    """
+    PATCH company/applications/<app_id>/withdraw/
+
+    Allows the authenticated learner to withdraw their own application,
+    as long as it is still in 'applied' or 'shortlisted' status.
+    Terminal statuses (accepted, rejected, withdrawn) cannot be changed.
+    """
+
+    permission_classes = [CustomizePermission]
+
+    def patch(self, request, app_id):
+        # 1. Authenticate
+        user = _get_user(request)
+        if not user:
+            return _unauthorized("User not found or token invalid.", "USER_NOT_FOUND")
+
+        # 2. Block company users
+        if _is_company_role(user):
+            return _forbidden(
+                "Company users cannot withdraw applications.",
+                "COMPANY_ROLE_NOT_ALLOWED",
+            )
+
+        # 3. Fetch the application — must belong to this user
+        try:
+            application = CompanyJobApplication.objects.select_related('job').get(
+                id=app_id,
+                applicant=user,
+            )
+        except CompanyJobApplication.DoesNotExist:
+            return _not_found(
+                "Application not found.",
+                "APPLICATION_NOT_FOUND",
+            )
+
+        # 4. Enforce FSM: only applied / shortlisted can be withdrawn
+        if application.status not in ('applied', 'shortlisted'):
+            return _bad_request(
+                f"Cannot withdraw an application with status '{application.status}'.",
+                "INVALID_STATUS_TRANSITION",
+            )
+
+        # 5. Apply the withdrawal
+        application.status = 'withdrawn'
+        application.save(update_fields=['status', 'updated_at'])
+
+        return CustomResponse(
+            general_message="Application withdrawn successfully.",
+            response={
+                "application_id": str(application.id),
+                "job_id":         str(application.job.id),
+                "new_status":     application.status,
             },
         ).get_success_response()

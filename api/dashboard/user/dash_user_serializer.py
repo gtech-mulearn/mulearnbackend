@@ -491,6 +491,7 @@ class UserBasicDetailsSerializer(serializers.ModelSerializer):
     class Meta:
         model = User
         fields = (
+            "id",
             "full_name",
             "muid",
             "interest_groups",

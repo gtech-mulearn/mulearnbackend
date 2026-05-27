@@ -145,6 +145,7 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
     """Session list with ig name and participant count."""
 
     ig_name = serializers.SerializerMethodField()
+    org_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.full_name")
     participant_count = serializers.SerializerMethodField()
 
@@ -163,6 +164,8 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
             "is_global",
             "ig_id",
             "ig_name",
+            "org_id",
+            "org_name",
             "created_by_name",
             "created_at",
             "participant_count",
@@ -172,6 +175,9 @@ class MentorSessionListSerializer(serializers.ModelSerializer):
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
 
+    def get_org_name(self, obj):
+        return obj.org.title if obj.org else None
+
     def get_participant_count(self, obj):
         return obj.participants.count()
 
@@ -180,6 +186,7 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
     """Session detail with all participants embedded."""
 
     ig_name = serializers.SerializerMethodField()
+    org_name = serializers.SerializerMethodField()
     created_by_name = serializers.CharField(source="created_by.full_name")
     updated_by_name = serializers.CharField(source="updated_by.full_name")
     approved_by_name = serializers.SerializerMethodField()
@@ -200,6 +207,8 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
             "is_global",
             "ig_id",
             "ig_name",
+            "org_id",
+            "org_name",
             "approved_by_name",
             "approved_at",
             "created_by_name",
@@ -212,6 +221,9 @@ class MentorSessionDetailSerializer(serializers.ModelSerializer):
 
     def get_ig_name(self, obj):
         return obj.ig.name if obj.ig else None
+
+    def get_org_name(self, obj):
+        return obj.org.title if obj.org else None
 
     def get_approved_by_name(self, obj):
         return obj.approved_by.full_name if obj.approved_by else None
@@ -858,3 +870,213 @@ class PublicMentorCardSerializer(serializers.ModelSerializer):
         ).values_list("session_id", flat=True)
         completed = MentorshipSession.objects.filter(id__in=links, status=MentorshipSession.Status.COMPLETED).count()
         return {"completed_sessions": completed, "hours": obj.hours}
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Org-Mentor Serializers (Company and Campus)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class OrgMentorOnboardingSerializer(serializers.ModelSerializer):
+    """Base create serializer for Company/Campus mentor onboarding.
+    Subclasses set mentor_tier; context['expected_org_type'] validates org."""
+
+    class Meta:
+        model = UserMentor
+        fields = [
+            "about", "expertise", "reason",
+            "mentor_tier", "org",
+            "created_by", "updated_by",
+        ]
+        extra_kwargs = {
+            "about":       {"required": False, "allow_null": True},
+            "expertise":   {"required": False, "allow_null": True},
+            "reason":      {"required": False, "allow_null": True},
+            "mentor_tier": {"required": True},
+            "org":         {"required": True},
+            "created_by":  {"required": True},
+            "updated_by":  {"required": True},
+        }
+
+    def validate_org(self, org):
+        expected_type = self.context.get("expected_org_type")
+        if expected_type and org.org_type != expected_type:
+            raise serializers.ValidationError(
+                f"Organization must be type '{expected_type}', got '{org.org_type}'."
+            )
+        return org
+
+
+class CompanyMentorOnboardingSerializer(OrgMentorOnboardingSerializer):
+    """Create a COMPANY_MENTOR row (org.org_type must be 'Company')."""
+
+    def validate(self, attrs):
+        attrs["mentor_tier"] = UserMentor.MentorTier.COMPANY_MENTOR
+        return attrs
+
+
+class CampusMentorOnboardingSerializer(OrgMentorOnboardingSerializer):
+    """Create a CAMPUS_MENTOR row (org.org_type must be 'College')."""
+
+    def validate(self, attrs):
+        attrs["mentor_tier"] = UserMentor.MentorTier.CAMPUS_MENTOR
+        return attrs
+
+
+class OrgMentorProfileUpdateSerializer(serializers.ModelSerializer):
+    """Partial update of org-mentor own profile (about/expertise/reason only)."""
+
+    class Meta:
+        model = UserMentor
+        fields = ["about", "expertise", "reason", "updated_by"]
+        extra_kwargs = {
+            "updated_by": {"required": True},
+            "about":      {"required": False, "allow_null": True},
+            "expertise":  {"required": False, "allow_null": True},
+            "reason":     {"required": False, "allow_null": True},
+        }
+
+
+class OrgMentorListSerializer(serializers.ModelSerializer):
+    """Read org-mentor profile for list and detail views."""
+
+    full_name        = serializers.CharField(source="user.full_name")
+    email            = serializers.EmailField(source="user.email")
+    muid             = serializers.CharField(source="user.muid")
+    profile_pic      = serializers.SerializerMethodField()
+    org_name         = serializers.SerializerMethodField()
+    org_type         = serializers.SerializerMethodField()
+    verified_by_name = serializers.SerializerMethodField()
+
+    class Meta:
+        model = UserMentor
+        fields = [
+            "id", "full_name", "email", "muid", "profile_pic",
+            "about", "expertise", "reason", "hours",
+            "mentor_tier", "is_verified",
+            "org_id", "org_name", "org_type",
+            "verified_by_name", "verified_at", "verification_note",
+            "created_at",
+        ]
+
+    def get_profile_pic(self, obj):
+        return obj.user.profile_pic
+
+    def get_org_name(self, obj):
+        return obj.org.title if obj.org else None
+
+    def get_org_type(self, obj):
+        return obj.org.org_type if obj.org else None
+
+    def get_verified_by_name(self, obj):
+        return obj.verified_by.full_name if obj.verified_by else None
+
+
+class OrgScopedSessionCreateSerializer(serializers.ModelSerializer):
+    """Create a session scoped to a Company/Campus org.
+    org is required; ig is optional (campus sessions may also link an IG chapter).
+    Org-scoped sessions are auto-SCHEDULED — no admin approval queue."""
+
+    class Meta:
+        model = MentorshipSession
+        fields = [
+            "org", "ig",
+            "title", "description", "mode",
+            "starts_at", "ends_at",
+            "meeting_link", "venue",
+            "max_participants", "status",
+            "created_by", "updated_by",
+        ]
+        extra_kwargs = {
+            "org":              {"required": True},
+            "ig":               {"required": False, "allow_null": True},
+            "status":           {"required": False},
+            "venue":            {"required": False, "allow_null": True},
+            "meeting_link":     {"required": False, "allow_null": True},
+            "max_participants": {"required": False, "allow_null": True},
+            "created_by":       {"required": True},
+            "updated_by":       {"required": True},
+        }
+
+    def validate(self, attrs):
+        from utils.utils import DateTimeUtils
+        starts_at = attrs.get("starts_at")
+        ends_at   = attrs.get("ends_at")
+        now       = DateTimeUtils.get_current_utc_time()
+
+        if starts_at and ends_at and starts_at >= ends_at:
+            raise serializers.ValidationError("starts_at must be before ends_at.")
+        if starts_at and starts_at < now:
+            raise serializers.ValidationError("starts_at cannot be in the past.")
+
+        mode         = attrs.get("mode", MentorshipSession.Mode.ONLINE)
+        venue        = attrs.get("venue")
+        meeting_link = attrs.get("meeting_link")
+
+        if mode == MentorshipSession.Mode.ONLINE and not meeting_link:
+            raise serializers.ValidationError({"meeting_link": "Meeting link required for ONLINE sessions."})
+        if mode == MentorshipSession.Mode.OFFLINE and not venue:
+            raise serializers.ValidationError({"venue": "Venue required for OFFLINE sessions."})
+        if mode == MentorshipSession.Mode.HYBRID and not (meeting_link or venue):
+            raise serializers.ValidationError("At least one of meeting_link or venue is required.")
+
+        # Org-scoped sessions skip the admin approval queue
+        attrs.setdefault("status", MentorshipSession.Status.SCHEDULED)
+        attrs["is_global"] = False
+        return attrs
+
+
+class OrgOpportunitySerializer(serializers.ModelSerializer):
+    """Read an org-scoped opportunity."""
+
+    org_name        = serializers.SerializerMethodField()
+    ig_name         = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source="created_by.full_name")
+
+    class Meta:
+        model = IgOpportunity
+        fields = [
+            "id", "org_id", "org_name",
+            "ig_id", "ig_name",
+            "type", "title", "description",
+            "eligibility", "application_url",
+            "starts_at", "ends_at", "status",
+            "created_by_name", "created_at", "updated_at",
+        ]
+
+    def get_org_name(self, obj):
+        return obj.org.title if obj.org else None
+
+    def get_ig_name(self, obj):
+        return obj.ig.name if obj.ig else None
+
+
+class OrgOpportunityWriteSerializer(serializers.ModelSerializer):
+    """Create / update an org-scoped opportunity."""
+
+    class Meta:
+        model = IgOpportunity
+        fields = [
+            "org", "ig",
+            "type", "title", "description",
+            "eligibility", "application_url",
+            "starts_at", "ends_at", "status",
+            "created_by", "updated_by",
+        ]
+        extra_kwargs = {
+            "org":              {"required": True},
+            "ig":               {"required": False, "allow_null": True},
+            "eligibility":      {"required": False, "allow_null": True},
+            "application_url":  {"required": False, "allow_null": True},
+            "starts_at":        {"required": False, "allow_null": True},
+            "ends_at":          {"required": False, "allow_null": True},
+            "status":           {"required": False},
+            "created_by":       {"required": True},
+            "updated_by":       {"required": True},
+        }
+
+    def validate(self, attrs):
+        starts_at = attrs.get("starts_at", getattr(self.instance, "starts_at", None))
+        ends_at   = attrs.get("ends_at",   getattr(self.instance, "ends_at",   None))
+        if starts_at and ends_at and starts_at >= ends_at:
+            raise serializers.ValidationError("starts_at must be before ends_at.")
+        return attrs

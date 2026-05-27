@@ -1,8 +1,10 @@
 from rest_framework import serializers
 from db.company import CompanyJob, CompanyJobRule
 from db.skill import Skill
-from db.task import InterestGroup
+from db.task import InterestGroup, TaskList
 from db.achievement import Achievement
+
+
 class JobRuleListSerializer(serializers.ModelSerializer):
     rule_name = serializers.SerializerMethodField()
     
@@ -44,22 +46,44 @@ class JobRuleListSerializer(serializers.ModelSerializer):
 class CompanyJobListSerializer(serializers.ModelSerializer):
     """Serializer for listing company jobs."""
     rules = JobRuleListSerializer(many=True, read_only=True)
+    linked_task_info = serializers.SerializerMethodField()
+
     class Meta:
         model = CompanyJob
         fields = [
-            'id', 'title', 'job_type', 'location', 'salary_range',
+            'id', 'title', 'experience', 'job_description',
+            'job_type', 'location', 'salary_range',
             'min_karma', 'min_level', 'status', 'created_at', 'updated_at',
             # Enhancement fields
             'karma_reward',
             'duration_value', 'duration_unit',
             'hourly_rate', 'deliverables',
             'stipend', 'certificate_provided',
+            # Task-based hiring
+            'requires_task_completion',
+            'linked_task_info',
             'rules',
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
 
+    def get_linked_task_info(self, obj):
+        """Return basic info about the linked task, or None."""
+        if not obj.linked_task_id:
+            return None
+        try:
+            task = TaskList.objects.get(id=obj.linked_task_id)
+            return {
+                'id': str(task.id),
+                'hashtag': task.hashtag,
+                'title': task.title,
+                'karma': task.karma,
+            }
+        except TaskList.DoesNotExist:
+            return None
+
 
 class CompanyJobCreateSerializer(serializers.ModelSerializer):
+    linked_task_id = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = CompanyJob
@@ -71,10 +95,13 @@ class CompanyJobCreateSerializer(serializers.ModelSerializer):
             'duration_value', 'duration_unit',
             'hourly_rate', 'deliverables',
             'stipend', 'certificate_provided',
+            # Task-based hiring
+            'linked_task_id', 'requires_task_completion',
         ]
         extra_kwargs = {
             'title':    {'required': True, 'max_length': 75},
             'job_type': {'required': True},
+            'requires_task_completion': {'required': False},
         }
 
     def validate_job_type(self, value):
@@ -120,10 +147,29 @@ class CompanyJobCreateSerializer(serializers.ModelSerializer):
                 {"duration_value": "duration_value is required when duration_unit is provided"}
             )
 
+        # Task-based hiring: if requires_task_completion, linked_task_id must be a live task
+        requires_task = data.get('requires_task_completion', False)
+        linked_task_id = data.get('linked_task_id')
+        if requires_task:
+            if not linked_task_id:
+                raise serializers.ValidationError(
+                    {"linked_task_id": "linked_task_id is required when requires_task_completion is True"}
+                )
+            task = TaskList.objects.filter(id=str(linked_task_id)).first()
+            if not task:
+                raise serializers.ValidationError(
+                    {"linked_task_id": f"Task with id {linked_task_id} does not exist"}
+                )
+            if getattr(task, 'approval_status', 'approved') != 'approved' or not task.active:
+                raise serializers.ValidationError(
+                    {"linked_task_id": "Linked task must be approved and active"}
+                )
+
         return data
 
 
 class CompanyJobUpdateSerializer(serializers.ModelSerializer):
+    linked_task_id = serializers.UUIDField(required=False, allow_null=True)
 
     class Meta:
         model = CompanyJob
@@ -135,23 +181,26 @@ class CompanyJobUpdateSerializer(serializers.ModelSerializer):
             'duration_value', 'duration_unit',
             'hourly_rate', 'deliverables',
             'stipend', 'certificate_provided',
+            # Task-based hiring
+            'linked_task_id', 'requires_task_completion',
         ]
         extra_kwargs = {
-            'title':               {'required': False, 'max_length': 75},
-            'experience':          {'required': False},
-            'job_description':     {'required': False},
-            'location':            {'required': False},
-            'salary_range':        {'required': False},
-            'job_type':            {'required': False},
-            'min_karma':           {'required': False},
-            'min_level':           {'required': False},
-            'karma_reward':        {'required': False},
-            'duration_value':      {'required': False},
-            'duration_unit':       {'required': False},
-            'hourly_rate':         {'required': False},
-            'deliverables':        {'required': False},
-            'stipend':             {'required': False},
-            'certificate_provided':{'required': False},
+            'title':                    {'required': False, 'max_length': 75},
+            'experience':               {'required': False},
+            'job_description':          {'required': False},
+            'location':                 {'required': False},
+            'salary_range':             {'required': False},
+            'job_type':                 {'required': False},
+            'min_karma':                {'required': False},
+            'min_level':                {'required': False},
+            'karma_reward':             {'required': False},
+            'duration_value':           {'required': False},
+            'duration_unit':            {'required': False},
+            'hourly_rate':              {'required': False},
+            'deliverables':             {'required': False},
+            'stipend':                  {'required': False},
+            'certificate_provided':     {'required': False},
+            'requires_task_completion': {'required': False},
         }
 
     def validate_job_type(self, value):
@@ -200,6 +249,24 @@ class CompanyJobUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"duration_value": "duration_value cannot be null when duration_unit is provided"}
             )
+
+        # Task-based hiring validation (same as create)
+        requires_task = data.get('requires_task_completion')
+        linked_task_id = data.get('linked_task_id')
+        if requires_task:
+            if not linked_task_id:
+                raise serializers.ValidationError(
+                    {"linked_task_id": "linked_task_id is required when requires_task_completion is True"}
+                )
+            task = TaskList.objects.filter(id=str(linked_task_id)).first()
+            if not task:
+                raise serializers.ValidationError(
+                    {"linked_task_id": f"Task with id {linked_task_id} does not exist"}
+                )
+            if getattr(task, 'approval_status', 'approved') != 'approved' or not task.active:
+                raise serializers.ValidationError(
+                    {"linked_task_id": "Linked task must be approved and active"}
+                )
 
         return data
 
