@@ -166,6 +166,12 @@ urlpatterns = [
         name="campus-growth",
     ),
 
+    path(
+        "showcase/",
+        campus_views.CampusShowcaseAPI.as_view(),
+        name="campus-showcase",
+    ),
+
     # Catch-all org_id routes MUST be last (they match any single-segment path)
     path(
         "<str:org_id>/",
