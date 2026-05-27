@@ -657,3 +657,19 @@ class CampusIGMemberSerializer(serializers.ModelSerializer):
         level_link = obj.user.user_lvl_link_user.first()
         return level_link.level.name if level_link else None
 
+
+class StudentActivityTimelineSerializer(serializers.ModelSerializer):
+    task_name = serializers.CharField(source="task.title", read_only=True)
+    ig_name = serializers.CharField(source="task.ig.name", read_only=True)
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = KarmaActivityLog
+        fields = ["id", "task_name", "ig_name", "karma", "status", "created_at"]
+
+    def get_status(self, obj):
+        if obj.appraiser_approved:
+            return "Approved"
+        elif obj.appraiser_approved is False:
+            return "Rejected"
+        return "Pending"

@@ -136,6 +136,11 @@ urlpatterns = [
 
     # New Analytics & Dashboard Routes
     path(
+        "students/<str:muid>/activity/",
+        campus_views.CampusStudentActivityAPI.as_view(),
+        name="campus-student-activity",
+    ),
+    path(
         "igs/",
         ig_views.CampusIGsAPI.as_view(),
         name="campus-igs-list",
