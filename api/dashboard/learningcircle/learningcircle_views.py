@@ -782,6 +782,11 @@ class CircleJoinAPI(APIView):
         except LearningCircle.DoesNotExist:
             return CustomResponse(general_message="Learning Circle not found").get_failure_response()
 
+        if circle.created_by_id == user_id:
+            return CustomResponse(
+                general_message="You are the creator of this circle"
+            ).get_failure_response()
+
         existing = UserCircleLink.objects.filter(circle=circle, user_id=user_id).first()
 
         if existing:
