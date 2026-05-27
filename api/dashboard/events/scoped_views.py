@@ -38,7 +38,7 @@ class IGEventListAPI(APIView):
             return CustomResponse(general_message='Interest Group not found.').get_failure_response()
 
         from django.db.models import Q
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org', 'created_by').filter(
             Q(organiser_ig_id=ig_id) | Q(scope_ig_id=ig_id),
             status__in=PUBLISHED_STATUSES,
         )
@@ -79,7 +79,7 @@ class ClusterEventListAPI(APIView):
                 pagination={'count': 0, 'totalPages': 0, 'isNext': False, 'isPrev': False, 'nextPage': None},
             )
 
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org', 'created_by').filter(
             organiser_ig_id__in=ig_ids,
             status__in=PUBLISHED_STATUSES,
         )
@@ -113,7 +113,7 @@ class CampusEventListAPI(APIView):
             return CustomResponse(general_message='Campus not found.').get_failure_response()
 
         from django.db.models import Q
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org', 'created_by').filter(
             Q(scope_org_id=campus_id) | Q(organiser_org_id=campus_id),
             status__in=PUBLISHED_STATUSES,
         )
@@ -150,7 +150,7 @@ class CampusIGEventListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     def get(self, request, campus_ig_id):
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org', 'created_by').filter(
             organiser_ci_id=campus_ig_id,
             status__in=PUBLISHED_STATUSES,
         )
@@ -182,7 +182,7 @@ class CompanyEventListAPI(APIView):
         if not org:
             return CustomResponse(general_message='Company not found.').get_failure_response()
 
-        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
+        events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org', 'created_by').filter(
             organiser_org_id=company_id,
             organiser_type=Event.OrganiserType.COMPANY,
             status__in=PUBLISHED_STATUSES,

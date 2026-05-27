@@ -38,6 +38,7 @@ MANAGEABLE_ROLES = {
     RoleType.DISTRICT_CAMPUS_LEAD.value,
     RoleType.COMPANY.value,
     RoleType.ENABLER.value,
+    RoleType.MENTOR.value,
 }
 
 
@@ -95,7 +96,7 @@ class ManageEventListCreateAPI(APIView):
             events = events.filter(status=status)
 
         paginated = CommonUtils.get_paginated_queryset(
-            events.select_related('category', 'organiser_ig', 'organiser_org'), request,
+            events.select_related('category', 'organiser_ig', 'organiser_org', 'created_by'), request,
             search_fields=['title', 'venue_city'],
             sort_fields={'created_at': '-created_at', 'start_datetime': 'start_datetime'},
         )
@@ -314,7 +315,7 @@ class ManageEventPublishAPI(APIView):
             new_status = Event.Status.PENDING_CAMPUS_APPROVAL
         elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
             new_status = Event.Status.PENDING_MENTOR_APPROVAL
-        elif event.organiser_type in (Event.OrganiserType.CAMPUS, Event.OrganiserType.COMPANY):
+        elif event.organiser_type in (Event.OrganiserType.CAMPUS, Event.OrganiserType.COMPANY, Event.OrganiserType.MENTOR):
             new_status = Event.Status.PENDING_APPROVAL
         else:
             new_status = Event.Status.PENDING_APPROVAL
