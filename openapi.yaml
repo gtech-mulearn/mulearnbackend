@@ -1,8 +1,8 @@
 openapi: 3.0.3
 info:
-  title: μLearn API
+  title: muLearn API
   version: 1.0.0
-  description: API documentation for the μLearn Platform backend.
+  description: API documentation for the muLearn Platform backend.
 paths:
   /api/v1/auth/apple-mobile/:
     post:
