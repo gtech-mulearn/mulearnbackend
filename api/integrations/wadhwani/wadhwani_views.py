@@ -7,9 +7,14 @@ from db.user import User
 
 from rest_framework.views import APIView
 from django.conf import settings
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class WadhwaniAuthToken(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Auth Token.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         url = settings.WADHWANI_CLIENT_AUTH_URL
 
@@ -29,6 +34,9 @@ class WadhwaniAuthToken(APIView):
 
 
 class WadhwaniUserLogin(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani User Login.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/iamservice/oauth/login"
         user_id = JWTUtils.fetch_user_id(request)
@@ -75,6 +83,9 @@ class WadhwaniUserLogin(APIView):
 
 
 class WadhwaniCourseDetails(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Course Details.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/courseservice/oauth/client/courses"
 
@@ -94,6 +105,9 @@ class WadhwaniCourseDetails(APIView):
 
 
 class WadhwaniCourseEnrollStatus(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Course Enroll Status.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/courseservice/oauth/client/courses"
         user_id = JWTUtils.fetch_user_id(request)
@@ -116,6 +130,9 @@ class WadhwaniCourseEnrollStatus(APIView):
 
 
 class WadhwaniCourseQuizData(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Course Quiz Data.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         if not (token := request.data.get("Client-Auth-Token", None)):
             return CustomResponse(

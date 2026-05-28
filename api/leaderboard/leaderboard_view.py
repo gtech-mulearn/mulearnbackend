@@ -8,9 +8,16 @@ from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class StudentsLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description="Retrieve Students Leaderboard.",
+        responses={200: serializers.StudentLeaderboardSerializer},
+    )
     def get(self, request):
         students_leaderboard = (
             User.objects.filter(
@@ -41,6 +48,9 @@ class StudentsLeaderboard(APIView):
 
 
 class StudentsMonthlyLeaderboard(APIView):
+    @extend_schema(tags=['Leaderboard'], description="Retrieve Students Monthly Leaderboard.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
         print("REquest reeceivd")
@@ -84,6 +94,9 @@ class StudentsMonthlyLeaderboard(APIView):
 
 
 class CollegeLeaderboard(APIView):
+    @extend_schema(tags=['Leaderboard'], description="Retrieve College Leaderboard.",
+        responses={200: serializers.WadhwaniCollegeLeaderboardSerializer},
+    )
     def get(self, request):
         college_leaderboard = (
             Organization.objects.filter(
@@ -104,6 +117,9 @@ class CollegeLeaderboard(APIView):
 
 
 class CollegeMonthlyLeaderboard(APIView):
+    @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
         college_monthly_leaderboard = (
@@ -140,6 +156,11 @@ class CollegeMonthlyLeaderboard(APIView):
         ).get_success_response()
 
 class WadhwaniCollegeLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description="Retrieve Wadhwani College Leaderboard.",
+        responses={200: serializers.WadhwaniCollegeLeaderboardSerializer},
+    )
     def get(self, request):
         wadhwani_hashtags = [
             "#lp24-interpersonalskills",
@@ -188,6 +209,11 @@ class WadhwaniCollegeLeaderboard(APIView):
 
 
 class WadhwaniZonalLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description="Retrieve Wadhwani Zonal Leaderboard.",
+        responses={200: serializers.WadhwaniZoneLeaderboardSerializer},
+    )
     def get(self, request):
         wadhwani_hashtags = [
             "#lp24-interpersonalskills",

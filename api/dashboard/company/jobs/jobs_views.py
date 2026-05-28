@@ -10,6 +10,8 @@ from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer,
 from db.skill import Skill 
 from db.task import InterestGroup  
 from db.achievement import Achievement
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 class BaseCompanyJobView(APIView):
     """Base view for common functionality across company job views."""
@@ -112,6 +114,11 @@ class BaseCompanyJobView(APIView):
 class ListCompanyJobsAPIView(BaseCompanyJobView):
     """API to list jobs for a specific company."""
     
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Retrieve List Company Jobs.",
+        responses={200: CompanyJobListSerializer},
+    )
     def get(self, request):
         try:
             # 1. Get authenticated user FIRST
@@ -225,6 +232,12 @@ class ListCompanyJobsAPIView(BaseCompanyJobView):
 
 class CreateCompanyJobAPIView(BaseCompanyJobView):
     
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Create Create Company Job.",
+        request=CompanyJobCreateSerializer,
+        responses={200: CompanyJobCreateSerializer},
+    )
     def post(self, request):
         try:
             # 1. Get authenticated user
@@ -326,6 +339,11 @@ class CreateCompanyJobAPIView(BaseCompanyJobView):
 class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
     """API view for retrieving specific job posting details with optimized rules."""
     
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Retrieve Get Company Job Details.",
+        responses={200: CompanyJobListSerializer},
+    )
     def get(self, request, job_id):
         try:
             # 1. Get authenticated user FIRST (same pattern as ListCompanyJobsAPIView)
@@ -394,6 +412,12 @@ class GetCompanyJobDetailsAPIView(BaseCompanyJobView):
 
 class UpdateCompanyJobAPIView(BaseCompanyJobView):
     
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Partially update Update Company Job.",
+        request=CompanyJobUpdateSerializer,
+        responses={200: CompanyJobUpdateSerializer},
+    )
     def patch(self, request, job_id):
         try:
             # 1. Get authenticated user
@@ -473,6 +497,9 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
                 http_status_code=status.HTTP_500_INTERNAL_SERVER_ERROR
             )
     
+    @extend_schema(tags=['Dashboard - Company - Jobs'], description="Delete Update Company Job.",
+        responses={200: CompanyJobUpdateSerializer},
+    )
     def delete(self, request, job_id):
         try:
             # 1. Get authenticated user
@@ -535,6 +562,12 @@ class UpdateCompanyJobAPIView(BaseCompanyJobView):
 class CreateJobRuleAPIView(BaseCompanyJobView):
     """API to create eligibility rules for a job."""
     
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Create Create Job Rule.",
+        request=JobRuleCreateSerializer,
+        responses={200: JobRuleCreateSerializer},
+    )
     def post(self, request, job_id):
         try:
             # 1. Get authenticated user
@@ -631,6 +664,9 @@ class CreateJobRuleAPIView(BaseCompanyJobView):
 class UpdateJobRuleAPIView(BaseCompanyJobView):
     """API to update a specific job rule."""
     
+    @extend_schema(tags=['Dashboard - Company - Jobs'], description="Partially update Update Job Rule.",
+        responses={200: JobRuleUpdateSerializer},
+    )
     def patch(self, request, job_id, rule_id):
         try:
             # 1. Get authenticated user
@@ -764,6 +800,9 @@ class UpdateJobRuleAPIView(BaseCompanyJobView):
 class DeleteJobRuleAPIView(BaseCompanyJobView):
     """API to delete a specific job rule."""
     
+    @extend_schema(tags=['Dashboard - Company - Jobs'], description="Delete Delete Job Rule.",
+        responses={200: CustomResponseSerializer},
+    )
     def delete(self, request, job_id, rule_id):
         try:
             # 1. Get authenticated user
@@ -837,6 +876,11 @@ class PublicJobsListAPIView(APIView):
     """Public API to browse active jobs across all companies. No auth required."""
     permission_classes = []  # No authentication needed
 
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Retrieve Public Jobs List.",
+        responses={200: CompanyJobListSerializer},
+    )
     def get(self, request):
         jobs_qs = CompanyJob.objects.filter(
             is_deleted=False,

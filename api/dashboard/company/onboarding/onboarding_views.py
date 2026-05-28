@@ -28,6 +28,8 @@ from .serializers import (
     CompanyVerificationActionSerializer,
     CompanyVerificationListSerializer,
 )
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 logger = logging.getLogger(__name__)
 
@@ -116,6 +118,12 @@ class CompanySignupAPIView(APIView):
     authentication_classes = []
     renderer_classes = [JSONRenderer]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Onboarding'],
+        description="Create Company Signup.",
+        request=CompanySignupSerializer,
+        responses={200: CompanySignupSerializer},
+    )
     def post(self, request):
         serializer = CompanySignupSerializer(data=request.data)
         if not serializer.is_valid():
@@ -283,6 +291,11 @@ class CompanyOnboardingStatusAPIView(APIView):
     permission_classes = [CustomizePermission]
     renderer_classes = [JSONRenderer]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Onboarding'],
+        description="Retrieve Company Onboarding Status.",
+        responses={200: CompanyOnboardingStatusSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -344,6 +357,11 @@ class CompanyVerificationRequestListAPIView(APIView):
     renderer_classes = [JSONRenderer]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Company - Onboarding'],
+        description="Retrieve Company Verification Request List.",
+        responses={200: CompanyVerificationListSerializer},
+    )
     def get(self, request):
         queryset = Company.objects.select_related("company_user_id").filter(
             deleted_at__isnull=True
@@ -424,6 +442,12 @@ class CompanyVerificationRequestActionAPIView(APIView):
     renderer_classes = [JSONRenderer]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Company - Onboarding'],
+        description="Partially update Company Verification Request Action.",
+        request=CompanyVerificationActionSerializer,
+        responses={200: CompanyVerificationActionSerializer},
+    )
     def patch(self, request, company_id):
         serializer = CompanyVerificationActionSerializer(data=request.data)
         if not serializer.is_valid():
@@ -525,6 +549,9 @@ class CompanyVerificationResubmitAPIView(APIView):
     permission_classes = [CustomizePermission]
     renderer_classes = [JSONRenderer]
 
+    @extend_schema(tags=['Dashboard - Company - Onboarding'], description="Create Company Verification Resubmit.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()

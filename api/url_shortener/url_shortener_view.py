@@ -10,6 +10,8 @@ from utils.permission import role_required
 from utils.types import RoleType
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class UrlShortenerAPI(APIView):
@@ -17,6 +19,12 @@ class UrlShortenerAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
+    )
+    @extend_schema(
+        tags=['Url Shortener'],
+        description="Create Url Shortener.",
+        request=ShortenUrlsCreateUpdateSerializer,
+        responses={200: ShortenUrlsCreateUpdateSerializer},
     )
     def post(self, request):
 
@@ -40,6 +48,11 @@ class UrlShortenerAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
+    )
+    @extend_schema(
+        tags=['Url Shortener'],
+        description="Retrieve Url Shortener.",
+        responses={200: ShowShortenUrlsSerializer},
     )
     def get(self, request):
         url_shortener_objects = UrlShortener.objects.all().order_by('-created_at')
@@ -78,6 +91,11 @@ class UrlShortenerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
+    @extend_schema(
+        tags=['Url Shortener'],
+        description="Update Url Shortener.",
+        responses={200: ShortenUrlsCreateUpdateSerializer},
+    )
     def put(self, request, url_id):
         url_shortener = UrlShortener.objects.filter(
             id=url_id
@@ -109,6 +127,9 @@ class UrlShortenerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
+    @extend_schema(tags=['Url Shortener'], description="Delete Url Shortener.",
+        responses={200: ShortenUrlsCreateUpdateSerializer},
+    )
     def delete(self, request, url_id):
         url_shortener_object = UrlShortener.objects.filter(
             id=url_id
@@ -130,6 +151,9 @@ class UrlAnalyticsAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
+    )
+    @extend_schema(tags=['Url Shortener'], description="Retrieve Url Analytics.",
+        responses={200: CustomResponseSerializer},
     )
     def get(self, request, url_id):
         queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)

@@ -16,6 +16,8 @@ from utils.permission import CustomizePermission, JWTUtils
 from decouple import config
 import requests
 from mu_celery.task import onboard_user
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
@@ -23,6 +25,9 @@ FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
 
 
 class ConnectDiscordAPI(APIView):
+    @extend_schema(tags=['Register'], description="Retrieve Connect Discord.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         if not JWTUtils.is_jwt_authenticated(request):
             return CustomResponse(
@@ -63,6 +68,9 @@ class ConnectDiscordAPI(APIView):
 class UserDomainSelectionAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Register'], description="Create User Domain Selection.",
+        responses={200: serializers.UserSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         domains = request.data.get("domains")
@@ -88,6 +96,9 @@ class UserDomainSelectionAPI(APIView):
 class UserEndgoalSelectionAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Register'], description="Create User Endgoal Selection.",
+        responses={200: serializers.UserSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         endgoals = request.data.get("endgoals")
@@ -168,6 +179,12 @@ class UserEndgoalSelectionAPI(APIView):
 class UnverifiedOrganizationCreateView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Register'],
+        description="Create Unverified Organization Create.",
+        request=serializers.UnverifiedOrganizationCreateSerializer,
+        responses={200: serializers.UnverifiedOrganizationCreateSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serialized_org = serializers.UnverifiedOrganizationCreateSerializer(
@@ -186,6 +203,12 @@ class UnverifiedOrganizationCreateView(APIView):
 
 
 class UserRegisterValidateAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Update User Register Validate.",
+        request=serializers.RegisterSerializer,
+        responses={200: serializers.RegisterSerializer},
+    )
     def put(self, request):
         serialized_user = serializers.RegisterSerializer(data=request.data)
 
@@ -199,6 +222,9 @@ class UserRegisterValidateAPI(APIView):
 
 class RoleAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Role.",
+        responses={200: serializers.RoleSerializer},
+    )
     def get(self, request):
         roles = Role.objects.all().values("id", "title")
         return CustomResponse(response={"roles": roles}).get_success_response()
@@ -206,6 +232,9 @@ class RoleAPI(APIView):
 
 class CollegesAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Colleges.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         colleges = Organization.objects.filter(
             org_type=OrganizationType.COLLEGE.value
@@ -216,6 +245,9 @@ class CollegesAPI(APIView):
 
 class DepartmentAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Department.",
+        responses={200: serializers.DepartmentSerializer},
+    )
     def get(self, request):
         department_serializer = Department.objects.all().values("id", "title")
 
@@ -230,6 +262,9 @@ class DepartmentAPI(APIView):
 
 class CompanyAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Company.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         company_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMPANY.value
@@ -245,6 +280,11 @@ class CompanyAPI(APIView):
 
 
 class LearningCircleUserViewAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create Learning Circle User View.",
+        responses={200: serializers.LearningCircleUserSerializer},
+    )
     def post(self, request):
         muid = request.headers.get("muid")
 
@@ -271,6 +311,12 @@ class LearningCircleUserViewAPI(APIView):
 
 class RegisterDataAPI(APIView):
 
+    @extend_schema(
+        tags=['Register'],
+        description="Create Register Data.",
+        request=serializers.RegisterSerializer,
+        responses={200: serializers.UserDetailSerializer},
+    )
     def post(self, request):
         data = request.data
         data = {key: value for key, value in data.items() if value}
@@ -302,6 +348,11 @@ class RegisterDataAPI(APIView):
 
 class CountryAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Country.",
+        responses={200: serializers.CountrySerializer},
+    )
     def get(self, request):
         countries = Country.objects.all()
 
@@ -315,6 +366,11 @@ class CountryAPI(APIView):
 
 
 class StateAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create State.",
+        responses={200: serializers.StateSerializer},
+    )
     def post(self, request):
         state = State.objects.filter(country_id=request.data.get("country"))
         serializer = serializers.StateSerializer(state, many=True)
@@ -327,6 +383,11 @@ class StateAPI(APIView):
 
 
 class DistrictAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create District.",
+        responses={200: serializers.DistrictSerializer},
+    )
     def post(self, request):
         district = District.objects.filter(zone__state_id=request.data.get("state"))
 
@@ -342,6 +403,11 @@ class DistrictAPI(APIView):
 class CollegeAPI(APIView):
     MAX_RESULTS = 20
 
+    @extend_schema(
+        tags=['Register'],
+        description="Create College.",
+        responses={200: serializers.OrgSerializer},
+    )
     def post(self, request):
         district_id = request.data.get("district")
         search_query = request.data.get("search", "").strip()
@@ -381,6 +447,11 @@ class CollegeAPI(APIView):
 
 
 class SchoolAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create School.",
+        responses={200: serializers.OrgSerializer},
+    )
     def post(self, request):
         org_queryset = Organization.objects.filter(
             Q(org_type=OrganizationType.SCHOOL.value),
@@ -400,6 +471,11 @@ class SchoolAPI(APIView):
 
 class CommunityAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Community.",
+        responses={200: serializers.OrgSerializer},
+    )
     def get(self, request):
         community_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMMUNITY.value
@@ -416,6 +492,11 @@ class CommunityAPI(APIView):
 
 class AreaOfInterestAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Area Of Interest.",
+        responses={200: serializers.AreaOfInterestAPISerializer},
+    )
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
 
@@ -429,6 +510,9 @@ class AreaOfInterestAPI(APIView):
 
 
 class UserEmailVerificationAPI(APIView):
+    @extend_schema(tags=['Register'], description="Create User Email Verification.",
+        responses={200: serializers.UserSerializer},
+    )
     def post(self, request):
         user_email = request.data.get("email")
 
@@ -444,6 +528,11 @@ class UserEmailVerificationAPI(APIView):
 
 class UserCountryAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve User Country.",
+        responses={200: serializers.UserCountrySerializer},
+    )
     def get(self, request):
         country = Country.objects.all()
 
@@ -458,6 +547,11 @@ class UserCountryAPI(APIView):
 
 
 class UserStateAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve User State.",
+        responses={200: serializers.UserStateSerializer},
+    )
     def get(self, request):
         country_name = request.data.get("country")
 
@@ -481,6 +575,11 @@ class UserStateAPI(APIView):
 
 
 class UserZoneAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve User Zone.",
+        responses={200: serializers.UserZoneSerializer},
+    )
     def get(self, request):
         state_name = request.data.get("state")
 
@@ -504,6 +603,11 @@ class UserZoneAPI(APIView):
 
 
 class LocationSearchView(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Location Search.",
+        responses={200: serializers.LocationSerializer},
+    )
     def get(self, request):
         query = request.GET.get("q")
         MAX_RESULTS = 7

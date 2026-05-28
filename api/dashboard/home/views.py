@@ -11,6 +11,8 @@ from db.task import KarmaActivityLog, Wallet
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 def _user_rank(user_id):
@@ -44,6 +46,9 @@ def _streak_payload(user):
 class LearnerDashboardSummaryAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Home'], description="Retrieve Learner Dashboard Summary.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).select_related("wallet_user").first()
@@ -120,6 +125,9 @@ class LearnerDashboardSummaryAPIView(APIView):
 class LearnerStreakAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Home'], description="Retrieve Learner Streak.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()

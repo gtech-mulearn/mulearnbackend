@@ -4,6 +4,8 @@ from django.conf import settings
 from rest_framework.views import APIView
 from utils.response import CustomResponse
 from .serializers import IssueVCSerializer
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 BASE_URL = settings.QSEVERSE_BASE_URL
@@ -15,6 +17,12 @@ HEADERS = {
 
 
 class IssueVerifiableCredentialView(APIView):
+    @extend_schema(
+        tags=['Integrations - Qseverse'],
+        description="Create Issue Verifiable Credential.",
+        request=IssueVCSerializer,
+        responses={200: IssueVCSerializer},
+    )
     def post(self, request):
         serializer = IssueVCSerializer(data=request.data)
         if serializer.is_valid():
@@ -43,6 +51,9 @@ class IssueVerifiableCredentialView(APIView):
 
 
 class GetAllConnectedUsersView(APIView):
+    @extend_schema(tags=['Integrations - Qseverse'], description="Retrieve Get All Connected Users.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         try:
             response = requests.get(
@@ -60,6 +71,9 @@ class GetAllConnectedUsersView(APIView):
 
 
 class GetConnectedUserView(APIView):
+    @extend_schema(tags=['Integrations - Qseverse'], description="Retrieve Get Connected User.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         key = request.query_params.get("key")
         value = request.query_params.get("value")
@@ -90,6 +104,9 @@ class GetConnectedUserView(APIView):
 
 
 class GetQSCredentialsView(APIView):
+    @extend_schema(tags=['Integrations - Qseverse'], description="Retrieve Get Q S Credentials.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         try:
             response = requests.get(

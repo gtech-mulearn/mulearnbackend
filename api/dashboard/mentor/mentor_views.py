@@ -1,3 +1,5 @@
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 from django.db import transaction, IntegrityError
 from django.db.models import Count, F as models_F, Q, Sum, Value, IntegerField
 from django.db.models.functions import Coalesce
@@ -50,9 +52,11 @@ from .mentor_serializers import (
     MentorTaskRequestSerializer,
     MentorTierUpdateSerializer,
     MentorVerifySerializer,
+    PublicMentorCardSerializer,
     PublicMentorSessionSerializer,
     SystemActionLogSerializer,
 )
+from api.dashboard.campus.serializers import CampusEventListSerializer
 
 # ─── Role shorthand ──────────────────────────────────────────────────────────
 
@@ -114,6 +118,11 @@ class MentorOnboardingAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Onboarding.",
+        responses={200: MentorListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         mentor = UserMentor.objects.filter(user_id=user_id).select_related(
@@ -127,6 +136,12 @@ class MentorOnboardingAPI(APIView):
         serializer = MentorListSerializer(mentor)
         return CustomResponse(response={"mentor": serializer.data}).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Onboarding.",
+        request=MentorOnboardingSerializer,
+        responses={200: MentorListSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -149,6 +164,12 @@ class MentorOnboardingAPI(APIView):
             response={"mentor": MentorListSerializer(mentor).data},
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Onboarding.",
+        request=MentorOnboardingUpdateSerializer,
+        responses={200: MentorListSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         mentor = UserMentor.objects.filter(user_id=user_id).first()
@@ -223,6 +244,11 @@ class MentorListAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor List.",
+        responses={200: MentorListSerializer},
+    )
     def get(self, request):
         is_verified = request.query_params.get("is_verified")
         mentor_qs = (
@@ -267,6 +293,11 @@ class MentorVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Verify.",
+        responses={200: MentorListSerializer},
+    )
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         mentor = UserMentor.objects.filter(id=pk).select_related("user").first()
@@ -415,6 +446,11 @@ class MentorOverviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Overview.",
+        responses={200: MentorSessionListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -604,6 +640,11 @@ class MentorSessionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Session.",
+        responses={200: MentorSessionListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -649,6 +690,12 @@ class MentorSessionAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Session.",
+        request=MentorSessionCreateSerializer,
+        responses={200: MentorSessionDetailSerializer},
+    )
     def post(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
@@ -737,6 +784,11 @@ class MentorSessionDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Session Detail.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def get(self, request, pk):
         session = (
             MentorshipSession.objects
@@ -752,6 +804,12 @@ class MentorSessionDetailAPI(APIView):
         return CustomResponse(response={"session": serializer.data}).get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Session Detail.",
+        request=MentorSessionUpdateSerializer,
+        responses={200: MentorSessionDetailSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -794,6 +852,9 @@ class MentorSessionDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Mentor Session Detail.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -835,6 +896,12 @@ class MentorSessionStatusAPI(APIView):
     }
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Session Status.",
+        request=MentorSessionStatusSerializer,
+        responses={200: MentorSessionStatusSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -884,6 +951,11 @@ class MentorSessionParticipantsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Session Participants.",
+        responses={200: MentorSessionParticipantSerializer},
+    )
     def get(self, request, pk):
         session = MentorshipSession.objects.filter(id=pk).first()
         if not session:
@@ -900,6 +972,12 @@ class MentorSessionParticipantsAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Session Participants.",
+        request=MentorSessionParticipantAddSerializer,
+        responses={200: MentorSessionParticipantSerializer},
+    )
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -951,6 +1029,9 @@ class MentorSessionParticipantsAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Mentor Session Participants.",
+        responses={200: MentorSessionParticipantSerializer},
+    )
     def delete(self, request, pk=None, session_pk=None, user_pk=None):
         session_id = session_pk or pk
         user_id = JWTUtils.fetch_user_id(request)
@@ -1000,6 +1081,11 @@ class GlobalSessionPendingAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Global Session Pending.",
+        responses={200: GlobalSessionPendingSerializer},
+    )
     def get(self, request):
         pending_qs = (
             MentorshipSession.objects
@@ -1051,6 +1137,11 @@ class GlobalSessionApproveAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Global Session Approve.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -1123,6 +1214,11 @@ class MentorAvailabilityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Availability.",
+        responses={200: MentorAvailabilitySerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1156,6 +1252,12 @@ class MentorAvailabilityAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Availability.",
+        request=MentorAvailabilityWriteSerializer,
+        responses={200: MentorAvailabilitySerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
@@ -1179,6 +1281,12 @@ class MentorAvailabilityDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Update Mentor Availability Detail.",
+        request=MentorAvailabilityWriteSerializer,
+        responses={200: MentorAvailabilitySerializer},
+    )
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         slot = MentorAvailabilitySlot.objects.filter(
@@ -1205,6 +1313,9 @@ class MentorAvailabilityDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Mentor Availability Detail.",
+        responses={200: MentorAvailabilityWriteSerializer},
+    )
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1237,6 +1348,11 @@ class MentorTaskRequestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Task Request.",
+        responses={200: MentorTaskRequestSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1267,6 +1383,12 @@ class MentorTaskRequestAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Task Request.",
+        request=MentorTaskRequestCreateSerializer,
+        responses={200: MentorTaskRequestSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
@@ -1297,6 +1419,11 @@ class MentorTaskRequestDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Task Request Detail.",
+        responses={200: MentorTaskRequestSerializer},
+    )
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1320,6 +1447,12 @@ class MentorTaskRequestDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Task Request Detail.",
+        request=MentorTaskRequestReviewSerializer,
+        responses={200: MentorTaskRequestReviewSerializer},
+    )
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         task_req = MentorTaskRequest.objects.select_related(
@@ -1391,6 +1524,9 @@ class MentorTaskRequestDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Mentor Task Request Detail.",
+        responses={200: MentorTaskRequestSerializer},
+    )
     def delete(self, request, pk):
         """Mentor withdraws their own PENDING task request before admin review."""
         user_id = JWTUtils.fetch_user_id(request)
@@ -1426,6 +1562,11 @@ class MentorOpportunityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Opportunity.",
+        responses={200: IgOpportunitySerializer},
+    )
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
         opp_type = request.query_params.get("type")
@@ -1455,6 +1596,12 @@ class MentorOpportunityAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Opportunity.",
+        request=IgOpportunityWriteSerializer,
+        responses={200: IgOpportunitySerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_id = request.data.get("ig")
@@ -1493,6 +1640,11 @@ class MentorOpportunityDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Opportunity Detail.",
+        responses={200: IgOpportunitySerializer},
+    )
     def get(self, request, pk):
         opp = IgOpportunity.objects.select_related("ig", "created_by").filter(id=pk).first()
         if not opp:
@@ -1502,6 +1654,12 @@ class MentorOpportunityDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Opportunity Detail.",
+        request=IgOpportunityWriteSerializer,
+        responses={200: IgOpportunitySerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = IgOpportunity.objects.filter(id=pk).first()
@@ -1532,6 +1690,9 @@ class MentorOpportunityDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Mentor Opportunity Detail.",
+        responses={200: IgOpportunitySerializer},
+    )
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = IgOpportunity.objects.filter(id=pk).first()
@@ -1555,6 +1716,9 @@ class MentorMenteesAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor Mentees.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1630,6 +1794,11 @@ class MentorActivityLogAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Activity Log.",
+        responses={200: SystemActionLogSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1672,6 +1841,11 @@ class MentorSessionKarmaAwardAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Session Karma Award.",
+        responses={200: MentorKarmaAwardSerializer},
+    )
     def get(self, request, pk):
         awards = (
             MentorKarmaAward.objects
@@ -1684,6 +1858,12 @@ class MentorSessionKarmaAwardAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Session Karma Award.",
+        request=MentorKarmaAwardWriteSerializer,
+        responses={200: MentorKarmaAwardSerializer},
+    )
     def post(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).select_related("ig").first()
@@ -1784,6 +1964,11 @@ class MentorTaskReviewQueueAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Task Review Queue.",
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -1834,6 +2019,11 @@ class MentorTaskReviewDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Task Review Detail.",
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles   = JWTUtils.fetch_role(request)
@@ -1865,6 +2055,12 @@ class MentorTaskReviewDetailAPI(APIView):
         return CustomResponse(response={"submission": serializer.data}).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Task Review Detail.",
+        request=KarmaReviewSerializer,
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def patch(self, request, pk):
         mentor_id = JWTUtils.fetch_user_id(request)
 
@@ -1924,6 +2120,11 @@ class MentorLeaderboardAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Leaderboard.",
+        responses={200: MentorLeaderboardSerializer},
+    )
     def get(self, request):
         ig_id = request.query_params.get("ig_id")
 
@@ -2039,6 +2240,9 @@ class MentorSessionRemindAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Create Mentor Session Remind.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = MentorshipSession.objects.filter(id=pk).first()
@@ -2116,6 +2320,9 @@ class MentorMyIgsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor My Igs.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         links = UserIgLink.objects.filter(
@@ -2148,6 +2355,9 @@ class MentorIgRequestListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor Ig Request List.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
@@ -2207,6 +2417,9 @@ class MentorIgRequestDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Partially update Mentor Ig Request Detail.",
+        responses={200: CustomResponseSerializer},
+    )
     def patch(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         roles    = JWTUtils.fetch_role(request)
@@ -2285,6 +2498,11 @@ class MentorAvailabilityCalendarAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Mentor Availability Calendar.",
+        responses={200: MentorAvailabilitySerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -2305,8 +2523,12 @@ class MentorAvailabilityCalendarAPI(APIView):
 class PublicMentorCardAPI(APIView):
     """GET /mentor/<muid>/public/ - Public read-only mentor profile."""
     # No auth for public endpoints
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Public Mentor Card.",
+        responses={200: PublicMentorCardSerializer},
+    )
     def get(self, request, muid):
-        from .mentor_serializers import PublicMentorCardSerializer
         mentor = UserMentor.objects.select_related("user").filter(
             user__muid=muid, is_verified=True
         ).first()
@@ -2339,6 +2561,9 @@ class MentorMenteeDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor Mentee Detail.",
+        responses={200: MenteeDetailSerializer},
+    )
     def get(self, request, user_pk):
         caller_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -2483,6 +2708,12 @@ class MentorSessionAttendanceAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Session Attendance.",
+        request=MentorSessionAttendanceSerializer,
+        responses={200: MentorSessionAttendanceSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -2560,6 +2791,11 @@ class PublicMentorSessionsAPI(APIView):
         mode   — filter by session mode (ONLINE / OFFLINE / HYBRID)
     """
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Public Mentor Sessions.",
+        responses={200: PublicMentorSessionSerializer},
+    )
     def get(self, request, muid):
         mentor = UserMentor.objects.select_related("user").filter(
             user__muid=muid, is_verified=True
@@ -2631,6 +2867,11 @@ class MentorSessionCloneAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Mentor Session Clone.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -2714,6 +2955,11 @@ class PublicMentorAvailabilityAPI(APIView):
         ig_id — filter slots by interest group
     """
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Public Mentor Availability.",
+        responses={200: MentorAvailabilitySerializer},
+    )
     def get(self, request):
         mentor_muid = request.query_params.get("mentor_muid")
         if not mentor_muid:
@@ -2767,6 +3013,12 @@ class MentorTierUpdateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Mentor Tier Update.",
+        request=MentorTierUpdateSerializer,
+        responses={200: MentorListSerializer},
+    )
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
 
@@ -2880,6 +3132,7 @@ from .mentor_serializers import (
 )
 from db.organization import Organization
 from utils.types import OrganizationType
+from utils.schema_utils import CustomResponseSerializer
 
 
 class CompanyMentorOnboardingAPI(APIView):
@@ -2893,6 +3146,11 @@ class CompanyMentorOnboardingAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Onboarding.",
+        responses={200: OrgMentorListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         rows = UserMentor.objects.filter(
@@ -2903,6 +3161,12 @@ class CompanyMentorOnboardingAPI(APIView):
             response={"mentors": OrgMentorListSerializer(rows, many=True).data}
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Company Mentor Onboarding.",
+        request=CompanyMentorOnboardingSerializer,
+        responses={200: OrgMentorListSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org")
@@ -2950,6 +3214,12 @@ class CompanyMentorOnboardingAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Company Mentor Onboarding.",
+        request=OrgMentorProfileUpdateSerializer,
+        responses={200: OrgMentorListSerializer},
+    )
     def patch(self, request, pk=None):
         user_id = JWTUtils.fetch_user_id(request)
         if not pk:
@@ -2977,6 +3247,11 @@ class CompanyMentorListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor List.",
+        responses={200: OrgMentorListSerializer},
+    )
     def get(self, request):
         qs = UserMentor.objects.filter(
             mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
@@ -3005,6 +3280,11 @@ class CompanyMentorVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Company Mentor Verify.",
+        responses={200: OrgMentorListSerializer},
+    )
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         row = UserMentor.objects.filter(
@@ -3068,6 +3348,11 @@ class CompanyMentorSessionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Session.",
+        responses={200: MentorSessionListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles   = JWTUtils.fetch_role(request)
@@ -3095,6 +3380,12 @@ class CompanyMentorSessionAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Company Mentor Session.",
+        request=OrgScopedSessionCreateSerializer,
+        responses={200: MentorSessionDetailSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org")
@@ -3146,6 +3437,11 @@ class CompanyMentorSessionDetailAPI(APIView):
         return qs.filter(org_id__in=verified_org_ids).first()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Session Detail.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def get(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3158,6 +3454,12 @@ class CompanyMentorSessionDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Company Mentor Session Detail.",
+        request=MentorSessionUpdateSerializer,
+        responses={200: MentorSessionDetailSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = self._get_session_for_user(pk, user_id, is_admin=False)
@@ -3176,6 +3478,9 @@ class CompanyMentorSessionDetailAPI(APIView):
         return CustomResponse(general_message="Session updated.").get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Company Mentor Session Detail.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def delete(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3195,6 +3500,11 @@ class CompanyMentorOpportunityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Opportunity.",
+        responses={200: OrgOpportunitySerializer},
+    )
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3219,6 +3529,12 @@ class CompanyMentorOpportunityAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Company Mentor Opportunity.",
+        request=OrgOpportunityWriteSerializer,
+        responses={200: OrgOpportunitySerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org")
@@ -3272,6 +3588,11 @@ class CompanyMentorOpportunityDetailAPI(APIView):
         return qs.filter(org_id__in=verified_org_ids).first()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Opportunity Detail.",
+        responses={200: OrgOpportunitySerializer},
+    )
     def get(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3281,6 +3602,12 @@ class CompanyMentorOpportunityDetailAPI(APIView):
         return CustomResponse(response={"opportunity": OrgOpportunitySerializer(opp).data}).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Company Mentor Opportunity Detail.",
+        request=OrgOpportunityWriteSerializer,
+        responses={200: OrgOpportunitySerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = self._get_opp(pk, user_id, is_admin=False)
@@ -3297,6 +3624,9 @@ class CompanyMentorOpportunityDetailAPI(APIView):
         return CustomResponse(general_message="Opportunity updated.").get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Company Mentor Opportunity Detail.",
+        responses={200: OrgOpportunitySerializer},
+    )
     def delete(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3314,6 +3644,9 @@ class CompanyMentorMenteesAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Company Mentor Mentees.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         # Tier enforcement: only sessions in orgs this mentor is verified for
@@ -3361,6 +3694,11 @@ class CompanyMentorTaskReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Task Review.",
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         verified_org_ids = _get_user_mentor_orgs(
@@ -3410,6 +3748,11 @@ class CompanyMentorTaskReviewDetailAPI(APIView):
         ).select_related("user", "task").first()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Task Review Detail.",
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         kal = self._get_kal(pk, user_id)
@@ -3420,6 +3763,12 @@ class CompanyMentorTaskReviewDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Company Mentor Task Review Detail.",
+        request=KarmaReviewSerializer,
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         # Tier enforcement: can only review entries from own company org users
@@ -3456,6 +3805,11 @@ class CompanyMentorMyOrgsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor My Orgs.",
+        responses={200: OrgMentorListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         rows = UserMentor.objects.filter(
@@ -3472,6 +3826,11 @@ class CompanyMentorAvailabilityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Company Mentor Availability.",
+        responses={200: MentorAvailabilitySerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         # Tier enforcement: only if user has at least one verified company mentor row
@@ -3491,6 +3850,12 @@ class CompanyMentorAvailabilityAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Company Mentor Availability.",
+        request=MentorAvailabilityWriteSerializer,
+        responses={200: MentorAvailabilitySerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.COMPANY_MENTOR).exists():
@@ -3525,6 +3890,11 @@ class CampusMentorOnboardingAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Onboarding.",
+        responses={200: OrgMentorListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         rows = UserMentor.objects.filter(
@@ -3535,6 +3905,12 @@ class CampusMentorOnboardingAPI(APIView):
             response={"mentors": OrgMentorListSerializer(rows, many=True).data}
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Campus Mentor Onboarding.",
+        request=CampusMentorOnboardingSerializer,
+        responses={200: OrgMentorListSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org")
@@ -3582,6 +3958,12 @@ class CampusMentorOnboardingAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Campus Mentor Onboarding.",
+        request=OrgMentorProfileUpdateSerializer,
+        responses={200: OrgMentorListSerializer},
+    )
     def patch(self, request, pk=None):
         user_id = JWTUtils.fetch_user_id(request)
         if not pk:
@@ -3606,6 +3988,11 @@ class CampusMentorListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor List.",
+        responses={200: OrgMentorListSerializer},
+    )
     def get(self, request):
         qs = UserMentor.objects.filter(
             mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
@@ -3634,6 +4021,11 @@ class CampusMentorVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Campus Mentor Verify.",
+        responses={200: OrgMentorListSerializer},
+    )
     def patch(self, request, pk):
         admin_id = JWTUtils.fetch_user_id(request)
         row = UserMentor.objects.filter(
@@ -3696,6 +4088,11 @@ class CampusMentorSessionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Session.",
+        responses={200: MentorSessionListSerializer},
+    )
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3721,6 +4118,12 @@ class CampusMentorSessionAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Campus Mentor Session.",
+        request=OrgScopedSessionCreateSerializer,
+        responses={200: MentorSessionDetailSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org")
@@ -3772,6 +4175,11 @@ class CampusMentorSessionDetailAPI(APIView):
         return qs.filter(org_id__in=verified_org_ids).first()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Session Detail.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def get(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3784,6 +4192,12 @@ class CampusMentorSessionDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Campus Mentor Session Detail.",
+        request=MentorSessionUpdateSerializer,
+        responses={200: MentorSessionDetailSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         session = self._get_session(pk, user_id, is_admin=False)
@@ -3801,6 +4215,9 @@ class CampusMentorSessionDetailAPI(APIView):
         return CustomResponse(general_message="Session updated.").get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Campus Mentor Session Detail.",
+        responses={200: MentorSessionDetailSerializer},
+    )
     def delete(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3820,6 +4237,11 @@ class CampusMentorOpportunityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Opportunity.",
+        responses={200: OrgOpportunitySerializer},
+    )
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3844,6 +4266,12 @@ class CampusMentorOpportunityAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Campus Mentor Opportunity.",
+        request=OrgOpportunityWriteSerializer,
+        responses={200: OrgOpportunitySerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org")
@@ -3894,6 +4322,11 @@ class CampusMentorOpportunityDetailAPI(APIView):
         return qs.filter(org_id__in=verified_org_ids).first()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Opportunity Detail.",
+        responses={200: OrgOpportunitySerializer},
+    )
     def get(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3903,6 +4336,12 @@ class CampusMentorOpportunityDetailAPI(APIView):
         return CustomResponse(response={"opportunity": OrgOpportunitySerializer(opp).data}).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Campus Mentor Opportunity Detail.",
+        request=OrgOpportunityWriteSerializer,
+        responses={200: OrgOpportunitySerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         opp = self._get_opp(pk, user_id, is_admin=False)
@@ -3919,6 +4358,9 @@ class CampusMentorOpportunityDetailAPI(APIView):
         return CustomResponse(general_message="Opportunity updated.").get_success_response()
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Campus Mentor Opportunity Detail.",
+        responses={200: OrgOpportunitySerializer},
+    )
     def delete(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
         is_admin = RoleType.ADMIN.value in JWTUtils.fetch_role(request)
@@ -3936,6 +4378,9 @@ class CampusMentorMenteesAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Campus Mentor Mentees.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         verified_org_ids = _get_user_mentor_orgs(
@@ -3982,6 +4427,11 @@ class CampusMentorTaskReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Task Review.",
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         verified_org_ids = _get_user_mentor_orgs(
@@ -4031,6 +4481,11 @@ class CampusMentorTaskReviewDetailAPI(APIView):
         ).select_related("user", "task").first()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Task Review Detail.",
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         kal = self._get_kal(pk, user_id)
@@ -4041,6 +4496,12 @@ class CampusMentorTaskReviewDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Campus Mentor Task Review Detail.",
+        request=KarmaReviewSerializer,
+        responses={200: KarmaReviewQueueSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         kal = self._get_kal(pk, user_id)
@@ -4079,6 +4540,11 @@ class CampusMentorEventsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Events.",
+        responses={200: CampusEventListSerializer},
+    )
     def get(self, request):
         from db.campus import CampusIGChapter
         from api.dashboard.campus.dash_campus_helper import get_campus_events_qs
@@ -4107,13 +4573,17 @@ class CampusMentorEventsAPI(APIView):
             search_fields=["title"],
             sort_fields={"start_datetime": "start_datetime"},
         )
-        from api.dashboard.campus.serializers import CampusEventListSerializer
         return CustomResponse(response={
             "data": CampusEventListSerializer(paginated["queryset"], many=True).data,
             "pagination": paginated["pagination"],
         }).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Campus Mentor Events.",
+        responses={200: CampusEventListSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         org_id  = request.data.get("org_id") or request.data.get("org")
@@ -4166,15 +4636,24 @@ class CampusMentorEventDetailAPI(APIView):
             return None
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Event Detail.",
+        responses={200: CampusEventListSerializer},
+    )
     def get(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         event = self._get_event(pk, user_id)
         if not event:
             return CustomResponse(general_message="Event not found.").get_failure_response()
-        from api.dashboard.campus.serializers import CampusEventListSerializer
         return CustomResponse(response={"event": CampusEventListSerializer(event).data}).get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Partially update Campus Mentor Event Detail.",
+        responses={200: CampusEventListSerializer},
+    )
     def patch(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         event = self._get_event(pk, user_id)
@@ -4192,6 +4671,9 @@ class CampusMentorEventDetailAPI(APIView):
         return CustomResponse(general_message="Event updated.").get_success_response()
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(tags=['Dashboard - Mentor'], description="Delete Campus Mentor Event Detail.",
+        responses={200: CampusEventListSerializer},
+    )
     def delete(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         event = self._get_event(pk, user_id)
@@ -4208,6 +4690,11 @@ class CampusMentorMyOrgsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor My Orgs.",
+        responses={200: OrgMentorListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         rows = UserMentor.objects.filter(
@@ -4224,6 +4711,11 @@ class CampusMentorAvailabilityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve Campus Mentor Availability.",
+        responses={200: MentorAvailabilitySerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.CAMPUS_MENTOR).exists():
@@ -4242,6 +4734,12 @@ class CampusMentorAvailabilityAPI(APIView):
         )
 
     @role_required([RoleType.MENTOR.value])
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Create Campus Mentor Availability.",
+        request=MentorAvailabilityWriteSerializer,
+        responses={200: MentorAvailabilitySerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not _get_user_mentor_orgs(user_id, UserMentor.MentorTier.CAMPUS_MENTOR).exists():

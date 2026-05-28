@@ -8,6 +8,7 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
 
+from drf_spectacular.utils import extend_schema
 from .skill_serializer import (
     SkillSerializer,
     SkillDropdownSerializer,
@@ -20,6 +21,11 @@ class SkillListAPI(APIView):
     """List all skills with pagination and search"""
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Skill'],
+        description="Retrieve Skill List.",
+        responses={200: SkillSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -75,6 +81,11 @@ class SkillDropdownAPI(APIView):
     """Get skills for dropdown selection"""
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Skill'],
+        description="Retrieve Skill Dropdown.",
+        responses={200: SkillDropdownSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -93,6 +104,12 @@ class SkillCreateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Skill'],
+        description="Create Skill Create.",
+        request=SkillCreateSerializer,
+        responses={200: SkillSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -141,6 +158,11 @@ class SkillDetailAPI(APIView):
     """Get, update, or delete a specific skill"""
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Skill'],
+        description="Retrieve Skill Detail.",
+        responses={200: SkillSerializer},
+    )
     def get(self, request, skill_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -160,6 +182,12 @@ class SkillDetailAPI(APIView):
         return CustomResponse(response=response_data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Skill'],
+        description="Update Skill Detail.",
+        request=SkillUpdateSerializer,
+        responses={200: SkillSerializer},
+    )
     def put(self, request, skill_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -213,6 +241,9 @@ class SkillDetailAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Skill'], description="Delete Skill Detail.",
+        responses={200: SkillSerializer},
+    )
     def delete(self, request, skill_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -241,6 +272,11 @@ class SkillTasksAPI(APIView):
     """Get all tasks linked to a specific skill"""
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Skill'],
+        description="Retrieve Skill Tasks.",
+        responses={200: SkillSerializer},
+    )
     def get(self, request, skill_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:

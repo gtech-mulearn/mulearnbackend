@@ -11,6 +11,8 @@ from db.user import User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 def _get_company_for_request(request):
@@ -126,6 +128,9 @@ def _talent_pool_payload(request):
 class CompanyDashboardSummaryAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Company'], description="Retrieve Company Dashboard Summary.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         company, error = _get_company_for_request(request)
         if error:
@@ -169,6 +174,9 @@ class CompanyDashboardSummaryAPIView(APIView):
 class CompanyTalentPoolAnalyticsAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Company'], description="Retrieve Company Talent Pool Analytics.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         _company, error = _get_company_for_request(request)
         if error:

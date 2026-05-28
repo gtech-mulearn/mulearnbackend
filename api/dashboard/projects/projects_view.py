@@ -13,6 +13,7 @@ from db.projects import (
     ProjectMember,
 )
 from db.user import User
+from drf_spectacular.utils import extend_schema
 from .projects_serializer import (
     ProjectSerializer,
     ProjectUpdateSerializer,
@@ -25,6 +26,11 @@ from .projects_serializer import (
 
 class ProjectDetailAPIView(APIView):
     authentication_classes = [CustomizePermission]
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Retrieve Project Detail.",
+        responses={200: ProjectSerializer},
+    )
     def get(self, request, pk=None):
         if pk is not None:
             project = Project.objects.get(id=pk)
@@ -37,6 +43,11 @@ class ProjectDetailAPIView(APIView):
                 general_message="no Project id provided"
             ).get_failure_response()
             
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Update Project Detail.",
+        responses={200: ProjectSerializer},
+    )
     def put(self, request, pk=None):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         if pk is None:
@@ -64,6 +75,9 @@ class ProjectDetailAPIView(APIView):
             ).get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
+    @extend_schema(tags=['Dashboard - Projects'], description="Delete Project Detail.",
+        responses={200: ProjectSerializer},
+    )
     def delete(self, request, pk=None):
         if pk is not None:
             try:
@@ -102,6 +116,11 @@ def _replace_skills(project, skill_ids):
 class ProjectStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Partially update Project Status.",
+        responses={200: ProjectSerializer},
+    )
     def patch(self, request, pk):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         try:
@@ -121,6 +140,11 @@ class ProjectStatusAPI(APIView):
 
 class ProjectsAPIView(APIView):
     authentication_classes = [CustomizePermission]
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Retrieve Projects.",
+        responses={200: ProjectSerializer},
+    )
     def get(self, request):
         viewer_id = JWTUtils.fetch_user_id(request)
 
@@ -161,6 +185,12 @@ class ProjectsAPIView(APIView):
             pagination=paginated["pagination"],
         )
         
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Create Projects.",
+        request=ProjectUpdateSerializer,
+        responses={200: ProjectSerializer},
+    )
     def post(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         images_data = request.FILES.getlist('images')
@@ -189,6 +219,11 @@ class ProjectsAPIView(APIView):
 class ProjectMemberAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Retrieve Project Member.",
+        responses={200: ProjectMemberSerializer},
+    )
     def get(self, request, project_id):
         members = (ProjectMember.objects.filter(project_id=project_id)
                    .select_related("user"))
@@ -196,6 +231,12 @@ class ProjectMemberAPI(APIView):
             response={"Members": ProjectMemberSerializer(members, many=True).data}
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Create Project Member.",
+        request=AddMemberSerializer,
+        responses={200: ProjectMemberSerializer},
+    )
     def post(self, request, project_id):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         try:
@@ -227,6 +268,9 @@ class ProjectMemberAPI(APIView):
             response={"Member": ProjectMemberSerializer(member).data}
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Projects'], description="Delete Project Member.",
+        responses={200: ProjectMemberSerializer},
+    )
     def delete(self, request, project_id, pk):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         try:
@@ -246,6 +290,11 @@ class ProjectMemberAPI(APIView):
 class ProjectVoteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Create Project Vote.",
+        responses={200: VoteSerializer},
+    )
     def post(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         project_id = request.data.get("project")
@@ -258,6 +307,9 @@ class ProjectVoteAPI(APIView):
         )
         return CustomResponse(response={"Vote": VoteSerializer(vote).data}).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Projects'], description="Delete Project Vote.",
+        responses={200: VoteSerializer},
+    )
     def delete(self, request, pk):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         try:
@@ -270,6 +322,12 @@ class ProjectVoteAPI(APIView):
 class ProjectCommentAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Projects'],
+        description="Create Project Comment.",
+        request=CommentSerializer,
+        responses={200: CommentSerializer},
+    )
     def post(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         data = {"comment": request.data.get("comment"), "project": request.data.get("project")}
@@ -279,6 +337,9 @@ class ProjectCommentAPI(APIView):
             return CustomResponse(response={"Comment": CommentSerializer(comment).data}).get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
+    @extend_schema(tags=['Dashboard - Projects'], description="Update Project Comment.",
+        responses={200: CommentSerializer},
+    )
     def put(self, request, pk):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         try:
@@ -291,6 +352,9 @@ class ProjectCommentAPI(APIView):
             return CustomResponse(response={"Comment": serializer.data}).get_success_response()
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
+    @extend_schema(tags=['Dashboard - Projects'], description="Delete Project Comment.",
+        responses={200: CommentSerializer},
+    )
     def delete(self, request, pk):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         try:

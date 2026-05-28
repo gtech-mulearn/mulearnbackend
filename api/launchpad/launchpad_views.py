@@ -40,6 +40,8 @@ from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 import decouple
 import secrets
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 def send_template_mail(context: dict, subject: str, address: List[str], attachment: str = None):
@@ -116,6 +118,12 @@ def generate_launchpad_jwt(user, user_type):
 
 
 class RegisterCompanyAPI(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Register Company.",
+        request=LaunchpadCompaniesSerializer,
+        responses={200: LaunchpadCompaniesSerializer},
+    )
     def post(self, request):
         required_fields = ['name', 'username']
         for field in required_fields:
@@ -175,6 +183,9 @@ class CompanyListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Launchpad'], description="Retrieve Company List.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
       companies = LaunchpadCompanies.objects.all()
       data = [
@@ -196,6 +207,11 @@ class CompanyListAPI(APIView):
     ).get_success_response()
 
 class CompanyListVerifiedAPI(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve Company List Verified.",
+        responses={200: LaunchpadCompanyPublicSerializer},
+    )
     def get(self, request):
         companies = LaunchpadCompanies.objects.filter(is_verified=True)
 
@@ -213,6 +229,12 @@ class CompanyListVerifiedAPI(APIView):
 
 class RegisterRecruiterAPI(APIView):
   authentication_classes = [LaunchpadJWTPermission]
+  @extend_schema(
+      tags=['Launchpad'],
+      description="Create Register Recruiter.",
+      request=LaunchpadRecruiterSerializer,
+      responses={200: LaunchpadRecruiterSerializer},
+  )
   def post(self, request):
     print(request.auth)
     if request.auth["user_type"] != "company":
@@ -268,6 +290,12 @@ class RegisterRecruiterAPI(APIView):
 class AddJobAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Add Job.",
+        request=LaunchpadJobsSerializer,
+        responses={200: LaunchpadJobsSerializer},
+    )
     def post(self, request):
         if request.auth["user_type"] != "recruiter":
             return CustomResponse(general_message="Only recruiters can add jobs.").get_failure_response()
@@ -380,6 +408,9 @@ class AddJobAPI(APIView):
 
 class JobAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
+    @extend_schema(tags=['Launchpad'], description="Retrieve Job.",
+        responses={200: LaunchpadJobUpdateSerializer},
+    )
     def get(self, request, job_id):
         user_type = request.auth["user_type"]
         user_id = request.auth["id"]
@@ -435,6 +466,9 @@ class JobAPI(APIView):
                 general_message="Job not found."
             ).get_failure_response()
         
+    @extend_schema(tags=['Launchpad'], description="Update Job.",
+        responses={200: LaunchpadJobUpdateSerializer},
+    )
     def put(self, request, job_id):
         user_type = request.auth["user_type"]
         user_id = request.auth["id"]
@@ -513,6 +547,9 @@ class JobAPI(APIView):
                 general_message="Job update failed"
             ).get_failure_response()
         
+    @extend_schema(tags=['Launchpad'], description="Delete Job.",
+        responses={200: LaunchpadJobUpdateSerializer},
+    )
     def delete(self, request, job_id):
         user_type = request.auth["user_type"]
         user_id = request.auth["id"]
@@ -548,6 +585,9 @@ class JobAPI(APIView):
 class ListJobsAPI(APIView):
     authentication_classes = [CustomizePermission, LaunchpadJWTPermission]
     
+    @extend_schema(tags=['Launchpad'], description="Retrieve List Jobs.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_type = request.auth.get("user_type")
         user_id = request.auth.get("id")
@@ -640,6 +680,12 @@ class ListJobsAPI(APIView):
 class VerifyTaskAPI(APIView):
     authentication_classes = [CustomizePermission]
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Verify Task.",
+        request=TaskVerificationSerializer,
+        responses={200: TaskVerificationSerializer},
+    )
     def post(self, request):
         serializer = TaskVerificationSerializer(data=request.data)
         
@@ -666,6 +712,9 @@ class VerifyTaskAPI(APIView):
             ).get_failure_response()
 
 class LoginCompanyAPI(APIView):
+    @extend_schema(tags=['Launchpad'], description="Create Login Company.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         data = request.data
         usernameOrEmail = data.get("username") or data.get("email")
@@ -700,6 +749,9 @@ class LoginCompanyAPI(APIView):
         }).get_success_response()
 
 class LoginRecruiterAPI(APIView):
+    @extend_schema(tags=['Launchpad'], description="Create Login Recruiter.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         data = request.data
         emailOrPhone = data.get('email') or data.get('phone')
@@ -739,6 +791,9 @@ class LoginRecruiterAPI(APIView):
         }).get_success_response()
 
 class GetCompanyInfoAPI(APIView):
+    @extend_schema(tags=['Launchpad'], description="Create Get Company Info.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         company_id = request.data.get('company_id')
         if not company_id:
@@ -778,6 +833,9 @@ class GetCompanyInfoAPI(APIView):
             return CustomResponse(general_message="Company not found.").get_failure_response()
 
 class GetRecruiterInfoAPI(APIView):
+    @extend_schema(tags=['Launchpad'], description="Create Get Recruiter Info.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         recruiter_id = request.data.get('recruiter_id')
         if not recruiter_id:
@@ -801,6 +859,9 @@ class GetRecruiterInfoAPI(APIView):
 
 
 class RefreshTokenAPI(APIView):
+    @extend_schema(tags=['Launchpad'], description="Create Refresh Token.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         refresh_token = request.data.get("refreshToken")
         if not refresh_token:
@@ -851,6 +912,9 @@ class RefreshTokenAPI(APIView):
 class CompanyVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Launchpad'], description="Create Company Verify.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         company_id = request.data.get('company_id')
         if not company_id:
@@ -887,6 +951,11 @@ class CompanyVerifyAPI(APIView):
 class ListLaunchpadStudentsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve List Launchpad Students.",
+        responses={200: EligibleStudentSerializer},
+    )
     def get(self, request, job_id):
         user_type = request.auth["user_type"]
         if user_type not in ["recruiter", "company"]:
@@ -1073,6 +1142,9 @@ class ListLaunchpadStudentsAPI(APIView):
 class HireRequestsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
+    @extend_schema(tags=['Launchpad'], description="Retrieve Hire Requests.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_type = request.auth["user_type"]
         if user_type not in ["recruiter", "company"]:
@@ -1349,6 +1421,9 @@ class HireRequestsAPI(APIView):
 class SendJobInvitationsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
+    @extend_schema(tags=['Launchpad'], description="Create Send Job Invitations.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         if request.auth["user_type"] != "recruiter":
             return CustomResponse(general_message="Only recruiters can send invitations.").get_failure_response()
@@ -1450,6 +1525,9 @@ class SendJobInvitationsAPI(APIView):
 class StudentJobInvitationsAPI(APIView):
     authentication_classes = [CustomizePermission]
     
+    @extend_schema(tags=['Launchpad'], description="Retrieve Student Job Invitations.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = request.auth["id"]
         status_filter = request.query_params.get('status', None)  
@@ -1536,6 +1614,9 @@ class StudentJobInvitationsAPI(APIView):
 class StudentApplyToJobAPI(APIView):
     authentication_classes = [CustomizePermission]
     
+    @extend_schema(tags=['Launchpad'], description="Create Student Apply To Job.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         try:
             user_id = request.auth["id"]
@@ -1599,6 +1680,9 @@ class StudentApplyToJobAPI(APIView):
 class AcceptedStudentsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
+    @extend_schema(tags=['Launchpad'], description="Retrieve Accepted Students.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request, job_id=None):
         if request.auth["user_type"] != "recruiter":
             return CustomResponse(general_message="Only recruiters can view students.").get_failure_response()
@@ -1748,6 +1832,9 @@ class AcceptedStudentsAPI(APIView):
         )
 class ScheduleInterviewAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
+    @extend_schema(tags=['Launchpad'], description="Create Schedule Interview.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         user_id = request.auth["id"]
         application_id = request.data.get('application_id')
@@ -1801,6 +1888,9 @@ class ScheduleInterviewAPI(APIView):
 class ApplicationFinalDecisionAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
+    @extend_schema(tags=['Launchpad'], description="Create Application Final Decision.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         user_type = request.auth["user_type"]
         if user_type not in ["recruiter", "company"]:
@@ -1909,6 +1999,9 @@ class ApplicationFinalDecisionAPI(APIView):
 
 class DeleteCompanyAPI(APIView):
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Launchpad'], description="Partially update Delete Company.",
+        responses={200: CustomResponseSerializer},
+    )
     def patch(self, request):
         company_id = request.data.get("id")
 
@@ -1934,6 +2027,11 @@ class DeleteCompanyAPI(APIView):
 
 #<--------------------------------------------------- old launchpad ------------------------------------------------->
 class Leaderboard(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve Leaderboard.",
+        responses={200: LaunchpadLeaderBoardSerializer},
+    )
     def get(self, request):
         total_karma_subquery = (
             KarmaActivityLog.objects.filter(
@@ -2019,6 +2117,11 @@ class Leaderboard(APIView):
 
 
 class TaskCompletedLeaderboard(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve Task Completed Leaderboard.",
+        responses={200: TaskCompletedLeaderBoardSerializer},
+    )
     def get(self, request):
 
         launchpad_tasks = TaskList.objects.filter(event="launchpad").values("id")
@@ -2104,6 +2207,11 @@ class TaskCompletedLeaderboard(APIView):
 
 
 class ListParticipantsAPI(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve List Participants.",
+        responses={200: LaunchpadParticipantsSerializer},
+    )
     def get(self, request):
         allowed_org_types = ["College", "School", "Company"]
         allowed_levels = LaunchPadLevels.get_all_values()
@@ -2194,6 +2302,9 @@ class ListParticipantsAPI(APIView):
 
 
 class LaunchpadDetailsCount(APIView):
+    @extend_schema(tags=['Launchpad'], description="Retrieve Launchpad Details Count.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         allowed_org_types = ["College", "School", "Company"]
         allowed_levels = LaunchPadLevels.get_all_values()
@@ -2265,6 +2376,11 @@ class LaunchpadDetailsCount(APIView):
 
 
 class CollegeData(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve College Data.",
+        responses={200: CollegeDataSerializer},
+    )
     def get(self, request):
         allowed_levels = LaunchPadLevels.get_all_values()
 
@@ -2343,6 +2459,12 @@ class CollegeData(APIView):
 
 class LaunchPadUser(APIView):
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Launch Pad User.",
+        request=LaunchpadUserSerializer,
+        responses={200: LaunchpadUserSerializer},
+    )
     def post(self, request):
         data = request.data
         auth_mail = data.pop("current_user", None)
@@ -2386,6 +2508,11 @@ class LaunchPadUser(APIView):
             general_message="Successfully added user"
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve Launch Pad User.",
+        responses={200: LaunchpadUserListSerializer},
+    )
     def get(self, request):
         auth_mail = request.query_params.get("current_user", None)
         if not LaunchPadUsers.objects.filter(
@@ -2406,6 +2533,11 @@ class LaunchPadUser(APIView):
             data=serializer.data, pagination=paginated_queryset.get("pagination")
         )
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Update Launch Pad User.",
+        responses={200: LaunchpadUpdateUserSerializer},
+    )
     def put(self, request, email):
         data = request.data
         auth_mail = data.pop("current_user", None)
@@ -2435,6 +2567,11 @@ class LaunchPadUser(APIView):
 
 class LaunchPadUserPublic(APIView):
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve Launch Pad User Public.",
+        responses={200: LaunchpadUserListSerializer},
+    )
     def get(self, request, email):
         try:
             user = LaunchPadUsers.objects.get(email=email)
@@ -2448,6 +2585,11 @@ class LaunchPadUserPublic(APIView):
 
 class UserProfile(APIView):
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve User Profile.",
+        responses={200: LaunchpadUserListSerializer},
+    )
     def get(self, request):
         auth_mail = request.query_params.get("current_user", None)
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
@@ -2456,6 +2598,9 @@ class UserProfile(APIView):
         serializer = LaunchpadUserListSerializer(user)
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @extend_schema(tags=['Launchpad'], description="Update User Profile.",
+        responses={200: LaunchpadUserListSerializer},
+    )
     def put(self, request):
         data = request.data
         auth_mail = data.pop("current_user", None)
@@ -2474,6 +2619,11 @@ class UserProfile(APIView):
 
 class UserBasedCollegeData(APIView):
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve User Based College Data.",
+        responses={200: CollegeDataSerializer},
+    )
     def get(self, request):
         auth_mail = request.query_params.get("current_user", None)
         if not LaunchPadUsers.objects.filter(email=auth_mail).exists():
@@ -2543,6 +2693,12 @@ class UserBasedCollegeData(APIView):
 
 class BulkLaunchpadUser(APIView):
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Bulk Launchpad User.",
+        request=LaunchpadUserSerializer,
+        responses={200: LaunchpadUserSerializer},
+    )
     def post(self, request):
         data = request.data
         auth_mail = data.pop("current_user", None)
@@ -2610,6 +2766,11 @@ class BulkLaunchpadUser(APIView):
 
 class LaunchPadListAdmin(APIView):
 
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Retrieve Launch Pad List Admin.",
+        responses={200: LaunchpadLeaderBoardSerializer},
+    )
     def get(self, request):
         auth_mail = request.query_params.get("current_user", None)
         auth_mail = auth_mail[0] if isinstance(auth_mail, list) else auth_mail
@@ -2790,6 +2951,9 @@ class UserLogAPI(BaseAPI):
 
 
 class IGLeaderboardView(APIView):
+    @extend_schema(tags=['Launchpad'], description="Retrieve I G Leaderboard.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         category = request.query_params.get("category")
         # ig_id = request.query_params.get("ig_id")
@@ -2884,6 +3048,12 @@ class IGLeaderboardView(APIView):
         )
 
 class ForgotPasswordAPI(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Forgot Password.",
+        request=ForgotPasswordSerializer,
+        responses={200: ForgotPasswordSerializer},
+    )
     def post(self, request):
         serializer = ForgotPasswordSerializer(data=request.data)
         
@@ -2948,6 +3118,12 @@ class ForgotPasswordAPI(APIView):
             ).get_success_response()
 
 class ResetPasswordAPI(APIView):
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Reset Password.",
+        request=ResetPasswordSerializer,
+        responses={200: ResetPasswordSerializer},
+    )
     def post(self, request):
         serializer = ResetPasswordSerializer(data=request.data)
         
@@ -2971,6 +3147,9 @@ class ResetPasswordAPI(APIView):
         ).get_success_response()
 
 class VerifyResetTokenAPI(APIView):
+    @extend_schema(tags=['Launchpad'], description="Create Verify Reset Token.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         token = request.data.get('token')
         user_type = request.data.get('user_type')
@@ -3014,6 +3193,12 @@ class VerifyResetTokenAPI(APIView):
 class ChangePasswordAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
+    @extend_schema(
+        tags=['Launchpad'],
+        description="Create Change Password.",
+        request=ChangePasswordSerializer,
+        responses={200: ChangePasswordSerializer},
+    )
     def post(self, request):
         user_type = request.auth["user_type"]
         user_id = request.auth["id"]

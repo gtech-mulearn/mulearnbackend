@@ -8,12 +8,19 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 
 from . import location_serializer
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class CountryDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Retrieve Country Data.",
+        responses={200: location_serializer.LocationSerializer},
+    )
     def get(self, request, country_id=None):
         if country_id:
             countries = Country.objects.filter(id=country_id)
@@ -46,6 +53,12 @@ class CountryDataAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Create Country Data.",
+        request=location_serializer.CountryCreateEditSerializer,
+        responses={200: location_serializer.LocationSerializer},
+    )
     def post(self, request):
         request_data = request.data
         request_data["created_by"] = request_data[
@@ -61,6 +74,11 @@ class CountryDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Partially update Country Data.",
+        responses={200: location_serializer.CountryCreateEditSerializer},
+    )
     def patch(self, request, country_id):
         country = Country.objects.get(id=country_id)
         request_data = request.data
@@ -77,6 +95,9 @@ class CountryDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Location'], description="Delete Country Data.",
+        responses={200: location_serializer.LocationSerializer},
+    )
     def delete(self, request, country_id):
         country = Country.objects.get(id=country_id)
         country.delete()
@@ -90,6 +111,11 @@ class StateDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Retrieve State Data.",
+        responses={200: location_serializer.StateRetrievalSerializer},
+    )
     def get(self, request, state_id=None):
         if state_id:
             states = State.objects.filter(pk=state_id).select_related(
@@ -123,6 +149,12 @@ class StateDataAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Create State Data.",
+        request=location_serializer.StateCreateEditSerializer,
+        responses={200: location_serializer.StateRetrievalSerializer},
+    )
     def post(self, request):
         request_data = request.data
         request_data["created_by"] = request_data[
@@ -141,6 +173,11 @@ class StateDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Partially update State Data.",
+        responses={200: location_serializer.StateCreateEditSerializer},
+    )
     def patch(self, request, state_id):
         state = State.objects.get(id=state_id)
         request_data = request.data
@@ -157,6 +194,9 @@ class StateDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Location'], description="Delete State Data.",
+        responses={200: location_serializer.StateRetrievalSerializer},
+    )
     def delete(self, request, state_id):
         state = State.objects.get(id=state_id)
         state.delete()
@@ -170,6 +210,11 @@ class ZoneDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Retrieve Zone Data.",
+        responses={200: location_serializer.ZoneRetrievalSerializer},
+    )
     def get(self, request, zone_id=None):
         if zone_id:
             zones = Zone.objects.filter(pk=zone_id)
@@ -208,6 +253,12 @@ class ZoneDataAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Create Zone Data.",
+        request=location_serializer.ZoneCreateEditSerializer,
+        responses={200: location_serializer.ZoneRetrievalSerializer},
+    )
     def post(self, request):
         request_data = request.data
         request_data["created_by"] = request_data[
@@ -225,6 +276,11 @@ class ZoneDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Partially update Zone Data.",
+        responses={200: location_serializer.ZoneCreateEditSerializer},
+    )
     def patch(self, request, zone_id):
         zone = Zone.objects.get(id=zone_id)
         request_data = request.data
@@ -241,6 +297,9 @@ class ZoneDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Location'], description="Delete Zone Data.",
+        responses={200: location_serializer.ZoneRetrievalSerializer},
+    )
     def delete(self, request, zone_id):
         zone = Zone.objects.get(id=zone_id)
         zone.delete()
@@ -254,6 +313,11 @@ class DistrictDataAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Retrieve District Data.",
+        responses={200: location_serializer.DistrictRetrievalSerializer},
+    )
     def get(self, request, district_id=None):
         if district_id:
             districts = District.objects.filter(pk=district_id)
@@ -298,6 +362,12 @@ class DistrictDataAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Create District Data.",
+        request=location_serializer.DistrictCreateEditSerializer,
+        responses={200: location_serializer.DistrictRetrievalSerializer},
+    )
     def post(self, request):
         request_data = request.data
         request_data["created_by"] = request_data[
@@ -315,6 +385,11 @@ class DistrictDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Location'],
+        description="Partially update District Data.",
+        responses={200: location_serializer.DistrictCreateEditSerializer},
+    )
     def patch(self, request, district_id):
         district = District.objects.get(id=district_id)
         request_data = request.data
@@ -331,6 +406,9 @@ class DistrictDataAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Location'], description="Delete District Data.",
+        responses={200: location_serializer.DistrictRetrievalSerializer},
+    )
     def delete(self, request, district_id):
         district = District.objects.get(id=district_id)
         district.delete()
@@ -341,6 +419,9 @@ class DistrictDataAPI(APIView):
 
 
 class CountryListApi(APIView):
+    @extend_schema(tags=['Dashboard - Location'], description="Retrieve Country List Api.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         country = Country.objects.all().values("id", "name").order_by("name")
 
@@ -348,6 +429,9 @@ class CountryListApi(APIView):
 
 
 class StateListApi(APIView):
+    @extend_schema(tags=['Dashboard - Location'], description="Retrieve State List Api.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         state = State.objects.all().values("id", "name").order_by("name")
 
@@ -355,6 +439,9 @@ class StateListApi(APIView):
 
 
 class ZoneListApi(APIView):
+    @extend_schema(tags=['Dashboard - Location'], description="Retrieve Zone List Api.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         zone = Zone.objects.all().values("id", "name").order_by("name")
 

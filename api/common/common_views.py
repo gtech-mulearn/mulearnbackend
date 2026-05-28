@@ -18,8 +18,16 @@ from utils.utils import CommonUtils
 from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCircleEnrollmentSerializer, \
     UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer, LcDetailsSerializer, \
     LcListSerializer
+from api.dashboard.ig.dash_ig_serializer import InterestGroupSerializer
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 class LcDetailsAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc Details.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
 
@@ -32,6 +40,11 @@ class LcDetailsAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class LcListAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc List.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         all_circles = LearningCircle.objects.all()
         
@@ -68,6 +81,9 @@ class LcListAPI(APIView):
 
     
 class LcDashboardAPI(APIView):
+    @extend_schema(tags=['Common'], description="Retrieve Lc Dashboard.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         date = request.query_params.get("date")
         if date:
@@ -198,6 +214,11 @@ class LcDashboardAPI(APIView):
 
 
 class LcReportAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc Report.",
+        responses={200: StudentInfoSerializer},
+    )
     def get(self, request):
         date = request.query_params.get('date')
         if date:
@@ -282,6 +303,11 @@ class LcReportAPI(APIView):
 
 
 class LcReportDownloadAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc Report Download.",
+        responses={200: StudentInfoSerializer},
+    )
     def get(self, request):
         student_info = (
             UserCircleLink.objects.filter(
@@ -320,6 +346,11 @@ class LcReportDownloadAPI(APIView):
 
 
 class CollegeWiseLcReport(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve College Wise Lc Report.",
+        responses={200: CollegeInfoSerializer},
+    )
     def get(self, request):
         date = request.query_params.get('date')
         if date:
@@ -371,6 +402,11 @@ class CollegeWiseLcReport(APIView):
 
 
 class CollegeWiseLcReportCSV(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve College Wise Lc Report C S V.",
+        responses={200: CollegeInfoSerializer},
+    )
     def get(self, request):
         learning_circle_count_subquery = (
             LearningCircle.objects.filter(org__org_type=OrganizationType.COLLEGE.value)
@@ -406,6 +442,11 @@ class CollegeWiseLcReportCSV(APIView):
 
 class LearningCircleEnrollment(APIView):
 
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Learning Circle Enrollment.",
+        responses={200: LearningCircleEnrollmentSerializer},
+    )
     def get(self, request):
         total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                              user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
@@ -453,6 +494,11 @@ class LearningCircleEnrollment(APIView):
 
 
 class LearningCircleEnrollmentCSV(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Learning Circle Enrollment C S V.",
+        responses={200: LearningCircleEnrollmentSerializer},
+    )
     def get(self, request):
         total_no_enrollment = (UserCircleLink.objects.filter(accepted=True,
                                                              user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value).values(
@@ -500,6 +546,9 @@ class LearningCircleEnrollmentCSV(APIView):
 
 
 class GlobalCountAPI(APIView):
+    @extend_schema(tags=['Common'], description="Retrieve Global Count.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         members_count = User.objects.all().count()
         org_type_counts = (
@@ -536,6 +585,9 @@ class GlobalCountAPI(APIView):
 
 
 class GTASANDSHOREAPI(APIView):
+    @extend_schema(tags=['Common'], description="Retrieve G T A S A N D S H O R E.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         response = requests.get('https://devfolio.vez.social/rank')
         if response.status_code == 200:
@@ -566,6 +618,9 @@ class GTASANDSHOREAPI(APIView):
 
 
 class UserProfilePicAPI(APIView):
+    @extend_schema(tags=['Common'], description="Retrieve User Profile Pic.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request, muid):
         user = User.objects.filter(muid=muid).first()
         if user is None:
@@ -576,11 +631,19 @@ class UserProfilePicAPI(APIView):
 
 class ListIGAPI(APIView):
 
+    @extend_schema(tags=['Common'], description="Retrieve List I G.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
 
 
 class IGDetailAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve I G Detail.",
+        responses={200: InterestGroupSerializer},
+    )
     def get(self, request, pk):
         from api.dashboard.ig.dash_ig_serializer import InterestGroupSerializer
 
@@ -600,6 +663,9 @@ class IGDetailAPI(APIView):
             response={"interestGroup": serializer.data}
         ).get_success_response()
 class ListAllLevelInfo(APIView):
+    @extend_schema(tags=['Common'], description="Retrieve List All Level Info.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
 
         levels = Level.objects.all().order_by("level_order")
@@ -634,6 +700,9 @@ class ListAllLevelInfo(APIView):
 
 class ListTopIgUsersAPI(APIView):
 
+    @extend_schema(tags=['Common'], description="Retrieve List Top Ig Users.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         ig_name = request.query_params.getlist("ig_name", [])
 
@@ -677,6 +746,11 @@ class ListTopIgUsersAPI(APIView):
 
 
 class BekenAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Beken.",
+        responses={200: UserLeaderboardSerializer},
+    )
     def get(self, request):
         user_info = User.objects.exclude(
             user_role_link_user__role__title__in=[RoleType.ENABLER.value, RoleType.MENTOR.value]).order_by(
@@ -686,6 +760,11 @@ class BekenAPI(APIView):
 
 
 class LcCollegeAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc College.",
+        responses={200: OrgSerializer},
+    )
     def get(self, request):
         org_queryset = Organization.objects.filter(
             Q(org_type=OrganizationType.COLLEGE.value),
@@ -711,6 +790,11 @@ class LcCollegeAPI(APIView):
 
 
 class LcDistrictAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc District.",
+        responses={200: DistrictSerializer},
+    )
     def get(self, request):
         district = District.objects.filter(zone__state_id=request.query_params.get("state_id"))
         
@@ -723,6 +807,11 @@ class LcDistrictAPI(APIView):
         ).get_success_response()
 
 class LcStateAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc State.",
+        responses={200: StateSerializer},
+    )
     def get(self, request):
         
         state = State.objects.filter(country_id=request.query_params.get("country_id"))
@@ -736,6 +825,11 @@ class LcStateAPI(APIView):
 
 
 class LcCountryAPI(APIView):
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve Lc Country.",
+        responses={200: CountrySerializer},
+    )
     def get(self, request):
         countries = Country.objects.all()
 

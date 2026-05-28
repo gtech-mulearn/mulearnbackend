@@ -2,9 +2,14 @@ from django.db import connection
 from rest_framework.views import APIView
 
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class Leaderboard(APIView):
+    @extend_schema(tags=['Top100 Coders'], description="Retrieve Leaderboard.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         query = """
         SELECT 

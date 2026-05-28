@@ -3,6 +3,8 @@ import requests
 from rest_framework.views import APIView
 
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 AUTH_DOMAIN = decouple.config("AUTH_DOMAIN")
@@ -14,6 +16,9 @@ class GoogleMobileAuthProxyAPI(APIView):
     Forwards requests to the auth server and returns the response.
     """
 
+    @extend_schema(tags=['Auth'], description="Create Google Mobile Auth Proxy.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         id_token = request.data.get("id_token") or request.data.get("idToken")
 
@@ -58,6 +63,9 @@ class AppleMobileAuthProxyAPI(APIView):
     Forwards requests to the auth server and returns the response.
     """
 
+    @extend_schema(tags=['Auth'], description="Create Apple Mobile Auth Proxy.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         identity_token = request.data.get("identity_token") or request.data.get("identityToken")
         email = request.data.get("email")
@@ -107,6 +115,9 @@ class UserAuthenticationProxyAPI(APIView):
     Forwards requests to the auth server and returns the response.
     """
 
+    @extend_schema(tags=['Auth'], description="Create User Authentication Proxy.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         email = request.data.get("emailOrMuid")
         password = request.data.get("password")
@@ -152,6 +163,9 @@ class RefreshTokenProxyAPI(APIView):
     Forwards requests to the auth server and returns fresh tokens.
     """
 
+    @extend_schema(tags=['Auth'], description="Create Refresh Token Proxy.",
+        responses={200: CustomResponseSerializer},
+    )
     def post(self, request):
         refresh_token = request.data.get("refreshToken") or request.data.get("refresh_token")
 

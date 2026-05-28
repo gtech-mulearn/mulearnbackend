@@ -12,6 +12,8 @@ from db.task import KarmaActivityLog
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 def _campus_context(request):
@@ -135,6 +137,9 @@ def _campus_stats(org, since):
 class CampusDashboardSummaryAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Dashboard Summary.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:
@@ -160,6 +165,9 @@ class CampusDashboardSummaryAPIView(APIView):
 class CampusMemberFunnelAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Member Funnel.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:
@@ -173,6 +181,9 @@ class CampusMemberFunnelAPIView(APIView):
 class CampusCircleHealthAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Circle Health.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:
@@ -186,6 +197,9 @@ class CampusCircleHealthAPIView(APIView):
 class CampusRecentActivityAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Recent Activity.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:

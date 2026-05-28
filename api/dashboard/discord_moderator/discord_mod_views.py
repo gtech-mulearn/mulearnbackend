@@ -8,11 +8,18 @@ from utils.utils import CommonUtils
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from .serializer import KarmaActivityLogSerializer,LeaderboardSerializer
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class TaskList(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Discord Moderator'],
+        description="Retrieve Task List.",
+        responses={200: KarmaActivityLogSerializer},
+    )
     def get(self, request):
         tasks = KarmaActivityLog.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -36,6 +43,9 @@ class TaskList(APIView):
 class PendingTasks(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Discord Moderator'], description="Retrieve Pending Tasks.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         date = request.query_params.get("date")
         if date:
@@ -58,6 +68,11 @@ class PendingTasks(APIView):
 class LeaderBoard(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Discord Moderator'],
+        description="Retrieve Leader Board.",
+        responses={200: LeaderboardSerializer},
+    )
     def get(self, request):
         choice = request.query_params.get("option", "peer")
 

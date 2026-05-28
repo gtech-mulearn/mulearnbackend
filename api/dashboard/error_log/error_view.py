@@ -10,6 +10,8 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 
 from .log_helper import ManageURLPatterns, logHandler
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class DownloadErrorLogAPI(APIView):
@@ -17,6 +19,9 @@ class DownloadErrorLogAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Download Error Log.",
+        responses={200: CustomResponseSerializer},
     )
     def get(self, request, log_name):
         error_log = f"{settings.LOG_PATH}/{log_name}.log"
@@ -36,6 +41,9 @@ class ViewErrorLogAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve View Error Log.",
+        responses={200: CustomResponseSerializer},
     )
     def get(self, request, log_name):
         error_log = f"{settings.LOG_PATH}/{log_name}.log"
@@ -59,6 +67,9 @@ class ClearErrorLogAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Create Clear Error Log.",
+        responses={200: CustomResponseSerializer},
     )
     def post(self, request, log_name):
         error_log = f"{settings.LOG_PATH}/{log_name}.log"
@@ -103,6 +114,9 @@ class LoggerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Logger.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         """
         Get the error logs.
@@ -133,6 +147,9 @@ class LoggerAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Partially update Logger.",
+        responses={200: CustomResponseSerializer},
     )
     def patch(self, request, error_id):
         """
@@ -169,6 +186,9 @@ class ErrorGraphAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Error Graph.",
+        responses={200: CustomResponseSerializer},
     )
     def get(self, request):
         """
@@ -216,6 +236,9 @@ class ErrorTabAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Error Tab.",
+        responses={200: CustomResponseSerializer},
     )
     def get(self, request):
         """

@@ -7,11 +7,16 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 class EnablerHomeSummaryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Enabler'], description="Retrieve Enabler Home Summary.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         enabler_id = JWTUtils.fetch_user_id(request)
         
@@ -34,6 +39,11 @@ class EnablerCampusListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Enabler'],
+        description="Retrieve Enabler Campus List.",
+        responses={200: serializers.EnablerCampusListSerializer},
+    )
     def get(self, request):
         enabler_id = JWTUtils.fetch_user_id(request)
         
@@ -55,6 +65,11 @@ class EnablerCampusReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Enabler'],
+        description="Retrieve Enabler Campus Review.",
+        responses={200: serializers.EnablerCampusListSerializer},
+    )
     def get(self, request, campus_id):
         enabler_id = JWTUtils.fetch_user_id(request)
         
@@ -77,6 +92,11 @@ class EnablerCampusNoteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Enabler'],
+        description="Retrieve Enabler Campus Note.",
+        responses={200: serializers.EnablerCampusNoteSerializer},
+    )
     def get(self, request, campus_id):
         enabler_id = JWTUtils.fetch_user_id(request)
         
@@ -94,6 +114,12 @@ class EnablerCampusNoteAPI(APIView):
         )
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Enabler'],
+        description="Create Enabler Campus Note.",
+        request=serializers.EnablerCampusNoteSerializer,
+        responses={200: serializers.EnablerCampusNoteSerializer},
+    )
     def post(self, request, campus_id):
         enabler_id = JWTUtils.fetch_user_id(request)
         
@@ -120,6 +146,9 @@ class EnablerReportsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Enabler'], description="Retrieve Enabler Reports.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         enabler_id = JWTUtils.fetch_user_id(request)
         

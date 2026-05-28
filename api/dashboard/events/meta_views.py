@@ -8,6 +8,8 @@ from db.organization import Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+from drf_spectacular.utils import extend_schema
+from utils.schema_utils import CustomResponseSerializer
 
 
 class EventCategoriesAPI(APIView):
@@ -17,6 +19,9 @@ class EventCategoriesAPI(APIView):
     No authentication required.
     """
 
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Event Categories.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         categories = Category.objects.filter(
             entity_type=Category.EntityType.EVENT,
@@ -36,6 +41,9 @@ class OrganizerOptionsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Organizer Options.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -122,6 +130,9 @@ class CollaborationTargetsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Collaboration Targets.",
+        responses={200: CustomResponseSerializer},
+    )
     def get(self, request):
         search = request.query_params.get('search', '').strip()
         filter_type = request.query_params.get('type', '').strip()
