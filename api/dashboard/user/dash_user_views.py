@@ -15,8 +15,8 @@ from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCateg
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.cache import cache
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
@@ -342,7 +342,7 @@ class UserVerificationCSV(APIView):
 
 class ForgotPasswordAPI(APIView):
     @extend_schema(tags=['Dashboard - User'], description="Create Forgot Password.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Forgot-password email sent")},
     )
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
@@ -383,7 +383,10 @@ class ForgotPasswordAPI(APIView):
 
 class ResetPasswordVerifyTokenAPI(APIView):
     @extend_schema(tags=['Dashboard - User'], description="Create Reset Password Verify Token.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='UserResetPasswordVerifyTokenResponse',
+            fields={'muid': s.CharField()},
+        )},
     )
     def post(self, request, token):
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):
@@ -405,7 +408,7 @@ class ResetPasswordVerifyTokenAPI(APIView):
 
 class ResetPasswordConfirmAPI(APIView):
     @extend_schema(tags=['Dashboard - User'], description="Create Reset Password Confirm.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Password reset confirmation")},
     )
     def post(self, request, token):
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):

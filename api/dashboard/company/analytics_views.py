@@ -11,8 +11,8 @@ from db.user import User, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 def _get_company_for_request(request):
@@ -129,7 +129,24 @@ class CompanyDashboardSummaryAPIView(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Company'], description="Retrieve Company Dashboard Summary.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='CompanyDashboardSummaryResponse',
+            fields={
+                'company': inline_serializer(
+                    name='CompanyDashboardCompanyInfo',
+                    fields={
+                        'id': s.CharField(),
+                        'name': s.CharField(),
+                        'slug': s.CharField(),
+                        'status': s.CharField(),
+                        'logo': s.CharField(allow_null=True),
+                    },
+                ),
+                'quick_stats': s.JSONField(),
+                'stat_cards': s.ListField(child=s.JSONField()),
+                'talent_pool': s.JSONField(),
+            },
+        )},
     )
     def get(self, request):
         company, error = _get_company_for_request(request)
@@ -175,7 +192,14 @@ class CompanyTalentPoolAnalyticsAPIView(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Company'], description="Retrieve Company Talent Pool Analytics.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='CompanyTalentPoolAnalyticsResponse',
+            fields={
+                'total_learners': s.IntegerField(),
+                'level_distribution': s.ListField(child=s.JSONField()),
+                'top_interest_groups': s.ListField(child=s.JSONField()),
+            },
+        )},
     )
     def get(self, request):
         _company, error = _get_company_for_request(request)

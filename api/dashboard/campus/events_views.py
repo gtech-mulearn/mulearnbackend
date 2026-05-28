@@ -18,8 +18,8 @@ from .dash_campus_helper import (
     get_campus_events_qs,
     validate_campus_member,
 )
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class CampusEventsAPI(APIView):
@@ -100,7 +100,27 @@ class CampusEventDistributionAPI(APIView):
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Event Distribution.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name="CampusEventDistributionResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusEventDistributionData",
+                    fields={
+                        "data": inline_serializer(
+                            name="CampusEventTagCount",
+                            fields={
+                                "tag": s.CharField(),
+                                "event_count": s.IntegerField(),
+                            },
+                            many=True,
+                        ),
+                    },
+                ),
+            },
+        )},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -373,7 +393,20 @@ class CampusExecomRoleAPI(APIView):
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Execom Role.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name="CampusExecomRoleListResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusExecomRoleListData",
+                    fields={
+                        "data": s.ListField(child=s.CharField()),
+                    },
+                ),
+            },
+        )},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -406,7 +439,7 @@ class CampusExecomRoleAPI(APIView):
 
     @role_required([RoleType.CAMPUS_LEAD.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Create Campus Execom Role.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Role created or already exists")},
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)

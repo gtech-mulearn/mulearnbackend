@@ -28,8 +28,8 @@ from .serializers import (
     CompanyVerificationActionSerializer,
     CompanyVerificationListSerializer,
 )
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 logger = logging.getLogger(__name__)
 
@@ -550,7 +550,14 @@ class CompanyVerificationResubmitAPIView(APIView):
     renderer_classes = [JSONRenderer]
 
     @extend_schema(tags=['Dashboard - Company - Onboarding'], description="Create Company Verification Resubmit.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='OnboardingCompanyVerificationResubmitResponse',
+            fields={
+                'company_id': s.CharField(),
+                'status': s.CharField(),
+                'verification_requested_at': s.CharField(allow_null=True),
+            },
+        )},
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)

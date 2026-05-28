@@ -14,8 +14,7 @@ from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
 from django.db.models import Q
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class RoleAPI(APIView):
@@ -385,7 +384,7 @@ class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Roles'], description="Retrieve Role Base Template.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="XLSX file download")},
     )
     def get(self, request):
         wb = load_workbook("./excel-templates/role_base_template.xlsx")

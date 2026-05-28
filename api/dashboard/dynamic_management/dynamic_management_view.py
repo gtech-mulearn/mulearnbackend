@@ -8,8 +8,8 @@ from utils.utils import CommonUtils
 from .dynamic_management_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer, \
     DynamicRoleUpdateSerializer, RoleDropDownSerializer, DynamicUserCreateSerializer, DynamicUserListSerializer, \
     DynamicUserUpdateSerializer
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class DynamicRoleAPI(APIView):
@@ -154,7 +154,10 @@ class DynamicTypeDropDownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Dynamic Management'], description="Retrieve Dynamic Type Drop Down.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='DynamicTypeDropDownResponse',
+            fields={'types': s.ListField(child=s.CharField())},
+        )},
     )
     def get(self, request):
         dynamic_types = ManagementType.get_all_values()

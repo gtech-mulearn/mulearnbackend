@@ -16,8 +16,8 @@ from .application_serializers import (
     LearnerApplicationListSerializer,
 )
 from .jobs_views import BaseCompanyJobView
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 # ---------------------------------------------------------------------------
@@ -460,7 +460,14 @@ class LearnerWithdrawApplicationAPIView(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Company - Jobs'], description="Partially update Learner Withdraw Application.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='ApplicationLearnerWithdrawResponse',
+            fields={
+                'application_id': s.CharField(),
+                'job_id': s.CharField(),
+                'new_status': s.CharField(),
+            },
+        )},
     )
     def patch(self, request, app_id):
         # 1. Authenticate

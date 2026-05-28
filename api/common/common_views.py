@@ -19,14 +19,31 @@ from .serializer import StudentInfoSerializer, CollegeInfoSerializer, LearningCi
     UserLeaderboardSerializer,OrgSerializer,DistrictSerializer,StateSerializer,CountrySerializer, LcDetailsSerializer, \
     LcListSerializer
 from api.dashboard.ig.dash_ig_serializer import InterestGroupSerializer
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 class LcDetailsAPI(APIView):
     @extend_schema(
         tags=['Common'],
         description="Retrieve Lc Details.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonLcDetailsResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": inline_serializer("CommonLcDetailsData", fields={
+                "name": s.CharField(),
+                "circle_code": s.CharField(),
+                "note": s.CharField(allow_null=True),
+                "day": s.CharField(allow_null=True),
+                "college": s.CharField(allow_null=True),
+                "members": s.ListField(child=s.DictField()),
+                "rank": s.IntegerField(allow_null=True),
+                "total_karma": s.IntegerField(),
+                "ig_id": s.CharField(),
+                "ig_name": s.CharField(),
+                "ig_code": s.CharField(),
+            }),
+        })},
     )
     def get(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
@@ -43,7 +60,24 @@ class LcListAPI(APIView):
     @extend_schema(
         tags=['Common'],
         description="Retrieve Lc List.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonLcListResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": s.ListField(child=inline_serializer("CommonLcListItem", fields={
+                "id": s.CharField(),
+                "name": s.CharField(),
+                "ig_name": s.CharField(),
+                "org_name": s.CharField(allow_null=True),
+                "member_count": s.IntegerField(),
+                "members": s.ListField(child=s.DictField(), allow_null=True),
+                "meet_place": s.CharField(allow_null=True),
+                "meet_time": s.CharField(allow_null=True),
+                "lead_name": s.CharField(allow_null=True),
+                "karma": s.IntegerField(),
+            })),
+            "pagination": s.DictField(child=s.IntegerField()),
+        })},
     )
     def get(self, request):
         all_circles = LearningCircle.objects.all()
@@ -82,7 +116,24 @@ class LcListAPI(APIView):
     
 class LcDashboardAPI(APIView):
     @extend_schema(tags=['Common'], description="Retrieve Lc Dashboard.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonLcDashboardResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": inline_serializer("CommonLcDashboardData", fields={
+                "lc_count": s.IntegerField(help_text="Total number of learning circles"),
+                "total_enrollment": s.IntegerField(help_text="Total college-student enrollments"),
+                "circle_count_by_ig": s.ListField(
+                    child=inline_serializer("CommonLcDashboardIgStat", fields={
+                        "name": s.CharField(),
+                        "total_circles": s.IntegerField(),
+                        "total_users": s.IntegerField(),
+                    }),
+                    help_text="Circle and user counts grouped by interest group",
+                ),
+                "unique_users": s.IntegerField(help_text="Number of unique enrolled users"),
+            }),
+        })},
     )
     def get(self, request):
         date = request.query_params.get("date")
@@ -547,7 +598,30 @@ class LearningCircleEnrollmentCSV(APIView):
 
 class GlobalCountAPI(APIView):
     @extend_schema(tags=['Common'], description="Retrieve Global Count.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonGlobalCountResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": inline_serializer("CommonGlobalCountData", fields={
+                "members": s.IntegerField(help_text="Total registered user count"),
+                "org_type_counts": s.ListField(
+                    child=inline_serializer("CommonOrgTypeCount", fields={
+                        "org_type": s.CharField(),
+                        "org_count": s.IntegerField(),
+                    }),
+                    help_text="Count of organisations per type (college, company, community)",
+                ),
+                "enablers_mentors_count": s.ListField(
+                    child=inline_serializer("CommonRoleCount", fields={
+                        "role__title": s.CharField(),
+                        "role_count": s.IntegerField(),
+                    }),
+                    help_text="Count of users with enabler / mentor roles",
+                ),
+                "ig_count": s.IntegerField(help_text="Total interest group count"),
+                "learning_circle_count": s.IntegerField(help_text="Total learning circle count"),
+            }),
+        })},
     )
     def get(self, request):
         members_count = User.objects.all().count()
@@ -586,7 +660,15 @@ class GlobalCountAPI(APIView):
 
 class GTASANDSHOREAPI(APIView):
     @extend_schema(tags=['Common'], description="Retrieve G T A S A N D S H O R E.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonGtasandshoreResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": s.DictField(
+                child=s.IntegerField(),
+                help_text="Map of normalised college name → submission count from devfolio",
+            ),
+        })},
     )
     def get(self, request):
         response = requests.get('https://devfolio.vez.social/rank')
@@ -619,7 +701,14 @@ class GTASANDSHOREAPI(APIView):
 
 class UserProfilePicAPI(APIView):
     @extend_schema(tags=['Common'], description="Retrieve User Profile Pic.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonUserProfilePicResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": inline_serializer("CommonUserProfilePicData", fields={
+                "image": s.CharField(allow_null=True, help_text="URL or path to the user's profile picture"),
+            }),
+        })},
     )
     def get(self, request, muid):
         user = User.objects.filter(muid=muid).first()
@@ -632,7 +721,17 @@ class UserProfilePicAPI(APIView):
 class ListIGAPI(APIView):
 
     @extend_schema(tags=['Common'], description="Retrieve List I G.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonListIGResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": s.ListField(
+                child=inline_serializer("CommonListIGItem", fields={
+                    "name": s.CharField(help_text="Interest group name"),
+                }),
+                help_text="All interest groups",
+            ),
+        })},
     )
     def get(self, request):
         return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
@@ -664,7 +763,37 @@ class IGDetailAPI(APIView):
         ).get_success_response()
 class ListAllLevelInfo(APIView):
     @extend_schema(tags=['Common'], description="Retrieve List All Level Info.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonListAllLevelInfoResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": s.ListField(
+                child=inline_serializer("CommonLevelItem", fields={
+                    "name": s.CharField(help_text="Level name"),
+                    "tasks": s.ListField(
+                        child=inline_serializer("CommonLevelTask", fields={
+                            "task_name": s.CharField(),
+                            "discord_link": s.CharField(allow_null=True),
+                            "hashtag": s.CharField(allow_null=True),
+                            "active": s.BooleanField(),
+                            "completed": s.BooleanField(),
+                            "karma": s.IntegerField(),
+                            "task_description": s.CharField(allow_null=True),
+                            "interest_group": inline_serializer("CommonLevelTaskIG", fields={
+                                "id": s.CharField(allow_null=True),
+                                "name": s.CharField(allow_null=True),
+                            }),
+                            "submission_channel": inline_serializer("CommonLevelTaskChannel", fields={
+                                "id": s.CharField(allow_null=True),
+                                "name": s.CharField(allow_null=True),
+                                "discord_id": s.CharField(allow_null=True),
+                            }),
+                        }),
+                    ),
+                }),
+                help_text="Levels with their associated tasks",
+            ),
+        })},
     )
     def get(self, request):
 
@@ -701,7 +830,24 @@ class ListAllLevelInfo(APIView):
 class ListTopIgUsersAPI(APIView):
 
     @extend_schema(tags=['Common'], description="Retrieve List Top Ig Users.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("CommonListTopIgUsersResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(child=s.CharField(), default={}),
+            "response": s.ListField(
+                child=inline_serializer("CommonTopIgUserItem", fields={
+                    "userid": s.CharField(help_text="User UUID"),
+                    "muid": s.CharField(help_text="User unique identifier"),
+                    "full_name": s.CharField(),
+                    "ig_karma": s.IntegerField(help_text="Total karma earned in the requested interest groups"),
+                    "igs": s.ListField(
+                        child=s.CharField(),
+                        help_text="All interest group names the user belongs to",
+                    ),
+                }),
+                help_text="Top 100 users ranked by karma in the requested interest groups",
+            ),
+        })},
     )
     def get(self, request):
         ig_name = request.query_params.getlist("ig_name", [])

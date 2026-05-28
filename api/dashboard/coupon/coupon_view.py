@@ -5,13 +5,20 @@ from rest_framework.views import APIView
 from db.user import UserCouponLink
 from utils.response import CustomResponse
 from utils.types import CouponResponseKey, DiscountTypes
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class CouponApi(APIView):
     @extend_schema(tags=['Dashboard - Coupon'], description="Create Coupon Api.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='CouponApplyResponse',
+            fields={
+                'discount_type': s.CharField(),
+                'discount_value': s.IntegerField(),
+                'ticket': s.ListField(child=s.CharField()),
+            },
+        )},
     )
     def post(self, request):
         if not (coupon_code := request.data.get("code")):

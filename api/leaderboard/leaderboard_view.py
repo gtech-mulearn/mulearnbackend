@@ -8,8 +8,8 @@ from db.user import User, UserRoleLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class StudentsLeaderboard(APIView):
@@ -49,7 +49,15 @@ class StudentsLeaderboard(APIView):
 
 class StudentsMonthlyLeaderboard(APIView):
     @extend_schema(tags=['Leaderboard'], description="Retrieve Students Monthly Leaderboard.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='LeaderboardStudentsMonthlyItem',
+            fields={
+                'full_name': s.CharField(),
+                'total_karma': s.IntegerField(),
+                'institution': s.CharField(allow_null=True),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
@@ -118,7 +126,15 @@ class CollegeLeaderboard(APIView):
 
 class CollegeMonthlyLeaderboard(APIView):
     @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='LeaderboardCollegeMonthlyItem',
+            fields={
+                'code': s.CharField(),
+                'total_karma': s.IntegerField(),
+                'students': s.IntegerField(),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()

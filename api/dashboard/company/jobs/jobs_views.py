@@ -10,8 +10,8 @@ from .serializers import CompanyJobCreateSerializer, CompanyJobUpdateSerializer,
 from db.skill import Skill 
 from db.task import InterestGroup  
 from db.achievement import Achievement
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 class BaseCompanyJobView(APIView):
     """Base view for common functionality across company job views."""
@@ -801,7 +801,14 @@ class DeleteJobRuleAPIView(BaseCompanyJobView):
     """API to delete a specific job rule."""
     
     @extend_schema(tags=['Dashboard - Company - Jobs'], description="Delete Delete Job Rule.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='JobDeleteJobRuleResponse',
+            fields={
+                'rule_id': s.CharField(),
+                'job_id': s.CharField(),
+                'deleted_at': s.CharField(),
+            },
+        )},
     )
     def delete(self, request, job_id, rule_id):
         try:

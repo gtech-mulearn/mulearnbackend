@@ -28,8 +28,8 @@ from .serializers import (
 )
 from .event_logger import log_event_action
 from .event_image_utils import delete_stale_event_media, merge_event_write_payload
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 MANAGEABLE_ROLES = {
@@ -304,7 +304,13 @@ class ManageEventPublishAPI(APIView):
     ]
 
     @extend_schema(tags=['Dashboard - Events'], description="Create Manage Event Publish.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EventPublishResponse',
+            fields={
+                'id': s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
     )
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)

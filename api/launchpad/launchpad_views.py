@@ -40,7 +40,8 @@ from django.core.mail import send_mail, EmailMessage
 from django.template.loader import render_to_string
 import decouple
 import secrets
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 from utils.schema_utils import CustomResponseSerializer
 
 
@@ -184,7 +185,17 @@ class CompanyListAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Launchpad'], description="Retrieve Company List.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadCompanyListResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+            "poc_name": s.CharField(allow_null=True),
+            "poc_email": s.CharField(allow_null=True),
+            "poc_phone": s.CharField(allow_null=True),
+            "website": s.CharField(allow_null=True),
+            "description": s.CharField(allow_null=True),
+            "address": s.CharField(allow_null=True),
+            "is_verified": s.BooleanField(),
+        })},
     )
     def get(self, request):
       companies = LaunchpadCompanies.objects.all()
@@ -586,7 +597,10 @@ class ListJobsAPI(APIView):
     authentication_classes = [CustomizePermission, LaunchpadJWTPermission]
     
     @extend_schema(tags=['Launchpad'], description="Retrieve List Jobs.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadListJobsResponse", fields={
+            "jobs": s.ListField(child=s.DictField()),
+            "summary": s.DictField(),
+        })},
     )
     def get(self, request):
         user_type = request.auth.get("user_type")
@@ -713,7 +727,16 @@ class VerifyTaskAPI(APIView):
 
 class LoginCompanyAPI(APIView):
     @extend_schema(tags=['Launchpad'], description="Create Login Company.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadLoginCompanyResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+            "username": s.CharField(),
+            "poc_name": s.CharField(allow_null=True),
+            "poc_email": s.CharField(allow_null=True),
+            "created_at": s.DateTimeField(),
+            "accessToken": s.CharField(),
+            "refreshToken": s.CharField(),
+        })},
     )
     def post(self, request):
         data = request.data
@@ -750,7 +773,17 @@ class LoginCompanyAPI(APIView):
 
 class LoginRecruiterAPI(APIView):
     @extend_schema(tags=['Launchpad'], description="Create Login Recruiter.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadLoginRecruiterResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+            "email": s.CharField(),
+            "phone": s.CharField(allow_null=True),
+            "role": s.CharField(allow_null=True),
+            "company_id": s.CharField(),
+            "created_at": s.DateTimeField(),
+            "accessToken": s.CharField(),
+            "refreshToken": s.CharField(),
+        })},
     )
     def post(self, request):
         data = request.data
@@ -792,7 +825,22 @@ class LoginRecruiterAPI(APIView):
 
 class GetCompanyInfoAPI(APIView):
     @extend_schema(tags=['Launchpad'], description="Create Get Company Info.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadCompanyInfoResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+            "username": s.CharField(),
+            "poc_name": s.CharField(allow_null=True),
+            "poc_role": s.CharField(allow_null=True),
+            "poc_email": s.CharField(allow_null=True),
+            "poc_phone": s.CharField(allow_null=True),
+            "website": s.CharField(allow_null=True),
+            "description": s.CharField(allow_null=True),
+            "address": s.CharField(allow_null=True),
+            "is_verified": s.BooleanField(),
+            "created_at": s.DateTimeField(),
+            "updated_at": s.DateTimeField(),
+            "recruiters": s.ListField(child=s.DictField()),
+        })},
     )
     def post(self, request):
         company_id = request.data.get('company_id')
@@ -834,7 +882,17 @@ class GetCompanyInfoAPI(APIView):
 
 class GetRecruiterInfoAPI(APIView):
     @extend_schema(tags=['Launchpad'], description="Create Get Recruiter Info.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadRecruiterInfoResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+            "email": s.CharField(),
+            "phone": s.CharField(allow_null=True),
+            "role": s.CharField(allow_null=True),
+            "company_id": s.CharField(),
+            "company_name": s.CharField(allow_null=True),
+            "created_at": s.DateTimeField(),
+            "updated_at": s.DateTimeField(),
+        })},
     )
     def post(self, request):
         recruiter_id = request.data.get('recruiter_id')
@@ -860,7 +918,10 @@ class GetRecruiterInfoAPI(APIView):
 
 class RefreshTokenAPI(APIView):
     @extend_schema(tags=['Launchpad'], description="Create Refresh Token.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadRefreshTokenResponse", fields={
+            "accessToken": s.CharField(),
+            "refreshToken": s.CharField(),
+        })},
     )
     def post(self, request):
         refresh_token = request.data.get("refreshToken")
@@ -913,7 +974,10 @@ class CompanyVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Launchpad'], description="Create Company Verify.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadCompanyVerifyResponse", fields={
+            "company_name": s.CharField(),
+            "message": s.CharField(),
+        })},
     )
     def post(self, request):
         company_id = request.data.get('company_id')
@@ -1143,7 +1207,10 @@ class HireRequestsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
     @extend_schema(tags=['Launchpad'], description="Retrieve Hire Requests.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadHireRequestsResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request):
         user_type = request.auth["user_type"]
@@ -1422,7 +1489,12 @@ class SendJobInvitationsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
     @extend_schema(tags=['Launchpad'], description="Create Send Job Invitations.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadSendInvitationsResponse", fields={
+            "job_info": s.DictField(),
+            "invitation_summary": s.DictField(),
+            "invited_students": s.ListField(child=s.DictField()),
+            "already_invited_students": s.ListField(child=s.DictField()),
+        })},
     )
     def post(self, request):
         if request.auth["user_type"] != "recruiter":
@@ -1526,7 +1598,10 @@ class StudentJobInvitationsAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @extend_schema(tags=['Launchpad'], description="Retrieve Student Job Invitations.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadStudentInvitationsResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request):
         user_id = request.auth["id"]
@@ -1615,7 +1690,13 @@ class StudentApplyToJobAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @extend_schema(tags=['Launchpad'], description="Create Student Apply To Job.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadStudentApplyResponse", fields={
+            "application_id": s.CharField(),
+            "job_info": s.DictField(),
+            "application_details": s.DictField(),
+            "status": s.CharField(),
+            "applied_at": s.DateTimeField(),
+        })},
     )
     def post(self, request):
         try:
@@ -1681,7 +1762,10 @@ class AcceptedStudentsAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
     @extend_schema(tags=['Launchpad'], description="Retrieve Accepted Students.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadAcceptedStudentsResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request, job_id=None):
         if request.auth["user_type"] != "recruiter":
@@ -1833,7 +1917,13 @@ class AcceptedStudentsAPI(APIView):
 class ScheduleInterviewAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     @extend_schema(tags=['Launchpad'], description="Create Schedule Interview.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadScheduleInterviewResponse", fields={
+            "application_id": s.CharField(),
+            "interview_date": s.DateField(),
+            "interview_platform": s.CharField(allow_null=True),
+            "interview_time": s.TimeField(allow_null=True),
+            "status": s.CharField(),
+        })},
     )
     def post(self, request):
         user_id = request.auth["id"]
@@ -1889,7 +1979,16 @@ class ApplicationFinalDecisionAPI(APIView):
     authentication_classes = [LaunchpadJWTPermission]
     
     @extend_schema(tags=['Launchpad'], description="Create Application Final Decision.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadApplicationDecisionResponse", fields={
+            "application_id": s.CharField(),
+            "decision": s.CharField(),
+            "previous_status": s.CharField(),
+            "decision_made_at": s.DateTimeField(),
+            "decision_made_by": s.DictField(),
+            "student_info": s.DictField(),
+            "job_info": s.DictField(),
+            "application_timeline": s.DictField(),
+        })},
     )
     def post(self, request):
         user_type = request.auth["user_type"]
@@ -2000,7 +2099,7 @@ class ApplicationFinalDecisionAPI(APIView):
 class DeleteCompanyAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Launchpad'], description="Partially update Delete Company.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Company unverified successfully.")},
     )
     def patch(self, request):
         company_id = request.data.get("id")
@@ -2303,7 +2402,13 @@ class ListParticipantsAPI(APIView):
 
 class LaunchpadDetailsCount(APIView):
     @extend_schema(tags=['Launchpad'], description="Retrieve Launchpad Details Count.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadDetailsCountResponse", fields={
+            "total_participants": s.IntegerField(),
+            "Level_1": s.IntegerField(),
+            "Level_2": s.IntegerField(),
+            "Level_3": s.IntegerField(),
+            "Level_4": s.IntegerField(),
+        })},
     )
     def get(self, request):
         allowed_org_types = ["College", "School", "Company"]
@@ -2952,7 +3057,10 @@ class UserLogAPI(BaseAPI):
 
 class IGLeaderboardView(APIView):
     @extend_schema(tags=['Launchpad'], description="Retrieve I G Leaderboard.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadIGLeaderboardResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request):
         category = request.query_params.get("category")
@@ -3148,7 +3256,11 @@ class ResetPasswordAPI(APIView):
 
 class VerifyResetTokenAPI(APIView):
     @extend_schema(tags=['Launchpad'], description="Create Verify Reset Token.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("LaunchpadVerifyResetTokenResponse", fields={
+            "valid": s.BooleanField(),
+            "user_name": s.CharField(allow_null=True),
+            "expires_at": s.DateTimeField(allow_null=True),
+        })},
     )
     def post(self, request):
         token = request.data.get('token')

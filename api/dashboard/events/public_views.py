@@ -24,8 +24,8 @@ from .serializers import (
     get_live_events,
     EventCalendarItemSerializer,
 )
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 def _get_viewer_id(request):
@@ -281,7 +281,14 @@ class EventInterestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Events'], description="Create Event Interest.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EventInterestCreateResponse',
+            fields={
+                'event_id': s.CharField(),
+                'user_id': s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
     )
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -324,7 +331,7 @@ class EventInterestAPI(APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Dashboard - Events'], description="Delete Event Interest.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Interest removed successfully.")},
     )
     def delete(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)

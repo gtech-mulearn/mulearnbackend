@@ -10,8 +10,8 @@ from utils.permission import role_required
 from utils.types import RoleType
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class UrlShortenerAPI(APIView):
@@ -153,7 +153,25 @@ class UrlAnalyticsAPI(APIView):
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.ASSOCIATE.value]
     )
     @extend_schema(tags=['Url Shortener'], description="Retrieve Url Analytics.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='UrlShortenerAnalyticsResponse',
+            fields={
+                'total_clicks': s.IntegerField(),
+                'created_on': s.CharField(),
+                'browsers': s.JSONField(),
+                'platforms': s.JSONField(),
+                'devices': s.JSONField(),
+                'sources': s.JSONField(),
+                'ip_address': s.JSONField(),
+                'city': s.JSONField(),
+                'region': s.JSONField(),
+                'countries': s.JSONField(),
+                'time_based_data': s.JSONField(),
+                'long_url': s.CharField(),
+                'short_url': s.CharField(),
+                'title': s.CharField(),
+            },
+        )},
     )
     def get(self, request, url_id):
         queryset = UrlShortenerTracker.objects.filter(url_shortener__id=url_id)

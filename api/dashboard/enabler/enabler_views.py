@@ -7,19 +7,26 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 class EnablerHomeSummaryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Enabler'], description="Retrieve Enabler Home Summary.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EnablerHomeSummaryResponse',
+            fields={
+                'total_campuses': s.IntegerField(),
+                'total_students': s.IntegerField(),
+                'total_karma': s.IntegerField(),
+            },
+        )},
     )
     def get(self, request):
         enabler_id = JWTUtils.fetch_user_id(request)
-        
+
         assigned_campuses = UserOrganizationLink.objects.filter(
             user_id=enabler_id,
             org__org_type=OrganizationType.COLLEGE.value
@@ -147,7 +154,23 @@ class EnablerReportsAPI(APIView):
 
     @role_required([RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Enabler'], description="Retrieve Enabler Reports.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EnablerReportsResponse',
+            fields={
+                'period': s.CharField(),
+                'summary': inline_serializer(
+                    name='EnablerReportsSummary',
+                    fields={
+                        'assigned_campuses': s.IntegerField(),
+                        'active_campuses': s.IntegerField(),
+                        'at_risk_campuses': s.IntegerField(),
+                        'followups_closed': s.IntegerField(),
+                        'followups_pending': s.IntegerField(),
+                    },
+                ),
+                'campuses': s.ListField(child=s.JSONField()),
+            },
+        )},
     )
     def get(self, request):
         enabler_id = JWTUtils.fetch_user_id(request)

@@ -8,8 +8,8 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 
 from . import location_serializer
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class CountryDataAPI(APIView):
@@ -420,7 +420,14 @@ class DistrictDataAPI(APIView):
 
 class CountryListApi(APIView):
     @extend_schema(tags=['Dashboard - Location'], description="Retrieve Country List Api.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='LocationCountryListResponse',
+            fields={
+                'id': s.CharField(),
+                'name': s.CharField(),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         country = Country.objects.all().values("id", "name").order_by("name")
@@ -430,7 +437,14 @@ class CountryListApi(APIView):
 
 class StateListApi(APIView):
     @extend_schema(tags=['Dashboard - Location'], description="Retrieve State List Api.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='LocationStateListResponse',
+            fields={
+                'id': s.CharField(),
+                'name': s.CharField(),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         state = State.objects.all().values("id", "name").order_by("name")
@@ -440,7 +454,14 @@ class StateListApi(APIView):
 
 class ZoneListApi(APIView):
     @extend_schema(tags=['Dashboard - Location'], description="Retrieve Zone List Api.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='LocationZoneListResponse',
+            fields={
+                'id': s.CharField(),
+                'name': s.CharField(),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         zone = Zone.objects.all().values("id", "name").order_by("name")

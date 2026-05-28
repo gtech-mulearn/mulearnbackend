@@ -8,8 +8,8 @@ from utils.utils import CommonUtils
 from utils.permission import CustomizePermission
 from utils.response import CustomResponse
 from .serializer import KarmaActivityLogSerializer,LeaderboardSerializer
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class TaskList(APIView):
@@ -44,7 +44,13 @@ class PendingTasks(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Discord Moderator'], description="Retrieve Pending Tasks.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='DiscordPendingTasksResponse',
+            fields={
+                'peer_pending': s.IntegerField(),
+                'appraise_pending': s.IntegerField(),
+            },
+        )},
     )
     def get(self, request):
         date = request.query_params.get("date")

@@ -23,8 +23,8 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired, Backen
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import DateTimeUtils, CommonUtils
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class AchievementListAPIView(APIView):
@@ -490,7 +490,23 @@ class UserProgressAPIView(APIView):
     """Get progress towards all achievements"""
 
     @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve User Progress.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("AchievementUserProgressResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("AchievementProgressItem", fields={
+                    "achievement_id": s.CharField(),
+                    "achievement_name": s.CharField(),
+                    "eligible": s.BooleanField(),
+                    "reason": s.CharField(allow_null=True),
+                    "progress": s.DictField(
+                        help_text="Rule-engine progress data (e.g. current vs. required counts)"
+                    ),
+                }),
+                help_text="Progress towards every achievement for the current user",
+            ),
+        })},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -665,7 +681,23 @@ class SimulateRulesAPIView(APIView):
     """Simulate rule evaluation for a user (admin/debug)"""
 
     @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Simulate Rules.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("AchievementSimulateRulesResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("AchievementSimulateItem", fields={
+                    "achievement_id": s.CharField(),
+                    "achievement_name": s.CharField(),
+                    "eligible": s.BooleanField(),
+                    "reason": s.CharField(allow_null=True),
+                    "progress": s.DictField(
+                        help_text="Rule-engine progress data for the target user"
+                    ),
+                }),
+                help_text="Simulated rule evaluation results for the given user (by muid)",
+            ),
+        })},
     )
     def get(self, request, muid):
         user_id = JWTUtils.fetch_user_id(request)
@@ -770,7 +802,7 @@ class ManualIssueAPIView(APIView):
     """Manually issue an achievement (admin)"""
 
     @extend_schema(tags=['Dashboard - Achievement'], description="Create Manual Issue.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Achievement manually issued to user")},
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -864,7 +896,24 @@ class AuditLogAPIView(APIView):
     """View audit logs for a user (admin)"""
 
     @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Audit Log.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("AchievementAuditLogResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("AchievementAuditLogItem", fields={
+                    "id": s.CharField(),
+                    "achievement_id": s.CharField(),
+                    "achievement_name": s.CharField(),
+                    "action": s.CharField(help_text="e.g. ISSUED, REVOKED"),
+                    "rule_version": s.IntegerField(allow_null=True),
+                    "metadata": s.DictField(allow_null=True),
+                    "performed_by": s.CharField(allow_null=True),
+                    "created_at": s.DateTimeField(allow_null=True),
+                }),
+                help_text="Last 100 audit log entries for the given user's achievements",
+            ),
+        })},
     )
     def get(self, request, muid):
         user_id = JWTUtils.fetch_user_id(request)

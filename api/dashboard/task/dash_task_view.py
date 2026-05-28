@@ -22,7 +22,8 @@ from openpyxl import load_workbook
 from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 from utils.schema_utils import CustomResponseSerializer
 
 
@@ -32,7 +33,10 @@ class TaskPublicListAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Task'],
         description="Retrieve Task Public List.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskPublicListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
@@ -103,7 +107,10 @@ class TaskListAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Task'],
         description="Retrieve Task List.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
@@ -173,7 +180,7 @@ class TaskListAPI(APIView):
         tags=['Dashboard - Task'],
         description="Create Task List.",
         request=TaskModifySerializer,
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Task Created Successfully")},
     )
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
@@ -329,7 +336,7 @@ class TaskListCSV(APIView):
     @extend_schema(
         tags=['Dashboard - Task'],
         description="Retrieve Task List C S V.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="CSV file download of the task list")},
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
@@ -555,7 +562,10 @@ class ChannelDropdownAPI(APIView):
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Channel Dropdown.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskChannelDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
     )
     def get(self, request):
         channels = Channel.objects.values("id", "name")
@@ -574,7 +584,10 @@ class IGDropdownAPI(APIView):
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve I G Dropdown.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskIGDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
     )
     def get(self, request):
         igs = InterestGroup.objects.values("id", "name")
@@ -592,7 +605,10 @@ class OrganizationDropdownAPI(APIView):
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Organization Dropdown.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskOrganizationDropdownResponse", fields={
+            "id": s.CharField(),
+            "title": s.CharField(),
+        })},
     )
     def get(self, request):
         organizations = Organization.objects.values("id", "title")
@@ -610,7 +626,10 @@ class LevelDropdownAPI(APIView):
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Level Dropdown.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskLevelDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
     )
     def get(self, request):
         levels = Level.objects.values("id", "name")
@@ -644,7 +663,9 @@ class EventDropDownApi(APIView):
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Event Drop Down Api.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskEventDropdownResponse", fields={
+            "events": s.ListField(child=s.CharField()),
+        })},
     )
     def get(self, request):
         events = Events.get_all_values()
@@ -655,7 +676,7 @@ class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Base Template.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Excel template file download (task_base_template.xlsx)")},
     )
     def get(self, request):
         wb = load_workbook("./excel-templates/task_base_template.xlsx")
@@ -800,7 +821,10 @@ class AdminTaskApprovalAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Admin Task Approval.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskAdminApprovalListResponse", fields={
+            "tasks": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
     )
     def get(self, request):
         """List all tasks with approval_status='pending'."""
@@ -846,7 +870,14 @@ class AdminTaskApprovalAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Dashboard - Task'], description="Partially update Admin Task Approval.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("TaskAdminApprovalActionResponse", fields={
+            "task_id": s.CharField(),
+            "approval_status": s.CharField(),
+            "active": s.BooleanField(),
+            "rejection_reason": s.CharField(allow_null=True),
+            "reviewed_by": s.CharField(allow_null=True),
+            "reviewed_at": s.CharField(allow_null=True),
+        })},
     )
     def patch(self, request, task_id):
         """

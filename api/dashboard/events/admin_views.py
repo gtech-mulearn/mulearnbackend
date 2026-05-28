@@ -12,8 +12,8 @@ from utils.types import RoleType
 
 from .serializers import EventListItemSerializer, EventDetailSerializer, get_live_events
 from .event_logger import log_event_action
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 PENDING_STATUSES = [
@@ -95,7 +95,13 @@ class AdminEventApproveAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Dashboard - Events'], description="Create Admin Event Approve.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EventApproveResponse',
+            fields={
+                'id': s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
     )
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -138,7 +144,14 @@ class AdminEventRejectAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Dashboard - Events'], description="Create Admin Event Reject.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EventRejectResponse',
+            fields={
+                'id': s.CharField(),
+                'status': s.CharField(),
+                'reason': s.CharField(),
+            },
+        )},
     )
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -188,7 +201,13 @@ class AdminEventFeatureAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Dashboard - Events'], description="Partially update Admin Event Feature.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='EventFeatureResponse',
+            fields={
+                'id': s.CharField(),
+                'is_featured': s.BooleanField(),
+            },
+        )},
     )
     def patch(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)

@@ -1,5 +1,5 @@
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 from django.db import transaction, IntegrityError
 from django.db.models import Count, F as models_F, Q, Sum, Value, IntegerField
 from django.db.models.functions import Coalesce
@@ -1717,7 +1717,21 @@ class MentorMenteesAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor Mentees.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("MentorMenteesResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("MentorMenteeItem", fields={
+                    "user_id": s.CharField(),
+                    "user__full_name": s.CharField(),
+                    "user__muid": s.CharField(),
+                    "user__email": s.EmailField(),
+                    "total_sessions": s.IntegerField(),
+                }),
+                help_text="Paginated list of distinct mentees with session counts",
+            ),
+        })},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -2241,7 +2255,7 @@ class MentorSessionRemindAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Create Mentor Session Remind.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Reminder sent to participants")},
     )
     def post(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
@@ -2321,7 +2335,21 @@ class MentorMyIgsAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor My Igs.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("MentorMyIgsResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": inline_serializer("MentorMyIgsData", fields={
+                "igs": s.ListField(
+                    child=inline_serializer("MentorIgItem", fields={
+                        "ig_id": s.CharField(),
+                        "ig_name": s.CharField(),
+                        "ig_code": s.CharField(),
+                    }),
+                    help_text="Interest groups the mentor is actively linked to",
+                ),
+            }),
+        })},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -2356,7 +2384,26 @@ class MentorIgRequestListAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Mentor Ig Request List.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("MentorIgRequestListResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": inline_serializer("MentorIgRequestListData", fields={
+                "requests": s.ListField(
+                    child=inline_serializer("MentorIgRequestItem", fields={
+                        "id": s.CharField(),
+                        "user_id": s.CharField(),
+                        "full_name": s.CharField(),
+                        "email": s.EmailField(),
+                        "muid": s.CharField(),
+                        "ig_id": s.CharField(),
+                        "ig_name": s.CharField(),
+                        "requested_at": s.DateTimeField(),
+                    }),
+                    help_text="Pending mentor-to-IG link requests for the given interest group",
+                ),
+            }),
+        })},
     )
     def get(self, request):
         user_id  = JWTUtils.fetch_user_id(request)
@@ -2418,7 +2465,7 @@ class MentorIgRequestDetailAPI(APIView):
 
     @role_required([RoleType.ADMIN.value, RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Partially update Mentor Ig Request Detail.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Mentor IG link request approved or rejected")},
     )
     def patch(self, request, pk):
         user_id  = JWTUtils.fetch_user_id(request)
@@ -3132,7 +3179,6 @@ from .mentor_serializers import (
 )
 from db.organization import Organization
 from utils.types import OrganizationType
-from utils.schema_utils import CustomResponseSerializer
 
 
 class CompanyMentorOnboardingAPI(APIView):
@@ -3645,7 +3691,21 @@ class CompanyMentorMenteesAPI(APIView):
 
     @role_required([RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Company Mentor Mentees.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("MentorCompanyMenteesResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("MentorCompanyMenteeItem", fields={
+                    "user_id": s.CharField(),
+                    "user__full_name": s.CharField(),
+                    "user__muid": s.CharField(),
+                    "user__email": s.EmailField(),
+                    "total_sessions": s.IntegerField(),
+                }),
+                help_text="Paginated list of distinct mentees from company-scoped sessions",
+            ),
+        })},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -4379,7 +4439,21 @@ class CampusMentorMenteesAPI(APIView):
 
     @role_required([RoleType.MENTOR.value])
     @extend_schema(tags=['Dashboard - Mentor'], description="Retrieve Campus Mentor Mentees.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("MentorCampusMenteesResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("MentorCampusMenteeItem", fields={
+                    "user_id": s.CharField(),
+                    "user__full_name": s.CharField(),
+                    "user__muid": s.CharField(),
+                    "user__email": s.EmailField(),
+                    "total_sessions": s.IntegerField(),
+                }),
+                help_text="Paginated list of distinct mentees from campus-scoped sessions",
+            ),
+        })},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)

@@ -1,7 +1,9 @@
 from datetime import datetime, timedelta
 from io import BytesIO
 
-from drf_spectacular.utils import extend_schema
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+from rest_framework import serializers as s
 import qrcode
 import requests
 from django.conf import settings
@@ -42,7 +44,6 @@ from django.contrib.auth.hashers import check_password
 from . import profile_serializer
 from .profile_serializer import LinkSocials, ResetPasswordSerialzier
 from .profile_serializer import UserTermSerializer
-from utils.schema_utils import CustomResponseSerializer
 
 
 class UserProfileEditView(APIView):
@@ -503,7 +504,7 @@ class UserRankAPI(APIView):
 
 class GetSocialsAPI(APIView):
     @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Get Socials.",
-        responses={200: CustomResponseSerializer},
+        responses={200: profile_serializer.LinkSocials},
     )
     def get(self, request, muid=None):
         if muid is not None:
@@ -536,7 +537,7 @@ class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Profile'], description="Update Socials.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Success")},
     )
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -560,7 +561,7 @@ class ResetPasswordAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Profile'], description="Create Reset Password.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Success")},
     )
     def post(self, request):
         user_muid = JWTUtils.fetch_muid(request)
@@ -594,7 +595,7 @@ class ResetPasswordAPI(APIView):
 
 class QrcodeRetrieveAPI(APIView):
     @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Qrcode Retrieve.",
-        responses={200: CustomResponseSerializer},
+        responses={200: profile_serializer.UserShareQrcode},
     )
     def get(self, request, uuid):
         try:
@@ -623,7 +624,10 @@ class QrcodeRetrieveAPI(APIView):
 
 class BadgesAPI(APIView):
     @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Badges.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("ProfileBadgesResponse", fields={
+            "full_name": s.CharField(),
+            "completed_tasks": s.ListField(child=s.CharField()),
+        })},
     )
     def get(self, request, muid):
         try:
@@ -708,7 +712,17 @@ class UsertermAPI(APIView):
 
 class KarmaFeedAPI(APIView):
     @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Karma Feed.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("ProfileKarmaFeedResponse", fields={
+            "top_user": inline_serializer("ProfileKarmaFeedTopUser", fields={
+                "karma": s.IntegerField(),
+                "full_name": s.CharField(allow_null=True),
+                "muid": s.CharField(allow_null=True),
+            }),
+            "top_college": inline_serializer("ProfileKarmaFeedTopCollege", fields={
+                "karma": s.IntegerField(),
+                "name": s.CharField(allow_null=True),
+            }),
+        })},
     )
     def get(self, request):
         today = datetime.now().date()
@@ -830,7 +844,14 @@ class UserPreferencesAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Profile'], description="Retrieve User Preferences.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer("ProfileUserPreferencesResponse", fields={
+            "domains": s.ListField(child=s.CharField()),
+            "endgoals": s.ListField(child=s.CharField()),
+            "orgs": s.ListField(child=inline_serializer("ProfileUserPreferencesOrg", fields={
+                "id": s.CharField(allow_null=True),
+                "name": s.CharField(allow_null=True),
+            })),
+        })},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -866,7 +887,7 @@ class UserPreferencesAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Profile'],
         description="Partially update User Preferences.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Success")},
     )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)

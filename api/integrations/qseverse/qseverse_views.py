@@ -4,8 +4,8 @@ from django.conf import settings
 from rest_framework.views import APIView
 from utils.response import CustomResponse
 from .serializers import IssueVCSerializer
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 BASE_URL = settings.QSEVERSE_BASE_URL
@@ -52,7 +52,15 @@ class IssueVerifiableCredentialView(APIView):
 
 class GetAllConnectedUsersView(APIView):
     @extend_schema(tags=['Integrations - Qseverse'], description="Retrieve Get All Connected Users.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='QseverseConnectedUserItem',
+            fields={
+                'did': s.CharField(),
+                'name': s.CharField(required=False, allow_null=True),
+                'email': s.EmailField(required=False, allow_null=True),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         try:
@@ -72,7 +80,12 @@ class GetAllConnectedUsersView(APIView):
 
 class GetConnectedUserView(APIView):
     @extend_schema(tags=['Integrations - Qseverse'], description="Retrieve Get Connected User.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='QseverseConnectedUserDidsResponse',
+            fields={
+                'dids': s.ListField(child=s.CharField()),
+            },
+        )},
     )
     def get(self, request):
         key = request.query_params.get("key")
@@ -105,7 +118,17 @@ class GetConnectedUserView(APIView):
 
 class GetQSCredentialsView(APIView):
     @extend_schema(tags=['Integrations - Qseverse'], description="Retrieve Get Q S Credentials.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='QseverseCredentialItem',
+            fields={
+                'credentialId': s.CharField(),
+                'templateId': s.CharField(),
+                'issuedTo': s.CharField(required=False, allow_null=True),
+                'issuedAt': s.CharField(required=False, allow_null=True),
+                'status': s.CharField(required=False, allow_null=True),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         try:

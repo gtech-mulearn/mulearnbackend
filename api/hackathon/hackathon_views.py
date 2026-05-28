@@ -18,8 +18,7 @@ from .serializer import HackathonRetrievalSerializer, UpcomingHackathonRetrieval
     HackathonInfoSerializer, HackathonUserSubmissionSerializer, ListApplicantsSerializer, \
     HackathonOrganiserSerializerRetrieval, HackathonOrganiserSerializer, HackathonFormSerializer, DistrictSerializer, \
     OrganisationSerializer
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class HackathonManagementAPI(APIView):
@@ -166,7 +165,7 @@ class GetDefaultFieldsAPI(APIView):
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(tags=['Hackathon'], description="Retrieve Get Default Fields.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="List of default hackathon form fields")},
     )
     def get(self, request):
         return CustomResponse(

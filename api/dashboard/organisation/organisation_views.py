@@ -35,8 +35,7 @@ from .serializers import (
     OrganizationVerifySerializer,
     UnverifiedOrganizationsSerializer,
 )
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class InstitutionPostUpdateDeleteAPI(APIView):
@@ -624,7 +623,7 @@ class OrganisationBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Organisation'], description="Retrieve Organisation Base Template.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="XLSX file download")},
     )
     def get(self, request):
         wb = load_workbook("./excel-templates/organisation_base_template.xlsx")
@@ -815,7 +814,7 @@ class OrganisationImportAPI(APIView):
 
 class TransferAPI(APIView):
     @extend_schema(tags=['Dashboard - Organisation'], description="Create Transfer.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Organisation transfer success message")},
     )
     def post(self, request):
         from_code = request.data.get("from_id")

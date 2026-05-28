@@ -13,8 +13,8 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
 from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class CampusListAPI(APIView):
@@ -138,7 +138,22 @@ class CampusStudentInEachLevelAPI(APIView):
 
     # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Student In Each Level.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name="CampusStudentInEachLevelResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusStudentLevelItem",
+                    fields={
+                        "level": s.IntegerField(),
+                        "students": s.IntegerField(),
+                    },
+                    many=True,
+                ),
+            },
+        )},
     )
     def get(self, request, org_id=None):
         if org_id:
@@ -897,7 +912,21 @@ class CampusKarmaByClusterAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Karma By Cluster.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name="CampusKarmaByClusterResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusKarmaByClusterCategory",
+                    fields={
+                        "total_karma": s.IntegerField(),
+                        "member_count": s.IntegerField(),
+                    },
+                ),
+            },
+        )},
     )
     def get(self, request, org_id=None):
 

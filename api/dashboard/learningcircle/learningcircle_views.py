@@ -34,8 +34,8 @@ from .learningcircle_serializer import (
     LearningCircleListMinSerializer,
     UserCircleListSerializer,
 )
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 
@@ -279,7 +279,7 @@ class LearningCircleRSVPAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Learning Circle R S V P.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="RSVP registered successfully. No response body.")},
     )
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
@@ -317,7 +317,7 @@ class LearningCircleJoinAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Learning Circle Join.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Joined the meeting successfully. No response body.")},
     )
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
@@ -374,7 +374,7 @@ class LearningCircleJoinAPI(APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Delete Learning Circle Join.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Removed from meetup attendee list. No response body.")},
     )
     def delete(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
@@ -400,7 +400,13 @@ class LearningCircleAttendeeReportAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Retrieve Learning Circle Attendee Report.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            "LearningCircleAttendeeReportGetResponse",
+            fields={
+                "report": s.CharField(allow_null=True, help_text="Attendee's report text"),
+                "report_link": s.CharField(allow_null=True, help_text="URL link to the attendee's report"),
+            },
+        )},
     )
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -425,7 +431,7 @@ class LearningCircleAttendeeReportAPI(APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Learning Circle Attendee Report.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Attendee report submitted successfully. No response body.")},
     )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -462,7 +468,7 @@ class LearningCircleAttendeeReportAPI(APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Delete Learning Circle Attendee Report.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Attendee report deleted successfully. No response body.")},
     )
     def delete(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -500,7 +506,27 @@ class LearningCircleReportAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Retrieve Learning Circle Report.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            "LearningCircleReportGetResponse",
+            fields={
+                "is_report_submitted": s.BooleanField(help_text="Whether the meeting report has been submitted by the organizer"),
+                "report": s.CharField(allow_null=True, help_text="Meeting report text submitted by the organizer"),
+                "attendees": s.ListField(
+                    child=inline_serializer(
+                        "LearningCircleReportAttendeeItem",
+                        fields={
+                            "user_id": s.CharField(help_text="UUID of the attendee"),
+                            "full_name": s.CharField(help_text="Full name of the attendee"),
+                            "muid": s.CharField(help_text="Unique mulearn ID of the attendee"),
+                            "is_lc_approved": s.BooleanField(allow_null=True, help_text="Whether the organizer approved this attendee's participation"),
+                            "report": s.CharField(allow_null=True, help_text="Attendee's own report text"),
+                            "report_link": s.CharField(allow_null=True, help_text="URL to the attendee's report"),
+                        },
+                    ),
+                    help_text="List of attendees who joined the meeting",
+                ),
+            },
+        )},
     )
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -535,7 +561,7 @@ class LearningCircleReportAPI(APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Learning Circle Report.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Meeting report submitted successfully. No response body.")},
     )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -595,7 +621,7 @@ class LearningCircleReportAPI(APIView):
         ).get_success_response()
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Delete Learning Circle Report.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Meeting report deleted successfully. No response body.")},
     )
     def delete(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -754,7 +780,34 @@ class LearningCircleMeetingListAPI(APIView):
 
 class LearningCircleMemberDetailsView(APIView):
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Retrieve Learning Circle Member Details.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            "LearningCircleMemberDetailsResponse",
+            fields={
+                "owner": inline_serializer(
+                    "LearningCircleMemberDetailsOwner",
+                    fields={
+                        "id": s.CharField(help_text="UUID of the circle creator"),
+                        "full_name": s.CharField(help_text="Full name of the circle creator"),
+                        "profile_pic": s.CharField(allow_null=True, help_text="Profile picture URL of the circle creator"),
+                        "muid": s.CharField(help_text="Unique mulearn ID of the circle creator"),
+                    },
+                ),
+                "members": s.ListField(
+                    child=inline_serializer(
+                        "LearningCircleMemberItem",
+                        fields={
+                            "id": s.CharField(help_text="UUID of the member"),
+                            "full_name": s.CharField(help_text="Full name of the member"),
+                            "profile_pic": s.CharField(allow_null=True, help_text="Profile picture URL of the member"),
+                            "muid": s.CharField(help_text="Unique mulearn ID of the member"),
+                            "ig_karma": s.IntegerField(help_text="Total karma earned by the member in this circle's interest group"),
+                            "is_leader": s.BooleanField(help_text="Whether this member holds the lead role in the circle"),
+                        },
+                    ),
+                    help_text="Accepted members sorted by ig_karma descending",
+                ),
+            },
+        )},
     )
     def get(self, request, circle_id):
         try:
@@ -1003,7 +1056,7 @@ class CircleMemberAddAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Circle Member Add.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Member added to the circle successfully. No response body.")},
     )
     def post(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)
@@ -1221,7 +1274,7 @@ class CircleTransferLeadAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Circle Transfer Lead.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Circle lead transferred successfully. No response body.")},
     )
     def post(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)

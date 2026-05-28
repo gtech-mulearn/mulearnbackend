@@ -11,8 +11,8 @@ from db.task import KarmaActivityLog, Wallet
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 def _user_rank(user_id):
@@ -47,7 +47,30 @@ class LearnerDashboardSummaryAPIView(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Home'], description="Retrieve Learner Dashboard Summary.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='HomeLearnerDashboardSummaryResponse',
+            fields={
+                'stats': inline_serializer(
+                    name='HomeLearnerDashboardStats',
+                    fields={
+                        'weekly_karma': s.IntegerField(),
+                        'total_karma': s.IntegerField(),
+                        'rank': s.IntegerField(),
+                        'active_circles': s.IntegerField(),
+                        'streak_days': s.IntegerField(),
+                    },
+                ),
+                'next_meeting': s.JSONField(allow_null=True),
+                'quick_action_counts': inline_serializer(
+                    name='HomeLearnerQuickActionCounts',
+                    fields={
+                        'circles': s.IntegerField(),
+                        'leaderboard_rank': s.IntegerField(),
+                        'job_openings': s.IntegerField(),
+                    },
+                ),
+            },
+        )},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -126,7 +149,14 @@ class LearnerStreakAPIView(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(tags=['Dashboard - Home'], description="Retrieve Learner Streak.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='HomeLearnerStreakResponse',
+            fields={
+                'streak_days': s.IntegerField(),
+                'last_activity_at': s.CharField(allow_null=True),
+                'activity_dates': s.ListField(child=s.CharField()),
+            },
+        )},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)

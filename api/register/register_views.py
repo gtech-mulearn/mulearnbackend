@@ -16,8 +16,8 @@ from utils.permission import CustomizePermission, JWTUtils
 from decouple import config
 import requests
 from mu_celery.task import onboard_user
-from drf_spectacular.utils import extend_schema
-from utils.schema_utils import CustomResponseSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
@@ -26,7 +26,7 @@ FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
 
 class ConnectDiscordAPI(APIView):
     @extend_schema(tags=['Register'], description="Retrieve Connect Discord.",
-        responses={200: CustomResponseSerializer},
+        responses={200: OpenApiResponse(description="Discord onboard success message")},
     )
     def get(self, request):
         if not JWTUtils.is_jwt_authenticated(request):
@@ -233,7 +233,13 @@ class RoleAPI(APIView):
 class CollegesAPI(APIView):
     @method_decorator(cache_page(60 * 10))
     @extend_schema(tags=['Register'], description="Retrieve Colleges.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='RegisterCollegesResponse',
+            fields={'colleges': s.ListField(child=inline_serializer(
+                name='RegisterCollegeItem',
+                fields={'id': s.CharField(), 'title': s.CharField()},
+            ))},
+        )},
     )
     def get(self, request):
         colleges = Organization.objects.filter(
@@ -263,7 +269,13 @@ class DepartmentAPI(APIView):
 class CompanyAPI(APIView):
     @method_decorator(cache_page(60 * 10))
     @extend_schema(tags=['Register'], description="Retrieve Company.",
-        responses={200: CustomResponseSerializer},
+        responses={200: inline_serializer(
+            name='RegisterCompaniesResponse',
+            fields={'companies': s.ListField(child=inline_serializer(
+                name='RegisterCompanyItem',
+                fields={'id': s.CharField(), 'title': s.CharField()},
+            ))},
+        )},
     )
     def get(self, request):
         company_queryset = Organization.objects.filter(
