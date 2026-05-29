@@ -32,4 +32,5 @@ from db import (  # noqa: F401
     task,
     url_shortener,
     user,
+    job,
 )
