@@ -11,11 +11,8 @@ class DbConfig(AppConfig):
     name = "db"
 
     def ready(self) -> None:
-        # Ensure all model modules are imported so Django's app registry
-        # can resolve lazy string FK references like 'db.InterestGroup', 'db.Event'
-        from db import task as _task          # noqa: F401 — registers InterestGroup etc.
-        from db import mentor as _mentor      # noqa: F401 — registers MentorshipSession etc.
-        from db import events as _events      # noqa: F401 — registers Event model
+        # Models are registered via db/models.py, which Django imports
+        # automatically during app population (before ready() runs).
         _ready = super().ready()
         self.check_system_user_exists()
         return _ready
