@@ -4,9 +4,15 @@ from db.notification import Notification
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from . import serializers
+from drf_spectacular.utils import extend_schema
 
 
 class NotificationListsAPI(APIView):
+    @extend_schema(
+        tags=['Notification'],
+        description="Retrieve Notification Lists.",
+        responses={200: serializers.NotificationSerializer},
+    )
     def get(self, request):
         """
         Get all notifications for a user
@@ -26,6 +32,9 @@ class NotificationListsAPI(APIView):
 class NotificationDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Notification'], description="Delete Notification Delete.",
+        responses={200: serializers.NotificationSerializer},
+    )
     def delete(self, request, notification_id):
         """
         Delete notification by providing notification id
@@ -50,6 +59,9 @@ class NotificationDeleteAPI(APIView):
 class NotificationDeleteAllAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Notification'], description="Delete Notification Delete All.",
+        responses={200: serializers.NotificationSerializer},
+    )
     def delete(self, request):
         """
         Delete all the notifications for a user

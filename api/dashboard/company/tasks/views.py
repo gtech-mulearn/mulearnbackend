@@ -15,6 +15,7 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 
 from .serializers import CompanyTaskListSerializer, CompanyTaskSubmitSerializer
+from drf_spectacular.utils import extend_schema
 
 
 # ---------------------------------------------------------------------------
@@ -67,6 +68,12 @@ class CompanyTaskSubmitAPIView(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Tasks'],
+        description="Create Company Task Submit.",
+        request=CompanyTaskSubmitSerializer,
+        responses={200: CompanyTaskListSerializer},
+    )
     def post(self, request):
         user, company, err = _get_company_user(request)
         if err:
@@ -129,6 +136,11 @@ class CompanyTaskListAPIView(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Tasks'],
+        description="Retrieve Company Task List.",
+        responses={200: CompanyTaskListSerializer},
+    )
     def get(self, request):
         user, company, err = _get_company_user(request)
         if err:
@@ -179,6 +191,11 @@ class CompanyTaskResubmitAPIView(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Tasks'],
+        description="Create Company Task Resubmit.",
+        responses={200: CompanyTaskListSerializer},
+    )
     def post(self, request, task_id):
         user, company, err = _get_company_user(request)
         if err:

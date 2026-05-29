@@ -18,12 +18,18 @@ from .serializer import HackathonRetrievalSerializer, UpcomingHackathonRetrieval
     HackathonInfoSerializer, HackathonUserSubmissionSerializer, ListApplicantsSerializer, \
     HackathonOrganiserSerializerRetrieval, HackathonOrganiserSerializer, HackathonFormSerializer, DistrictSerializer, \
     OrganisationSerializer
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class HackathonManagementAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Retrieve Hackathon Management.",
+        responses={200: UpcomingHackathonRetrievalSerializer},
+    )
     def get(self, request, hackathon_id=None):
         user_id = JWTUtils.fetch_user_id(request)
         if request.path.endswith("upcoming/"):
@@ -52,6 +58,12 @@ class HackathonManagementAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Create Hackathon Management.",
+        request=HackathonCreateUpdateDeleteSerializer,
+        responses={200: UpcomingHackathonRetrievalSerializer},
+    )
     def post(self, request):
         serializer = HackathonCreateUpdateDeleteSerializer(
             data=request.data, context={"request": request}
@@ -65,6 +77,11 @@ class HackathonManagementAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Update Hackathon Management.",
+        responses={200: HackathonUpdateSerializer},
+    )
     def put(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:
@@ -82,6 +99,11 @@ class HackathonManagementAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Delete Hackathon Management.",
+        responses={200: HackathonCreateUpdateDeleteSerializer},
+    )
     def delete(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:
@@ -99,6 +121,11 @@ class HackathonPublishingAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Update Hackathon Publishing.",
+        responses={200: HackathonPublishingSerializer},
+    )
     def put(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:
@@ -120,6 +147,11 @@ class HackathonInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Retrieve Hackathon Info.",
+        responses={200: HackathonInfoSerializer},
+    )
     def get(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         serializer = HackathonInfoSerializer(
@@ -132,6 +164,9 @@ class GetDefaultFieldsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Hackathon'], description="Retrieve Get Default Fields.",
+        responses={200: OpenApiResponse(description="List of default hackathon form fields")},
+    )
     def get(self, request):
         return CustomResponse(
             response=DEFAULT_HACKATHON_FORM_FIELDS
@@ -142,6 +177,12 @@ class HackathonSubmissionAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Create Hackathon Submission.",
+        request=HackathonUserSubmissionSerializer,
+        responses={200: HackathonUserSubmissionSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         hackathon_id = request.data.get('hackathon_id')
@@ -164,6 +205,11 @@ class ListApplicantsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Retrieve List Applicants.",
+        responses={200: ListApplicantsSerializer},
+    )
     def get(self, request, hackathon_id=None):
         if hackathon_id:
             data = HackathonUserSubmission.objects.filter(hackathon__id=hackathon_id)
@@ -182,6 +228,9 @@ class HackathonOrganiserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Hackathon'], description="Retrieve Hackathon Organiser.",
+        responses={200: HackathonOrganiserSerializer},
+    )
     def get(self, request, hackathon_id):
         hackathon_ids = HackathonOrganiserLink.objects.filter(
             hackathon__id=hackathon_id
@@ -192,6 +241,12 @@ class HackathonOrganiserAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Create Hackathon Organiser.",
+        request=HackathonOrganiserSerializer,
+        responses={200: HackathonOrganiserSerializer},
+    )
     def post(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:
@@ -210,6 +265,11 @@ class HackathonOrganiserAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Delete Hackathon Organiser.",
+        responses={200: HackathonOrganiserSerializer},
+    )
     def delete(self, request, organiser_link_id):
         organiser = HackathonOrganiserLink.objects.filter(id=organiser_link_id).first()
         if organiser is None:
@@ -227,6 +287,11 @@ class ListOrganisations(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Retrieve List Organisations.",
+        responses={200: OrganisationSerializer},
+    )
     def get(self, request):
         organisations = Organization.objects.all()
         serializer = OrganisationSerializer(
@@ -239,6 +304,11 @@ class ListDistricts(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Retrieve List Districts.",
+        responses={200: DistrictSerializer},
+    )
     def get(self, request):
         districts = District.objects.all()
         serializer = DistrictSerializer(districts, many=True)
@@ -249,6 +319,11 @@ class ListHackathonFormAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Hackathon'],
+        description="Retrieve List Hackathon Form.",
+        responses={200: HackathonFormSerializer},
+    )
     def get(self, request, hackathon_id):
         hackathon = Hackathon.objects.filter(id=hackathon_id).first()
         if hackathon is None:

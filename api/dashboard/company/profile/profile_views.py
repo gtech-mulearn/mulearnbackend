@@ -16,6 +16,7 @@ from .serializers import (
     PublicCompanyProfileSerializer,
 )
 from api.dashboard.company.jobs.serializers import CompanyJobListSerializer
+from drf_spectacular.utils import extend_schema
 
 
 class BaseCompanyProfileView(APIView):
@@ -101,6 +102,11 @@ class BaseCompanyProfileView(APIView):
 
 
 class CompanyProfileAPIView(BaseCompanyProfileView):
+    @extend_schema(
+        tags=['Dashboard - Company - Profile'],
+        description="Retrieve Company Profile.",
+        responses={200: CompanyProfileSerializer},
+    )
     def get(self, request):
         user = self.get_authenticated_user(request)
         if not user:
@@ -137,6 +143,12 @@ class CompanyProfileAPIView(BaseCompanyProfileView):
             response=serializer.data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Company - Profile'],
+        description="Create Company Profile.",
+        request=CompanyProfileCreateUpdateSerializer,
+        responses={200: CompanyProfileSerializer},
+    )
     def post(self, request):
         user = self.get_authenticated_user(request)
         if not user:
@@ -191,6 +203,11 @@ class CompanyProfileAPIView(BaseCompanyProfileView):
             response=CompanyProfileSerializer(company).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Company - Profile'],
+        description="Partially update Company Profile.",
+        responses={200: CompanyProfileCreateUpdateSerializer},
+    )
     def patch(self, request):
         user = self.get_authenticated_user(request)
         if not user:
@@ -251,6 +268,9 @@ class CompanyProfileAPIView(BaseCompanyProfileView):
             response=CompanyProfileSerializer(company).data,
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Company - Profile'], description="Delete Company Profile.",
+        responses={200: CompanyProfileSerializer},
+    )
     def delete(self, request):
         user = self.get_authenticated_user(request)
         if not user:
@@ -303,6 +323,11 @@ class PublicCompanyProfileAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        tags=['Dashboard - Company - Profile'],
+        description="Retrieve Public Company Profile.",
+        responses={200: PublicCompanyProfileSerializer},
+    )
     def get(self, request, slug):
         company = Company.objects.filter(
             slug=slug,
@@ -330,6 +355,11 @@ class PublicCompanyJobsAPIView(APIView):
     permission_classes = [AllowAny]
     authentication_classes = []
 
+    @extend_schema(
+        tags=['Dashboard - Company - Profile'],
+        description="Retrieve Public Company Jobs.",
+        responses={200: CompanyJobListSerializer},
+    )
     def get(self, request, slug):
         company = Company.objects.filter(
             slug=slug,

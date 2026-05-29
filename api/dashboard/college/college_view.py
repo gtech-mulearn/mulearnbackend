@@ -7,12 +7,18 @@ from utils.permission import JWTUtils
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import CommonUtils
+from drf_spectacular.utils import extend_schema
 from .serializer import (
     CollegeListSerializer,
     CollegeChangeSerializer,
 )
 
 class CollegeApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - College'],
+        description="Retrieve College Api.",
+        responses={200: CollegeListSerializer},
+    )
     def get(self, request, college_code=None):
         if college_code:
             colleges = College.objects.filter(id=college_code)
@@ -36,6 +42,12 @@ class CollegeApi(APIView):
 
 
 class CollegeChangeAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - College'],
+        description="Partially update College Change.",
+        request=CollegeChangeSerializer,
+        responses={200: CollegeChangeSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = CollegeChangeSerializer(data=request.data)

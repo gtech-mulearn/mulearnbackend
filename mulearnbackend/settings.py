@@ -75,8 +75,8 @@ REST_FRAMEWORK = {
 }
 
 SPECTACULAR_SETTINGS = {
-    "TITLE": "μLearn API",
-    "DESCRIPTION": "API documentation for the μLearn Platform backend.",
+    "TITLE": "muLearn API",
+    "DESCRIPTION": "API documentation for the muLearn Platform backend.",
     "VERSION": "1.0.0",
     "SERVE_INCLUDE_SCHEMA": False,
     "COMPONENT_SPLIT_PATCH": True,

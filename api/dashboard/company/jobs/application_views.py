@@ -16,6 +16,8 @@ from .application_serializers import (
     LearnerApplicationListSerializer,
 )
 from .jobs_views import BaseCompanyJobView
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 # ---------------------------------------------------------------------------
@@ -113,6 +115,12 @@ class ApplyToJobAPIView(APIView):
 
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Create Apply To Job.",
+        request=ApplicationCreateSerializer,
+        responses={200: ApplicationCreateSerializer},
+    )
     def post(self, request, job_id):
         # 1. Authenticate
         user = _get_user(request)
@@ -207,6 +215,11 @@ class LearnerApplicationsAPIView(APIView):
 
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Retrieve Learner Applications.",
+        responses={200: LearnerApplicationListSerializer},
+    )
     def get(self, request):
         # 1. Authenticate
         user = _get_user(request)
@@ -270,6 +283,11 @@ class CompanyJobApplicationsListAPIView(BaseCompanyJobView):
     Sort fields:      karma, appliedAt, name
     """
 
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Retrieve Company Job Applications List.",
+        responses={200: ApplicantDetailSerializer},
+    )
     def get(self, request, job_id):
         # 1. Authenticate
         user = self.get_authenticated_user(request)
@@ -360,6 +378,12 @@ class CompanyUpdateApplicationStatusAPIView(BaseCompanyJobView):
         status  (str)  — one of the values in CompanyJobApplication.STATUS_CHOICES
     """
 
+    @extend_schema(
+        tags=['Dashboard - Company - Jobs'],
+        description="Partially update Company Update Application Status.",
+        request=ApplicationStatusUpdateSerializer,
+        responses={200: ApplicationStatusUpdateSerializer},
+    )
     def patch(self, request, job_id, app_id):
         # 1. Authenticate
         user = self.get_authenticated_user(request)
@@ -435,6 +459,16 @@ class LearnerWithdrawApplicationAPIView(APIView):
 
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Company - Jobs'], description="Partially update Learner Withdraw Application.",
+        responses={200: inline_serializer(
+            name='ApplicationLearnerWithdrawResponse',
+            fields={
+                'application_id': s.CharField(),
+                'job_id': s.CharField(),
+                'new_status': s.CharField(),
+            },
+        )},
+    )
     def patch(self, request, app_id):
         # 1. Authenticate
         user = _get_user(request)

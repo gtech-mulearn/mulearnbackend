@@ -48,6 +48,9 @@ from .dash_lc_serializer import (
     CircleMeetSerializer,
 )
 from decouple import config
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
+from utils.schema_utils import CustomResponseSerializer
 
 BE_DOMAIN = config("BE_DOMAIN_NAME")
 
@@ -63,6 +66,29 @@ class UserLearningCircleListApi(APIView):
         associated with the user.
     """
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve User Learning Circle List Api.",
+        responses={200: inline_serializer("LcUserCircleListResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(),
+            "response": inline_serializer("LcUserCircleItem", many=True, fields={
+                "id": s.CharField(),
+                "name": s.CharField(),
+                "circle_code": s.CharField(),
+                "ig": s.CharField(help_text="Interest group name"),
+                "org": s.CharField(allow_null=True, help_text="Organisation title"),
+                "meet_place": s.CharField(allow_null=True),
+                "meet_time": s.CharField(allow_null=True),
+                "updated_by": s.CharField(),
+                "updated_at": s.DateTimeField(),
+                "created_by": s.CharField(),
+                "created_at": s.DateTimeField(),
+                "member_count": s.IntegerField(),
+            }),
+        })},
+    )
     def get(self, request):  # Lists user's learning circle
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -77,6 +103,28 @@ class UserLearningCircleListApi(APIView):
 
 
 class LearningCircleMainApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Learning Circle Main Api.",
+        responses={200: inline_serializer("LcMainListResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(),
+            "response": inline_serializer("LcMainItem", many=True, fields={
+                "id": s.CharField(),
+                "name": s.CharField(),
+                "ig_name": s.CharField(),
+                "org_name": s.CharField(allow_null=True),
+                "member_count": s.IntegerField(),
+                "members": s.ListField(child=s.DictField(), allow_null=True),
+                "meet_place": s.CharField(allow_null=True),
+                "meet_time": s.CharField(allow_null=True),
+                "lead_name": s.CharField(allow_null=True),
+                "ismember": s.BooleanField(),
+                "karma": s.IntegerField(),
+            }),
+        })},
+    )
     def post(self, request):
         all_circles = LearningCircle.objects.all()
         if JWTUtils.is_logged_in(request):
@@ -133,6 +181,11 @@ class LearningCircleStatsAPI(APIView):
         CustomResponse: A custom response containing data about all learning circles.
     """
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Learning Circle Stats.",
+        responses={200: LearningCircleStatsSerializer},
+    )
     def get(self, request):
         learning_circle = LearningCircle.objects.all()
 
@@ -142,6 +195,19 @@ class LearningCircleStatsAPI(APIView):
 
 
 class LearningCircleCreateApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Learning Circle Create Api.",
+        request=LearningCircleCreateSerializer,
+        responses={200: inline_serializer("LcCreateResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(),
+            "response": inline_serializer("LcCreatePayload", fields={
+                "circle_id": s.CharField(),
+            }),
+        })},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -160,6 +226,21 @@ class LearningCircleCreateApi(APIView):
 
 
 class LearningCircleListMembersApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Learning Circle List Members Api.",
+        responses={200: inline_serializer("LcMemberListResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(),
+            "response": inline_serializer("LcMemberItem", many=True, fields={
+                "full_name": s.CharField(),
+                "discord_id": s.CharField(allow_null=True),
+                "level": s.CharField(allow_null=True),
+                "lc_karma": s.IntegerField(),
+            }),
+        })},
+    )
     def get(self, request, circle_id):
         # learning_circle = LearningCircle.objects.filter(
         #     id=circle_id
@@ -179,6 +260,29 @@ class LearningCircleListMembersApi(APIView):
 
 
 class TotalLearningCircleListApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Total Learning Circle List Api.",
+        responses={200: inline_serializer("LcTotalListResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(),
+            "response": inline_serializer("LcTotalListItem", many=True, fields={
+                "id": s.CharField(),
+                "name": s.CharField(),
+                "circle_code": s.CharField(),
+                "ig": s.CharField(help_text="Interest group name"),
+                "org": s.CharField(allow_null=True, help_text="Organisation title"),
+                "meet_place": s.CharField(allow_null=True),
+                "meet_time": s.CharField(allow_null=True),
+                "updated_by": s.CharField(),
+                "updated_at": s.DateTimeField(),
+                "created_by": s.CharField(),
+                "created_at": s.DateTimeField(),
+                "member_count": s.IntegerField(),
+            }),
+        })},
+    )
     def post(self, request, circle_code=None):
         user_id = JWTUtils.fetch_user_id(request)
         filters = Q()
@@ -213,6 +317,12 @@ class TotalLearningCircleListApi(APIView):
 
 
 class LearningCircleJoinApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Learning Circle Join Api.",
+        request=LearningCircleJoinSerializer,
+        responses={200: LearningCircleJoinSerializer},
+    )
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -243,6 +353,34 @@ class LearningCircleJoinApi(APIView):
 
 
 class LearningCircleDetailsApi(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Learning Circle Details Api.",
+        responses={200: inline_serializer("LcDetailsResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(),
+            "response": inline_serializer("LcDetailsPayload", fields={
+                "name": s.CharField(),
+                "circle_code": s.CharField(),
+                "note": s.CharField(allow_null=True),
+                "meet_time": s.CharField(allow_null=True),
+                "meet_place": s.CharField(allow_null=True),
+                "day": s.CharField(allow_null=True),
+                "college": s.CharField(allow_null=True),
+                "members": s.ListField(child=s.DictField()),
+                "pending_members": s.ListField(child=s.DictField()),
+                "rank": s.IntegerField(allow_null=True),
+                "total_karma": s.IntegerField(),
+                "is_lead": s.BooleanField(),
+                "is_member": s.BooleanField(),
+                "ig_id": s.CharField(),
+                "ig_name": s.CharField(),
+                "ig_code": s.CharField(),
+                "previous_meetings": s.ListField(child=s.DictField()),
+            }),
+        })},
+    )
     def get(self, request, circle_id, member_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -266,6 +404,11 @@ class LearningCircleDetailsApi(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Learning Circle Details Api.",
+        responses={200: LearningCircleUpdateSerializer},
+    )
     def post(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         circle = LearningCircle.objects.filter(id=circle_id).first()
@@ -294,6 +437,11 @@ class LearningCircleDetailsApi(APIView):
             general_message="Removed successfully"
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Partially update Learning Circle Details Api.",
+        responses={200: LearningCircleUpdateSerializer},
+    )
     def patch(self, request, member_id, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -350,6 +498,11 @@ class LearningCircleDetailsApi(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Update Learning Circle Details Api.",
+        responses={200: LearningCircleNoteSerializer},
+    )
     def put(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
         serializer = LearningCircleNoteSerializer(learning_circle, data=request.data)
@@ -361,6 +514,9 @@ class LearningCircleDetailsApi(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Delete Learning Circle Details Api.",
+        responses={200: OpenApiResponse(description="Success — returns message: Leadership transferred | Learning Circle Deleted | Left")},
+    )
     def delete(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         usr_circle_link = UserCircleLink.objects.filter(
@@ -454,6 +610,9 @@ class LearningCircleDetailsApi(APIView):
 
 
 class LearningCircleLeadTransfer(APIView):
+    @extend_schema(tags=['Dashboard - Lc'], description="Partially update Learning Circle Lead Transfer.",
+        responses={200: OpenApiResponse(description="Success — message: Lead transferred successfully")},
+    )
     def patch(self, request, circle_id, new_lead_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -491,6 +650,9 @@ class LearningCircleLeadTransfer(APIView):
 
 
 class LearningCircleInviteLeadAPI(APIView):
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Learning Circle Invite Lead.",
+        responses={200: OpenApiResponse(description="Success — message: User Invited")},
+    )
     def post(self, request):
         circle_id = request.POST.get("lc")
         muid = request.POST.get("muid")
@@ -532,6 +694,9 @@ class LearningCircleInviteMemberAPI(APIView):
     Invite a member to a learning circle.
     """
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Learning Circle Invite Member.",
+        responses={200: OpenApiResponse(description="Success — message: User Invited")},
+    )
     def post(self, request, circle_id, muid):
         """
         POST request to invite a member to a learning circle.
@@ -597,6 +762,9 @@ class LearningCircleInvitationStatus(APIView):
     API to update the invitation status
     """
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Learning Circle Invitation Status.",
+        responses={200: OpenApiResponse(description="Success — redirects to FR_DOMAIN/dashboard/learning-circle/ on acceptance, or message: User rejected invitation on rejection")},
+    )
     def post(self, request, circle_id, muid, status):
         """
         PUT request to accept the invitation to join the learning circle, by adding the user data to the lc
@@ -636,6 +804,11 @@ class LearningCircleInvitationStatus(APIView):
 
 
 class ScheduleMeetAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Update Schedule Meet.",
+        responses={200: ScheduleMeetingSerializer},
+    )
     def put(self, request, circle_id):
         learning_circle = LearningCircle.objects.filter(id=circle_id).first()
 
@@ -651,6 +824,11 @@ class ScheduleMeetAPI(APIView):
 
 
 class IgTaskDetailsAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Ig Task Details.",
+        responses={200: IgTaskDetailsSerializer},
+    )
     def get(self, request, circle_id):
         task_list = TaskList.objects.filter(
             ig__learning_circle_ig__id=circle_id
@@ -670,6 +848,12 @@ class IgTaskDetailsAPI(APIView):
 
 
 class AddMemberAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Add Member.",
+        request=AddMemberSerializer,
+        responses={200: AddMemberSerializer},
+    )
     def post(self, request, circle_id):
         muid = request.data.get("muid")
 
@@ -696,6 +880,9 @@ class AddMemberAPI(APIView):
 
 
 class ValidateUserMeetCreateAPI(APIView):
+    @extend_schema(tags=['Dashboard - Lc'], description="Retrieve Validate User Meet Create.",
+        responses={200: OpenApiResponse(description="Success — message: success (circle is eligible for a new meet today)")},
+    )
     def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -741,6 +928,12 @@ class CircleMeetAPI(APIView):
 
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Circle Meet.",
+        request=CircleMeetSerializer,
+        responses={200: CircleMeetTasksSerializer},
+    )
     def post(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -767,6 +960,11 @@ class CircleMeetAPI(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Circle Meet.",
+        responses={200: CircleMeetSerializer},
+    )
     def get(self, request, circle_id):
         user_id = JWTUtils.fetch_user_id(request)
         now = DateTimeUtils.get_current_utc_time()
@@ -801,6 +999,12 @@ class CircleMeetReportSubmitAPI(APIView):
     Submit report for meetup
     """
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Circle Meet Report Submit.",
+        request=MeetRecordsCreateEditDeleteSerializer,
+        responses={200: MeetRecordsCreateEditDeleteSerializer},
+    )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -842,6 +1046,11 @@ class CircleMeetDetailAPI(APIView):
     Get details of a meetup
     """
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Circle Meet Detail.",
+        responses={200: CircleMeetDetailSerializer},
+    )
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -863,6 +1072,11 @@ class CircleMeetListAPI(APIView):
     List all meetups available
     """
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Circle Meet List.",
+        responses={200: CircleMeetSerializer},
+    )
     def get(self, request, is_user=None):
         if is_user:
             if not (user_id := JWTUtils.fetch_user_id(request)):
@@ -916,6 +1130,9 @@ class CircleMeetInterestedAPI(APIView):
     Show interest to join a meetup
     """
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Circle Meet Interested.",
+        responses={200: CircleMeetSerializer},
+    )
     def post(self, request, meet_id):
         notes = request.data.get("notes")
         user_id = JWTUtils.fetch_user_id(request)
@@ -951,6 +1168,9 @@ class CircleMeetInterestedAPI(APIView):
             general_message=f"Interest shown successfully. You can join the meetup when it starts."
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Delete Circle Meet Interested.",
+        responses={200: CircleMeetSerializer},
+    )
     def delete(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -972,6 +1192,9 @@ class CircleMeetJoinAPI(APIView):
     Join a meetup
     """
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Circle Meet Join.",
+        responses={200: CircleMeetSerializer},
+    )
     def post(self, request, meet_code_id):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -1036,6 +1259,11 @@ class CircleMeetJoinAPI(APIView):
 
 
 class CircleMeetAttendeesListAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Retrieve Circle Meet Attendees List.",
+        responses={200: CircleAttendeeReportSerializer},
+    )
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         if meet_id:
@@ -1084,6 +1312,9 @@ class CircleMeetAttendeesListAPI(APIView):
 class CircleAttendeeReportAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Circle Attendee Report.",
+        responses={200: CircleAttendeeReportSerializer},
+    )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not (meet := CircleMeetingLog.objects.filter(id=meet_id).first()):
@@ -1126,6 +1357,12 @@ class CircleAttendeeReportAPI(APIView):
 class CircleMeetTaskPOWAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Lc'],
+        description="Create Circle Meet Task P O W.",
+        request=CircleAttendeeReportSerializer,
+        responses={200: CircleAttendeeReportSerializer},
+    )
     def post(self, request, meet_id, task_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not (CircleMeetingLog.objects.filter(id=meet_id).exists()):
@@ -1174,6 +1411,9 @@ class CircleMeetVerifyAPI(APIView):
             RoleType.APPRAISER.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Lc'], description="Retrieve Circle Meet Verify.",
+        responses={200: CircleMeetSerializer},
+    )
     def get(self, request):
         unverified_meets = CircleMeetingLog.objects.select_related("circle").filter(
             is_report_submitted=True, is_verified=False
@@ -1188,6 +1428,9 @@ class CircleMeetVerifyAPI(APIView):
             RoleType.DISCORD_MANAGER.value,
             RoleType.APPRAISER.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Lc'], description="Create Circle Meet Verify.",
+        responses={200: CircleMeetSerializer},
     )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)

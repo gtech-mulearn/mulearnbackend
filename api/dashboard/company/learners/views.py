@@ -9,6 +9,7 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 
 from .serializers import LearnerListSerializer
+from drf_spectacular.utils import extend_schema
 
 
 class LearnerDiscoveryAPIView(APIView):
@@ -116,6 +117,11 @@ class LearnerDiscoveryAPIView(APIView):
     # Main handler                                                         #
     # ------------------------------------------------------------------ #
 
+    @extend_schema(
+        tags=['Dashboard - Company - Learners'],
+        description="Retrieve Learner Discovery.",
+        responses={200: LearnerListSerializer},
+    )
     def get(self, request):
         # 1. Authenticate
         user = self._get_user(request)

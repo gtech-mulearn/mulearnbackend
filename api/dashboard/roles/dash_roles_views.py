@@ -14,12 +14,18 @@ from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
 from django.db.models import Q
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve Role.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def get(self, request):
         roles_queryset = Role.objects.all()
 
@@ -53,6 +59,11 @@ class RoleAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Partially update Role.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def patch(self, request, roles_id):
         role = Role.objects.get(id=roles_id)
         old_name = role.title
@@ -84,6 +95,9 @@ class RoleAPI(APIView):
             ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Roles'], description="Delete Role.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def delete(self, request, roles_id):
         role = Role.objects.get(id=roles_id)
         role.delete()
@@ -96,6 +110,12 @@ class RoleAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create Role.",
+        request=dash_roles_serializer.RoleDashboardSerializer,
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def post(self, request):
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             data=request.data, partial=True, context={"request": request}
@@ -121,6 +141,11 @@ class RoleManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve Role Management C S V.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def get(self, request):
         role = Role.objects.all()
 
@@ -134,6 +159,11 @@ class UserRoleSearchAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve User Role Search.",
+        responses={200: dash_roles_serializer.UserRoleSearchSerializer},
+    )
     def get(self, request, role_id):
         user = User.objects.filter(user_role_link_user__role_id=role_id).distinct()
 
@@ -166,6 +196,11 @@ class UserRoleLinkManagement(APIView):
     """
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve User Role Link Management.",
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def get(self, request, role_id):
         """
         Lists all the users with a given role
@@ -179,6 +214,11 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Update User Role Link Management.",
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def put(self, request, role_id):
         """
         Lists all the users without a given role;
@@ -195,6 +235,12 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create User Role Link Management.",
+        request=dash_roles_serializer.RoleAssignmentSerializer,
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def post(self, request, role_id):
         """
         Assigns a large bunch of users a certain role
@@ -213,6 +259,9 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Roles'], description="Partially update User Role Link Management.",
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def patch(self, request, role_id):
         """
         Removes a role from a large bunch of users
@@ -265,6 +314,12 @@ class UserRole(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create User Role.",
+        request=dash_roles_serializer.UserRoleCreateSerializer,
+        responses={200: dash_roles_serializer.UserRoleCreateSerializer},
+    )
     def post(self, request):
         serializer = dash_roles_serializer.UserRoleCreateSerializer(
             data=request.data, context={"request": request}
@@ -295,6 +350,9 @@ class UserRole(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Roles'], description="Delete User Role.",
+        responses={200: dash_roles_serializer.UserRoleCreateSerializer},
+    )
     def delete(self, request):
         serializer = dash_roles_serializer.UserRoleCreateSerializer(
             data=request.data, context={"request": request}
@@ -325,6 +383,9 @@ class UserRole(APIView):
 class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Roles'], description="Retrieve Role Base Template.",
+        responses={200: OpenApiResponse(description="XLSX file download")},
+    )
     def get(self, request):
         wb = load_workbook("./excel-templates/role_base_template.xlsx")
         ws = wb["Data Definitions"]
@@ -354,6 +415,12 @@ class UserRoleBulkAssignAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create User Role Bulk Assign.",
+        request=dash_roles_serializer.UserRoleBulkAssignSerializer,
+        responses={200: dash_roles_serializer.UserRoleBulkAssignSerializer},
+    )
     def post(self, request):
         try:
             file_obj = request.FILES["user_roles_list"]

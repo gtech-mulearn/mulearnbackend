@@ -11,6 +11,7 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 
 from .serializers import CompanyMemberAddSerializer, CompanyMemberSerializer
+from drf_spectacular.utils import extend_schema
 
 
 # ---------------------------------------------------------------------------
@@ -63,6 +64,11 @@ class CompanyMemberListAPIView(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Members'],
+        description="Retrieve Company Member List.",
+        responses={200: CompanyMemberSerializer},
+    )
     def get(self, request):
         user, company, err = _get_company_user(request)
         if err:
@@ -119,6 +125,12 @@ class CompanyMemberAddAPIView(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company - Members'],
+        description="Create Company Member Add.",
+        request=CompanyMemberAddSerializer,
+        responses={200: CompanyMemberSerializer},
+    )
     def post(self, request):
         user, company, err = _get_company_user(request)
         if err:
@@ -202,6 +214,9 @@ class CompanyMemberRemoveAPIView(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Company - Members'], description="Delete Company Member Remove.",
+        responses={200: CompanyMemberSerializer},
+    )
     def delete(self, request, link_id):
         user, company, err = _get_company_user(request)
         if err:

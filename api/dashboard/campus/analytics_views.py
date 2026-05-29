@@ -13,11 +13,31 @@ from django.utils import timezone
 from db.organization import UserOrganizationLink
 from api.dashboard.learningcircle import services as lc_services
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 class CampusKarmaTrendAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Karma Trend.",
+        responses={200: inline_serializer(
+            name="CampusKarmaTrendResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusKarmaTrendItem",
+                    fields={
+                        "date": s.CharField(allow_null=True),
+                        "total_karma": s.IntegerField(),
+                    },
+                    many=True,
+                ),
+            },
+        )},
+    )
     def get(self, request):
         org, error = get_campus_context(request)
         if error: return error
@@ -60,6 +80,28 @@ class CampusGrowthAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Growth.",
+        responses={200: inline_serializer(
+            name="CampusGrowthResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusGrowthItem",
+                    fields={
+                        "key": s.CharField(),
+                        "label": s.CharField(),
+                        "value": s.IntegerField(),
+                        "delta": s.IntegerField(),
+                        "delta_type": s.CharField(),
+                        "period": s.CharField(),
+                    },
+                    many=True,
+                ),
+            },
+        )},
+    )
     def get(self, request):
         org, error = get_campus_context(request)
         if error: return error
