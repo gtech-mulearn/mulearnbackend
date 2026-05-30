@@ -2854,7 +2854,34 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyGigAnalyticsResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/applications/{app_id}/resubmit/:
     patch:
       operationId: dashboard_company_applications_resubmit_partial_update
@@ -3483,7 +3510,8 @@ paths:
           description: ''
   /api/v1/dashboard/company/mulearners/:
     get:
-      operationId: dashboard_company_mulearners_retrieve
+      operationId: dashboard_company_mulearners_list
+      description: Directory of MuLearners available to companies.
       parameters:
       - in: query
         name: achievement
@@ -3533,7 +3561,36 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MulearnerDirectory'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/profile/:
     get:
       operationId: dashboard_company_profile_retrieve
@@ -25531,6 +25588,30 @@ components:
       - name
       - slug
       - updated_at
+    CompanyGigAnalyticsResponse:
+      type: object
+      properties:
+        total_gigs_posted:
+          type: integer
+        active_gigs:
+          type: integer
+        closed_gigs:
+          type: integer
+        average_hourly_rate:
+          type: number
+          format: double
+        application_funnel:
+          type: object
+          additionalProperties: {}
+        conversion_rate:
+          type: string
+      required:
+      - active_gigs
+      - application_funnel
+      - average_hourly_rate
+      - closed_gigs
+      - conversion_rate
+      - total_gigs_posted
     CompanyList:
       type: object
       properties:
@@ -28639,6 +28720,46 @@ components:
       - full_name
       - muid
       - profile_pic
+    MulearnerDirectory:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        full_name:
+          type: string
+          maxLength: 150
+        muid:
+          type: string
+          maxLength: 100
+        email:
+          type: string
+          format: email
+          maxLength: 200
+        karma:
+          type: string
+          readOnly: true
+        level:
+          type: string
+          readOnly: true
+        college:
+          type: string
+          readOnly: true
+        department:
+          type: string
+          readOnly: true
+        graduation_year:
+          type: string
+          readOnly: true
+      required:
+      - college
+      - department
+      - email
+      - full_name
+      - graduation_year
+      - karma
+      - level
+      - muid
     MyEventInvite:
       type: object
       properties:

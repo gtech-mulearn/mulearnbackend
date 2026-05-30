@@ -12,6 +12,8 @@ class CompanyMulearnerDirectoryAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Directory of MuLearners available to companies.",
         parameters=[
             OpenApiParameter("min_karma", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("max_karma", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
@@ -23,7 +25,8 @@ class CompanyMulearnerDirectoryAPI(APIView):
             OpenApiParameter("skill", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("achievement", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("task", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-        ]
+        ],
+        responses={200: mulearner_serializers.MulearnerDirectorySerializer(many=True)},
     )
     @role_required([RoleType.COMPANY.value])
     def get(self, request):
