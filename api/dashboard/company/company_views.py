@@ -11,7 +11,12 @@ from . import serializers
 class CompanyRegistrationAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @extend_schema(request=serializers.CompanyRegisterSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Submit a new company registration.",
+        request=serializers.CompanyRegisterSerializer,
+        responses={200: serializers.CompanyRegisterSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -33,7 +38,12 @@ class CompanyRegistrationAPI(APIView):
             
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @extend_schema(request=serializers.CompanyUpdateSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Update or resubmit a pending/rejected company registration.",
+        request=serializers.CompanyUpdateSerializer,
+        responses={200: serializers.CompanyUpdateSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         company = Company.objects.filter(company_user_id=user_id).first()
@@ -71,6 +81,10 @@ class CompanyRegistrationAPI(APIView):
 class CompanyStatusAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Check the status of a company registration.",
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -93,6 +107,11 @@ class CompanyStatusAPI(APIView):
 class CompanyProfileAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Retrieve the profile of a verified company.",
+        responses={200: serializers.CompanyDetailSerializer},
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -106,7 +125,12 @@ class CompanyProfileAPI(APIView):
         serializer = serializers.CompanyDetailSerializer(company)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @extend_schema(request=serializers.CompanyUpdateSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Update the profile of a verified company.",
+        request=serializers.CompanyUpdateSerializer,
+        responses={200: serializers.CompanyUpdateSerializer},
+    )
     @role_required([RoleType.COMPANY.value])
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -134,6 +158,8 @@ class CompanyListAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(
+        tags=['Dashboard - Company'],
+        description="List all companies with filtering.",
         parameters=[
             OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("industry_sector", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
@@ -141,7 +167,8 @@ class CompanyListAPI(APIView):
             OpenApiParameter("district", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("state", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("country", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-        ]
+        ],
+        responses={200: serializers.CompanyListSerializer(many=True)},
     )
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
@@ -184,6 +211,11 @@ class CompanyListAPI(APIView):
 class CompanyDetailAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Get details of a specific company by ID.",
+        responses={200: serializers.CompanyDetailSerializer},
+    )
     @role_required([RoleType.ADMIN.value])
     def get(self, request, company_id):
         company = Company.objects.filter(id=company_id).first()
@@ -198,7 +230,11 @@ class CompanyDetailAPI(APIView):
 class CompanyVerifyAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @extend_schema(request=serializers.CompanyVerifySerializer)
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Verify or reject a company.",
+        request=serializers.CompanyVerifySerializer,
+    )
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, company_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -229,6 +265,11 @@ class CompanyVerifyAPI(APIView):
 class PublicCompanyProfileAPI(APIView):
     permission_classes = []
 
+    @extend_schema(
+        tags=['Public - Company'],
+        description="Public endpoint to view a company's profile.",
+        responses={200: serializers.PublicCompanyProfileSerializer},
+    )
     def get(self, request, slug):
         company = Company.objects.filter(slug=slug, status="verified").first()
         if not company:
