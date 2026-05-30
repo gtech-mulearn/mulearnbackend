@@ -9877,224 +9877,25 @@ paths:
                 - message
                 - response
           description: ''
-  /api/v1/dashboard/mentor/{muid}/public/:
-    get:
-      operationId: dashboard_mentor_public_retrieve
-      description: Retrieve Public Mentor Card.
-      parameters:
-      - in: path
-        name: muid
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/PublicMentorCard'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/mentor/{muid}/public/sessions/:
-    get:
-      operationId: dashboard_mentor_public_sessions_retrieve
-      description: Retrieve Public Mentor Sessions.
-      parameters:
-      - in: path
-        name: muid
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/PublicMentorSession'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/mentor/{id}/verify/:
-    patch:
-      operationId: dashboard_mentor_verify_partial_update
-      description: |-
-        PATCH /<mentor_id>/verify/
-
-        Required body field:
-            action : "approve" | "reject"
-
-        Optional:
-            note        : str  — shown to mentor in notification
-            mentor_tier : "NORMAL" | "VERIFIED"  (approve only, default NORMAL)
-
-        Approve:
-            • is_verified = True, role assigned, IG links created, mentor notified ✅
-        Reject:
-            • user_mentor row deleted (user can reapply), mentor notified ❌
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/activity-log/:
-    get:
-      operationId: dashboard_mentor_activity_log_retrieve
-      description: GET — recent SystemActionLog entries.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
   /api/v1/dashboard/mentor/availability/:
     get:
-      operationId: dashboard_mentor_availability_retrieve
-      description: GET — list slots; POST — create a new slot.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_availability_create
-      description: GET — list slots; POST — create a new slot.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/availability/{id}/:
-    put:
-      operationId: dashboard_mentor_availability_update
-      description: PUT — full replace; DELETE — soft-delete.
+      operationId: dashboard_mentor_availability_list
+      description: List all availability slots for the logged-in mentor.
       parameters:
-      - in: path
-        name: id
+      - in: query
+        name: ig_id
         schema:
           type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_availability_destroy
-      description: PUT — full replace; DELETE — soft-delete.
-      parameters:
-      - in: path
-        name: id
+      - in: query
+        name: is_active
         schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/availability/calendar/:
-    get:
-      operationId: dashboard_mentor_availability_calendar_retrieve
-      description: GET - Return slots formatted for calendar consumption.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/availability/public/:
-    get:
-      operationId: dashboard_mentor_availability_public_retrieve
-      description: Retrieve Public Mentor Availability.
+          type: boolean
       tags:
       - Mentor
       security:
       - cookieAuth: []
       - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -10118,207 +9919,9 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/MentorAvailability'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/mentor/campus-mentor/{id}/verify/:
-    patch:
-      operationId: dashboard_mentor_campus_mentor_verify_partial_update
-      description: PATCH <pk>/verify/ — admin approves or rejects a CAMPUS_MENTOR
-        application.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/availability/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_availability_retrieve
-      description: GET / POST availability slots (campus mentor scope).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_campus_mentor_availability_create
-      description: GET / POST availability slots (campus mentor scope).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/events/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_events_retrieve
-      description: |-
-        GET  — list events scoped to the campus mentor's college org.
-        POST — create a new event for the campus.
-
-        Tier enforcement: only CAMPUS_MENTOR rows with is_verified=True can create events.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_campus_mentor_events_create
-      description: |-
-        GET  — list events scoped to the campus mentor's college org.
-        POST — create a new event for the campus.
-
-        Tier enforcement: only CAMPUS_MENTOR rows with is_verified=True can create events.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/events/{id}/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_events_retrieve_2
-      description: GET / PATCH / DELETE a single campus event (campus mentor only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_campus_mentor_events_partial_update
-      description: GET / PATCH / DELETE a single campus event (campus mentor only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_campus_mentor_events_destroy
-      description: GET / PATCH / DELETE a single campus event (campus mentor only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/list/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_list_retrieve
-      description: 'GET — admin: paginated list of all CAMPUS_MENTOR applications.'
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/mentees/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_mentees_retrieve
-      description: GET — distinct mentees from sessions in the mentor's campus orgs.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/my-orgs/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_my_orgs_retrieve
-      description: GET — list the requesting mentor's own campus mentor rows.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/onboarding/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_onboarding_retrieve
-      description: Retrieve Campus Mentor Onboarding.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/OrgMentorList'
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AvailabilitySlot'
                 required:
                 - hasError
                 - statusCode
@@ -10326,25 +9929,26 @@ paths:
                 - response
           description: ''
     post:
-      operationId: dashboard_mentor_campus_mentor_onboarding_create
-      description: Create Campus Mentor Onboarding.
+      operationId: dashboard_mentor_availability_create
+      description: Create a new mentor availability slot.
       tags:
       - Mentor
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CampusMentorOnboarding'
+              $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/CampusMentorOnboarding'
+              $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/CampusMentorOnboarding'
+              $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
         required: true
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -10368,7 +9972,7 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/OrgMentorList'
+                    $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
                 required:
                 - hasError
                 - statusCode
@@ -10376,36 +9980,25 @@ paths:
                 - response
           description: ''
     patch:
-      operationId: dashboard_mentor_campus_mentor_onboarding_partial_update
-      description: |-
-        GET   — list own CAMPUS_MENTOR UserMentor rows.
-        POST  — apply as campus mentor for a College org.
-        PATCH — update profile for one row (pk = UserMentor.id).
-
-        Tier enforcement: org must be org_type=College.
+      operationId: dashboard_mentor_availability_partial_update
+      description: Update an existing mentor availability slot.
       tags:
       - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAvailabilitySlotCreateUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAvailabilitySlotCreateUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAvailabilitySlotCreateUpdate'
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/onboarding/{id}/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_onboarding_retrieve_2
-      description: Retrieve Campus Mentor Onboarding.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -10429,7 +10022,75 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/OrgMentorList'
+                    $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: dashboard_mentor_availability_destroy
+      description: Delete a mentor availability slot.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/mentor/availability/{slot_id}/:
+    get:
+      operationId: dashboard_mentor_availability_list_2
+      description: List all availability slots for the logged-in mentor.
+      parameters:
+      - in: query
+        name: ig_id
+        schema:
+          type: string
+      - in: query
+        name: is_active
+        schema:
+          type: boolean
+      - in: path
+        name: slot_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AvailabilitySlot'
                 required:
                 - hasError
                 - statusCode
@@ -10437,11 +10098,11 @@ paths:
                 - response
           description: ''
     post:
-      operationId: dashboard_mentor_campus_mentor_onboarding_create_2
-      description: Create Campus Mentor Onboarding.
+      operationId: dashboard_mentor_availability_create_2
+      description: Create a new mentor availability slot.
       parameters:
       - in: path
-        name: id
+        name: slot_id
         schema:
           type: string
         required: true
@@ -10451,17 +10112,18 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CampusMentorOnboarding'
+              $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/CampusMentorOnboarding'
+              $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/CampusMentorOnboarding'
+              $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
         required: true
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -10485,7 +10147,7 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/OrgMentorList'
+                    $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
                 required:
                 - hasError
                 - statusCode
@@ -10493,471 +10155,11 @@ paths:
                 - response
           description: ''
     patch:
-      operationId: dashboard_mentor_campus_mentor_onboarding_partial_update_2
-      description: |-
-        GET   — list own CAMPUS_MENTOR UserMentor rows.
-        POST  — apply as campus mentor for a College org.
-        PATCH — update profile for one row (pk = UserMentor.id).
-
-        Tier enforcement: org must be org_type=College.
+      operationId: dashboard_mentor_availability_partial_update_2
+      description: Update an existing mentor availability slot.
       parameters:
       - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/opportunities/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_opportunities_retrieve
-      description: GET / POST — opportunities scoped to the mentor's campus org.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_campus_mentor_opportunities_create
-      description: GET / POST — opportunities scoped to the mentor's campus org.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/opportunities/{id}/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_opportunities_retrieve_2
-      description: GET / PATCH / DELETE a single campus opportunity.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_campus_mentor_opportunities_partial_update
-      description: GET / PATCH / DELETE a single campus opportunity.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_campus_mentor_opportunities_destroy
-      description: GET / PATCH / DELETE a single campus opportunity.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/review-queue/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_review_queue_retrieve
-      description: GET — KAL entries from campus org students, pending mentor review.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/review-queue/{id}/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_review_queue_retrieve_2
-      description: GET detail / PATCH to approve or reject a KAL entry (campus students
-        only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_campus_mentor_review_queue_partial_update
-      description: GET detail / PATCH to approve or reject a KAL entry (campus students
-        only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/sessions/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_sessions_retrieve
-      description: |-
-        GET  — list campus-scoped sessions for this mentor's orgs.
-        POST — create a session scoped to a campus org (ig optional for IG-chapter link).
-
-        Tier enforcement: only CAMPUS_MENTOR rows with is_verified=True can create sessions.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_campus_mentor_sessions_create
-      description: |-
-        GET  — list campus-scoped sessions for this mentor's orgs.
-        POST — create a session scoped to a campus org (ig optional for IG-chapter link).
-
-        Tier enforcement: only CAMPUS_MENTOR rows with is_verified=True can create sessions.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/campus-mentor/sessions/{id}/:
-    get:
-      operationId: dashboard_mentor_campus_mentor_sessions_retrieve_2
-      description: GET / PATCH / DELETE a single campus-scoped session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_campus_mentor_sessions_partial_update
-      description: GET / PATCH / DELETE a single campus-scoped session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_campus_mentor_sessions_destroy
-      description: GET / PATCH / DELETE a single campus-scoped session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/company/{id}/verify/:
-    patch:
-      operationId: dashboard_mentor_company_verify_partial_update
-      description: PATCH <pk>/verify/ — admin approves or rejects a COMPANY_MENTOR
-        application.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/availability/:
-    get:
-      operationId: dashboard_mentor_company_availability_retrieve
-      description: GET / POST availability slots (reuses existing slot model, company
-        context).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_company_availability_create
-      description: GET / POST availability slots (reuses existing slot model, company
-        context).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/list/:
-    get:
-      operationId: dashboard_mentor_company_list_retrieve
-      description: 'GET — admin: paginated list of all COMPANY_MENTOR applications.'
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/mentees/:
-    get:
-      operationId: dashboard_mentor_company_mentees_retrieve
-      description: GET — distinct mentees from sessions in the mentor's company orgs.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/my-orgs/:
-    get:
-      operationId: dashboard_mentor_company_my_orgs_retrieve
-      description: GET — list the requesting mentor's own company mentor rows.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/onboarding/:
-    get:
-      operationId: dashboard_mentor_company_onboarding_retrieve
-      description: Retrieve Company Mentor Onboarding.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/OrgMentorList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    post:
-      operationId: dashboard_mentor_company_onboarding_create
-      description: Create Company Mentor Onboarding.
-      tags:
-      - Mentor
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompanyMentorOnboarding'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CompanyMentorOnboarding'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CompanyMentorOnboarding'
-        required: true
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/OrgMentorList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    patch:
-      operationId: dashboard_mentor_company_onboarding_partial_update
-      description: |-
-        GET   — list own COMPANY_MENTOR UserMentor rows.
-        POST  — apply as company mentor for an org (org_type must be Company).
-        PATCH — update profile for one row (pk = UserMentor.id).
-
-        Tier enforcement: each row is unique per (user, COMPANY_MENTOR, org).
-        A mentor CANNOT apply twice for the same company org.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/onboarding/{id}/:
-    get:
-      operationId: dashboard_mentor_company_onboarding_retrieve_2
-      description: Retrieve Company Mentor Onboarding.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/OrgMentorList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    post:
-      operationId: dashboard_mentor_company_onboarding_create_2
-      description: Create Company Mentor Onboarding.
-      parameters:
-      - in: path
-        name: id
+        name: slot_id
         schema:
           type: string
         required: true
@@ -10967,17 +10169,17 @@ paths:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/CompanyMentorOnboarding'
+              $ref: '#/components/schemas/PatchedAvailabilitySlotCreateUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/CompanyMentorOnboarding'
+              $ref: '#/components/schemas/PatchedAvailabilitySlotCreateUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/CompanyMentorOnboarding'
-        required: true
+              $ref: '#/components/schemas/PatchedAvailabilitySlotCreateUpdate'
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -11001,399 +10203,96 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/OrgMentorList'
+                    $ref: '#/components/schemas/AvailabilitySlotCreateUpdate'
                 required:
                 - hasError
                 - statusCode
                 - message
                 - response
           description: ''
-    patch:
-      operationId: dashboard_mentor_company_onboarding_partial_update_2
-      description: |-
-        GET   — list own COMPANY_MENTOR UserMentor rows.
-        POST  — apply as company mentor for an org (org_type must be Company).
-        PATCH — update profile for one row (pk = UserMentor.id).
-
-        Tier enforcement: each row is unique per (user, COMPANY_MENTOR, org).
-        A mentor CANNOT apply twice for the same company org.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/opportunities/:
-    get:
-      operationId: dashboard_mentor_company_opportunities_retrieve
-      description: GET / POST — opportunities scoped to the mentor's company org.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_company_opportunities_create
-      description: GET / POST — opportunities scoped to the mentor's company org.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/opportunities/{id}/:
-    get:
-      operationId: dashboard_mentor_company_opportunities_retrieve_2
-      description: GET / PATCH / DELETE a single company opportunity.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_company_opportunities_partial_update
-      description: GET / PATCH / DELETE a single company opportunity.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
     delete:
-      operationId: dashboard_mentor_company_opportunities_destroy
-      description: GET / PATCH / DELETE a single company opportunity.
+      operationId: dashboard_mentor_availability_destroy_2
+      description: Delete a mentor availability slot.
       parameters:
       - in: path
-        name: id
+        name: slot_id
         schema:
           type: string
         required: true
       tags:
       - Mentor
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '204':
           description: No response body
-  /api/v1/dashboard/mentor/company/review-queue/:
+  /api/v1/dashboard/mentor/detail/{mentor_id}/:
     get:
-      operationId: dashboard_mentor_company_review_queue_retrieve
-      description: GET — KAL entries from company org users, pending mentor review.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/review-queue/{id}/:
-    get:
-      operationId: dashboard_mentor_company_review_queue_retrieve_2
-      description: GET detail / PATCH to approve or reject a KAL entry (company org
-        users only).
+      operationId: dashboard_mentor_detail_retrieve
+      description: Get details of a specific mentor by ID.
       parameters:
       - in: path
-        name: id
+        name: mentor_id
         schema:
           type: string
         required: true
       tags:
       - Mentor
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_company_review_queue_partial_update
-      description: GET detail / PATCH to approve or reject a KAL entry (company org
-        users only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/sessions/:
-    get:
-      operationId: dashboard_mentor_company_sessions_retrieve
-      description: |-
-        GET  — list sessions scoped to any of the requesting mentor's verified company orgs.
-        POST — create a session scoped to a specific company org.
-
-        Tier enforcement: only COMPANY_MENTOR rows with is_verified=True can create sessions.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_company_sessions_create
-      description: |-
-        GET  — list sessions scoped to any of the requesting mentor's verified company orgs.
-        POST — create a session scoped to a specific company org.
-
-        Tier enforcement: only COMPANY_MENTOR rows with is_verified=True can create sessions.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/company/sessions/{id}/:
-    get:
-      operationId: dashboard_mentor_company_sessions_retrieve_2
-      description: GET / PATCH / DELETE a single company-scoped session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_company_sessions_partial_update
-      description: GET / PATCH / DELETE a single company-scoped session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_company_sessions_destroy
-      description: GET / PATCH / DELETE a single company-scoped session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/ig-requests/:
-    get:
-      operationId: dashboard_mentor_ig_requests_retrieve
-      description: |-
-        GET /mentor/ig-requests/?ig_id=<uuid>
-        IG Lead (or Admin) views pending mentor-to-IG link requests for their IG.
-        Pending = UserIgLink(assignment_type=MENTOR, is_active=False).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/ig-requests/{id}/:
-    patch:
-      operationId: dashboard_mentor_ig_requests_partial_update
-      description: |-
-        PATCH /mentor/ig-requests/<uil_pk>/
-        IG Lead approves or rejects a pending mentor IG link request.
-
-        Body:
-            action : "approve" | "reject"
-            note   : str (optional, shown to mentor on reject)
-
-        Approve → UserIgLink.is_active = True, mentor notified
-        Reject  → UserIgLink row deleted, mentor notified
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/leaderboard/:
-    get:
-      operationId: dashboard_mentor_leaderboard_retrieve
-      description: |-
-        GET /mentor/leaderboard/
-        Optional: ?ig_id=<id>
-
-        Score = (sessions_completed × 3) + (mentees_attended × 2) + (hours × 1)
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/mentor/list/:
     get:
-      operationId: dashboard_mentor_list_retrieve
-      description: GET — paginated list of all mentor applications (admin only).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/list/{id}/tier/:
-    patch:
-      operationId: dashboard_mentor_list_tier_partial_update
-      description: |-
-        PATCH /mentor/list/<pk>/tier/
-
-        Admin-only. Changes the mentor_tier of a verified mentor after they
-        have already been approved. Sends a notification to the mentor.
-
-        Body:
-            { "mentor_tier": "IG_MENTOR" | "MENTOR" }
+      operationId: dashboard_mentor_list_list
+      description: List all mentor applications with filtering.
       parameters:
-      - in: path
-        name: id
+      - in: query
+        name: mentor_tier
         schema:
           type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/mentees/:
-    get:
-      operationId: dashboard_mentor_mentees_retrieve
-      description: GET — distinct mentees across sessions.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/mentees/{user_pk}/:
-    get:
-      operationId: dashboard_mentor_mentees_retrieve_2
-      description: |-
-        GET /mentor/mentees/<user_pk>/
-
-        Returns a full profile of a single mentee:
-        - User info
-        - Sessions shared with the requesting mentor (or all sessions for admin)
-        - Karma earned by the mentee from tasks within the mentor's IGs
-        - Task review stats (reviewed / approved / rejected by this mentor)
-      parameters:
-      - in: path
-        name: user_pk
+      - in: query
+        name: status
         schema:
           type: string
-        required: true
       tags:
       - Mentor
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/my-igs/:
-    get:
-      operationId: dashboard_mentor_my_igs_retrieve
-      description: |-
-        GET /mentor/my-igs/
-        Returns all IGs the authenticated mentor is actively linked to
-        (UserIgLink with assignment_type=MENTOR, is_active=True).
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/onboarding/:
-    get:
-      operationId: dashboard_mentor_onboarding_retrieve
-      description: Retrieve Mentor Onboarding.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -11417,33 +10316,75 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/MentorList'
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorList'
                 required:
                 - hasError
                 - statusCode
                 - message
                 - response
           description: ''
-    post:
-      operationId: dashboard_mentor_onboarding_create
-      description: Create Mentor Onboarding.
+  /api/v1/dashboard/mentor/profile/:
+    get:
+      operationId: dashboard_mentor_profile_retrieve
+      description: Retrieve the profile of a verified mentor.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    patch:
+      operationId: dashboard_mentor_profile_partial_update
+      description: Update the profile of a verified mentor.
       tags:
       - Mentor
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/MentorOnboarding'
+              $ref: '#/components/schemas/PatchedMentorUpdate'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/MentorOnboarding'
+              $ref: '#/components/schemas/PatchedMentorUpdate'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/MentorOnboarding'
-        required: true
+              $ref: '#/components/schemas/PatchedMentorUpdate'
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -11467,32 +10408,128 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/MentorList'
+                    $ref: '#/components/schemas/MentorUpdate'
                 required:
                 - hasError
                 - statusCode
                 - message
                 - response
           description: ''
-    patch:
-      operationId: dashboard_mentor_onboarding_partial_update
-      description: Partially update Mentor Onboarding.
+  /api/v1/dashboard/mentor/public/availability/{mentor_id}/:
+    get:
+      operationId: dashboard_mentor_public_availability_list
+      description: List active availability slots for a specific mentor.
+      parameters:
+      - in: path
+        name: mentor_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/AvailabilitySlot'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/public/profile/{mentor_id}/:
+    get:
+      operationId: dashboard_mentor_public_profile_retrieve
+      description: View a mentor's profile publicly.
+      parameters:
+      - in: path
+        name: mentor_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/register/:
+    post:
+      operationId: dashboard_mentor_register_create
+      description: Submit a new mentor registration.
       tags:
       - Mentor
       requestBody:
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/PatchedMentorOnboardingUpdate'
+              $ref: '#/components/schemas/MentorRegister'
           application/x-www-form-urlencoded:
             schema:
-              $ref: '#/components/schemas/PatchedMentorOnboardingUpdate'
+              $ref: '#/components/schemas/MentorRegister'
           multipart/form-data:
             schema:
-              $ref: '#/components/schemas/PatchedMentorOnboardingUpdate'
+              $ref: '#/components/schemas/MentorRegister'
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           content:
@@ -11516,637 +10553,706 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/MentorList'
+                    $ref: '#/components/schemas/MentorRegister'
                 required:
                 - hasError
                 - statusCode
                 - message
                 - response
           description: ''
-  /api/v1/dashboard/mentor/opportunities/:
-    get:
-      operationId: dashboard_mentor_opportunities_retrieve
-      description: GET — list; POST — create opportunity.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_opportunities_create
-      description: GET — list; POST — create opportunity.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/opportunities/{id}/:
-    get:
-      operationId: dashboard_mentor_opportunities_retrieve_2
-      description: GET / PUT / PATCH / DELETE a single opportunity.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
     patch:
-      operationId: dashboard_mentor_opportunities_partial_update
-      description: GET / PUT / PATCH / DELETE a single opportunity.
+      operationId: dashboard_mentor_register_partial_update
+      description: Update a pending mentor application or resubmit a rejected one.
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/admin/list/:
+    get:
+      operationId: dashboard_mentor_session_admin_list_list
+      description: Admin view to list all mentorship sessions.
+      parameters:
+      - in: query
+        name: ig_id
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/admin/verify/{session_id}/:
+    patch:
+      operationId: dashboard_mentor_session_admin_verify_partial_update
+      description: Verify or reject a mentorship session.
       parameters:
       - in: path
-        name: id
+        name: session_id
         schema:
           type: string
         required: true
       tags:
       - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSessionVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSessionVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedAdminSessionVerify'
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           description: No response body
-    delete:
-      operationId: dashboard_mentor_opportunities_destroy
-      description: GET / PUT / PATCH / DELETE a single opportunity.
+  /api/v1/dashboard/mentor/session/available/:
+    get:
+      operationId: dashboard_mentor_session_available_list
+      description: List all scheduled sessions for the IGs the user belongs to.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/create/:
+    post:
+      operationId: dashboard_mentor_session_create_create
+      description: Create a new mentorship session.
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/SessionCreate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/list/:
+    get:
+      operationId: dashboard_mentor_session_list_list
+      description: List all sessions created by the logged-in mentor, or get details
+        of a specific session.
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/list/{session_id}/:
+    get:
+      operationId: dashboard_mentor_session_list_list_2
+      description: List all sessions created by the logged-in mentor, or get details
+        of a specific session.
       parameters:
       - in: path
-        name: id
+        name: session_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/participant/feedback/{session_id}/:
+    patch:
+      operationId: dashboard_mentor_session_participant_feedback_partial_update
+      description: Allows a user to submit feedback for a session they attended.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantFeedback'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantFeedback'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantFeedback'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ParticipantList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/participant/history/:
+    get:
+      operationId: dashboard_mentor_session_participant_history_list
+      description: List all mentorship sessions the logged-in user has joined.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParticipantList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/participant/list/{session_id}/:
+    get:
+      operationId: dashboard_mentor_session_participant_list_list
+      description: Mentor view to list all participants in a specific session.
+      parameters:
+      - in: path
+        name: session_id
         schema:
           type: string
         required: true
       tags:
       - Mentor
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ParticipantList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/participant/update/{link_id}/:
+    patch:
+      operationId: dashboard_mentor_session_participant_update_partial_update
+      description: Mentor view to update participant's attendance and progress.
+      parameters:
+      - in: path
+        name: link_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedParticipantUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ParticipantUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/participation/join/{session_id}/:
+    post:
+      operationId: dashboard_mentor_session_participation_join_create
+      description: Allows a MuLearn user to join a scheduled mentorship session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ParticipantList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/update/{session_id}/:
+    patch:
+      operationId: dashboard_mentor_session_update_partial_update
+      description: Update or cancel a mentorship session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedSessionUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedSessionUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedSessionUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/SessionUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: dashboard_mentor_session_update_destroy
+      description: Delete a mentorship session.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
       responses:
         '204':
           description: No response body
-  /api/v1/dashboard/mentor/overview/:
+  /api/v1/dashboard/mentor/status/:
     get:
-      operationId: dashboard_mentor_overview_retrieve
-      description: |-
-        GET /mentor/overview/
-
-        Returns a comprehensive dashboard snapshot in a single call.
-        Admin sees platform-wide data; mentor sees their own scoped data.
-
-        Optional query param: ?ig_id=<id>  — scope session/opportunity counts to one IG.
-
-        Response shape:
-        {
-          "mentors": { total, verified, unverified, pending_verification },
-          "sessions": {
-            "counts": { pending_approval, scheduled, completed, cancelled, no_show, total },
-            "upcoming": [ ...next 5 SCHEDULED sessions ],
-            "pending_global": [ ...next 5 PENDING_APPROVAL global sessions ]
-          },
-          "task_requests": { pending, approved, rejected,
-                             recent_pending: [ ...latest 5 PENDING requests ] },
-          "opportunities": { total, published, draft, closed,
-                             by_ig: [ { ig_id, ig_name, count } ] },
-          "mentees": { total_unique },
-          "recent_activity": [ ...last 5 SystemActionLog entries ]
-        }
+      operationId: dashboard_mentor_status_retrieve
+      description: Check the status of a mentor registration.
       tags:
       - Mentor
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
           description: No response body
-  /api/v1/dashboard/mentor/review-queue/:
-    get:
-      operationId: dashboard_mentor_review_queue_retrieve
-      description: GET  /mentor/review-queue/  — KAL entries pending mentor review
-        in mentor's IGs
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/review-queue/{id}/:
-    get:
-      operationId: dashboard_mentor_review_queue_retrieve_2
-      description: |-
-        GET   /mentor/review-queue/<kal_id>/ — single KAL entry detail
-        PATCH /mentor/review-queue/<kal_id>/ — mentor approves or rejects a task submission
-        Karma is NOT credited here; admin finalises via the existing appraiser flow.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
+  /api/v1/dashboard/mentor/verify/{mentor_id}/:
     patch:
-      operationId: dashboard_mentor_review_queue_partial_update
-      description: |-
-        GET   /mentor/review-queue/<kal_id>/ — single KAL entry detail
-        PATCH /mentor/review-queue/<kal_id>/ — mentor approves or rejects a task submission
-        Karma is NOT credited here; admin finalises via the existing appraiser flow.
+      operationId: dashboard_mentor_verify_partial_update
+      description: Verify or reject a mentor application.
       parameters:
       - in: path
-        name: id
+        name: mentor_id
         schema:
           type: string
         required: true
       tags:
       - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorVerify'
       security:
+      - cookieAuth: []
+      - basicAuth: []
       - jwtAuth: []
-      - {}
       responses:
         '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/:
-    get:
-      operationId: dashboard_mentor_sessions_retrieve
-      description: |-
-        GET  — paginated session list (admin sees all; mentor sees own)
-        POST — create session:
-               • with ig_id  → admin only, status=SCHEDULED
-               • without ig_id → mentor/admin, status=PENDING_APPROVAL, is_global=True
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_sessions_create
-      description: |-
-        GET  — paginated session list (admin sees all; mentor sees own)
-        POST — create session:
-               • with ig_id  → admin only, status=SCHEDULED
-               • without ig_id → mentor/admin, status=PENDING_APPROVAL, is_global=True
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/:
-    get:
-      operationId: dashboard_mentor_sessions_retrieve_2
-      description: GET / PUT / PATCH / DELETE for a single session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_sessions_partial_update
-      description: GET / PUT / PATCH / DELETE for a single session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_sessions_destroy
-      description: GET / PUT / PATCH / DELETE for a single session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/approve/:
-    patch:
-      operationId: dashboard_mentor_sessions_approve_partial_update
-      description: PATCH — admin approves or rejects a pending global session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/attendance/:
-    patch:
-      operationId: dashboard_mentor_sessions_attendance_partial_update
-      description: |-
-        PATCH /mentor/sessions/<pk>/attendance/
-
-        Bulk-update attendance_status for multiple participants in one request.
-
-        Body:
-            {
-              "participants": [
-                { "user_id": "<uuid>", "attendance_status": "ATTENDED" },
-                { "user_id": "<uuid>", "attendance_status": "NO_SHOW" },
-                ...
-              ]
-            }
-
-        - Admin: can update any session.
-        - Mentor: can only update sessions they created.
-        - Validates that every user_id is actually a participant in the session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/clone/:
-    post:
-      operationId: dashboard_mentor_sessions_clone_create
-      description: |-
-        POST /mentor/sessions/<pk>/clone/
-
-        Deep-copies a session with the following rules:
-        - title     → "Copy of <original title>"
-        - status    → PENDING_APPROVAL (global) or SCHEDULED (IG-scoped)
-        - starts_at / ends_at → cleared (null); caller must PATCH afterwards
-        - All other fields (description, mode, ig, max_participants,
-          meeting_link, venue, is_global) are preserved
-        - Creator is automatically added as MENTOR participant
-        - Original participants are NOT copied
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/karma-award/:
-    get:
-      operationId: dashboard_mentor_sessions_karma_award_retrieve
-      description: |-
-        GET  /mentor/sessions/<pk>/karma-award/ — list awards for this session
-        POST /mentor/sessions/<pk>/karma-award/ — admin awards karma to a mentor
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_sessions_karma_award_create
-      description: |-
-        GET  /mentor/sessions/<pk>/karma-award/ — list awards for this session
-        POST /mentor/sessions/<pk>/karma-award/ — admin awards karma to a mentor
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/participants/:
-    get:
-      operationId: dashboard_mentor_sessions_participants_retrieve
-      description: GET / POST / DELETE participants on a session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_sessions_participants_create
-      description: GET / POST / DELETE participants on a session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_sessions_participants_destroy
-      description: GET / POST / DELETE participants on a session.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/remind/:
-    post:
-      operationId: dashboard_mentor_sessions_remind_create
-      description: |-
-        POST /mentor/sessions/<pk>/remind/
-        Sends a Notification to every participant (INVITED or ATTENDED) in the session.
-        Also called automatically on session creation/status→SCHEDULED (see helper below).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{id}/status/:
-    patch:
-      operationId: dashboard_mentor_sessions_status_partial_update
-      description: PATCH — update only the session status (admin only).
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/{session_pk}/participants/{user_pk}/:
-    get:
-      operationId: dashboard_mentor_sessions_participants_retrieve_2
-      description: GET / POST / DELETE participants on a session.
-      parameters:
-      - in: path
-        name: session_pk
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: user_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_sessions_participants_create_2
-      description: GET / POST / DELETE participants on a session.
-      parameters:
-      - in: path
-        name: session_pk
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: user_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_sessions_participants_destroy_2
-      description: GET / POST / DELETE participants on a session.
-      parameters:
-      - in: path
-        name: session_pk
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: user_pk
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
-          description: No response body
-  /api/v1/dashboard/mentor/sessions/pending/:
-    get:
-      operationId: dashboard_mentor_sessions_pending_retrieve
-      description: GET — paginated list of global sessions awaiting admin approval.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/stats/:
-    get:
-      operationId: dashboard_mentor_stats_retrieve
-      description: 'Alias: GET /mentor/stats/ → same as /mentor/overview/.'
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/task-requests/:
-    get:
-      operationId: dashboard_mentor_task_requests_retrieve
-      description: GET — list; POST — submit a task proposal.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    post:
-      operationId: dashboard_mentor_task_requests_create
-      description: GET — list; POST — submit a task proposal.
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/mentor/task-requests/{id}/:
-    get:
-      operationId: dashboard_mentor_task_requests_retrieve_2
-      description: GET — detail; PATCH — admin review (approve/reject); DELETE — mentor
-        withdraws pending request.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_mentor_task_requests_partial_update
-      description: GET — detail; PATCH — admin review (approve/reject); DELETE — mentor
-        withdraws pending request.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    delete:
-      operationId: dashboard_mentor_task_requests_destroy
-      description: GET — detail; PATCH — admin review (approve/reject); DELETE — mentor
-        withdraws pending request.
-      parameters:
-      - in: path
-        name: id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Mentor
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '204':
           description: No response body
   /api/v1/dashboard/organisation/affiliation/list/:
     get:
@@ -23710,6 +22816,95 @@ components:
             etc.)
       required:
       - response
+    AvailabilitySlot:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        mentor_user_id:
+          type: string
+          readOnly: true
+        ig_id:
+          type: string
+          nullable: true
+          readOnly: true
+        ig_name:
+          type: string
+          readOnly: true
+        weekday:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        timezone:
+          type: string
+          maxLength: 64
+        is_active:
+          type: boolean
+        valid_from:
+          type: string
+          format: date
+          nullable: true
+        valid_to:
+          type: string
+          format: date
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - end_time
+      - ig_id
+      - ig_name
+      - mentor_user_id
+      - start_time
+      - updated_at
+      - weekday
+    AvailabilitySlotCreateUpdate:
+      type: object
+      properties:
+        ig:
+          type: string
+          nullable: true
+        weekday:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        timezone:
+          type: string
+          maxLength: 64
+        is_active:
+          type: boolean
+        valid_from:
+          type: string
+          format: date
+          nullable: true
+        valid_to:
+          type: string
+          format: date
+          nullable: true
+      required:
+      - end_time
+      - start_time
+      - weekday
     BankTransfer:
       type: object
       description: Serializer for bank transfer donation requests (amount >= 5L)
@@ -24171,46 +23366,6 @@ components:
       - key
       - label
       - percentage
-    CampusMentorOnboarding:
-      type: object
-      description: Create a CAMPUS_MENTOR row (org.org_type must be 'College').
-      properties:
-        about:
-          type: string
-          nullable: true
-          maxLength: 1000
-        expertise:
-          type: string
-          nullable: true
-        reason:
-          type: string
-          nullable: true
-          maxLength: 1000
-        mentor_tier:
-          enum:
-          - IG_MENTOR
-          - MENTOR
-          - COMPANY_MENTOR
-          - CAMPUS_MENTOR
-          type: string
-          description: |-
-            * `IG_MENTOR` - IG Mentor
-            * `MENTOR` - Mentor
-            * `COMPANY_MENTOR` - Company Mentor
-            * `CAMPUS_MENTOR` - Campus Mentor
-          x-spec-enum-id: 502a7e5c2300b154
-        org:
-          type: string
-          nullable: true
-        created_by:
-          type: string
-        updated_by:
-          type: string
-      required:
-      - created_by
-      - mentor_tier
-      - org
-      - updated_by
     CampusRecentActivityData:
       type: object
       properties:
@@ -25674,46 +24829,6 @@ components:
       - name
       - slug
       - state_name
-    CompanyMentorOnboarding:
-      type: object
-      description: Create a COMPANY_MENTOR row (org.org_type must be 'Company').
-      properties:
-        about:
-          type: string
-          nullable: true
-          maxLength: 1000
-        expertise:
-          type: string
-          nullable: true
-        reason:
-          type: string
-          nullable: true
-          maxLength: 1000
-        mentor_tier:
-          enum:
-          - IG_MENTOR
-          - MENTOR
-          - COMPANY_MENTOR
-          - CAMPUS_MENTOR
-          type: string
-          description: |-
-            * `IG_MENTOR` - IG Mentor
-            * `MENTOR` - Mentor
-            * `COMPANY_MENTOR` - Company Mentor
-            * `CAMPUS_MENTOR` - Campus Mentor
-          x-spec-enum-id: 502a7e5c2300b154
-        org:
-          type: string
-          nullable: true
-        created_by:
-          type: string
-        updated_by:
-          type: string
-      required:
-      - created_by
-      - mentor_tier
-      - org
-      - updated_by
     CompanyRegister:
       type: object
       properties:
@@ -28523,76 +27638,16 @@ components:
       required:
       - id
       - name
-    MentorAvailability:
+    MentorDetail:
       type: object
-      description: Read availability slots.
       properties:
         id:
           type: string
           maxLength: 36
-        mentor_user_id:
+        user_full_name:
           type: string
           readOnly: true
-        mentor_full_name:
-          type: string
-        ig_id:
-          type: string
-          nullable: true
-          readOnly: true
-        ig_name:
-          type: string
-          readOnly: true
-        weekday:
-          type: integer
-          maximum: 65535
-          minimum: 0
-        start_time:
-          type: string
-          format: time
-        end_time:
-          type: string
-          format: time
-        timezone:
-          type: string
-          maxLength: 64
-        is_active:
-          type: boolean
-        valid_from:
-          type: string
-          format: date
-          nullable: true
-        valid_to:
-          type: string
-          format: date
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - created_at
-      - end_time
-      - ig_id
-      - ig_name
-      - mentor_full_name
-      - mentor_user_id
-      - start_time
-      - weekday
-    MentorList:
-      type: object
-      description: Full mentor profile for admin roster view.
-      properties:
-        id:
-          type: string
-          maxLength: 36
-        full_name:
-          type: string
-        email:
-          type: string
-          format: email
-        muid:
-          type: string
-        profile_pic:
+        user_email:
           type: string
           readOnly: true
         about:
@@ -28624,11 +27679,19 @@ components:
             * `COMPANY_MENTOR` - Company Mentor
             * `CAMPUS_MENTOR` - Campus Mentor
           x-spec-enum-id: 502a7e5c2300b154
-        is_verified:
-          type: boolean
-        verified_by_name:
+        status:
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
           type: string
-          readOnly: true
+          description: |-
+            * `PENDING` - Pending
+            * `APPROVED` - Approved
+            * `REJECTED` - Rejected
+          x-spec-enum-id: 1f00471a47c591be
+        preferred_ig_ids:
+          nullable: true
         verified_at:
           type: string
           format: date-time
@@ -28637,19 +27700,85 @@ components:
           type: string
           nullable: true
           maxLength: 500
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
         created_at:
           type: string
           format: date-time
           nullable: true
+        user:
+          type: string
+        org:
+          type: string
+          nullable: true
+        verified_by:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+        created_by:
+          type: string
       required:
-      - email
-      - full_name
-      - muid
-      - profile_pic
-      - verified_by_name
-    MentorOnboarding:
+      - created_by
+      - updated_by
+      - user
+      - user_email
+      - user_full_name
+    MentorList:
       type: object
-      description: Create a new UserMentor row (first-time application).
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        user_id:
+          type: string
+          readOnly: true
+        user_full_name:
+          type: string
+          readOnly: true
+        user_email:
+          type: string
+          readOnly: true
+        mentor_tier:
+          enum:
+          - IG_MENTOR
+          - MENTOR
+          - COMPANY_MENTOR
+          - CAMPUS_MENTOR
+          type: string
+          description: |-
+            * `IG_MENTOR` - IG Mentor
+            * `MENTOR` - Mentor
+            * `COMPANY_MENTOR` - Company Mentor
+            * `CAMPUS_MENTOR` - Campus Mentor
+          x-spec-enum-id: 502a7e5c2300b154
+        status:
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          type: string
+          description: |-
+            * `PENDING` - Pending
+            * `APPROVED` - Approved
+            * `REJECTED` - Rejected
+          x-spec-enum-id: 1f00471a47c591be
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - user_email
+      - user_full_name
+      - user_id
+    MentorRegister:
+      type: object
       properties:
         about:
           type: string
@@ -28662,15 +27791,34 @@ components:
           type: string
           nullable: true
           maxLength: 1000
+        hours:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
         preferred_ig_ids:
           nullable: true
-        created_by:
+    MentorUpdate:
+      type: object
+      properties:
+        about:
           type: string
-        updated_by:
+          nullable: true
+          maxLength: 1000
+        expertise:
           type: string
-      required:
-      - created_by
-      - updated_by
+          nullable: true
+        reason:
+          type: string
+          nullable: true
+          maxLength: 1000
+        hours:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        preferred_ig_ids:
+          nullable: true
     MinimalCampus:
       type: object
       properties:
@@ -28938,88 +28086,6 @@ components:
           maxLength: 100
       required:
       - title
-    OrgMentorList:
-      type: object
-      description: Read org-mentor profile for list and detail views.
-      properties:
-        id:
-          type: string
-          maxLength: 36
-        full_name:
-          type: string
-        email:
-          type: string
-          format: email
-        muid:
-          type: string
-        profile_pic:
-          type: string
-          readOnly: true
-        about:
-          type: string
-          nullable: true
-          maxLength: 1000
-        expertise:
-          type: string
-          nullable: true
-        reason:
-          type: string
-          nullable: true
-          maxLength: 1000
-        hours:
-          type: integer
-          maximum: 4294967295
-          minimum: 0
-          format: int64
-        mentor_tier:
-          enum:
-          - IG_MENTOR
-          - MENTOR
-          - COMPANY_MENTOR
-          - CAMPUS_MENTOR
-          type: string
-          description: |-
-            * `IG_MENTOR` - IG Mentor
-            * `MENTOR` - Mentor
-            * `COMPANY_MENTOR` - Company Mentor
-            * `CAMPUS_MENTOR` - Campus Mentor
-          x-spec-enum-id: 502a7e5c2300b154
-        is_verified:
-          type: boolean
-        org_id:
-          type: string
-          nullable: true
-          readOnly: true
-        org_name:
-          type: string
-          readOnly: true
-        org_type:
-          type: string
-          readOnly: true
-        verified_by_name:
-          type: string
-          readOnly: true
-        verified_at:
-          type: string
-          format: date-time
-          nullable: true
-        verification_note:
-          type: string
-          nullable: true
-          maxLength: 500
-        created_at:
-          type: string
-          format: date-time
-          nullable: true
-      required:
-      - email
-      - full_name
-      - muid
-      - org_id
-      - org_name
-      - org_type
-      - profile_pic
-      - verified_by_name
     Organisation:
       type: object
       properties:
@@ -29110,6 +28176,104 @@ components:
       - company
       - ig
       - type
+    ParticipantList:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        session_id:
+          type: string
+          readOnly: true
+        user_id:
+          type: string
+          readOnly: true
+        user_full_name:
+          type: string
+          readOnly: true
+        mu_id:
+          type: string
+          readOnly: true
+        participant_role:
+          enum:
+          - MENTOR
+          - MENTEE
+          - CO_MENTOR
+          type: string
+          description: |-
+            * `MENTOR` - Mentor
+            * `MENTEE` - Mentee
+            * `CO_MENTOR` - Co-Mentor
+          x-spec-enum-id: 5532fb01fb167890
+        attendance_status:
+          enum:
+          - INVITED
+          - ATTENDED
+          - ABSENT
+          type: string
+          description: |-
+            * `INVITED` - Invited
+            * `ATTENDED` - Attended
+            * `ABSENT` - Absent
+          x-spec-enum-id: 9b151332b9f464f1
+        progress_note:
+          type: string
+          nullable: true
+          maxLength: 500
+        feedback:
+          type: string
+          nullable: true
+        contributed_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - mu_id
+      - participant_role
+      - session_id
+      - user_full_name
+      - user_id
+    ParticipantUpdate:
+      type: object
+      properties:
+        attendance_status:
+          enum:
+          - INVITED
+          - ATTENDED
+          - ABSENT
+          type: string
+          description: |-
+            * `INVITED` - Invited
+            * `ATTENDED` - Attended
+            * `ABSENT` - Absent
+          x-spec-enum-id: 9b151332b9f464f1
+        progress_note:
+          type: string
+          nullable: true
+          maxLength: 500
+        contributed_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+    PatchedAdminSessionVerify:
+      type: object
+      properties:
+        status:
+          enum:
+          - SCHEDULED
+          - REJECTED
+          type: string
+          description: |-
+            * `SCHEDULED` - SCHEDULED
+            * `REJECTED` - REJECTED
+          x-spec-enum-id: a2b796bef1a02f76
     PatchedApplicationTracking:
       type: object
       properties:
@@ -29143,6 +28307,35 @@ components:
           type: string
           format: date-time
           readOnly: true
+    PatchedAvailabilitySlotCreateUpdate:
+      type: object
+      properties:
+        ig:
+          type: string
+          nullable: true
+        weekday:
+          type: integer
+          maximum: 32767
+          minimum: -32768
+        start_time:
+          type: string
+          format: time
+        end_time:
+          type: string
+          format: time
+        timezone:
+          type: string
+          maxLength: 64
+        is_active:
+          type: boolean
+        valid_from:
+          type: string
+          format: date
+          nullable: true
+        valid_to:
+          type: string
+          format: date
+          nullable: true
     PatchedCollegeChange:
       type: object
       properties:
@@ -29300,9 +28493,8 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobRule'
-    PatchedMentorOnboardingUpdate:
+    PatchedMentorUpdate:
       type: object
-      description: Partial update of mentor's own profile fields.
       properties:
         about:
           type: string
@@ -29315,10 +28507,95 @@ components:
           type: string
           nullable: true
           maxLength: 1000
+        hours:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
         preferred_ig_ids:
           nullable: true
-        updated_by:
+    PatchedMentorVerify:
+      type: object
+      properties:
+        status:
+          enum:
+          - APPROVED
+          - REJECTED
           type: string
+          description: |-
+            * `APPROVED` - APPROVED
+            * `REJECTED` - REJECTED
+          x-spec-enum-id: 00a806fd4640c2d2
+        verification_note:
+          type: string
+    PatchedParticipantFeedback:
+      type: object
+      properties:
+        feedback:
+          type: string
+          nullable: true
+    PatchedParticipantUpdate:
+      type: object
+      properties:
+        attendance_status:
+          enum:
+          - INVITED
+          - ATTENDED
+          - ABSENT
+          type: string
+          description: |-
+            * `INVITED` - Invited
+            * `ATTENDED` - Attended
+            * `ABSENT` - Absent
+          x-spec-enum-id: 9b151332b9f464f1
+        progress_note:
+          type: string
+          nullable: true
+          maxLength: 500
+        contributed_minutes:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+    PatchedSessionUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
+        max_participants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
     PatchedUserApplicationResubmit:
       type: object
       properties:
@@ -29688,92 +28965,6 @@ components:
       - name
       - slug
       - state_name
-    PublicMentorCard:
-      type: object
-      description: Public read-only profile for frontend mentor discovery pages.
-      properties:
-        full_name:
-          type: string
-        muid:
-          type: string
-        profile_pic:
-          type: string
-          nullable: true
-        about:
-          type: string
-          nullable: true
-          maxLength: 1000
-        expertise:
-          type: string
-          nullable: true
-        mentor_tier:
-          enum:
-          - IG_MENTOR
-          - MENTOR
-          - COMPANY_MENTOR
-          - CAMPUS_MENTOR
-          type: string
-          description: |-
-            * `IG_MENTOR` - IG Mentor
-            * `MENTOR` - Mentor
-            * `COMPANY_MENTOR` - Company Mentor
-            * `CAMPUS_MENTOR` - Campus Mentor
-          x-spec-enum-id: 502a7e5c2300b154
-        linked_igs:
-          type: string
-          readOnly: true
-        availability_slots:
-          type: string
-          readOnly: true
-        session_stats:
-          type: string
-          readOnly: true
-      required:
-      - availability_slots
-      - full_name
-      - linked_igs
-      - muid
-      - profile_pic
-      - session_stats
-    PublicMentorSession:
-      type: object
-      description: Completed session entry for a mentor's public profile.
-      properties:
-        id:
-          type: string
-          maxLength: 36
-        title:
-          type: string
-          maxLength: 150
-        mode:
-          enum:
-          - ONLINE
-          - OFFLINE
-          - HYBRID
-          type: string
-          description: |-
-            * `ONLINE` - Online
-            * `OFFLINE` - Offline
-            * `HYBRID` - Hybrid
-          x-spec-enum-id: af88be50a5259b14
-        ig_name:
-          type: string
-          readOnly: true
-        starts_at:
-          type: string
-          format: date-time
-        ends_at:
-          type: string
-          format: date-time
-        participant_count:
-          type: string
-          readOnly: true
-      required:
-      - ends_at
-      - ig_name
-      - participant_count
-      - starts_at
-      - title
     QseverseConnectedUserDidsResponse:
       type: object
       properties:
@@ -29945,6 +29136,168 @@ components:
           maxLength: 75
       required:
       - id
+      - title
+    SessionCreate:
+      type: object
+      properties:
+        ig:
+          type: string
+          nullable: true
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
+        max_participants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+      required:
+      - ends_at
+      - starts_at
+      - title
+    SessionList:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        ig_id:
+          type: string
+          nullable: true
+          readOnly: true
+        ig_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 150
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          enum:
+          - SCHEDULED
+          - PENDING_APPROVAL
+          - COMPLETED
+          - CANCELLED
+          - REJECTED
+          type: string
+          description: |-
+            * `SCHEDULED` - Scheduled
+            * `PENDING_APPROVAL` - Pending Approval
+            * `COMPLETED` - Completed
+            * `CANCELLED` - Cancelled
+            * `REJECTED` - Rejected
+          x-spec-enum-id: 829e033712bec382
+        created_by_id:
+          type: string
+          readOnly: true
+        created_by_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        max_participants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+      required:
+      - created_at
+      - created_by_id
+      - created_by_name
+      - ends_at
+      - ig_id
+      - ig_name
+      - starts_at
+      - status
+      - title
+    SessionUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
+        max_participants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+      required:
+      - ends_at
+      - starts_at
       - title
     ShareUserProfileUpdate:
       type: object
