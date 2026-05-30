@@ -97,14 +97,11 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if UserJobApplication.objects.filter(user_id=user_id, job=job).exists():
             raise serializers.ValidationError("You have already applied for this job.")
 
-        # Rule Engine Validation
         user = User.objects.filter(id=user_id).first()
         wallet = Wallet.objects.filter(user_id=user_id).first()
         user_karma = wallet.karma if wallet else 0
-        
         lvl_link = UserLvlLink.objects.filter(user_id=user_id).first()
         user_level = lvl_link.level.level_order if (lvl_link and lvl_link.level) else 0
-
         rules = CompanyJobRule.objects.filter(job=job)
         
         for rule in rules:
@@ -120,8 +117,7 @@ class JobApplicationSerializer(serializers.ModelSerializer):
             elif rule.rule_type == 'max_level':
                 if user_level > int(rule.rule_value):
                     raise serializers.ValidationError(f"Exceeds Level limit. Maximum Level {rule.rule_value} allowed.")
-            # Other rules like skill, degree, etc. would require more complex querying against user's profile/tasks.
-            
+                      
         return data
 
     def create(self, validated_data):
@@ -148,3 +144,28 @@ class ApplicationTrackingSerializer(serializers.ModelSerializer):
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
+
+class UserApplicationResubmitSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = UserJobApplication
+        fields = ['resume_link', 'cover_letter']
+
+    def update(self, instance, validated_data):
+        instance.resume_link = validated_data.get('resume_link', instance.resume_link)
+        instance.cover_letter = validated_data.get('cover_letter', instance.cover_letter)
+        instance.status = 'Pending'
+        instance.rejection_reason = None
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.save()
+        return instance
+
+class UserAppliedJobsSerializer(serializers.ModelSerializer):
+    job = JobListSerializer(read_only=True)
+
+    class Meta:
+        model = UserJobApplication
+        fields = [
+            'id', 'job', 'resume_link', 'cover_letter', 'status', 
+            'rejection_reason', 'applied_at'
+        ]
+

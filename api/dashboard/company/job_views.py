@@ -7,11 +7,13 @@ from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.job import CompanyJob, UserJobApplication
 from db.company import Company
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import job_serializers
 
 class CompanyJobAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(request=job_serializers.JobCreateSerializer)
     @role_required([RoleType.COMPANY.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -68,6 +70,7 @@ class CompanyJobDetailAPI(APIView):
         serializer = job_serializers.JobListSerializer(job)
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @extend_schema(request=job_serializers.JobUpdateSerializer)
     @role_required([RoleType.COMPANY.value])
     def patch(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -128,6 +131,7 @@ class PublicJobAPI(APIView):
 class JobApplicationAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(request=job_serializers.JobApplicationSerializer)
     def post(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -178,6 +182,7 @@ class JobApplicationAPI(APIView):
 class ApplicationStatusAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(request=job_serializers.ApplicationTrackingSerializer)
     @role_required([RoleType.COMPANY.value])
     def patch(self, request, app_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -199,3 +204,99 @@ class ApplicationStatusAPI(APIView):
             ).get_success_response()
             
         return CustomResponse(message=serializer.errors).get_failure_response()
+
+class PublicCompanyJobListAPI(APIView):
+    permission_classes = []
+
+    def get(self, request, slug):
+        company = Company.objects.filter(slug=slug, status="verified").first()
+        if not company:
+            return CustomResponse(
+                general_message="Company not found."
+            ).get_failure_response(status_code=404)
+
+        jobs = CompanyJob.objects.filter(company=company, status='Active', is_deleted=False)
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            jobs, request, 
+            search_fields=["title", "location", "job_type"],
+            sort_fields={"title": "title", "created_at": "created_at"}
+        )
+        
+        serializer = job_serializers.JobListSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+
+class UserApplicationWithdrawAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def delete(self, request, app_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        application = UserJobApplication.objects.filter(id=app_id, user_id=user_id).first()
+        if not application:
+            return CustomResponse(
+                general_message="Application not found or you do not have permission to withdraw it."
+            ).get_failure_response(status_code=404)
+
+        application.delete()
+        
+        return CustomResponse(
+            general_message="Application withdrawn successfully."
+        ).get_success_response()
+
+class UserApplicationResubmitAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(request=job_serializers.UserApplicationResubmitSerializer)
+    def patch(self, request, app_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        application = UserJobApplication.objects.filter(id=app_id, user_id=user_id).first()
+        if not application:
+            return CustomResponse(
+                general_message="Application not found or access denied."
+            ).get_failure_response(status_code=404)
+
+        if application.status != 'Rejected':
+            return CustomResponse(
+                general_message="Only rejected applications can be resubmitted."
+            ).get_failure_response()
+
+        serializer = job_serializers.UserApplicationResubmitSerializer(
+            application, data=request.data, partial=True
+        )
+
+        if serializer.is_valid():
+            serializer.save()
+            return CustomResponse(
+                general_message="Application resubmitted successfully.",
+            ).get_success_response()
+            
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+class UserAppliedJobsAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        applications = UserJobApplication.objects.filter(user_id=user_id, job__is_deleted=False)
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            applications, request, 
+            search_fields=["job__title", "job__company__name", "status"],
+            sort_fields={"applied_at": "applied_at", "status": "status"}
+        )
+        
+        serializer = job_serializers.UserAppliedJobsSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+

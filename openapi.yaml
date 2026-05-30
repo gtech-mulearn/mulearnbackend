@@ -2796,1418 +2796,9 @@ paths:
                 - message
                 - response
           description: ''
-  /api/v1/dashboard/company/applications/:
+  /api/v1/dashboard/company/{company_id}/:
     get:
-      operationId: dashboard_company_applications_retrieve
-      description: Retrieve Learner Applications.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/LearnerApplicationList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/applications/{app_id}/withdraw/:
-    patch:
-      operationId: dashboard_company_applications_withdraw_partial_update
-      description: Partially update Learner Withdraw Application.
-      parameters:
-      - in: path
-        name: app_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/ApplicationLearnerWithdrawResponse'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/create/:
-    post:
-      operationId: dashboard_company_create_create
-      description: Create Company Signup.
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompanySignup'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CompanySignup'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CompanySignup'
-        required: true
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanySignup'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/home-summary/:
-    get:
-      operationId: dashboard_company_home_summary_retrieve
-      description: Retrieve Company Dashboard Summary.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyDashboardSummaryResponse'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/:
-    get:
-      operationId: dashboard_company_jobs_retrieve
-      description: Retrieve List Company Jobs.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/:
-    patch:
-      operationId: dashboard_company_jobs_partial_update
-      description: Partially update Update Company Job.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedCompanyJobUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedCompanyJobUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedCompanyJobUpdate'
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobUpdate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    delete:
-      operationId: dashboard_company_jobs_destroy
-      description: Delete Update Company Job.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobUpdate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/applications/:
-    get:
-      operationId: dashboard_company_jobs_applications_retrieve
-      description: Retrieve Company Job Applications List.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/ApplicantDetail'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/applications/{app_id}/:
-    patch:
-      operationId: dashboard_company_jobs_applications_partial_update
-      description: Partially update Company Update Application Status.
-      parameters:
-      - in: path
-        name: app_id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/PatchedApplicationStatusUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/PatchedApplicationStatusUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/PatchedApplicationStatusUpdate'
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/ApplicationStatusUpdate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/apply/:
-    post:
-      operationId: dashboard_company_jobs_apply_create
-      description: Create Apply To Job.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/ApplicationCreate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/ApplicationCreate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/ApplicationCreate'
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/ApplicationCreate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/details/:
-    get:
-      operationId: dashboard_company_jobs_details_retrieve
-      description: Retrieve Get Company Job Details.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/rules/{rule_id}/:
-    patch:
-      operationId: dashboard_company_jobs_rules_partial_update
-      description: Partially update Update Job Rule.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: rule_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/JobRuleUpdate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/rules/{rule_id}/delete/:
-    delete:
-      operationId: dashboard_company_jobs_rules_delete_destroy
-      description: Delete Delete Job Rule.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      - in: path
-        name: rule_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/JobDeleteJobRuleResponse'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/{job_id}/rules/create/:
-    post:
-      operationId: dashboard_company_jobs_rules_create_create
-      description: Create Create Job Rule.
-      parameters:
-      - in: path
-        name: job_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/JobRuleCreate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/JobRuleCreate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/JobRuleCreate'
-        required: true
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/JobRuleCreate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/jobs/create/:
-    post:
-      operationId: dashboard_company_jobs_create_create
-      description: Create Create Company Job.
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompanyJobCreate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CompanyJobCreate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CompanyJobCreate'
-        required: true
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobCreate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/learners/:
-    get:
-      operationId: dashboard_company_learners_retrieve
-      description: Retrieve Learner Discovery.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/LearnerList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/members/:
-    get:
-      operationId: dashboard_company_members_retrieve
-      description: Retrieve Company Member List.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyMember'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/members/{link_id}/remove/:
-    delete:
-      operationId: dashboard_company_members_remove_destroy
-      description: Delete Company Member Remove.
-      parameters:
-      - in: path
-        name: link_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyMember'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/members/add/:
-    post:
-      operationId: dashboard_company_members_add_create
-      description: Create Company Member Add.
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompanyMemberAdd'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CompanyMemberAdd'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CompanyMemberAdd'
-        required: true
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyMember'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/onboarding/status/:
-    get:
-      operationId: dashboard_company_onboarding_status_retrieve
-      description: Retrieve Company Onboarding Status.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyOnboardingStatus'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/profile/:
-    get:
-      operationId: dashboard_company_profile_retrieve
-      description: Retrieve Company Profile.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyProfile'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    post:
-      operationId: dashboard_company_profile_create
-      description: Create Company Profile.
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompanyProfileCreateUpdate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CompanyProfileCreateUpdate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CompanyProfileCreateUpdate'
-        required: true
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyProfile'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    patch:
-      operationId: dashboard_company_profile_partial_update
-      description: Partially update Company Profile.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyProfileCreateUpdate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-    delete:
-      operationId: dashboard_company_profile_destroy
-      description: Delete Company Profile.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyProfile'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/profile/public/{slug}/:
-    get:
-      operationId: dashboard_company_profile_public_retrieve
-      description: Retrieve Public Company Profile.
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/PublicCompanyProfile'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/profile/public/{slug}/jobs/:
-    get:
-      operationId: dashboard_company_profile_public_jobs_retrieve
-      description: Retrieve Public Company Jobs.
-      parameters:
-      - in: path
-        name: slug
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/talent-pool/analytics/:
-    get:
-      operationId: dashboard_company_talent_pool_analytics_retrieve
-      description: Retrieve Company Talent Pool Analytics.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyTalentPoolAnalyticsResponse'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/tasks/:
-    get:
-      operationId: dashboard_company_tasks_retrieve
-      description: Retrieve Company Task List.
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyTaskList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/tasks/{task_id}/resubmit/:
-    post:
-      operationId: dashboard_company_tasks_resubmit_create
-      description: Create Company Task Resubmit.
-      parameters:
-      - in: path
-        name: task_id
-        schema:
-          type: string
-        required: true
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyTaskList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/tasks/submit/:
-    post:
-      operationId: dashboard_company_tasks_submit_create
-      description: Create Company Task Submit.
-      tags:
-      - Company
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/CompanyTaskSubmit'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/CompanyTaskSubmit'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/CompanyTaskSubmit'
-        required: true
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyTaskList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
-  /api/v1/dashboard/company/verification/requests/:
-    get:
-      operationId: dashboard_company_verification_requests_retrieve
-      tags:
-      - Company
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          description: No response body
-  /api/v1/dashboard/company/verification/requests/{company_id}/:
-    patch:
-      operationId: dashboard_company_verification_requests_partial_update
+      operationId: dashboard_company_retrieve
       parameters:
       - in: path
         name: company_id
@@ -4223,10 +2814,9 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/v1/dashboard/company/verification/resubmit/:
-    post:
-      operationId: dashboard_company_verification_resubmit_create
-      description: Create Company Verification Resubmit.
+  /api/v1/dashboard/company/analytics/gigs/:
+    get:
+      operationId: dashboard_company_analytics_gigs_retrieve
       tags:
       - Company
       security:
@@ -4235,34 +2825,546 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/OnboardingCompanyVerificationResubmitResponse'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
+          description: No response body
+  /api/v1/dashboard/company/applications/{app_id}/resubmit/:
+    patch:
+      operationId: dashboard_company_applications_resubmit_partial_update
+      parameters:
+      - in: path
+        name: app_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedUserApplicationResubmit'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedUserApplicationResubmit'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedUserApplicationResubmit'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/applications/{app_id}/status/:
+    patch:
+      operationId: dashboard_company_applications_status_partial_update
+      parameters:
+      - in: path
+        name: app_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationTracking'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationTracking'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedApplicationTracking'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/applications/{app_id}/withdraw/:
+    delete:
+      operationId: dashboard_company_applications_withdraw_destroy
+      parameters:
+      - in: path
+        name: app_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/company/applications/me/:
+    get:
+      operationId: dashboard_company_applications_me_retrieve
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/jobs/:
+    get:
+      operationId: dashboard_company_jobs_retrieve
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_company_jobs_create
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/jobs/{job_id}/:
+    get:
+      operationId: dashboard_company_jobs_retrieve_2
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_company_jobs_partial_update
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedJobUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedJobUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedJobUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_company_jobs_destroy
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/company/jobs/{job_id}/applications/:
+    get:
+      operationId: dashboard_company_jobs_applications_retrieve
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_company_jobs_applications_create
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobApplication'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobApplication'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobApplication'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/jobs/{job_id}/apply/:
+    get:
+      operationId: dashboard_company_jobs_apply_retrieve
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_company_jobs_apply_create
+      parameters:
+      - in: path
+        name: job_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/JobApplication'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/JobApplication'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/JobApplication'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/jobs/all/:
+    get:
+      operationId: dashboard_company_jobs_all_retrieve
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/list/:
+    get:
+      operationId: dashboard_company_list_retrieve
+      parameters:
+      - in: query
+        name: company_size
+        schema:
+          type: string
+      - in: query
+        name: country
+        schema:
+          type: string
+      - in: query
+        name: district
+        schema:
+          type: string
+      - in: query
+        name: industry_sector
+        schema:
+          type: string
+      - in: query
+        name: state
+        schema:
+          type: string
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/mulearners/:
+    get:
+      operationId: dashboard_company_mulearners_retrieve
+      parameters:
+      - in: query
+        name: achievement
+        schema:
+          type: string
+      - in: query
+        name: college
+        schema:
+          type: string
+      - in: query
+        name: department
+        schema:
+          type: string
+      - in: query
+        name: graduation_year
+        schema:
+          type: string
+      - in: query
+        name: ig
+        schema:
+          type: string
+      - in: query
+        name: level
+        schema:
+          type: integer
+      - in: query
+        name: max_karma
+        schema:
+          type: integer
+      - in: query
+        name: min_karma
+        schema:
+          type: integer
+      - in: query
+        name: skill
+        schema:
+          type: string
+      - in: query
+        name: task
+        schema:
+          type: string
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/profile/:
+    get:
+      operationId: dashboard_company_profile_retrieve
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_company_profile_partial_update
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/profile/public/{slug}/:
+    get:
+      operationId: dashboard_company_profile_public_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/profile/public/{slug}/jobs/:
+    get:
+      operationId: dashboard_company_profile_public_jobs_retrieve
+      parameters:
+      - in: path
+        name: slug
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/register/:
+    post:
+      operationId: dashboard_company_register_create
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyRegister'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyRegister'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyRegister'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_company_register_partial_update
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyUpdate'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/status/:
+    get:
+      operationId: dashboard_company_status_retrieve
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/verify/{company_id}/:
+    patch:
+      operationId: dashboard_company_verify_partial_update
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedCompanyVerify'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/coupon/verify-coupon/:
     post:
       operationId: dashboard_coupon_verify_coupon_create
@@ -21822,7 +20924,6 @@ paths:
   /api/v1/public/jobs/:
     get:
       operationId: public_jobs_retrieve
-      description: Retrieve Public Jobs List.
       tags:
       - Public
       security:
@@ -21831,34 +20932,7 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/CompanyJobList'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
+          description: No response body
   /api/v1/public/lc-dashboard/:
     get:
       operationId: public_lc_dashboard_retrieve
@@ -23919,130 +22993,6 @@ components:
       - title
       - updated_at
       - updated_by
-    ApplicantDetail:
-      type: object
-      description: Company-facing snapshot of a single applicant and their application
-        state.
-      properties:
-        id:
-          type: string
-          readOnly: true
-        status:
-          enum:
-          - applied
-          - shortlisted
-          - accepted
-          - rejected
-          - withdrawn
-          type: string
-          description: |-
-            * `applied` - Applied
-            * `shortlisted` - Shortlisted
-            * `accepted` - Accepted
-            * `rejected` - Rejected
-            * `withdrawn` - Withdrawn
-          x-spec-enum-id: 63b8f553d276f0da
-          readOnly: true
-        cover_note:
-          type: string
-          readOnly: true
-          nullable: true
-        applicant_id:
-          type: string
-          readOnly: true
-        full_name:
-          type: string
-          readOnly: true
-        muid:
-          type: string
-          readOnly: true
-        district:
-          type: string
-          readOnly: true
-        karma:
-          type: string
-          readOnly: true
-        level:
-          type: string
-          readOnly: true
-        reviewed_by_id:
-          type: string
-          readOnly: true
-        reviewed_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - applicant_id
-      - cover_note
-      - created_at
-      - district
-      - full_name
-      - id
-      - karma
-      - level
-      - muid
-      - reviewed_at
-      - reviewed_by_id
-      - status
-      - updated_at
-    ApplicationCreate:
-      type: object
-      description: Validates the payload when a learner submits an application.
-      properties:
-        cover_note:
-          type: string
-          nullable: true
-          maxLength: 1000
-    ApplicationLearnerWithdrawResponse:
-      type: object
-      properties:
-        application_id:
-          type: string
-        job_id:
-          type: string
-        new_status:
-          type: string
-      required:
-      - application_id
-      - job_id
-      - new_status
-    ApplicationStatusUpdate:
-      type: object
-      description: |-
-        Validates a company's status-change request and enforces the FSM:
-            applied     → shortlisted | rejected
-            shortlisted → accepted    | rejected
-            accepted    → (terminal)
-            rejected    → (terminal)
-            withdrawn   → (terminal)
-      properties:
-        status:
-          enum:
-          - applied
-          - shortlisted
-          - accepted
-          - rejected
-          - withdrawn
-          type: string
-          description: |-
-            * `applied` - applied
-            * `shortlisted` - shortlisted
-            * `accepted` - accepted
-            * `rejected` - rejected
-            * `withdrawn` - withdrawn
-          x-spec-enum-id: 5c46e0ac4ef5e30a
-      required:
-      - status
     AreaOfInterestAPI:
       type: object
       properties:
@@ -25866,441 +24816,6 @@ components:
           $ref: '#/components/schemas/CommonUserProfilePicData'
       required:
       - response
-    CompanyDashboardCompanyInfo:
-      type: object
-      properties:
-        id:
-          type: string
-        name:
-          type: string
-        slug:
-          type: string
-        status:
-          type: string
-        logo:
-          type: string
-          nullable: true
-      required:
-      - id
-      - logo
-      - name
-      - slug
-      - status
-    CompanyDashboardSummaryResponse:
-      type: object
-      properties:
-        company:
-          $ref: '#/components/schemas/CompanyDashboardCompanyInfo'
-        quick_stats: {}
-        stat_cards:
-          type: array
-          items: {}
-        talent_pool: {}
-      required:
-      - company
-      - quick_stats
-      - stat_cards
-      - talent_pool
-    CompanyJobCreate:
-      type: object
-      properties:
-        title:
-          type: string
-          maxLength: 75
-        experience:
-          type: string
-          nullable: true
-          maxLength: 20
-        job_description:
-          type: string
-          nullable: true
-        location:
-          type: string
-          nullable: true
-          maxLength: 75
-        salary_range:
-          type: string
-          nullable: true
-          maxLength: 36
-        job_type:
-          enum:
-          - Hybrid
-          - Full-Time
-          - Remote
-          - Part-Time
-          - Internship
-          - Gig
-          type: string
-          description: |-
-            * `Hybrid` - Hybrid
-            * `Full-Time` - Full-Time
-            * `Remote` - Remote
-            * `Part-Time` - Part-Time
-            * `Internship` - Internship
-            * `Gig` - Gig
-          x-spec-enum-id: f5d301381f7b17d9
-        min_karma:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        min_level:
-          type: integer
-          maximum: 32767
-          minimum: -32768
-          nullable: true
-        karma_reward:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        duration_value:
-          type: integer
-          maximum: 65535
-          minimum: 0
-          nullable: true
-        duration_unit:
-          enum:
-          - days
-          - weeks
-          - months
-          - ''
-          - null
-          type: string
-          description: |-
-            * `days` - Days
-            * `weeks` - Weeks
-            * `months` - Months
-          x-spec-enum-id: 6fc39b069cf0123e
-          nullable: true
-        hourly_rate:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          nullable: true
-        deliverables:
-          nullable: true
-        stipend:
-          type: string
-          nullable: true
-          maxLength: 75
-        certificate_provided:
-          type: boolean
-          nullable: true
-        linked_task_id:
-          type: string
-          format: uuid
-          nullable: true
-        requires_task_completion:
-          type: boolean
-      required:
-      - job_type
-      - title
-    CompanyJobList:
-      type: object
-      description: Serializer for listing company jobs.
-      properties:
-        id:
-          type: string
-          readOnly: true
-        title:
-          type: string
-          maxLength: 75
-        experience:
-          type: string
-          nullable: true
-          maxLength: 20
-        job_description:
-          type: string
-          nullable: true
-        job_type:
-          enum:
-          - Hybrid
-          - Full-Time
-          - Remote
-          - Part-Time
-          - Internship
-          - Gig
-          type: string
-          description: |-
-            * `Hybrid` - Hybrid
-            * `Full-Time` - Full-Time
-            * `Remote` - Remote
-            * `Part-Time` - Part-Time
-            * `Internship` - Internship
-            * `Gig` - Gig
-          x-spec-enum-id: f5d301381f7b17d9
-        location:
-          type: string
-          nullable: true
-          maxLength: 75
-        salary_range:
-          type: string
-          nullable: true
-          maxLength: 36
-        min_karma:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        min_level:
-          type: integer
-          maximum: 32767
-          minimum: -32768
-          nullable: true
-        status:
-          enum:
-          - Draft
-          - Active
-          - Closed
-          - Expired
-          type: string
-          description: |-
-            * `Draft` - Draft
-            * `Active` - Active
-            * `Closed` - Closed
-            * `Expired` - Expired
-          x-spec-enum-id: 8391e6e6f770c3c4
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-        karma_reward:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        duration_value:
-          type: integer
-          maximum: 65535
-          minimum: 0
-          nullable: true
-        duration_unit:
-          enum:
-          - days
-          - weeks
-          - months
-          - ''
-          - null
-          type: string
-          description: |-
-            * `days` - Days
-            * `weeks` - Weeks
-            * `months` - Months
-          x-spec-enum-id: 6fc39b069cf0123e
-          nullable: true
-        hourly_rate:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          nullable: true
-        deliverables:
-          nullable: true
-        stipend:
-          type: string
-          nullable: true
-          maxLength: 75
-        certificate_provided:
-          type: boolean
-          nullable: true
-        requires_task_completion:
-          type: boolean
-        linked_task_info:
-          type: string
-          readOnly: true
-        rules:
-          type: array
-          items:
-            $ref: '#/components/schemas/JobRuleList'
-          readOnly: true
-      required:
-      - created_at
-      - id
-      - job_type
-      - linked_task_info
-      - rules
-      - title
-      - updated_at
-    CompanyJobUpdate:
-      type: object
-      properties:
-        title:
-          type: string
-          maxLength: 75
-        experience:
-          type: string
-          nullable: true
-          maxLength: 20
-        job_description:
-          type: string
-          nullable: true
-        location:
-          type: string
-          nullable: true
-          maxLength: 75
-        salary_range:
-          type: string
-          nullable: true
-          maxLength: 36
-        job_type:
-          enum:
-          - Hybrid
-          - Full-Time
-          - Remote
-          - Part-Time
-          - Internship
-          - Gig
-          type: string
-          description: |-
-            * `Hybrid` - Hybrid
-            * `Full-Time` - Full-Time
-            * `Remote` - Remote
-            * `Part-Time` - Part-Time
-            * `Internship` - Internship
-            * `Gig` - Gig
-          x-spec-enum-id: f5d301381f7b17d9
-        min_karma:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        min_level:
-          type: integer
-          maximum: 32767
-          minimum: -32768
-          nullable: true
-        karma_reward:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        duration_value:
-          type: integer
-          maximum: 65535
-          minimum: 0
-          nullable: true
-        duration_unit:
-          enum:
-          - days
-          - weeks
-          - months
-          - ''
-          - null
-          type: string
-          description: |-
-            * `days` - Days
-            * `weeks` - Weeks
-            * `months` - Months
-          x-spec-enum-id: 6fc39b069cf0123e
-          nullable: true
-        hourly_rate:
-          type: string
-          format: decimal
-          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
-          nullable: true
-        deliverables:
-          nullable: true
-        stipend:
-          type: string
-          nullable: true
-          maxLength: 75
-        certificate_provided:
-          type: boolean
-          nullable: true
-        linked_task_id:
-          type: string
-          format: uuid
-          nullable: true
-        requires_task_completion:
-          type: boolean
-    CompanyMember:
-      type: object
-      description: Read-only serializer for a company member, including their muLearn
-        profile.
-      properties:
-        id:
-          type: string
-          readOnly: true
-        user_id:
-          type: string
-          readOnly: true
-        full_name:
-          type: string
-          readOnly: true
-        muid:
-          type: string
-          readOnly: true
-        district:
-          type: string
-          readOnly: true
-        karma:
-          type: string
-          readOnly: true
-        level:
-          type: string
-          readOnly: true
-        interest_groups:
-          type: string
-          readOnly: true
-        role:
-          enum:
-          - employee
-          - mentor
-          type: string
-          description: |-
-            * `employee` - Employee
-            * `mentor` - Mentor
-          x-spec-enum-id: 974a572738b3952f
-          readOnly: true
-        status:
-          enum:
-          - active
-          - removed
-          type: string
-          description: |-
-            * `active` - Active
-            * `removed` - Removed
-          x-spec-enum-id: 5b153fa4ee0078cd
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - created_at
-      - district
-      - full_name
-      - id
-      - interest_groups
-      - karma
-      - level
-      - muid
-      - role
-      - status
-      - user_id
-    CompanyMemberAdd:
-      type: object
-      description: Validates the payload for adding a user to a company roster.
-      properties:
-        user_id:
-          type: string
-          format: uuid
-        role:
-          enum:
-          - employee
-          - mentor
-          type: string
-          description: |-
-            * `employee` - employee
-            * `mentor` - mentor
-          x-spec-enum-id: 2bf7cb9d25e80297
-      required:
-      - role
-      - user_id
     CompanyMentorOnboarding:
       type: object
       description: Create a COMPANY_MENTOR row (org.org_type must be 'Company').
@@ -26341,253 +24856,7 @@ components:
       - mentor_tier
       - org
       - updated_by
-    CompanyOnboardingStatus:
-      type: object
-      properties:
-        id:
-          type: string
-          maxLength: 36
-        name:
-          type: string
-          maxLength: 75
-        slug:
-          type: string
-          maxLength: 100
-        status:
-          enum:
-          - pending_verification
-          - active
-          - rejected
-          - inactive
-          - blocked
-          - ''
-          - null
-          type: string
-          description: |-
-            * `pending_verification` - Pending Verification
-            * `active` - Active
-            * `rejected` - Rejected
-            * `inactive` - Inactive
-            * `blocked` - Blocked
-          x-spec-enum-id: 7c0961047a121024
-          nullable: true
-        poc_name:
-          type: string
-          readOnly: true
-        poc_email:
-          type: string
-          readOnly: true
-        rejection_reason:
-          type: string
-          nullable: true
-        verification_requested_at:
-          type: string
-          format: date-time
-          nullable: true
-        verified_at:
-          type: string
-          format: date-time
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - created_at
-      - name
-      - poc_email
-      - poc_name
-      - slug
-      - updated_at
-    CompanyProfile:
-      type: object
-      properties:
-        id:
-          type: string
-          readOnly: true
-        company_user_id:
-          type: string
-          readOnly: true
-        name:
-          type: string
-          readOnly: true
-        logo:
-          type: string
-          readOnly: true
-          nullable: true
-        description:
-          type: string
-          readOnly: true
-        industry_sector:
-          type: string
-          readOnly: true
-          nullable: true
-        website_link:
-          type: string
-          readOnly: true
-          nullable: true
-        email:
-          type: string
-          format: email
-          readOnly: true
-          nullable: true
-        slug:
-          type: string
-          readOnly: true
-        status:
-          enum:
-          - pending_verification
-          - active
-          - rejected
-          - inactive
-          - blocked
-          - null
-          type: string
-          description: |-
-            * `pending_verification` - Pending Verification
-            * `active` - Active
-            * `rejected` - Rejected
-            * `inactive` - Inactive
-            * `blocked` - Blocked
-          x-spec-enum-id: 7c0961047a121024
-          readOnly: true
-          nullable: true
-        location:
-          type: string
-          readOnly: true
-          nullable: true
-        legal_name:
-          type: string
-          readOnly: true
-          nullable: true
-        registration_number:
-          type: string
-          readOnly: true
-          nullable: true
-        tax_id:
-          type: string
-          readOnly: true
-          nullable: true
-        company_size:
-          type: string
-          readOnly: true
-          nullable: true
-        linkedin_url:
-          type: string
-          readOnly: true
-          nullable: true
-        verification_document_url:
-          type: string
-          readOnly: true
-          nullable: true
-        founded_year:
-          type: integer
-          readOnly: true
-          nullable: true
-        remote_policy:
-          type: string
-          readOnly: true
-          nullable: true
-        culture_text:
-          type: string
-          readOnly: true
-          nullable: true
-        tech_stack:
-          readOnly: true
-          nullable: true
-        perks:
-          readOnly: true
-          nullable: true
-        testimonials:
-          readOnly: true
-          nullable: true
-        gallery:
-          readOnly: true
-          nullable: true
-        hire_count:
-          type: string
-          readOnly: true
-        alumni_count:
-          type: string
-          readOnly: true
-        avg_karma_of_hires:
-          type: string
-          readOnly: true
-        campus_events_count:
-          type: string
-          readOnly: true
-        verification_requested_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        verified_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-        verified_by:
-          type: string
-          readOnly: true
-          nullable: true
-        rejection_reason:
-          type: string
-          readOnly: true
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-        deleted_at:
-          type: string
-          format: date-time
-          readOnly: true
-          nullable: true
-      required:
-      - alumni_count
-      - avg_karma_of_hires
-      - campus_events_count
-      - company_size
-      - company_user_id
-      - created_at
-      - culture_text
-      - deleted_at
-      - description
-      - email
-      - founded_year
-      - gallery
-      - hire_count
-      - id
-      - industry_sector
-      - legal_name
-      - linkedin_url
-      - location
-      - logo
-      - name
-      - perks
-      - registration_number
-      - rejection_reason
-      - remote_policy
-      - slug
-      - status
-      - tax_id
-      - tech_stack
-      - testimonials
-      - updated_at
-      - verification_document_url
-      - verification_requested_at
-      - verified_at
-      - verified_by
-      - website_link
-    CompanyProfileCreateUpdate:
+    CompanyRegister:
       type: object
       properties:
         name:
@@ -26598,6 +24867,10 @@ components:
           nullable: true
         description:
           type: string
+        short_pitch:
+          type: string
+          nullable: true
+          maxLength: 900
         industry_sector:
           type: string
           nullable: true
@@ -26607,16 +24880,21 @@ components:
           nullable: true
         email:
           type: string
-          format: email
           nullable: true
-          maxLength: 100
-        slug:
-          type: string
           maxLength: 100
         location:
           type: string
           nullable: true
           maxLength: 150
+        district_id:
+          type: string
+          nullable: true
+        state_id:
+          type: string
+          nullable: true
+        country_id:
+          type: string
+          nullable: true
         legal_name:
           type: string
           nullable: true
@@ -26634,9 +24912,6 @@ components:
           nullable: true
           maxLength: 50
         linkedin_url:
-          type: string
-          nullable: true
-        verification_document_url:
           type: string
           nullable: true
         founded_year:
@@ -26662,185 +24937,6 @@ components:
       required:
       - description
       - name
-      - slug
-    CompanySignup:
-      type: object
-      properties:
-        name:
-          type: string
-          maxLength: 75
-        poc_name:
-          type: string
-          maxLength: 150
-        poc_email:
-          type: string
-          format: email
-          maxLength: 200
-        password:
-          type: string
-          writeOnly: true
-          maxLength: 200
-          minLength: 8
-        poc_phone:
-          type: string
-          maxLength: 15
-        website_link:
-          type: string
-          format: uri
-        description:
-          type: string
-        industry_sector:
-          type: string
-          maxLength: 75
-        location:
-          type: string
-          maxLength: 150
-        district_id:
-          type: string
-          maxLength: 36
-        legal_name:
-          type: string
-          maxLength: 150
-        registration_number:
-          type: string
-          maxLength: 100
-        tax_id:
-          type: string
-          maxLength: 100
-        company_size:
-          type: string
-          maxLength: 50
-        linkedin_url:
-          type: string
-          format: uri
-        verification_document_url:
-          type: string
-          format: uri
-      required:
-      - name
-      - password
-      - poc_email
-      - poc_name
-    CompanyTalentPoolAnalyticsResponse:
-      type: object
-      properties:
-        total_learners:
-          type: integer
-        level_distribution:
-          type: array
-          items: {}
-        top_interest_groups:
-          type: array
-          items: {}
-      required:
-      - level_distribution
-      - top_interest_groups
-      - total_learners
-    CompanyTaskList:
-      type: object
-      description: Read-only serializer for a company's submitted tasks.
-      properties:
-        id:
-          type: string
-          readOnly: true
-        title:
-          type: string
-          readOnly: true
-        hashtag:
-          type: string
-          readOnly: true
-        description:
-          type: string
-          readOnly: true
-          nullable: true
-        karma:
-          type: integer
-          readOnly: true
-          nullable: true
-        approval_status:
-          enum:
-          - approved
-          - pending
-          - rejected
-          type: string
-          description: |-
-            * `approved` - Approved
-            * `pending` - Pending
-            * `rejected` - Rejected
-          x-spec-enum-id: e9436f319d54eebe
-          readOnly: true
-        rejection_reason:
-          type: string
-          readOnly: true
-          nullable: true
-        ig_name:
-          type: string
-          readOnly: true
-        type_name:
-          type: string
-          readOnly: true
-        active:
-          type: boolean
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - active
-      - approval_status
-      - created_at
-      - description
-      - hashtag
-      - id
-      - ig_name
-      - karma
-      - rejection_reason
-      - title
-      - type_name
-      - updated_at
-    CompanyTaskSubmit:
-      type: object
-      description: |-
-        Validates the payload when a company submits a new task for admin review.
-        The ig_id is required — all company-submitted tasks must belong to an IG.
-      properties:
-        title:
-          type: string
-          maxLength: 75
-        hashtag:
-          type: string
-          maxLength: 75
-        description:
-          type: string
-          nullable: true
-        karma:
-          type: integer
-          minimum: 1
-        ig_id:
-          type: string
-          maxLength: 36
-        type_id:
-          type: string
-          maxLength: 36
-        channel_id:
-          type: string
-          nullable: true
-          maxLength: 36
-        level_id:
-          type: string
-          nullable: true
-          maxLength: 36
-      required:
-      - hashtag
-      - ig_id
-      - karma
-      - title
-      - type_id
     Country:
       type: object
       properties:
@@ -28045,88 +26141,105 @@ components:
       - credential_info
       - subject_info
       - template_id
-    JobDeleteJobRuleResponse:
-      type: object
-      properties:
-        rule_id:
-          type: string
-        job_id:
-          type: string
-        deleted_at:
-          type: string
-      required:
-      - deleted_at
-      - job_id
-      - rule_id
-    JobRuleCreate:
-      type: object
-      description: Serializer for creating job rules.
-      properties:
-        rule_type:
-          enum:
-          - skill
-          - interest_group
-          - achievement
-          type: string
-          description: |-
-            * `skill` - Skill
-            * `interest_group` - Interest Group
-            * `achievement` - Achievement
-          x-spec-enum-id: 90beda87332dbac6
-        rule_type_id:
-          type: string
-          maxLength: 255
-      required:
-      - rule_type
-      - rule_type_id
-    JobRuleList:
+    JobApplication:
       type: object
       properties:
         id:
           type: string
-          maxLength: 36
-        rule_type:
-          enum:
-          - skill
-          - interest_group
-          - achievement
+          readOnly: true
+        job:
           type: string
-          description: |-
-            * `skill` - Skill
-            * `interest_group` - Interest Group
-            * `achievement` - Achievement
-          x-spec-enum-id: 90beda87332dbac6
-        rule_type_id:
+        resume_link:
           type: string
-          maxLength: 36
-        rule_name:
+          nullable: true
+        cover_letter:
+          type: string
+          nullable: true
+        status:
           type: string
           readOnly: true
       required:
-      - rule_name
-      - rule_type
-      - rule_type_id
-    JobRuleUpdate:
+      - id
+      - job
+      - status
+    JobCreate:
       type: object
-      description: Serializer for updating job rules.
       properties:
-        rule_type:
-          enum:
-          - skill
-          - interest_group
-          - achievement
+        id:
           type: string
-          description: |-
-            * `skill` - Skill
-            * `interest_group` - Interest Group
-            * `achievement` - Achievement
-          x-spec-enum-id: 90beda87332dbac6
-        rule_type_id:
+          readOnly: true
+        title:
           type: string
-          maxLength: 255
+          maxLength: 75
+        experience:
+          type: string
+          nullable: true
+          maxLength: 20
+        job_description:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+          maxLength: 75
+        salary_range:
+          type: string
+          nullable: true
+          maxLength: 36
+        job_type:
+          type: string
+          maxLength: 20
+        status:
+          type: string
+          maxLength: 20
+        duration_value:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        duration_unit:
+          type: string
+          nullable: true
+          maxLength: 20
+        hourly_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        deliverables:
+          nullable: true
+        stipend:
+          type: string
+          nullable: true
+          maxLength: 75
+        certificate_provided:
+          type: string
+          nullable: true
+          maxLength: 3
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobRule'
       required:
+      - id
+      - job_type
+      - title
+    JobRule:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        rule_type:
+          type: string
+          maxLength: 50
+        rule_value:
+          type: string
+          maxLength: 150
+      required:
+      - id
       - rule_type
-      - rule_type_id
+      - rule_value
     KKEMUser:
       type: object
       properties:
@@ -29044,119 +27157,6 @@ components:
       - full_name
       - institution
       - total_karma
-    LearnerApplicationList:
-      type: object
-      description: Learner-facing view of their own application — includes job & company
-        context.
-      properties:
-        id:
-          type: string
-          readOnly: true
-        status:
-          enum:
-          - applied
-          - shortlisted
-          - accepted
-          - rejected
-          - withdrawn
-          type: string
-          description: |-
-            * `applied` - Applied
-            * `shortlisted` - Shortlisted
-            * `accepted` - Accepted
-            * `rejected` - Rejected
-            * `withdrawn` - Withdrawn
-          x-spec-enum-id: 63b8f553d276f0da
-          readOnly: true
-        cover_note:
-          type: string
-          readOnly: true
-          nullable: true
-        job_id:
-          type: string
-          readOnly: true
-        job_title:
-          type: string
-          readOnly: true
-        job_type:
-          type: string
-          readOnly: true
-        company_name:
-          type: string
-          readOnly: true
-        company_id:
-          type: string
-          readOnly: true
-        created_at:
-          type: string
-          format: date-time
-          readOnly: true
-        updated_at:
-          type: string
-          format: date-time
-          readOnly: true
-      required:
-      - company_id
-      - company_name
-      - cover_note
-      - created_at
-      - id
-      - job_id
-      - job_title
-      - job_type
-      - status
-      - updated_at
-    LearnerList:
-      type: object
-      description: |-
-        Flattens User + Wallet + Level + IG memberships into a single object.
-        All relational data is expected to be pre-fetched / pre-annotated on the
-        queryset to avoid N+1 queries.
-      properties:
-        id:
-          type: string
-          maxLength: 36
-        muid:
-          type: string
-          maxLength: 100
-        full_name:
-          type: string
-          maxLength: 150
-        gender:
-          enum:
-          - Male
-          - Female
-          - ''
-          - null
-          type: string
-          description: |-
-            * `Male` - Male
-            * `Female` - Female
-          x-spec-enum-id: 4048b1fb433dc7b5
-          nullable: true
-        district:
-          type: string
-          readOnly: true
-        karma:
-          type: string
-          readOnly: true
-        level:
-          type: string
-          readOnly: true
-        interest_groups:
-          type: string
-          readOnly: true
-        interested_in_work:
-          type: boolean
-        interested_in_gig_work:
-          type: boolean
-      required:
-      - district
-      - full_name
-      - interest_groups
-      - karma
-      - level
-      - muid
     LearningCircleAttendeeReportGetResponse:
       type: object
       properties:
@@ -29764,20 +27764,6 @@ components:
       - id
       - title
       - user
-    OnboardingCompanyVerificationResubmitResponse:
-      type: object
-      properties:
-        company_id:
-          type: string
-        status:
-          type: string
-        verification_requested_at:
-          type: string
-          nullable: true
-      required:
-      - company_id
-      - status
-      - verification_requested_at
     Order:
       type: object
       description: Serializer for one-time order creation requests
@@ -30011,31 +27997,39 @@ components:
       - company
       - ig
       - type
-    PatchedApplicationStatusUpdate:
+    PatchedApplicationTracking:
       type: object
-      description: |-
-        Validates a company's status-change request and enforces the FSM:
-            applied     → shortlisted | rejected
-            shortlisted → accepted    | rejected
-            accepted    → (terminal)
-            rejected    → (terminal)
-            withdrawn   → (terminal)
       properties:
-        status:
-          enum:
-          - applied
-          - shortlisted
-          - accepted
-          - rejected
-          - withdrawn
+        id:
           type: string
-          description: |-
-            * `applied` - applied
-            * `shortlisted` - shortlisted
-            * `accepted` - accepted
-            * `rejected` - rejected
-            * `withdrawn` - withdrawn
-          x-spec-enum-id: 5c46e0ac4ef5e30a
+          readOnly: true
+        job:
+          type: string
+          readOnly: true
+        applicant_name:
+          type: string
+          readOnly: true
+        applicant_email:
+          type: string
+          readOnly: true
+        resume_link:
+          type: string
+          readOnly: true
+          nullable: true
+        cover_letter:
+          type: string
+          readOnly: true
+          nullable: true
+        status:
+          type: string
+          maxLength: 20
+        rejection_reason:
+          type: string
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          readOnly: true
     PatchedCollegeChange:
       type: object
       properties:
@@ -30046,7 +28040,99 @@ components:
           type: string
           nullable: true
           maxLength: 36
-    PatchedCompanyJobUpdate:
+    PatchedCompanyUpdate:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 75
+        logo:
+          type: string
+          nullable: true
+        description:
+          type: string
+        short_pitch:
+          type: string
+          nullable: true
+          maxLength: 900
+        industry_sector:
+          type: string
+          nullable: true
+          maxLength: 75
+        website_link:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+          maxLength: 100
+        location:
+          type: string
+          nullable: true
+          maxLength: 150
+        district_id:
+          type: string
+          nullable: true
+        state_id:
+          type: string
+          nullable: true
+        country_id:
+          type: string
+          nullable: true
+        legal_name:
+          type: string
+          nullable: true
+          maxLength: 150
+        registration_number:
+          type: string
+          nullable: true
+          maxLength: 100
+        tax_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        company_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        linkedin_url:
+          type: string
+          nullable: true
+        founded_year:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        remote_policy:
+          type: string
+          nullable: true
+          maxLength: 20
+        culture_text:
+          type: string
+          nullable: true
+        tech_stack:
+          nullable: true
+        perks:
+          nullable: true
+        testimonials:
+          nullable: true
+        gallery:
+          nullable: true
+    PatchedCompanyVerify:
+      type: object
+      properties:
+        status:
+          enum:
+          - verified
+          - rejected
+          type: string
+          description: |-
+            * `verified` - verified
+            * `rejected` - rejected
+          x-spec-enum-id: 3001a7a51be9bcf9
+        rejection_reason:
+          type: string
+    PatchedJobUpdate:
       type: object
       properties:
         title:
@@ -30068,56 +28154,20 @@ components:
           nullable: true
           maxLength: 36
         job_type:
-          enum:
-          - Hybrid
-          - Full-Time
-          - Remote
-          - Part-Time
-          - Internship
-          - Gig
           type: string
-          description: |-
-            * `Hybrid` - Hybrid
-            * `Full-Time` - Full-Time
-            * `Remote` - Remote
-            * `Part-Time` - Part-Time
-            * `Internship` - Internship
-            * `Gig` - Gig
-          x-spec-enum-id: f5d301381f7b17d9
-        min_karma:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
-        min_level:
-          type: integer
-          maximum: 32767
-          minimum: -32768
-          nullable: true
-        karma_reward:
-          type: integer
-          maximum: 2147483647
-          minimum: -2147483648
-          nullable: true
+          maxLength: 20
+        status:
+          type: string
+          maxLength: 20
         duration_value:
           type: integer
           maximum: 65535
           minimum: 0
           nullable: true
         duration_unit:
-          enum:
-          - days
-          - weeks
-          - months
-          - ''
-          - null
           type: string
-          description: |-
-            * `days` - Days
-            * `weeks` - Weeks
-            * `months` - Months
-          x-spec-enum-id: 6fc39b069cf0123e
           nullable: true
+          maxLength: 20
         hourly_rate:
           type: string
           format: decimal
@@ -30130,14 +28180,13 @@ components:
           nullable: true
           maxLength: 75
         certificate_provided:
-          type: boolean
-          nullable: true
-        linked_task_id:
           type: string
-          format: uuid
           nullable: true
-        requires_task_completion:
-          type: boolean
+          maxLength: 3
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobRule'
     PatchedMentorOnboardingUpdate:
       type: object
       description: Partial update of mentor's own profile fields.
@@ -30157,6 +28206,15 @@ components:
           nullable: true
         updated_by:
           type: string
+    PatchedUserApplicationResubmit:
+      type: object
+      properties:
+        resume_link:
+          type: string
+          nullable: true
+        cover_letter:
+          type: string
+          nullable: true
     ProfileBadgesResponse:
       type: object
       properties:
@@ -30438,93 +28496,6 @@ components:
         skill_ids_json:
           type: string
           writeOnly: true
-    PublicCompanyProfile:
-      type: object
-      properties:
-        id:
-          type: string
-          readOnly: true
-        name:
-          type: string
-          readOnly: true
-        logo:
-          type: string
-          readOnly: true
-          nullable: true
-        description:
-          type: string
-          readOnly: true
-        industry_sector:
-          type: string
-          readOnly: true
-          nullable: true
-        website_link:
-          type: string
-          readOnly: true
-          nullable: true
-        slug:
-          type: string
-          readOnly: true
-        location:
-          type: string
-          readOnly: true
-          nullable: true
-        founded_year:
-          type: integer
-          readOnly: true
-          nullable: true
-        remote_policy:
-          type: string
-          readOnly: true
-          nullable: true
-        culture_text:
-          type: string
-          readOnly: true
-          nullable: true
-        tech_stack:
-          readOnly: true
-          nullable: true
-        perks:
-          readOnly: true
-          nullable: true
-        testimonials:
-          readOnly: true
-          nullable: true
-        gallery:
-          readOnly: true
-          nullable: true
-        hire_count:
-          type: string
-          readOnly: true
-        alumni_count:
-          type: string
-          readOnly: true
-        avg_karma_of_hires:
-          type: string
-          readOnly: true
-        campus_events_count:
-          type: string
-          readOnly: true
-      required:
-      - alumni_count
-      - avg_karma_of_hires
-      - campus_events_count
-      - culture_text
-      - description
-      - founded_year
-      - gallery
-      - hire_count
-      - id
-      - industry_sector
-      - location
-      - logo
-      - name
-      - perks
-      - remote_policy
-      - slug
-      - tech_stack
-      - testimonials
-      - website_link
     PublicMentorCard:
       type: object
       description: Public read-only profile for frontend mentor discovery pages.

@@ -5,17 +5,29 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.user import User
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import mulearner_serializers
 
 class CompanyMulearnerDirectoryAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        parameters=[
+            OpenApiParameter("min_karma", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("max_karma", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("level", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("college", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("department", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("graduation_year", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("ig", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("skill", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("achievement", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("task", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+        ]
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request):
-        # 1. Base query: Only users with public profile
         users = User.objects.filter(user_settings_user__is_public=True)
-
-        # 2. Extract Query Params
         min_karma = request.query_params.get('min_karma')
         max_karma = request.query_params.get('max_karma')
         level = request.query_params.get('level')
@@ -27,7 +39,6 @@ class CompanyMulearnerDirectoryAPI(APIView):
         achievement = request.query_params.get('achievement')
         task = request.query_params.get('task')
 
-        # 3. Apply Relational Filters
         if min_karma:
             users = users.filter(wallet_user__karma__gte=min_karma)
         if max_karma:
@@ -52,10 +63,8 @@ class CompanyMulearnerDirectoryAPI(APIView):
         if task:
             users = users.filter(karma_activity_log_user__task_id=task)
 
-        # Avoid duplicates due to joins
         users = users.distinct()
 
-        # 4. Standard Search & Pagination
         paginated_queryset = CommonUtils.get_paginated_queryset(
             users, request, 
             search_fields=["full_name", "muid", "email"],

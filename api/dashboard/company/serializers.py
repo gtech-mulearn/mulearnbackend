@@ -118,9 +118,6 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['updated_by'] = self.context.get("user_id", instance.company_user_id)
         
-        # If the name changes, don't necessarily change the slug unless required, but let's keep slug static or regenerate if you want.
-        # Usually slug shouldn't change to avoid breaking links.
-        
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
@@ -181,9 +178,7 @@ class CompanyVerifySerializer(serializers.Serializer):
         if status == "verified":
             instance.verified_by = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
-            
-            # 1. Create Organization Record if it doesn't exist
-            # Check if there's already an org mapped to this company to avoid duplicates
+
             org = Organization.objects.filter(title=instance.name, org_type=OrganizationType.COMPANY.value).first()
             if not org:
                 org_code = generate_unique_code()
@@ -198,7 +193,6 @@ class CompanyVerifySerializer(serializers.Serializer):
                     updated_at=DateTimeUtils.get_current_utc_time()
                 )
             
-            # 2. Auto-assign Company role to the User
             company_role = Role.objects.filter(title=RoleType.COMPANY.value).first()
             if company_role:
                 UserRoleLink.objects.update_or_create(
@@ -216,3 +210,35 @@ class CompanyVerifySerializer(serializers.Serializer):
             
         instance.save()
         return instance
+
+class PublicCompanyProfileSerializer(serializers.ModelSerializer):
+    district_name = serializers.CharField(source='district.name', read_only=True, default=None)
+    state_name = serializers.CharField(source='district.zone.state.name', read_only=True, default=None)
+    country_name = serializers.CharField(source='district.zone.state.country.name', read_only=True, default=None)
+
+    class Meta:
+        model = Company
+        fields = [
+            "id",
+            "name",
+            "slug",
+            "logo",
+            "description",
+            "short_pitch",
+            "industry_sector",
+            "website_link",
+            "email",
+            "location",
+            "district_name",
+            "state_name",
+            "country_name",
+            "company_size",
+            "linkedin_url",
+            "founded_year",
+            "remote_policy",
+            "culture_text",
+            "tech_stack",
+            "perks",
+            "testimonials",
+            "gallery"
+        ]
