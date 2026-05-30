@@ -134,7 +134,16 @@ class UserMentor(models.Model):
         default=MentorTier.MENTOR             # default changed from IG_MENTOR → MENTOR
     )
 
-    is_verified = models.BooleanField(default=False)
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    status = models.CharField(
+        max_length=20,
+        choices=Status.choices,
+        default=Status.PENDING
+    )
 
     # JSON list of IG UUIDs mentor expressed interest in during onboarding.
     # On admin approval, UserIgLink rows are auto-created for each.
