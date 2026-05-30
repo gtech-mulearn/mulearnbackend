@@ -5,10 +5,29 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from db.job import CompanyJob, UserJobApplication
 from db.company import Company
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers
 
 class CompanyGigAnalyticsAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Analytics'],
+        description="Retrieve analytics data for company gigs.",
+        responses={
+            200: inline_serializer(
+                name='CompanyGigAnalyticsResponse',
+                fields={
+                    'total_gigs_posted': serializers.IntegerField(),
+                    'active_gigs': serializers.IntegerField(),
+                    'closed_gigs': serializers.IntegerField(),
+                    'average_hourly_rate': serializers.FloatField(),
+                    'application_funnel': serializers.DictField(),
+                    'conversion_rate': serializers.CharField(),
+                }
+            )
+        }
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)

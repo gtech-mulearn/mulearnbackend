@@ -13,7 +13,12 @@ from . import job_serializers
 class CompanyJobAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @extend_schema(request=job_serializers.JobCreateSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Post a new job/gig.",
+        request=job_serializers.JobCreateSerializer,
+        responses={200: job_serializers.JobCreateSerializer},
+    )
     @role_required([RoleType.COMPANY.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -30,6 +35,11 @@ class CompanyJobAPI(APIView):
             
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="List all jobs for the logged-in company.",
+        responses={200: job_serializers.JobListSerializer(many=True)},
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
@@ -58,6 +68,11 @@ class CompanyJobAPI(APIView):
 class CompanyJobDetailAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Retrieve details of a specific job.",
+        responses={200: job_serializers.JobListSerializer},
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -70,7 +85,12 @@ class CompanyJobDetailAPI(APIView):
         serializer = job_serializers.JobListSerializer(job)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @extend_schema(request=job_serializers.JobUpdateSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Update a specific job.",
+        request=job_serializers.JobUpdateSerializer,
+        responses={200: job_serializers.JobUpdateSerializer},
+    )
     @role_required([RoleType.COMPANY.value])
     def patch(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -91,6 +111,10 @@ class CompanyJobDetailAPI(APIView):
             
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Delete a specific job.",
+    )
     @role_required([RoleType.COMPANY.value])
     def delete(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -110,6 +134,11 @@ class CompanyJobDetailAPI(APIView):
 class PublicJobAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Public - Jobs'],
+        description="Public endpoint to list all active jobs.",
+        responses={200: job_serializers.JobListSerializer(many=True)},
+    )
     def get(self, request):
         jobs = CompanyJob.objects.filter(status='Active', is_deleted=False)
         
@@ -131,7 +160,11 @@ class PublicJobAPI(APIView):
 class JobApplicationAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @extend_schema(request=job_serializers.JobApplicationSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Apply to a job.",
+        request=job_serializers.JobApplicationSerializer,
+    )
     def post(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -154,6 +187,11 @@ class JobApplicationAPI(APIView):
             
         return CustomResponse(message=serializer.errors).get_failure_response()
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="List all applications for a specific job.",
+        responses={200: job_serializers.ApplicationTrackingSerializer(many=True)},
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -182,7 +220,12 @@ class JobApplicationAPI(APIView):
 class ApplicationStatusAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @extend_schema(request=job_serializers.ApplicationTrackingSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Update the status of a job application.",
+        request=job_serializers.ApplicationTrackingSerializer,
+        responses={200: job_serializers.ApplicationTrackingSerializer},
+    )
     @role_required([RoleType.COMPANY.value])
     def patch(self, request, app_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -208,6 +251,11 @@ class ApplicationStatusAPI(APIView):
 class PublicCompanyJobListAPI(APIView):
     permission_classes = []
 
+    @extend_schema(
+        tags=['Public - Company'],
+        description="Public endpoint to view all active jobs for a specific company.",
+        responses={200: job_serializers.JobListSerializer(many=True)},
+    )
     def get(self, request, slug):
         company = Company.objects.filter(slug=slug, status="verified").first()
         if not company:
@@ -234,6 +282,10 @@ class PublicCompanyJobListAPI(APIView):
 class UserApplicationWithdrawAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Withdraw a submitted job application.",
+    )
     def delete(self, request, app_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -252,7 +304,11 @@ class UserApplicationWithdrawAPI(APIView):
 class UserApplicationResubmitAPI(APIView):
     permission_classes = [CustomizePermission]
 
-    @extend_schema(request=job_serializers.UserApplicationResubmitSerializer)
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Resubmit a rejected job application.",
+        request=job_serializers.UserApplicationResubmitSerializer,
+    )
     def patch(self, request, app_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -282,6 +338,11 @@ class UserApplicationResubmitAPI(APIView):
 class UserAppliedJobsAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="List all jobs the user has applied to.",
+        responses={200: job_serializers.UserAppliedJobsSerializer(many=True)},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         applications = UserJobApplication.objects.filter(user_id=user_id, job__is_deleted=False)
