@@ -5,7 +5,7 @@ from django.utils import timezone
 from rest_framework import status
 from rest_framework.views import APIView
 
-from db.company import CompanyJob
+from db.job import CompanyJob
 from db.learning_circle import CircleMeetingLog, UserCircleLink
 from db.task import KarmaActivityLog, Wallet
 from db.user import User
