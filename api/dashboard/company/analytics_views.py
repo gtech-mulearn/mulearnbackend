@@ -5,10 +5,15 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from db.job import CompanyJob, UserJobApplication
 from db.company import Company
+from drf_spectacular.utils import extend_schema
 
 class CompanyGigAnalyticsAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Company Analytics'],
+        description="Retrieve analytics data for company gigs.",
+    )
     @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)

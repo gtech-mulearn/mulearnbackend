@@ -2799,6 +2799,7 @@ paths:
   /api/v1/dashboard/company/{company_id}/:
     get:
       operationId: dashboard_company_retrieve
+      description: Get details of a specific company by ID.
       parameters:
       - in: path
         name: company_id
@@ -2813,10 +2814,38 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/analytics/gigs/:
     get:
       operationId: dashboard_company_analytics_gigs_retrieve
+      description: Retrieve analytics data for company gigs.
       tags:
       - Company
       security:
@@ -2829,6 +2858,7 @@ paths:
   /api/v1/dashboard/company/applications/{app_id}/resubmit/:
     patch:
       operationId: dashboard_company_applications_resubmit_partial_update
+      description: Resubmit a rejected job application.
       parameters:
       - in: path
         name: app_id
@@ -2858,6 +2888,7 @@ paths:
   /api/v1/dashboard/company/applications/{app_id}/status/:
     patch:
       operationId: dashboard_company_applications_status_partial_update
+      description: Update the status of a job application.
       parameters:
       - in: path
         name: app_id
@@ -2883,10 +2914,38 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ApplicationTracking'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/applications/{app_id}/withdraw/:
     delete:
       operationId: dashboard_company_applications_withdraw_destroy
+      description: Withdraw a submitted job application.
       parameters:
       - in: path
         name: app_id
@@ -2904,7 +2963,8 @@ paths:
           description: No response body
   /api/v1/dashboard/company/applications/me/:
     get:
-      operationId: dashboard_company_applications_me_retrieve
+      operationId: dashboard_company_applications_me_list
+      description: List all jobs the user has applied to.
       tags:
       - Company
       security:
@@ -2913,10 +2973,40 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/UserAppliedJobs'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/jobs/:
     get:
-      operationId: dashboard_company_jobs_retrieve
+      operationId: dashboard_company_jobs_list
+      description: List all jobs for the logged-in company.
       tags:
       - Company
       security:
@@ -2925,9 +3015,39 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     post:
       operationId: dashboard_company_jobs_create
+      description: Post a new job/gig.
       tags:
       - Company
       requestBody:
@@ -2948,10 +3068,38 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/JobCreate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/jobs/{job_id}/:
     get:
-      operationId: dashboard_company_jobs_retrieve_2
+      operationId: dashboard_company_jobs_retrieve
+      description: Retrieve details of a specific job.
       parameters:
       - in: path
         name: job_id
@@ -2966,9 +3114,37 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/JobList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     patch:
       operationId: dashboard_company_jobs_partial_update
+      description: Update a specific job.
       parameters:
       - in: path
         name: job_id
@@ -2994,9 +3170,37 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/JobUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     delete:
       operationId: dashboard_company_jobs_destroy
+      description: Delete a specific job.
       parameters:
       - in: path
         name: job_id
@@ -3014,7 +3218,8 @@ paths:
           description: No response body
   /api/v1/dashboard/company/jobs/{job_id}/applications/:
     get:
-      operationId: dashboard_company_jobs_applications_retrieve
+      operationId: dashboard_company_jobs_applications_list
+      description: List all applications for a specific job.
       parameters:
       - in: path
         name: job_id
@@ -3029,9 +3234,39 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApplicationTracking'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     post:
       operationId: dashboard_company_jobs_applications_create
+      description: Apply to a job.
       parameters:
       - in: path
         name: job_id
@@ -3061,7 +3296,8 @@ paths:
           description: No response body
   /api/v1/dashboard/company/jobs/{job_id}/apply/:
     get:
-      operationId: dashboard_company_jobs_apply_retrieve
+      operationId: dashboard_company_jobs_apply_list
+      description: List all applications for a specific job.
       parameters:
       - in: path
         name: job_id
@@ -3076,9 +3312,39 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ApplicationTracking'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     post:
       operationId: dashboard_company_jobs_apply_create
+      description: Apply to a job.
       parameters:
       - in: path
         name: job_id
@@ -3108,7 +3374,8 @@ paths:
           description: No response body
   /api/v1/dashboard/company/jobs/all/:
     get:
-      operationId: dashboard_company_jobs_all_retrieve
+      operationId: dashboard_company_jobs_all_list
+      description: Public endpoint to list all active jobs.
       tags:
       - Company
       security:
@@ -3117,10 +3384,40 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/list/:
     get:
-      operationId: dashboard_company_list_retrieve
+      operationId: dashboard_company_list_list
+      description: List all companies with filtering.
       parameters:
       - in: query
         name: company_size
@@ -3154,7 +3451,36 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CompanyList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/mulearners/:
     get:
       operationId: dashboard_company_mulearners_retrieve
@@ -3211,6 +3537,7 @@ paths:
   /api/v1/dashboard/company/profile/:
     get:
       operationId: dashboard_company_profile_retrieve
+      description: Retrieve the profile of a verified company.
       tags:
       - Company
       security:
@@ -3219,9 +3546,37 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     patch:
       operationId: dashboard_company_profile_partial_update
+      description: Update the profile of a verified company.
       tags:
       - Company
       requestBody:
@@ -3241,10 +3596,38 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/profile/public/{slug}/:
     get:
       operationId: dashboard_company_profile_public_retrieve
+      description: Public endpoint to view a company's profile.
       parameters:
       - in: path
         name: slug
@@ -3259,10 +3642,38 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/PublicCompanyProfile'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/profile/public/{slug}/jobs/:
     get:
-      operationId: dashboard_company_profile_public_jobs_retrieve
+      operationId: dashboard_company_profile_public_jobs_list
+      description: Public endpoint to view all active jobs for a specific company.
       parameters:
       - in: path
         name: slug
@@ -3277,10 +3688,40 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/register/:
     post:
       operationId: dashboard_company_register_create
+      description: Submit a new company registration.
       tags:
       - Company
       requestBody:
@@ -3301,9 +3742,37 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyRegister'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
     patch:
       operationId: dashboard_company_register_partial_update
+      description: Update or resubmit a pending/rejected company registration.
       tags:
       - Company
       requestBody:
@@ -3323,10 +3792,38 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyUpdate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/status/:
     get:
       operationId: dashboard_company_status_retrieve
+      description: Check the status of a company registration.
       tags:
       - Company
       security:
@@ -3339,6 +3836,7 @@ paths:
   /api/v1/dashboard/company/verify/{company_id}/:
     patch:
       operationId: dashboard_company_verify_partial_update
+      description: Verify or reject a company.
       parameters:
       - in: path
         name: company_id
@@ -20923,7 +21421,8 @@ paths:
           description: ''
   /api/v1/public/jobs/:
     get:
-      operationId: public_jobs_retrieve
+      operationId: public_jobs_list
+      description: Public endpoint to list all active jobs.
       tags:
       - Public
       security:
@@ -20932,7 +21431,36 @@ paths:
       - jwtAuth: []
       responses:
         '200':
-          description: No response body
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/JobList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/public/lc-dashboard/:
     get:
       operationId: public_lc_dashboard_retrieve
@@ -22993,6 +23521,47 @@ components:
       - title
       - updated_at
       - updated_by
+    ApplicationTracking:
+      type: object
+      properties:
+        id:
+          type: string
+          readOnly: true
+        job:
+          type: string
+          readOnly: true
+        applicant_name:
+          type: string
+          readOnly: true
+        applicant_email:
+          type: string
+          readOnly: true
+        resume_link:
+          type: string
+          readOnly: true
+          nullable: true
+        cover_letter:
+          type: string
+          readOnly: true
+          nullable: true
+        status:
+          type: string
+          maxLength: 20
+        rejection_reason:
+          type: string
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - applicant_email
+      - applicant_name
+      - applied_at
+      - cover_letter
+      - id
+      - job
+      - resume_link
     AreaOfInterestAPI:
       type: object
       properties:
@@ -24816,6 +25385,214 @@ components:
           $ref: '#/components/schemas/CommonUserProfilePicData'
       required:
       - response
+    CompanyDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        company_user_name:
+          type: string
+          readOnly: true
+        company_user_email:
+          type: string
+          readOnly: true
+        district_name:
+          type: string
+          readOnly: true
+        name:
+          type: string
+          maxLength: 75
+        logo:
+          type: string
+          nullable: true
+        description:
+          type: string
+        short_pitch:
+          type: string
+          nullable: true
+          maxLength: 900
+        industry_sector:
+          type: string
+          nullable: true
+          maxLength: 75
+        website_link:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+          maxLength: 100
+        slug:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          maxLength: 30
+        location:
+          type: string
+          nullable: true
+          maxLength: 150
+        legal_name:
+          type: string
+          nullable: true
+          maxLength: 150
+        registration_number:
+          type: string
+          nullable: true
+          maxLength: 100
+        tax_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        company_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        linkedin_url:
+          type: string
+          nullable: true
+        verification_document_url:
+          type: string
+          nullable: true
+        verification_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+        verified_by:
+          type: string
+          nullable: true
+          maxLength: 36
+        rejection_reason:
+          type: string
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+        deleted_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_by:
+          type: string
+          nullable: true
+          maxLength: 36
+        deleted_by:
+          type: string
+          nullable: true
+          maxLength: 36
+        founded_year:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        remote_policy:
+          type: string
+          nullable: true
+          maxLength: 20
+        culture_text:
+          type: string
+          nullable: true
+        tech_stack:
+          nullable: true
+        perks:
+          nullable: true
+        testimonials:
+          nullable: true
+        gallery:
+          nullable: true
+        company_user:
+          type: string
+        district:
+          type: string
+          nullable: true
+        state:
+          type: string
+          nullable: true
+        country:
+          type: string
+          nullable: true
+      required:
+      - company_user
+      - company_user_email
+      - company_user_name
+      - created_at
+      - description
+      - district_name
+      - name
+      - slug
+      - updated_at
+    CompanyList:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        name:
+          type: string
+          maxLength: 75
+        slug:
+          type: string
+          maxLength: 100
+        status:
+          type: string
+          maxLength: 30
+        email:
+          type: string
+          nullable: true
+          maxLength: 100
+        company_user_id:
+          type: string
+          readOnly: true
+        company_user_name:
+          type: string
+          readOnly: true
+        industry_sector:
+          type: string
+          nullable: true
+          maxLength: 75
+        company_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        location:
+          type: string
+          nullable: true
+          maxLength: 150
+        district_name:
+          type: string
+          readOnly: true
+        state_name:
+          type: string
+          readOnly: true
+        country_name:
+          type: string
+          readOnly: true
+        verification_requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - company_user_id
+      - company_user_name
+      - country_name
+      - district_name
+      - name
+      - slug
+      - state_name
     CompanyMentorOnboarding:
       type: object
       description: Create a COMPANY_MENTOR row (org.org_type must be 'Company').
@@ -24857,6 +25634,87 @@ components:
       - org
       - updated_by
     CompanyRegister:
+      type: object
+      properties:
+        name:
+          type: string
+          maxLength: 75
+        logo:
+          type: string
+          nullable: true
+        description:
+          type: string
+        short_pitch:
+          type: string
+          nullable: true
+          maxLength: 900
+        industry_sector:
+          type: string
+          nullable: true
+          maxLength: 75
+        website_link:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+          maxLength: 100
+        location:
+          type: string
+          nullable: true
+          maxLength: 150
+        district_id:
+          type: string
+          nullable: true
+        state_id:
+          type: string
+          nullable: true
+        country_id:
+          type: string
+          nullable: true
+        legal_name:
+          type: string
+          nullable: true
+          maxLength: 150
+        registration_number:
+          type: string
+          nullable: true
+          maxLength: 100
+        tax_id:
+          type: string
+          nullable: true
+          maxLength: 100
+        company_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        linkedin_url:
+          type: string
+          nullable: true
+        founded_year:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        remote_policy:
+          type: string
+          nullable: true
+          maxLength: 20
+        culture_text:
+          type: string
+          nullable: true
+        tech_stack:
+          nullable: true
+        perks:
+          nullable: true
+        testimonials:
+          nullable: true
+        gallery:
+          nullable: true
+      required:
+      - description
+      - name
+    CompanyUpdate:
       type: object
       properties:
         name:
@@ -26224,6 +27082,82 @@ components:
       - id
       - job_type
       - title
+    JobList:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        company_name:
+          type: string
+          readOnly: true
+        company_logo:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 75
+        experience:
+          type: string
+          nullable: true
+          maxLength: 20
+        job_description:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+          maxLength: 75
+        salary_range:
+          type: string
+          nullable: true
+          maxLength: 36
+        job_type:
+          type: string
+          maxLength: 20
+        status:
+          type: string
+          maxLength: 20
+        duration_value:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        duration_unit:
+          type: string
+          nullable: true
+          maxLength: 20
+        hourly_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        deliverables:
+          nullable: true
+        stipend:
+          type: string
+          nullable: true
+          maxLength: 75
+        certificate_provided:
+          type: string
+          nullable: true
+          maxLength: 3
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobRule'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - company_logo
+      - company_name
+      - created_at
+      - job_type
+      - rules
+      - title
     JobRule:
       type: object
       properties:
@@ -26240,6 +27174,64 @@ components:
       - id
       - rule_type
       - rule_value
+    JobUpdate:
+      type: object
+      properties:
+        title:
+          type: string
+          maxLength: 75
+        experience:
+          type: string
+          nullable: true
+          maxLength: 20
+        job_description:
+          type: string
+          nullable: true
+        location:
+          type: string
+          nullable: true
+          maxLength: 75
+        salary_range:
+          type: string
+          nullable: true
+          maxLength: 36
+        job_type:
+          type: string
+          maxLength: 20
+        status:
+          type: string
+          maxLength: 20
+        duration_value:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        duration_unit:
+          type: string
+          nullable: true
+          maxLength: 20
+        hourly_rate:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,8}(?:\.\d{0,2})?$
+          nullable: true
+        deliverables:
+          nullable: true
+        stipend:
+          type: string
+          nullable: true
+          maxLength: 75
+        certificate_provided:
+          type: string
+          nullable: true
+          maxLength: 3
+        rules:
+          type: array
+          items:
+            $ref: '#/components/schemas/JobRule'
+      required:
+      - job_type
+      - title
     KKEMUser:
       type: object
       properties:
@@ -28496,6 +29488,85 @@ components:
         skill_ids_json:
           type: string
           writeOnly: true
+    PublicCompanyProfile:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        name:
+          type: string
+          maxLength: 75
+        slug:
+          type: string
+          maxLength: 100
+        logo:
+          type: string
+          nullable: true
+        description:
+          type: string
+        short_pitch:
+          type: string
+          nullable: true
+          maxLength: 900
+        industry_sector:
+          type: string
+          nullable: true
+          maxLength: 75
+        website_link:
+          type: string
+          nullable: true
+        email:
+          type: string
+          nullable: true
+          maxLength: 100
+        location:
+          type: string
+          nullable: true
+          maxLength: 150
+        district_name:
+          type: string
+          readOnly: true
+        state_name:
+          type: string
+          readOnly: true
+        country_name:
+          type: string
+          readOnly: true
+        company_size:
+          type: string
+          nullable: true
+          maxLength: 50
+        linkedin_url:
+          type: string
+          nullable: true
+        founded_year:
+          type: integer
+          maximum: 65535
+          minimum: 0
+          nullable: true
+        remote_policy:
+          type: string
+          nullable: true
+          maxLength: 20
+        culture_text:
+          type: string
+          nullable: true
+        tech_stack:
+          nullable: true
+        perks:
+          nullable: true
+        testimonials:
+          nullable: true
+        gallery:
+          nullable: true
+      required:
+      - country_name
+      - description
+      - district_name
+      - name
+      - slug
+      - state_name
     PublicMentorCard:
       type: object
       description: Public read-only profile for frontend mentor discovery pages.
@@ -29165,6 +30236,35 @@ components:
       required:
       - achievement
       - user_id
+    UserAppliedJobs:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        job:
+          allOf:
+          - $ref: '#/components/schemas/JobList'
+          readOnly: true
+        resume_link:
+          type: string
+          nullable: true
+        cover_letter:
+          type: string
+          nullable: true
+        status:
+          type: string
+          maxLength: 20
+        rejection_reason:
+          type: string
+          nullable: true
+        applied_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - applied_at
+      - job
     UserBasicDetails:
       type: object
       properties:
