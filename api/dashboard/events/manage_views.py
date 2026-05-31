@@ -38,6 +38,7 @@ MANAGEABLE_ROLES = {
     RoleType.DISTRICT_CAMPUS_LEAD.value,
     RoleType.COMPANY.value,
     RoleType.ENABLER.value,
+    RoleType.LEAD_ENABLER.value,
 }
 
 

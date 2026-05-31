@@ -177,7 +177,7 @@ class CampusExecomAPI(APIView):
             response={"data": serializer.data}
         ).get_success_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -283,7 +283,7 @@ class CampusExecomAPI(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     def delete(self, request, member_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 

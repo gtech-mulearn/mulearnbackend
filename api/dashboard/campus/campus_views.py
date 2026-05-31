@@ -453,7 +453,7 @@ class ChangeStudentTypeAPI(APIView):
 class TransferLeadRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         new_lead_muid = request.data.get("new_lead_muid", None)
