@@ -279,3 +279,32 @@ class PublicCompanyProfileAPI(APIView):
             
         serializer = serializers.PublicCompanyProfileSerializer(company)
         return CustomResponse(response=serializer.data).get_success_response()
+
+
+class CompanyAdminSummaryAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Get summary stats for companies for the admin dashboard.",
+    )
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        from db.company import Company
+        from db.job import CompanyJob
+        from db.task import TaskList
+        
+        companies = Company.objects.all()
+        
+        data = {
+            "total_companies": companies.count(),
+            "verified_companies": companies.filter(status="verified").count(),
+            "pending_companies": companies.filter(status="pending").count(),
+            "rejected_companies": companies.filter(status="rejected").count(),
+            "total_jobs": CompanyJob.objects.count(),
+            "total_company_tasks": TaskList.objects.filter(
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+            ).count()
+        }
+        
+        return CustomResponse(response=data).get_success_response()
