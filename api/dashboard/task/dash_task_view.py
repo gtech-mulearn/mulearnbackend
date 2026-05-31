@@ -827,26 +827,61 @@ class AdminTaskApprovalAPI(APIView):
         })},
     )
     def get(self, request):
-        """List all tasks with approval_status='pending'."""
+        """List tasks with filtering."""
         from django.utils import timezone as tz
 
         queryset = (
             TaskList.objects
-            .filter(approval_status="pending")
-            .select_related("ig", "type", "submitted_by_company")
+            .select_related("ig", "type", "requested_by", "requested_by__company_profile")
             .order_by("created_at")
         )
+
+        approval_status = request.query_params.get("approval_status", "pending")
+        if approval_status:
+            queryset = queryset.filter(approval_status=approval_status)
+
+        source = request.query_params.get("source")
+        role = request.query_params.get("role") or source
+        
+        if role == "mentor":
+            queryset = queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
+            )
+        elif role == "company":
+            queryset = queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+            )
+        elif role == "admin":
+            queryset = queryset.filter(requested_by__isnull=True)
+
+        company_name = request.query_params.get("company_name")
+        if company_name:
+            queryset = queryset.filter(requested_by__company_profile__name__icontains=company_name)
+
+        mentor_name = request.query_params.get("mentor_name")
+        if mentor_name:
+            queryset = queryset.filter(
+                requested_by__full_name__icontains=mentor_name,
+                requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
+            )
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
             request,
-            search_fields=["title", "hashtag", "submitted_by_company__name"],
+            search_fields=[
+                "title", "hashtag",
+                "requested_by__company_profile__name",
+                "requested_by__full_name",
+            ],
             sort_fields={"createdAt": "created_at", "title": "title"},
             is_pagination=True,
         )
 
         data = []
         for task in paginated["queryset"]:
+            company_profile = getattr(task.requested_by, "company_profile", None) if task.requested_by else None
             data.append({
                 "id":                   str(task.id),
                 "title":                task.title,
@@ -856,15 +891,17 @@ class AdminTaskApprovalAPI(APIView):
                 "approval_status":      task.approval_status,
                 "ig":                   {"id": str(task.ig.id), "name": task.ig.name} if task.ig else None,
                 "type":                 {"id": str(task.type.id), "title": task.type.title} if task.type else None,
-                "submitted_by_company": {
-                    "id": str(task.submitted_by_company.id),
-                    "name": task.submitted_by_company.name,
-                } if task.submitted_by_company else None,
-                "created_at":           task.created_at.isoformat(),
+                "company_name":         company_profile.name if company_profile else None,
+                "requested_by": {
+                    "id":        str(task.requested_by.id),
+                    "full_name": task.requested_by.full_name,
+                } if task.requested_by else None,
+                "requested_at": task.requested_at.isoformat() if task.requested_at else None,
+                "created_at":   task.created_at.isoformat(),
             })
 
         return CustomResponse(
-            general_message="Pending tasks fetched successfully.",
+            general_message="Tasks fetched successfully.",
             response={"tasks": data, "pagination": paginated["pagination"]},
         ).get_success_response()
 

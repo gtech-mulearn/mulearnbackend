@@ -169,6 +169,13 @@ class TaskList(models.Model):
     )
     reviewed_at = models.DateTimeField(null=True, blank=True)
 
+    # Mentor task submission tracking
+    requested_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='requested_by', related_name='task_list_requested_by'
+    )
+    requested_at = models.DateTimeField(null=True, blank=True)
+
     class Meta:
         managed = False
         db_table = "task_list"

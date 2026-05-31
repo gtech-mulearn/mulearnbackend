@@ -1,5 +1,5 @@
 from django.urls import path
-from . import mentor_views, session_views, availability_views, participant_views
+from . import mentor_views, session_views, availability_views, participant_views, task_views
 
 urlpatterns = [
     path('public/profile/<str:mentor_id>/', mentor_views.MentorPublicProfileAPI.as_view(), name='mentor-public-profile'),
@@ -24,4 +24,7 @@ urlpatterns = [
     path('session/participant/list/<str:session_id>/', participant_views.MentorParticipantListAPI.as_view(), name='mentor-participant-list'),
     path('session/participant/update/<str:link_id>/', participant_views.MentorParticipantUpdateAPI.as_view(), name='mentor-participant-update'),
     path('session/participant/feedback/<str:session_id>/', participant_views.ParticipantFeedbackAPI.as_view(), name='participant-feedback'),
+    path('tasks/ig-dropdown/',   task_views.MentorIGDropdownAPI.as_view(),       name='mentor-task-ig-dropdown'),
+    path('tasks/',               task_views.MentorTaskListCreateAPI.as_view(),    name='mentor-task-list-create'),
+    path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
 ]
