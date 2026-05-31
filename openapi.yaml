@@ -3890,6 +3890,187 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/dashboard/company/summary/:
+    get:
+      operationId: dashboard_company_summary_retrieve
+      description: Get summary stats for companies for the admin dashboard.
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/company/tasks/:
+    get:
+      operationId: dashboard_company_tasks_retrieve
+      description: List all tasks submitted by the authenticated company user (filtered
+        by requested_by). Supports pagination, search, and sort.
+      parameters:
+      - in: query
+        name: approval_status
+        schema:
+          type: string
+        description: 'Filter by approval_status: pending | approved | rejected'
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyTaskListResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: dashboard_company_tasks_create
+      description: Create a new task for the company. The task is saved with approval_status='pending'
+        and active=False until an admin approves it. Accepts an optional skill_ids
+        list.
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyTaskCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyTaskCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyTaskCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task submitted for approval.
+  /api/v1/dashboard/company/tasks/{task_id}/:
+    get:
+      operationId: dashboard_company_tasks_retrieve_2
+      description: Retrieve the detail of a specific task submitted by the company.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyTaskList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    put:
+      operationId: dashboard_company_tasks_update
+      description: Update a task submitted by the company. Regardless of the current
+        approval_status, the task reverts to 'pending' and active=False after editing.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyTaskUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyTaskUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyTaskUpdate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task updated and re-submitted for approval.
+    delete:
+      operationId: dashboard_company_tasks_destroy
+      description: Delete a pending task submitted by the company.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task deleted successfully.
   /api/v1/dashboard/company/verify/{company_id}/:
     patch:
       operationId: dashboard_company_verify_partial_update
@@ -11224,6 +11405,223 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/dashboard/mentor/tasks/:
+    get:
+      operationId: dashboard_mentor_tasks_retrieve
+      description: List all tasks submitted by the authenticated mentor (filtered
+        by requested_by). Supports pagination, search, and sort.
+      parameters:
+      - in: query
+        name: approval_status
+        schema:
+          type: string
+        description: 'Filter by approval_status: pending | approved | rejected'
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorTaskListResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: dashboard_mentor_tasks_create
+      description: Create a new task for an IG the mentor belongs to. The task is
+        saved with approval_status='pending' and active=False until an admin approves
+        it. Accepts an optional skill_ids list (array of active skill UUIDs) alongside
+        the task fields — mirrors admin task creation behaviour.
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MentorTaskCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MentorTaskCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MentorTaskCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task submitted for approval.
+  /api/v1/dashboard/mentor/tasks/{task_id}/:
+    get:
+      operationId: dashboard_mentor_tasks_retrieve_2
+      description: Retrieve the detail of a specific task submitted by the mentor.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorTaskList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    put:
+      operationId: dashboard_mentor_tasks_update
+      description: Update a task submitted by the mentor. Regardless of the current
+        approval_status, the task reverts to 'pending' and active=False after editing
+        (triggering re-approval). If the task was previously approved, it is deactivated
+        until re-approved. Accepts optional skill_ids to replace the current skill
+        links.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MentorTaskUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MentorTaskUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MentorTaskUpdate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task updated and re-submitted for approval.
+    delete:
+      operationId: dashboard_mentor_tasks_destroy
+      description: Delete a task submitted by the mentor. Only allowed when approval_status
+        is 'pending'. Approved or rejected tasks cannot be deleted.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: Task deleted successfully.
+  /api/v1/dashboard/mentor/tasks/ig-dropdown/:
+    get:
+      operationId: dashboard_mentor_tasks_ig_dropdown_list
+      description: Returns only the Interest Groups the authenticated mentor belongs
+        to (active MENTOR assignment). Use this list to populate the IG selector when
+        creating a task.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorIGDropdownResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/mentor/verify/{mentor_id}/:
     patch:
       operationId: dashboard_mentor_verify_partial_update
@@ -24910,6 +25308,194 @@ components:
       required:
       - description
       - name
+    CompanyTaskCreate:
+      type: object
+      description: |-
+        Serializer for company task creation.
+        Similar to mentor task creation but IG is optional and no IG validation.
+        Locked fields (active, approval_status, requested_by, requested_at)
+        are injected by the view via serializer.save(**overrides).
+      properties:
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+        level:
+          type: string
+          nullable: true
+        created_by:
+          type: string
+        updated_by:
+          type: string
+      required:
+      - created_by
+      - hashtag
+      - title
+      - type
+      - updated_by
+    CompanyTaskList:
+      type: object
+      description: Read-only list/detail serializer for company tasks.
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        hashtag:
+          type: string
+          maxLength: 75
+        discord_link:
+          type: string
+          nullable: true
+          maxLength: 200
+        title:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        channel:
+          type: string
+        type:
+          type: string
+        active:
+          type: boolean
+        variable_karma:
+          type: boolean
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        level:
+          type: string
+        org:
+          type: string
+        ig:
+          type: string
+        event:
+          type: string
+          nullable: true
+          maxLength: 50
+        bonus_karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        bonus_time:
+          type: string
+          format: date-time
+          nullable: true
+        approval_status:
+          enum:
+          - approved
+          - pending
+          - rejected
+          type: string
+          description: |-
+            * `approved` - Approved
+            * `pending` - Pending
+            * `rejected` - Rejected
+          x-spec-enum-id: e9436f319d54eebe
+        rejection_reason:
+          type: string
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        requested_by_name:
+          type: string
+        requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        skills:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - hashtag
+      - skills
+      - title
+      - type
+      - updated_at
+    CompanyTaskListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        pagination:
+          type: object
+          additionalProperties: {}
+      required:
+      - data
+      - pagination
+    CompanyTaskUpdate:
+      type: object
+      description: Partial update serializer — same writable fields as create except
+        created_by.
+      properties:
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+        level:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+      required:
+      - hashtag
+      - title
+      - type
+      - updated_by
     CompanyUpdate:
       type: object
       properties:
@@ -27726,6 +28312,16 @@ components:
       - user
       - user_email
       - user_full_name
+    MentorIGDropdownResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+      required:
+      - id
+      - name
     MentorList:
       type: object
       properties:
@@ -27798,6 +28394,200 @@ components:
           format: int64
         preferred_ig_ids:
           nullable: true
+    MentorTaskCreate:
+      type: object
+      description: |-
+        Mirrors admin TaskModifySerializer field-for-field.
+        Locked fields (active, approval_status, requested_by, requested_at)
+        are injected by the view via serializer.save(**overrides).
+      properties:
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+        level:
+          type: string
+          nullable: true
+        ig:
+          type: string
+        created_by:
+          type: string
+        updated_by:
+          type: string
+      required:
+      - created_by
+      - hashtag
+      - ig
+      - title
+      - type
+      - updated_by
+    MentorTaskList:
+      type: object
+      description: Read-only list/detail serializer — mirrors admin TaskListSerializer.
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        hashtag:
+          type: string
+          maxLength: 75
+        discord_link:
+          type: string
+          nullable: true
+          maxLength: 200
+        title:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        channel:
+          type: string
+        type:
+          type: string
+        active:
+          type: boolean
+        variable_karma:
+          type: boolean
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        level:
+          type: string
+        org:
+          type: string
+        ig:
+          type: string
+        event:
+          type: string
+          nullable: true
+          maxLength: 50
+        bonus_karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        bonus_time:
+          type: string
+          format: date-time
+          nullable: true
+        approval_status:
+          enum:
+          - approved
+          - pending
+          - rejected
+          type: string
+          description: |-
+            * `approved` - Approved
+            * `pending` - Pending
+            * `rejected` - Rejected
+          x-spec-enum-id: e9436f319d54eebe
+        rejection_reason:
+          type: string
+          nullable: true
+        reviewed_at:
+          type: string
+          format: date-time
+          nullable: true
+        requested_by_name:
+          type: string
+        requested_at:
+          type: string
+          format: date-time
+          nullable: true
+        skills:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - hashtag
+      - skills
+      - title
+      - type
+      - updated_at
+    MentorTaskListResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        pagination:
+          type: object
+          additionalProperties: {}
+      required:
+      - data
+      - pagination
+    MentorTaskUpdate:
+      type: object
+      description: |-
+        Partial update serializer — same writable fields as create.
+        The view injects approval_status / active / review-reset fields via save().
+      properties:
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        description:
+          type: string
+          nullable: true
+        type:
+          type: string
+        level:
+          type: string
+          nullable: true
+        ig:
+          type: string
+          nullable: true
+        updated_by:
+          type: string
+      required:
+      - hashtag
+      - title
+      - type
+      - updated_by
     MentorUpdate:
       type: object
       properties:
