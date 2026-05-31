@@ -23,7 +23,6 @@ from db import (  # noqa: F401
     launchpad,
     learning_circle,
     mentor,
-    mentor_task_request,
     notification,
     organization,
     projects,
