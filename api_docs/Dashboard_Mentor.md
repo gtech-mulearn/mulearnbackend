@@ -33,6 +33,8 @@
 | 21 | [`session/participant/update/<link_id>/`](#21-sessionparticipantupdatelink_id) | `PATCH` | Mentor |
 | 22 | [`session/participant/feedback/<session_id>/`](#22-sessionparticipantfeedbacksession_id) | `PATCH` | Authenticated user (participant) |
 
+**Mentor tasks & admin approval:** see [Dashboard_Mentor_Tasks.md](./Dashboard_Mentor_Tasks.md) (`tasks/ig-dropdown/`, `tasks/`, `tasks/<task_id>/`, `activity/`, admin `task/pending/` & `task/<task_id>/review/`).
+
 ---
 
 ## Overview

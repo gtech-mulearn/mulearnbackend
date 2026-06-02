@@ -117,7 +117,7 @@ Creates a new Interest Group chapter at the authenticated user's campus. It can 
 **Constraints:**
 - Only one active chapter per IG per campus is permitted
 - If a `lead` is provided, that user must be a member of the campus
-- The newly created chapter lead will be automatically assigned the `{ig_code}CampusLead` role
+- The newly created chapter lead will be automatically assigned the `{ig_code} CampusLead` role
 - User must have the required role
 
 **Authentication:**
@@ -210,7 +210,7 @@ Updates an existing IG chapter. Allows modification of description, active statu
 - User must have the required role
 - Target chapter must belong to the user's campus
 - If the `lead` is changed, the new lead must be in the campus
-- Role `{ig_code}CampusLead` is automatically revoked from the old lead and granted to the new lead
+- Role `{ig_code} CampusLead` is automatically revoked from the old lead and granted to the new lead
 
 **Authentication:**
 Bearer token (JWT) required.
@@ -285,7 +285,7 @@ Example:
 **Status:** IMPLEMENTED
 
 **Purpose:**
-Soft-deletes a campus IG chapter. It deactivates the chapter by setting `is_active=False`, clears the lead, and revokes the associated `{ig_code}CampusLead` role.
+Soft-deletes a campus IG chapter. It deactivates the chapter by setting `is_active=False`, clears the lead, and revokes the associated `{ig_code} CampusLead` role.
 
 **Roles:**
 - Campus Lead

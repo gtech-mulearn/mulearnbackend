@@ -118,22 +118,25 @@ class MentorVerifySerializer(serializers.Serializer):
             # Assign global MENTOR role
             mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
             if mentor_role:
-                UserRoleLink.objects.update_or_create(
+                role_link, created = UserRoleLink.objects.get_or_create(
                     user=instance.user,
                     role=mentor_role,
                     defaults={
-                        "verified": True, 
+                        "verified": True,
                         "created_by_id": user_id,
-                        "created_at": DateTimeUtils.get_current_utc_time()
-                    }
+                        "created_at": DateTimeUtils.get_current_utc_time(),
+                    },
                 )
-            
+                if not created and not role_link.verified:
+                    role_link.verified = True
+                    role_link.save(update_fields=["verified"])
+
             # Auto-assign UserIgLink for IG_MENTOR
             if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR and instance.preferred_ig_ids:
                 for ig_id in instance.preferred_ig_ids:
                     ig = InterestGroup.objects.filter(id=ig_id).first()
                     if ig:
-                        UserIgLink.objects.update_or_create(
+                        ig_link, created = UserIgLink.objects.get_or_create(
                             user=instance.user,
                             ig=ig,
                             defaults={
@@ -141,9 +144,16 @@ class MentorVerifySerializer(serializers.Serializer):
                                 "is_active": True,
                                 "assigned_by_id": user_id,
                                 "created_by_id": user_id,
-                                "created_at": DateTimeUtils.get_current_utc_time()
-                            }
+                                "created_at": DateTimeUtils.get_current_utc_time(),
+                            },
                         )
+                        if not created:
+                            ig_link.assignment_type = UserIgLink.AssignmentType.MENTOR
+                            ig_link.is_active = True
+                            ig_link.assigned_by_id = user_id
+                            ig_link.save(
+                                update_fields=["assignment_type", "is_active", "assigned_by_id"]
+                            )
                         
         elif status == UserMentor.Status.REJECTED:
             instance.verification_note = validated_data.get("verification_note")
@@ -152,12 +162,15 @@ class MentorVerifySerializer(serializers.Serializer):
         return instance
 
 from db.mentor import MentorshipSession
+from db.organization import Organization
+from db.task import InterestGroup
 
 class SessionCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = MentorshipSession
         fields = [
-            "ig",
+            "entity_id",
+            "session_type",
             "title",
             "description",
             "mode",
@@ -224,14 +237,15 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
 
 class SessionListSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
-    ig_name = serializers.CharField(source='ig.name', read_only=True)
+    entity_name = serializers.SerializerMethodField()
 
     class Meta:
         model = MentorshipSession
         fields = [
             "id",
-            "ig_id",
-            "ig_name",
+            "entity_id",
+            "entity_name",
+            "session_type",
             "title",
             "mode",
             "starts_at",
@@ -242,6 +256,15 @@ class SessionListSerializer(serializers.ModelSerializer):
             "created_at",
             "max_participants"
         ]
+
+    def get_entity_name(self, obj):
+        if obj.session_type == MentorshipSession.SessionType.IG_SESSION:
+            ig = InterestGroup.objects.filter(id=obj.entity_id).first()
+            return ig.name if ig else None
+        elif obj.session_type == MentorshipSession.SessionType.CAMPUS_SESSION:
+            org = Organization.objects.filter(id=obj.entity_id).first()
+            return org.title if org else None
+        return None
 
 class SessionDetailSerializer(SessionListSerializer):
     class Meta(SessionListSerializer.Meta):
@@ -425,3 +448,12 @@ class ParticipantFeedbackSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError("You can only leave feedback for sessions you have attended.")
             
         return data
+
+class MentorActivitySerializer(serializers.Serializer):
+    id = serializers.CharField()
+    activity_type = serializers.CharField()
+    title = serializers.CharField()
+    description = serializers.CharField(allow_null=True, required=False)
+    date = serializers.DateTimeField()
+    status = serializers.CharField(allow_null=True, required=False)
+

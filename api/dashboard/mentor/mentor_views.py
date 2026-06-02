@@ -5,6 +5,8 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.user import UserMentor
+from db.mentor import MentorshipSession
+from db.task import KarmaActivityLog
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import serializers
 
@@ -95,9 +97,77 @@ class MentorStatusAPI(APIView):
             
         return CustomResponse(
             response={
-                "status": mentor.status,
-                "verification_note": mentor.verification_note,
-                "mentor_id": mentor.id,
+                "organization": getattr(mentor.org, "title", None) if mentor.org else None,
+                "verified_by": getattr(mentor.verified_by, "full_name", None) if mentor.verified_by else None,
+                "verified_at": mentor.verified_at,
+            }
+        ).get_success_response()
+
+class MentorActivityListAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Get recent activity of the currently logged-in mentor (sessions created, tasks appraised).",
+        responses={200: serializers.MentorActivitySerializer(many=True)},
+    )
+    @role_required([RoleType.MENTOR.value, RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        # 1. Fetch MentorshipSessions created by this mentor
+        sessions = MentorshipSession.objects.filter(
+            created_by_id=user_id,
+            is_deleted=False
+        )
+
+        # 2. Fetch KarmaActivityLogs appraised by this mentor
+        appraisals = KarmaActivityLog.objects.filter(
+            appraiser_approved_by_id=user_id
+        ).select_related("task")
+
+        activities = []
+        for session in sessions:
+            activities.append({
+                "id": session.id,
+                "activity_type": "SESSION_CREATED",
+                "title": session.title,
+                "description": session.description,
+                "date": session.created_at,
+                "status": session.status,
+            })
+
+        for log in appraisals:
+            status_text = "Pending"
+            if log.appraiser_approved:
+                status_text = "Approved"
+            elif log.appraiser_approved is False:
+                status_text = "Rejected"
+                
+            activities.append({
+                "id": str(log.id),
+                "activity_type": "TASK_APPRAISED",
+                "title": log.task.title if log.task else "Unknown Task",
+                "description": None,
+                "date": log.updated_at,
+                "status": status_text,
+            })
+
+        # Sort activities by date descending
+        activities.sort(key=lambda x: x["date"] or x.get("created_at") or "", reverse=True)
+
+        # Paginate the combined list
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            activities, request,
+            search_fields=["title", "activity_type", "status"],
+            sort_fields={"date": "date"}
+        )
+
+        serializer = serializers.MentorActivitySerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
 

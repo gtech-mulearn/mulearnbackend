@@ -7,6 +7,7 @@ urlpatterns = [
     path('register/', mentor_views.MentorRegistrationAPI.as_view(), name='mentor-register'),
     path('status/', mentor_views.MentorStatusAPI.as_view(), name='mentor-status'),
     path('profile/', mentor_views.MentorProfileAPI.as_view(), name='mentor-profile'),
+    path('activity/', mentor_views.MentorActivityListAPI.as_view(), name='mentor-activity'),
     path('list/', mentor_views.MentorListAPI.as_view(), name='mentor-list'),
     path('verify/<str:mentor_id>/', mentor_views.MentorVerifyAPI.as_view(), name='mentor-verify'),
     path('detail/<str:mentor_id>/', mentor_views.MentorDetailAPI.as_view(), name='mentor-detail'),

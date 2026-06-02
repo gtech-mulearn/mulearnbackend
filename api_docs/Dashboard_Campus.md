@@ -33,6 +33,8 @@
 | 22 | [`<org_id>/karma-by-cluster/`](#22-org_idkarma-by-cluster) | `GET` | Any authenticated user |
 | 23 | [`campus-list/`](#23-campus-list) | `GET` | Any authenticated user |
 
+**Campus mentor & sessions:** see [Dashboard_Campus_Mentor_Sessions.md](./Dashboard_Campus_Mentor_Sessions.md) (`assign-mentor/`, `sessions/create/`, `sessions/list/`).
+
 ---
 
 ## 1. Campus Details

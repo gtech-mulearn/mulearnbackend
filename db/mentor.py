@@ -17,8 +17,13 @@ class MentorshipSession(models.Model):
         CANCELLED = 'CANCELLED', 'Cancelled'
         REJECTED = 'REJECTED', 'Rejected'
 
+    class SessionType(models.TextChoices):
+        IG_SESSION = 'ig_session', 'IG Session'
+        CAMPUS_SESSION = 'campus_session', 'Campus Session'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    ig = models.ForeignKey(InterestGroup, on_delete=models.SET_NULL, null=True, db_column="ig_id", related_name="mentorship_sessions")
+    session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.IG_SESSION)
+    entity_id = models.CharField(max_length=36, blank=True, null=True)
     title = models.CharField(max_length=150)
     description = models.TextField(blank=True, null=True)
     mode = models.CharField(max_length=10, choices=Mode.choices, default=Mode.ONLINE)
