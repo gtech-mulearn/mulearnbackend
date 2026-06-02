@@ -34,8 +34,12 @@ class MentorSessionCreateAPI(APIView):
                 general_message="You are not assigned as a mentor for this Interest Group."
             ).get_failure_response(status_code=403)
 
+        data = request.data.copy()
+        data["entity_id"] = ig_id
+        data["session_type"] = MentorshipSession.SessionType.IG_SESSION
+
         serializer = serializers.SessionCreateSerializer(
-            data=request.data, context={"user_id": user_id}
+            data=data, context={"user_id": user_id}
         )
 
         if serializer.is_valid():
@@ -77,7 +81,7 @@ class MentorSessionListAPI(APIView):
             
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request, 
-            search_fields=["title", "description", "ig__name"],
+            search_fields=["title", "description"],
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
         
@@ -168,11 +172,11 @@ class AdminSessionListAPI(APIView):
         if status:
             sessions = sessions.filter(status=status)
         if ig_id:
-            sessions = sessions.filter(ig_id=ig_id)
+            sessions = sessions.filter(entity_id=ig_id, session_type=MentorshipSession.SessionType.IG_SESSION)
             
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request, 
-            search_fields=["title", "ig__name", "created_by__full_name"],
+            search_fields=["title", "created_by__full_name"],
             sort_fields={"starts_at": "starts_at", "created_at": "created_at", "status": "status"}
         )
         
@@ -234,14 +238,15 @@ class AvailableSessionListAPI(APIView):
         user_ig_ids = UserIgLink.objects.filter(user_id=user_id).values_list('ig_id', flat=True)
         
         sessions = MentorshipSession.objects.filter(
-            ig_id__in=user_ig_ids, 
+            entity_id__in=user_ig_ids, 
+            session_type=MentorshipSession.SessionType.IG_SESSION,
             status=MentorshipSession.Status.SCHEDULED, 
             is_deleted=False
         )
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request, 
-            search_fields=["title", "description", "ig__name"],
+            search_fields=["title", "description"],
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
         

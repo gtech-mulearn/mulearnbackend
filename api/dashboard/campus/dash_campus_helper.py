@@ -3,7 +3,7 @@ import uuid
 from db.organization import UserOrganizationLink
 from db.campus import CampusIGChapter
 from db.user import Role, UserRoleLink
-from utils.types import OrganizationType
+from utils.types import OrganizationType, RoleType
 
 
 def get_user_college_link(user_id):
@@ -58,13 +58,13 @@ def get_campus_ig_chapters(org_id):
 def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
     """
     Assign a new campus-level IG lead for a chapter.
-    - Removes the old lead's UserRoleLink for {ig_code}CampusLead at this campus.
+    - Removes the old lead's UserRoleLink for "{ig_code} CampusLead" at this campus.
     - Creates a new UserRoleLink for the new lead.
     - Updates the chapter's lead field.
     Mirrors the role-transfer logic in TransferIGRoleAPI.post().
     """
     ig_code = chapter.ig.code
-    role = Role.objects.filter(title=f"{ig_code}CampusLead").first()
+    role = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).first()
     if role is None:
         return False
 

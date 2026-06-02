@@ -13,7 +13,7 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
 from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
-from drf_spectacular.utils import extend_schema, inline_serializer
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
 
@@ -413,7 +413,7 @@ class CampusStudentDetailsCSVAPI(APIView):
                 )
             )
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(
+        filtered_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
             ["full_name", "level"],
@@ -428,10 +428,11 @@ class CampusStudentDetailsCSVAPI(APIView):
                 "mobile": "mobile_",
                 "is_alumni": "is_alumni",
             },
+            is_pagination=False,
         )
 
         serializer = serializers.CampusStudentDetailsSerializer(
-            user_org_links, many=True, context={"ranks": ranks}
+            filtered_queryset, many=True, context={"ranks": ranks}
         )
         return CommonUtils.generate_csv(serializer.data, "Campus Student Details")
 
@@ -736,7 +737,7 @@ class TransferIGRoleAPI(APIView):
 
         # need to change title according to the ig role
         # below code filter role for title=ig_code + ' CampusLead'
-        role_id = Role.objects.filter(title=f"{ig_code} CampusLead").first()
+        role_id = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).first()
         if role_id is None:
             return CustomResponse(
                 general_message="Can't find the role"
@@ -1093,7 +1094,9 @@ class CampusIGChapterAPI(APIView):
             ).get_failure_response()
 
         if chapter.lead:
-            role = Role.objects.filter(title=f"{chapter.ig.code}CampusLead").first()
+            role = Role.objects.filter(
+                title=RoleType.IG_CAMPUS_LEAD_ROLE(chapter.ig.code)
+            ).first()
             if role:
                 UserRoleLink.objects.filter(
                     user=chapter.lead,
@@ -1267,3 +1270,89 @@ class CampusShowcaseAPI(APIView):
         return CustomResponse(
             response=serializer.errors
         ).get_failure_response()
+
+
+class AssignCampusMentorAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Assign a student from the campus as a Campus Mentor.",
+        request=inline_serializer(
+            name="AssignCampusMentorRequest",
+            fields={
+                "muid": s.CharField(required=True),
+            }
+        ),
+        responses={200: OpenApiResponse(description="Successfully nominated as a Campus Mentor")},
+    )
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        muid = request.data.get("muid")
+
+        if not muid:
+            return CustomResponse(
+                general_message="muid is required"
+            ).get_failure_response()
+
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        org = user_org_link.org
+
+        student = User.objects.filter(muid=muid).first()
+        if not student:
+            return CustomResponse(
+                general_message="Student not found"
+            ).get_failure_response()
+
+        # Validate student is in the same campus
+        student_org_link = UserOrganizationLink.objects.filter(
+            user=student,
+            org=org,
+            org__org_type=OrganizationType.COLLEGE.value,
+            is_alumni=False
+        ).first()
+
+        if not student_org_link:
+            return CustomResponse(
+                general_message="Student is not a member of your campus"
+            ).get_failure_response()
+
+        from db.user import UserMentor
+        from utils.utils import DateTimeUtils
+
+        existing_campus_mentor = UserMentor.objects.filter(
+            user=student,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+            org=org,
+        ).first()
+        if existing_campus_mentor:
+            return CustomResponse(
+                general_message="Student is already a Campus Mentor or has a pending request"
+            ).get_failure_response()
+
+        other_mentor = UserMentor.objects.filter(user=student).first()
+        if other_mentor:
+            return CustomResponse(
+                general_message=f"Student is already a mentor with tier {other_mentor.mentor_tier}"
+            ).get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        UserMentor.objects.create(
+            user=student,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+            status=UserMentor.Status.PENDING,
+            org=org,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+            created_at=now,
+            updated_at=now,
+        )
+
+        return CustomResponse(
+            general_message="Student successfully nominated as a Campus Mentor"
+        ).get_success_response()
