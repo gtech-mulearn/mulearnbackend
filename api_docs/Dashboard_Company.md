@@ -30,6 +30,8 @@
 | 18 | [`mulearners/`](#18-mulearners) | `GET` | Company |
 | 19 | [`analytics/gigs/`](#19-analyticsgigs) | `GET` | Company |
 
+**Company tasks & admin approval:** see [Dashboard_Company_Tasks.md](./Dashboard_Company_Tasks.md) (`tasks/`, `tasks/<task_id>/`, admin `task/pending/` & `task/<task_id>/review/`).
+
 ---
 
 ## Overview
