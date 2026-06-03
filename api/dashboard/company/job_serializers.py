@@ -29,9 +29,9 @@ class JobCreateSerializer(serializers.ModelSerializer):
         rules_data = validated_data.pop('rules', [])
         user_id = self.context.get('user_id')
         
-        company = Company.objects.filter(company_user_id=user_id).first()
+        company = self.context.get('company')
         if not company:
-            raise serializers.ValidationError("You do not have a verified company profile.")
+            raise serializers.ValidationError("You do not have a verified company profile or lack permissions.")
 
         job = CompanyJob.objects.create(company=company, **validated_data)
         

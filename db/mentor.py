@@ -18,8 +18,9 @@ class MentorshipSession(models.Model):
         REJECTED = 'REJECTED', 'Rejected'
 
     class SessionType(models.TextChoices):
-        IG_SESSION = 'ig_session', 'IG Session'
-        CAMPUS_SESSION = 'campus_session', 'Campus Session'
+        IG_SESSION      = 'ig_session',      'IG Session'
+        CAMPUS_SESSION  = 'campus_session',  'Campus Session'
+        COMPANY_SESSION = 'company_session', 'Company Session'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.IG_SESSION)

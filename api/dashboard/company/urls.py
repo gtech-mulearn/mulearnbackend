@@ -20,11 +20,15 @@ urlpatterns = [
     path("applications/<str:app_id>/resubmit/", job_views.UserApplicationResubmitAPI.as_view()),
     path("mulearners/",               mulearner_views.CompanyMulearnerDirectoryAPI.as_view()),
     path("analytics/gigs/",           analytics_views.CompanyGigAnalyticsAPI.as_view()),
-    
+
+    # Company Mentor — Nomination
+    path("mentor/nominate/",          company_views.CompanyMentorNominateAPI.as_view()),
+    path("mentor/list/",              company_views.CompanyMentorListAPI.as_view()),
+
     # Task Management for Company
     path("tasks/",                    task_views.CompanyTaskListCreateAPI.as_view(), name='company-task-list-create'),
     path("tasks/<str:task_id>/",      task_views.CompanyTaskDetailAPI.as_view(), name='company-task-detail'),
-    
+
     path("<str:company_id>/",         company_views.CompanyDetailAPI.as_view()),
     path("verify/<str:company_id>/",  company_views.CompanyVerifyAPI.as_view()),
 ]
