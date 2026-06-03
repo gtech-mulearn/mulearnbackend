@@ -377,7 +377,7 @@ class CampusExecomRoleAPI(APIView):
 
         return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         role_title = request.data.get("role_title")
