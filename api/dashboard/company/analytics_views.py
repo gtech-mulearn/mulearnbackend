@@ -1,19 +1,18 @@
 from rest_framework.views import APIView
 from django.db.models import Avg, Count
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
-from utils.types import RoleType
 from db.job import CompanyJob, UserJobApplication
-from db.company import Company
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers
+from .company_views import _get_company_for_user
 
 class CompanyGigAnalyticsAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Analytics'],
-        description="Retrieve analytics data for company gigs.",
+        description="Retrieve analytics data for company gigs (creator or approved company mentor).",
         responses={
             200: inline_serializer(
                 name='CompanyGigAnalyticsResponse',
@@ -28,13 +27,12 @@ class CompanyGigAnalyticsAPI(APIView):
             )
         }
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-        
+        company = _get_company_for_user(user_id)
+
         if not company:
-            return CustomResponse(general_message="Company profile not found.").get_failure_response(status_code=404)
+            return CustomResponse(general_message="Company profile not found or access denied.").get_failure_response(status_code=404)
 
         gigs = CompanyJob.objects.filter(company=company, job_type='Gig', is_deleted=False)
         

@@ -9,4 +9,6 @@ urlpatterns = [
     path('college-monthly/', leaderboard_view.CollegeMonthlyLeaderboard.as_view()),
     path('wadhwani-college/', leaderboard_view.WadhwaniCollegeLeaderboard.as_view()),
     path('wadhwani-zonal/', leaderboard_view.WadhwaniZonalLeaderboard.as_view()),
+    path('ig-mentor/<str:ig_id>/', leaderboard_view.IGMentorLeaderboard.as_view()),
+    path('campus-mentor/<str:campus_id>/', leaderboard_view.CampusMentorLeaderboard.as_view()),
 ]

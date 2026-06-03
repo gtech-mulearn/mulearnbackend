@@ -34,8 +34,26 @@ def _save_task_skills(task_id, skill_ids, user_id):
 
 
 def get_verified_company(user_id):
-    """Return the verified company for the user, or None."""
-    return Company.objects.filter(company_user_id=user_id, status="verified").first()
+    """
+    Return the verified Company for a user if they are:
+    - the company creator (company_user_id == user_id), OR
+    - an approved COMPANY_MENTOR for that company.
+    """
+    company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+    if company:
+        return company
+
+    from db.user import UserMentor
+    mentor = UserMentor.objects.filter(
+        user_id=user_id,
+        mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+        status=UserMentor.Status.APPROVED,
+    ).select_related("org").first()
+
+    if mentor and mentor.org:
+        return Company.objects.filter(name=mentor.org.title, status="verified").first()
+
+    return None
 
 
 class CompanyTaskListCreateAPI(APIView):
@@ -45,7 +63,7 @@ class CompanyTaskListCreateAPI(APIView):
         tags=["Dashboard - Company Task"],
         description=(
             "List all tasks submitted by the authenticated company user "
-            "(filtered by requested_by). Supports pagination, search, and sort."
+            "(creator or company mentor). Supports pagination, search, and sort."
         ),
         parameters=[
             OpenApiParameter(
@@ -66,7 +84,6 @@ class CompanyTaskListCreateAPI(APIView):
             )
         },
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -121,7 +138,6 @@ class CompanyTaskListCreateAPI(APIView):
         request=CompanyTaskCreateSerializer,
         responses={200: OpenApiResponse(description="Task submitted for approval.")},
     )
-    @role_required([RoleType.COMPANY.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -173,9 +189,13 @@ class CompanyTaskDetailAPI(APIView):
         description="Retrieve the detail of a specific task submitted by the company.",
         responses={200: CompanyTaskListSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
 
         task = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
@@ -199,9 +219,13 @@ class CompanyTaskDetailAPI(APIView):
         request=CompanyTaskUpdateSerializer,
         responses={200: OpenApiResponse(description="Task updated and re-submitted for approval.")},
     )
-    @role_required([RoleType.COMPANY.value])
     def put(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
             id=task_id, requested_by_id=user_id
@@ -251,9 +275,13 @@ class CompanyTaskDetailAPI(APIView):
         description="Delete a pending task submitted by the company.",
         responses={200: OpenApiResponse(description="Task deleted successfully.")},
     )
-    @role_required([RoleType.COMPANY.value])
     def delete(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
             id=task_id, requested_by_id=user_id
