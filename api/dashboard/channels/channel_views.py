@@ -7,10 +7,16 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from .serializers import ChannelCUDSerializer, ChannelListSerializer
+from drf_spectacular.utils import extend_schema
 
 class ChannelCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Channels'],
+        description="Retrieve Channel C R U D.",
+        responses={200: ChannelListSerializer},
+    )
     def get(self, request):
 
         channel = Channel.objects.all()
@@ -33,6 +39,12 @@ class ChannelCRUDAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Channels'],
+        description="Create Channel C R U D.",
+        request=ChannelCUDSerializer,
+        responses={200: ChannelListSerializer},
+    )
     def post(self, request):
         
         user_id = JWTUtils.fetch_user_id(request)
@@ -57,6 +69,11 @@ class ChannelCRUDAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Channels'],
+        description="Update Channel C R U D.",
+        responses={200: ChannelCUDSerializer},
+    )
     def put(self, request, channel_id):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -89,6 +106,9 @@ class ChannelCRUDAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Channels'], description="Delete Channel C R U D.",
+        responses={200: ChannelListSerializer},
+    )
     def delete(self, request, channel_id):
 
         channel = Channel.objects.filter(

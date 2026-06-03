@@ -28,6 +28,8 @@ from .serializers import (
 )
 from .event_logger import log_event_action
 from .event_image_utils import delete_stale_event_media, merge_event_write_payload
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 MANAGEABLE_ROLES = {
@@ -68,6 +70,11 @@ class ManageEventListCreateAPI(APIView):
     authentication_classes = [CustomizePermission]
     parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Manage Event List Create.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -109,6 +116,12 @@ class ManageEventListCreateAPI(APIView):
             pagination=paginated['pagination'],
         )
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Create Manage Event List Create.",
+        request=EventWriteSerializer,
+        responses={200: EventDetailSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -169,6 +182,11 @@ class ManageEventDetailAPI(APIView):
             return None, None, None, 'You do not have permission to manage this event.'
         return event, user_id, roles, None
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Manage Event Detail.",
+        responses={200: EventDetailSerializer},
+    )
     def get(self, request, event_id):
         event, user_id, _, error = self._get_managed_event(request, event_id)
         if error:
@@ -188,9 +206,15 @@ class ManageEventDetailAPI(APIView):
             response=event_data,
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Events'], description="Update Manage Event Detail.",
+        responses={200: EventDetailSerializer},
+    )
     def put(self, request, event_id):
         return self._update(request, event_id, partial=False)
 
+    @extend_schema(tags=['Dashboard - Events'], description="Partially update Manage Event Detail.",
+        responses={200: EventDetailSerializer},
+    )
     def patch(self, request, event_id):
         return self._update(request, event_id, partial=True)
 
@@ -232,6 +256,9 @@ class ManageEventDetailAPI(APIView):
             ).data,
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Events'], description="Delete Manage Event Detail.",
+        responses={200: EventDetailSerializer},
+    )
     def delete(self, request, event_id):
         event, user_id, _, error = self._get_managed_event(request, event_id)
         if error:
@@ -277,6 +304,15 @@ class ManageEventPublishAPI(APIView):
         'venue_type', 'organiser_type',
     ]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Create Manage Event Publish.",
+        responses={200: inline_serializer(
+            name='EventPublishResponse',
+            fields={
+                'id': s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
+    )
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -349,6 +385,11 @@ class ManageEventCoOwnerAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Manage Event Co Owner.",
+        responses={200: EventCoOwnerSerializer},
+    )
     def get(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -367,6 +408,11 @@ class ManageEventCoOwnerAPI(APIView):
             response=EventCoOwnerSerializer(co_owners, many=True).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Create Manage Event Co Owner.",
+        responses={200: EventCoOwnerSerializer},
+    )
     def post(self, request, event_id):
         """
         Body: { "user_id": "<uuid>" }
@@ -435,6 +481,9 @@ class ManageEventCoOwnerRemoveAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Delete Manage Event Co Owner Remove.",
+        responses={200: EventCoOwnerSerializer},
+    )
     def delete(self, request, event_id, co_owner_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -541,6 +590,11 @@ class ManageEventCollaboratorAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Manage Event Collaborator.",
+        responses={200: EventCollaboratorSerializer},
+    )
     def get(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -557,6 +611,11 @@ class ManageEventCollaboratorAPI(APIView):
             response=EventCollaboratorSerializer(collabs, many=True).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Create Manage Event Collaborator.",
+        responses={200: EventCollaboratorSerializer},
+    )
     def post(self, request, event_id):
         """
         Body: {
@@ -630,6 +689,9 @@ class ManageEventCollaboratorRemoveAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Delete Manage Event Collaborator Remove.",
+        responses={200: EventCollaboratorSerializer},
+    )
     def delete(self, request, event_id, collaborator_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -671,6 +733,11 @@ class ManageEventCollaboratorAcceptAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Create Manage Event Collaborator Accept.",
+        responses={200: EventCollaboratorSerializer},
+    )
     def post(self, request, event_id, collaborator_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -730,6 +797,11 @@ class ManageEventCollaboratorRejectAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Create Manage Event Collaborator Reject.",
+        responses={200: EventCollaboratorSerializer},
+    )
     def post(self, request, event_id, collaborator_id):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -788,6 +860,11 @@ class MyEventInvitesAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve My Event Invites.",
+        responses={200: MyEventInviteSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)

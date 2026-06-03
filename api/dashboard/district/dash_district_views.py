@@ -12,12 +12,18 @@ from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
 from . import dash_district_serializer
 from .dash_district_helper import get_user_college_link
+from drf_spectacular.utils import extend_schema
 
 
 class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Detail.",
+        responses={200: dash_district_serializer.DistrictDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -39,6 +45,11 @@ class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Top Three Campus.",
+        responses={200: dash_district_serializer.DistrictTopThreeCampusSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -83,6 +94,11 @@ class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Student Level Status.",
+        responses={200: dash_district_serializer.DistrictStudentLevelStatusSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -107,6 +123,11 @@ class DistrictStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Student Details.",
+        responses={200: dash_district_serializer.DistrictStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -173,6 +194,11 @@ class DistrictStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Student Details C S V.",
+        responses={200: dash_district_serializer.DistrictStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -221,6 +247,11 @@ class DistrictsCollageDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve Districts Collage Details.",
+        responses={200: dash_district_serializer.DistrictCollegeDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -290,6 +321,11 @@ class DistrictsCollageDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve Districts Collage Details C S V.",
+        responses={200: dash_district_serializer.DistrictCollegeDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 

@@ -13,11 +13,18 @@ from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
 from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class CampusListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus List.",
+        responses={200: serializers.CampusListSerializer},
+    )
     def get(self, request):
         campuses = Organization.objects.filter(org_type=OrganizationType.COLLEGE.value)
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -53,6 +60,11 @@ class CampusDetailsPublicAPI(APIView):
 
     # Use the role_required decorator to specify the allowed roles for this view
     # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Details Public.",
+        responses={200: serializers.CampusDetailsPublicSerializer},
+    )
     def get(self, request, org_id):
 
         if not org_id:
@@ -92,6 +104,11 @@ class CampusDetailsAPI(APIView):
 
     # Use the role_required decorator to specify the allowed roles for this view
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Details.",
+        responses={200: serializers.CampusDetailsSerializer},
+    )
     def get(self, request):
         # Fetch the user's ID from the request using JWTUtils
         user_id = JWTUtils.fetch_user_id(request)
@@ -120,6 +137,24 @@ class CampusStudentInEachLevelAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Student In Each Level.",
+        responses={200: inline_serializer(
+            name="CampusStudentInEachLevelResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusStudentLevelItem",
+                    fields={
+                        "level": s.IntegerField(),
+                        "students": s.IntegerField(),
+                    },
+                    many=True,
+                ),
+            },
+        )},
+    )
     def get(self, request, org_id=None):
         if org_id:
             org = Organization.objects.filter(
@@ -159,6 +194,11 @@ class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Student Details.",
+        responses={200: serializers.CampusStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -279,6 +319,11 @@ class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Student Details C S V.",
+        responses={200: serializers.CampusStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -368,7 +413,7 @@ class CampusStudentDetailsCSVAPI(APIView):
                 )
             )
 
-        paginated_queryset = CommonUtils.get_paginated_queryset(
+        filtered_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
             request,
             ["full_name", "level"],
@@ -383,10 +428,11 @@ class CampusStudentDetailsCSVAPI(APIView):
                 "mobile": "mobile_",
                 "is_alumni": "is_alumni",
             },
+            is_pagination=False,
         )
 
         serializer = serializers.CampusStudentDetailsSerializer(
-            user_org_links, many=True, context={"ranks": ranks}
+            filtered_queryset, many=True, context={"ranks": ranks}
         )
         return CommonUtils.generate_csv(serializer.data, "Campus Student Details")
 
@@ -395,6 +441,11 @@ class WeeklyKarmaAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Weekly Karma.",
+        responses={200: serializers.WeeklyKarmaSerializer},
+    )
     def get(self, request, org_id=None):
         if org_id:
             org = Organization.objects.filter(
@@ -426,6 +477,11 @@ class ChangeStudentTypeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Partially update Change Student Type.",
+        responses={200: serializers.ChangeStudentTypeSerializer},
+    )
     def patch(self, request, member_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -452,8 +508,13 @@ class ChangeStudentTypeAPI(APIView):
 
 class TransferLeadRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
-
     @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Create Transfer Lead Role.",
+        request=serializers.UserRoleLinkSerializer,
+        responses={200: serializers.UserRoleLinkSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         new_lead_muid = request.data.get("new_lead_muid", None)
@@ -528,6 +589,12 @@ class TransferEnablerRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Create Transfer Enabler Role.",
+        request=serializers.UserRoleLinkSerializer,
+        responses={200: serializers.UserRoleLinkSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         new_enabler_muid = request.data.get("new_enabler_muid", None)
@@ -604,6 +671,9 @@ class TransferIGRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Transfer I G Role.",
+        responses={200: serializers.UserRoleLinkSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -622,6 +692,12 @@ class TransferIGRoleAPI(APIView):
         return CustomResponse(response={"ig_list": ig_list}).get_success_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Create Transfer I G Role.",
+        request=serializers.UserRoleLinkSerializer,
+        responses={200: serializers.UserRoleLinkSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         new_ig_muid = request.data.get("new_ig_muid", None)
@@ -660,7 +736,7 @@ class TransferIGRoleAPI(APIView):
 
         # need to change title according to the ig role
         # below code filter role for title=ig_code + ' CampusLead'
-        role_id = Role.objects.filter(title=f"{ig_code} CampusLead").first()
+        role_id = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).first()
         if role_id is None:
             return CustomResponse(
                 general_message="Can't find the role"
@@ -698,6 +774,11 @@ class TransferIGRoleAPI(APIView):
 class CampusStudentLeaderboardAPI(APIView):
 
     authentication_classes = [CustomizePermission]
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Student Leaderboard.",
+        responses={200: serializers.CampusLeaderboardSerializer},
+    )
     def get(self, request, org_id=None):
 
         if not org_id:
@@ -830,6 +911,23 @@ class CampusKarmaByClusterAPI(APIView):
 
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Karma By Cluster.",
+        responses={200: inline_serializer(
+            name="CampusKarmaByClusterResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusKarmaByClusterCategory",
+                    fields={
+                        "total_karma": s.IntegerField(),
+                        "member_count": s.IntegerField(),
+                    },
+                ),
+            },
+        )},
+    )
     def get(self, request, org_id=None):
 
         if not org_id:
@@ -898,6 +996,11 @@ class CampusIGChapterAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus I G Chapter.",
+        responses={200: serializers.CampusIGChapterListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -910,6 +1013,12 @@ class CampusIGChapterAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Create Campus I G Chapter.",
+        request=serializers.CampusIGChapterCreateSerializer,
+        responses={200: serializers.CampusIGChapterListSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -929,6 +1038,11 @@ class CampusIGChapterAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Partially update Campus I G Chapter.",
+        responses={200: serializers.CampusIGChapterUpdateSerializer},
+    )
     def patch(self, request, chapter_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -959,6 +1073,9 @@ class CampusIGChapterAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Campus'], description="Delete Campus I G Chapter.",
+        responses={200: serializers.CampusIGChapterListSerializer},
+    )
     def delete(self, request, chapter_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -976,7 +1093,9 @@ class CampusIGChapterAPI(APIView):
             ).get_failure_response()
 
         if chapter.lead:
-            role = Role.objects.filter(title=f"{chapter.ig.code}CampusLead").first()
+            role = Role.objects.filter(
+                title=RoleType.IG_CAMPUS_LEAD_ROLE(chapter.ig.code)
+            ).first()
             if role:
                 UserRoleLink.objects.filter(
                     user=chapter.lead,
@@ -999,6 +1118,12 @@ class CampusSocialLinkAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Update Campus Social Link.",
+        request=serializers.CampusSocialLinkUpsertSerializer,
+        responses={200: serializers.CampusSocialLinkUpsertSerializer},
+    )
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -1018,6 +1143,9 @@ class CampusSocialLinkAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(tags=['Dashboard - Campus'], description="Delete Campus Social Link.",
+        responses={200: serializers.CampusSocialLinkUpsertSerializer},
+    )
     def delete(self, request, link_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -1046,6 +1174,11 @@ class CampusStudentActivityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Student Activity.",
+        responses={200: serializers.StudentActivityTimelineSerializer},
+    )
     def get(self, request, muid):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -1082,6 +1215,11 @@ class CampusShowcaseAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus Showcase.",
+        responses={200: serializers.CampusShowcaseSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -1101,6 +1239,12 @@ class CampusShowcaseAPI(APIView):
             ).get_failure_response()
 
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Partially update Campus Showcase.",
+        request=serializers.CampusShowcaseSerializer,
+        responses={200: serializers.CampusShowcaseSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not (user_org_link := get_user_college_link(user_id)):
@@ -1125,3 +1269,89 @@ class CampusShowcaseAPI(APIView):
         return CustomResponse(
             response=serializer.errors
         ).get_failure_response()
+
+
+class AssignCampusMentorAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Assign a student from the campus as a Campus Mentor.",
+        request=inline_serializer(
+            name="AssignCampusMentorRequest",
+            fields={
+                "muid": s.CharField(required=True),
+            }
+        ),
+        responses={200: OpenApiResponse(description="Successfully nominated as a Campus Mentor")},
+    )
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        muid = request.data.get("muid")
+
+        if not muid:
+            return CustomResponse(
+                general_message="muid is required"
+            ).get_failure_response()
+
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        org = user_org_link.org
+
+        student = User.objects.filter(muid=muid).first()
+        if not student:
+            return CustomResponse(
+                general_message="Student not found"
+            ).get_failure_response()
+
+        # Validate student is in the same campus
+        student_org_link = UserOrganizationLink.objects.filter(
+            user=student,
+            org=org,
+            org__org_type=OrganizationType.COLLEGE.value,
+            is_alumni=False
+        ).first()
+
+        if not student_org_link:
+            return CustomResponse(
+                general_message="Student is not a member of your campus"
+            ).get_failure_response()
+
+        from db.user import UserMentor
+        from utils.utils import DateTimeUtils
+
+        existing_campus_mentor = UserMentor.objects.filter(
+            user=student,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+            org=org,
+        ).first()
+        if existing_campus_mentor:
+            return CustomResponse(
+                general_message="Student is already a Campus Mentor or has a pending request"
+            ).get_failure_response()
+
+        other_mentor = UserMentor.objects.filter(user=student).first()
+        if other_mentor:
+            return CustomResponse(
+                general_message=f"Student is already a mentor with tier {other_mentor.mentor_tier}"
+            ).get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        UserMentor.objects.create(
+            user=student,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+            status=UserMentor.Status.PENDING,
+            org=org,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+            created_at=now,
+            updated_at=now,
+        )
+
+        return CustomResponse(
+            general_message="Student successfully nominated as a Campus Mentor"
+        ).get_success_response()

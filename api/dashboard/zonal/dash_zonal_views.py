@@ -11,12 +11,18 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import dash_zonal_helper, dash_zonal_serializer
+from drf_spectacular.utils import extend_schema
 
 
 class ZonalDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal Details.",
+        responses={200: dash_zonal_serializer.ZonalDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -37,6 +43,11 @@ class ZonalTopThreeDistrictAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal Top Three District.",
+        responses={200: dash_zonal_serializer.ZonalTopThreeDistrictSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -83,6 +94,11 @@ class ZonalStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal Student Level Status.",
+        responses={200: dash_zonal_serializer.ZonalStudentLevelStatusSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -106,6 +122,11 @@ class ZonalStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal Student Details.",
+        responses={200: dash_zonal_serializer.ZonalStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -172,6 +193,11 @@ class ZonalStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal Student Details C S V.",
+        responses={200: dash_zonal_serializer.ZonalStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -220,6 +246,11 @@ class ZonalCollegeDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal College Details.",
+        responses={200: dash_zonal_serializer.ZonalCollegeDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -289,6 +320,11 @@ class ZonalCollegeDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ZONAL_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - Zonal'],
+        description="Retrieve Zonal College Details C S V.",
+        responses={200: dash_zonal_serializer.ZonalCollegeDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 

@@ -7,6 +7,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from .serializers import AffiliationCUDSerializer, AffiliationListSerializer
+from drf_spectacular.utils import extend_schema
 
 
 
@@ -16,6 +17,11 @@ from .serializers import AffiliationCUDSerializer, AffiliationListSerializer
 class AffiliationCRUDAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Affiliation'],
+        description="Retrieve Affiliation C R U D.",
+        responses={200: AffiliationListSerializer},
+    )
     def get(self, request):
         affiliation = OrgAffiliation.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -39,6 +45,12 @@ class AffiliationCRUDAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Affiliation'],
+        description="Create Affiliation C R U D.",
+        request=AffiliationCUDSerializer,
+        responses={200: AffiliationListSerializer},
+    )
     def post(self, request):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -63,6 +75,11 @@ class AffiliationCRUDAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Affiliation'],
+        description="Update Affiliation C R U D.",
+        responses={200: AffiliationCUDSerializer},
+    )
     def put(self, request, affiliation_id):
 
         user_id = JWTUtils.fetch_user_id(request)
@@ -94,6 +111,9 @@ class AffiliationCRUDAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Affiliation'], description="Delete Affiliation C R U D.",
+        responses={200: AffiliationListSerializer},
+    )
     def delete(self, request, affiliation_id):
 
         affiliation = OrgAffiliation.objects.filter(

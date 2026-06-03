@@ -7,9 +7,22 @@ from db.user import User
 
 from rest_framework.views import APIView
 from django.conf import settings
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class WadhwaniAuthToken(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Auth Token.",
+        responses={200: inline_serializer(
+            name='WadhwaniAuthTokenResponse',
+            fields={
+                'access_token': s.CharField(),
+                'token_type': s.CharField(),
+                'expires_in': s.IntegerField(),
+                'scope': s.CharField(required=False, allow_blank=True),
+            },
+        )},
+    )
     def post(self, request):
         url = settings.WADHWANI_CLIENT_AUTH_URL
 
@@ -29,6 +42,19 @@ class WadhwaniAuthToken(APIView):
 
 
 class WadhwaniUserLogin(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani User Login.",
+        responses={200: inline_serializer(
+            name='WadhwaniUserLoginResponse',
+            fields={
+                'status': s.CharField(),
+                'accessToken': s.CharField(required=False),
+                'expiresIn': s.IntegerField(required=False),
+                'userCreated': s.BooleanField(required=False),
+                'courseEnrolled': s.BooleanField(required=False),
+                'redirectionUrl': s.CharField(required=False, allow_blank=True),
+            },
+        )},
+    )
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/iamservice/oauth/login"
         user_id = JWTUtils.fetch_user_id(request)
@@ -75,6 +101,26 @@ class WadhwaniUserLogin(APIView):
 
 
 class WadhwaniCourseDetails(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Course Details.",
+        responses={200: inline_serializer(
+            name='WadhwaniCourseDetailsResponse',
+            fields={
+                'status': s.CharField(),
+                'courses': s.ListField(
+                    child=inline_serializer(
+                        name='WadhwaniCourseItem',
+                        fields={
+                            'courseRootId': s.CharField(),
+                            'name': s.CharField(),
+                            'description': s.CharField(required=False, allow_blank=True),
+                            'thumbnailUrl': s.CharField(required=False, allow_null=True),
+                        },
+                    ),
+                    required=False,
+                ),
+            },
+        )},
+    )
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/courseservice/oauth/client/courses"
 
@@ -94,6 +140,26 @@ class WadhwaniCourseDetails(APIView):
 
 
 class WadhwaniCourseEnrollStatus(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Course Enroll Status.",
+        responses={200: inline_serializer(
+            name='WadhwaniCourseEnrollStatusResponse',
+            fields={
+                'status': s.CharField(),
+                'enrolledCourses': s.ListField(
+                    child=inline_serializer(
+                        name='WadhwaniEnrolledCourseItem',
+                        fields={
+                            'courseRootId': s.CharField(),
+                            'name': s.CharField(),
+                            'enrollmentDate': s.CharField(required=False, allow_null=True),
+                            'completionStatus': s.CharField(required=False, allow_null=True),
+                        },
+                    ),
+                    required=False,
+                ),
+            },
+        )},
+    )
     def post(self, request):
         url = settings.WADHWANI_BASE_URL + "/api/v1/courseservice/oauth/client/courses"
         user_id = JWTUtils.fetch_user_id(request)
@@ -116,6 +182,27 @@ class WadhwaniCourseEnrollStatus(APIView):
 
 
 class WadhwaniCourseQuizData(APIView):
+    @extend_schema(tags=['Integrations - Wadhwani'], description="Create Wadhwani Course Quiz Data.",
+        responses={200: inline_serializer(
+            name='WadhwaniCourseQuizDataResponse',
+            fields={
+                'status': s.CharField(),
+                'quizData': s.ListField(
+                    child=inline_serializer(
+                        name='WadhwaniQuizItem',
+                        fields={
+                            'quizId': s.CharField(),
+                            'quizName': s.CharField(),
+                            'score': s.FloatField(required=False, allow_null=True),
+                            'totalMarks': s.FloatField(required=False, allow_null=True),
+                            'attemptDate': s.CharField(required=False, allow_null=True),
+                        },
+                    ),
+                    required=False,
+                ),
+            },
+        )},
+    )
     def post(self, request):
         if not (token := request.data.get("Client-Auth-Token", None)):
             return CustomResponse(

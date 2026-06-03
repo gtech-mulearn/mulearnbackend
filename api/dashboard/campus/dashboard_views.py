@@ -12,6 +12,8 @@ from db.task import KarmaActivityLog
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 def _campus_context(request):
@@ -135,6 +137,85 @@ def _campus_stats(org, since):
 class CampusDashboardSummaryAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Dashboard Summary.",
+        responses={200: inline_serializer(
+            name="CampusDashboardSummaryResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusDashboardSummaryData",
+                    fields={
+                        "campus": inline_serializer(
+                            name="CampusDashboardSummaryCampus",
+                            fields={
+                                "org_id": s.CharField(),
+                                "college_name": s.CharField(),
+                                "campus_code": s.CharField(),
+                                "campus_zone": s.CharField(allow_null=True),
+                            },
+                        ),
+                        "stat_cards": inline_serializer(
+                            name="CampusDashboardStatCard",
+                            fields={
+                                "key": s.CharField(),
+                                "label": s.CharField(),
+                                "value": s.IntegerField(allow_null=True),
+                                "delta": s.IntegerField(),
+                                "delta_type": s.CharField(),
+                                "period": s.CharField(),
+                            },
+                            many=True,
+                        ),
+                        "member_funnel": inline_serializer(
+                            name="CampusDashboardMemberFunnel",
+                            fields={
+                                "max": s.IntegerField(),
+                                "stages": inline_serializer(
+                                    name="CampusDashboardFunnelStage",
+                                    fields={
+                                        "key": s.CharField(),
+                                        "label": s.CharField(),
+                                        "count": s.IntegerField(),
+                                        "percentage": s.FloatField(),
+                                    },
+                                    many=True,
+                                ),
+                            },
+                        ),
+                        "circle_health": inline_serializer(
+                            name="CampusDashboardCircleHealth",
+                            fields={
+                                "circle_id": s.CharField(),
+                                "circle_name": s.CharField(),
+                                "ig_id": s.CharField(),
+                                "ig_name": s.CharField(allow_null=True),
+                                "member_count": s.IntegerField(),
+                                "sessions_per_month": s.IntegerField(),
+                                "last_session_at": s.CharField(allow_null=True),
+                                "status": s.CharField(),
+                            },
+                            many=True,
+                        ),
+                        "recent_activity": inline_serializer(
+                            name="CampusDashboardRecentActivity",
+                            fields={
+                                "id": s.CharField(),
+                                "type": s.CharField(),
+                                "title": s.CharField(),
+                                "description": s.CharField(),
+                                "created_at": s.CharField(allow_null=True),
+                                "actor": s.DictField(),
+                                "metadata": s.DictField(),
+                            },
+                            many=True,
+                        ),
+                    },
+                ),
+            },
+        )},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:
@@ -160,6 +241,32 @@ class CampusDashboardSummaryAPIView(APIView):
 class CampusMemberFunnelAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Member Funnel.",
+        responses={200: inline_serializer(
+            name="CampusMemberFunnelResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusMemberFunnelData",
+                    fields={
+                        "max": s.IntegerField(),
+                        "stages": inline_serializer(
+                            name="CampusMemberFunnelStage",
+                            fields={
+                                "key": s.CharField(),
+                                "label": s.CharField(),
+                                "count": s.IntegerField(),
+                                "percentage": s.FloatField(),
+                            },
+                            many=True,
+                        ),
+                    },
+                ),
+            },
+        )},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:
@@ -173,6 +280,35 @@ class CampusMemberFunnelAPIView(APIView):
 class CampusCircleHealthAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Circle Health.",
+        responses={200: inline_serializer(
+            name="CampusCircleHealthResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusCircleHealthData",
+                    fields={
+                        "data": inline_serializer(
+                            name="CampusCircleHealthItem",
+                            fields={
+                                "circle_id": s.CharField(),
+                                "circle_name": s.CharField(),
+                                "ig_id": s.CharField(),
+                                "ig_name": s.CharField(allow_null=True),
+                                "member_count": s.IntegerField(),
+                                "sessions_per_month": s.IntegerField(),
+                                "last_session_at": s.CharField(allow_null=True),
+                                "status": s.CharField(),
+                            },
+                            many=True,
+                        ),
+                    },
+                ),
+            },
+        )},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:
@@ -186,6 +322,34 @@ class CampusCircleHealthAPIView(APIView):
 class CampusRecentActivityAPIView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Recent Activity.",
+        responses={200: inline_serializer(
+            name="CampusRecentActivityResponse",
+            fields={
+                "hasError": s.BooleanField(),
+                "statusCode": s.IntegerField(),
+                "message": s.DictField(),
+                "response": inline_serializer(
+                    name="CampusRecentActivityData",
+                    fields={
+                        "data": inline_serializer(
+                            name="CampusRecentActivityItem",
+                            fields={
+                                "id": s.CharField(),
+                                "type": s.CharField(),
+                                "title": s.CharField(),
+                                "description": s.CharField(),
+                                "created_at": s.CharField(allow_null=True),
+                                "actor": s.DictField(),
+                                "metadata": s.DictField(),
+                            },
+                            many=True,
+                        ),
+                    },
+                ),
+            },
+        )},
+    )
     def get(self, request):
         org, error = _campus_context(request)
         if error:

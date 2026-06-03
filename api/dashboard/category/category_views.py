@@ -6,9 +6,15 @@ from .category_serializer import CategoryListSerializer, CategoryCUDSerializer
 from utils.types import RoleType
 from utils.permission import role_required
 from utils.utils import CommonUtils
+from drf_spectacular.utils import extend_schema
 
 class CategoryAPI(APIView):
     authentication_classes = [CustomizePermission]
+    @extend_schema(
+        tags=['Dashboard - Category'],
+        description="Retrieve Category.",
+        responses={200: CategoryListSerializer},
+    )
     def get(self, request, category_id=None):
         if category_id:
             category = Category.objects.filter(id=category_id).first()
@@ -36,6 +42,12 @@ class CategoryAPI(APIView):
             RoleType.ADMIN.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Category'],
+        description="Create Category.",
+        request=CategoryCUDSerializer,
+        responses={200: CategoryListSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = CategoryCUDSerializer(
@@ -56,6 +68,11 @@ class CategoryAPI(APIView):
         [
             RoleType.ADMIN.value,
         ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Category'],
+        description="Update Category.",
+        responses={200: CategoryCUDSerializer},
     )
     def put(self, request, category_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -84,6 +101,11 @@ class CategoryAPI(APIView):
             RoleType.ADMIN.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Category'],
+        description="Partially update Category.",
+        responses={200: CategoryCUDSerializer},
+    )
     def patch(self, request, category_id):
         user_id = JWTUtils.fetch_user_id(request)
         category = Category.objects.filter(id=category_id).first()
@@ -111,6 +133,9 @@ class CategoryAPI(APIView):
         [
             RoleType.ADMIN.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Category'], description="Delete Category.",
+        responses={200: CategoryListSerializer},
     )
     def delete(self, request, category_id):
         category = Category.objects.filter(id=category_id).first()
