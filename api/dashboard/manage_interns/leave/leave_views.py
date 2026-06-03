@@ -19,7 +19,7 @@ class ManageInternLeaveAPI(APIView):
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             leaves, request,
-            ['user__fullname', 'leave_type', 'status'],
+            ['user__full_name', 'leave_type', 'status'],
             {'created_at': 'created_at', 'status': 'status'}
         )
         

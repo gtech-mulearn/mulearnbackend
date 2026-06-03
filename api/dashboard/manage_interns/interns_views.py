@@ -25,7 +25,7 @@ class ManageInternAPI(APIView):
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             interns, request,
-            ['user__fullname', 'guild', 'status'],
+            ['user__full_name', 'guild', 'status'],
             {'created_at': 'created_at', 'status': 'status'}
         )
         
@@ -82,6 +82,28 @@ class ManageInternAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
+    @role_required([RoleType.ADMIN.value])
+    def delete(self, request, intern_id):
+        from django.db import transaction
+        from db.user import UserRoleLink
+        from utils.types import RoleType
+        
+        user_id = JWTUtils.fetch_user_id(request)
+        intern = UserInternGuildLink.objects.filter(id=intern_id).first()
+        if not intern:
+            return CustomResponse(general_message="Intern not found.").get_failure_response()
+            
+        with transaction.atomic():
+            # Soft delete / Deactivate
+            intern.status = InternGuildStatus.INACTIVE.value
+            intern.updated_by_id = user_id
+            intern.save()
+            
+            # Remove "Intern" role
+            UserRoleLink.objects.filter(user=intern.user, role__title=RoleType.INTERN.value).delete()
+        
+        return CustomResponse(general_message="Intern deactivated successfully.").get_success_response()
+
 class ManageInternStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -122,7 +144,7 @@ class ManageInternExportAPI(APIView):
         
         for intern in interns:
             writer.writerow([
-                intern.user.fullname,
+                intern.user.full_name,
                 intern.user.muid,
                 intern.guild,
                 intern.status,

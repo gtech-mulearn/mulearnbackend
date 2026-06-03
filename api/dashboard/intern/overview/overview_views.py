@@ -3,7 +3,7 @@ from django.db.models import Sum
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternLeaderboardWeights
+from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
 from utils.utils import CommonUtils
 from db.intern import UserInternGuildLink, InternTask
 from db.task import KarmaActivityLog
@@ -62,7 +62,7 @@ class InternOverviewActivityAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         logs = KarmaActivityLog.objects.filter(
             user_id=user_id, 
-            task__type__title='Intern Task'
+            task__hashtag__startswith='#intern-'
         ).select_related('task').order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -91,6 +91,65 @@ class InternOverviewLeaderboardTopAPI(APIView):
 
     @role_required([RoleType.INTERN.value])
     def get(self, request):
-        # Returning empty for now until Phase 8 Leaderboard logic is implemented,
-        # which will be extracted to a shared service to provide top 3 easily.
-        return CustomResponse(response=[]).get_success_response()
+        interns = UserInternGuildLink.objects.filter(
+            status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
+        ).select_related('user')
+        
+        intern_user_ids = [intern.user_id for intern in interns]
+        
+        streaks = UserStreak.objects.filter(user_id__in=intern_user_ids)
+        daily_streaks = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_timesheet'}
+        weekly_streaks = {s.user_id: s.current_streak for s in streaks if s.streak_type == 'intern_weekly_review'}
+        
+        karma_logs = KarmaActivityLog.objects.filter(user_id__in=intern_user_ids, task__hashtag__startswith='#intern-')
+        karma_by_user = karma_logs.values('user_id').annotate(total=Sum('karma'))
+        karma_dict = {item['user_id']: item['total'] for item in karma_by_user}
+        
+        completed_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, status='COMPLETED')
+        tasks_by_user = {}
+        for t in completed_tasks:
+            tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
+            
+        leaderboard_data = []
+        for intern in interns:
+            user_id = intern.user_id
+            
+            d_streak_val = daily_streaks.get(user_id, 0)
+            w_streak_val = weekly_streaks.get(user_id, 0)
+            total_intern_karma = karma_dict.get(user_id, 0)
+            
+            user_tasks = tasks_by_user.get(user_id, [])
+            completed_count = len(user_tasks)
+            
+            complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
+            complexity_score = sum([complexity_map.get(t.complexity, 1) for t in user_tasks])
+            
+            score = (total_intern_karma * InternLeaderboardWeights.KARMA_MULTIPLIER +
+                     d_streak_val * InternLeaderboardWeights.DAILY_STREAK_MULTIPLIER +
+                     w_streak_val * InternLeaderboardWeights.WEEKLY_STREAK_MULTIPLIER +
+                     completed_count * InternLeaderboardWeights.COMPLETED_TASKS_MULTIPLIER +
+                     complexity_score * InternLeaderboardWeights.COMPLEXITY_SCORE_MULTIPLIER)
+                     
+            leaderboard_data.append({
+                "user_id": user_id,
+                "full_name": intern.user.full_name,
+                "guild": intern.guild,
+                "score": score
+            })
+            
+        leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
+        top_three = leaderboard_data[:3]
+        for i, entry in enumerate(top_three):
+            entry['rank'] = i + 1
+            
+        return CustomResponse(response=top_three).get_success_response()
+
+
+class InternGuildsAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.INTERN.value, RoleType.ADMIN.value])
+    def get(self, request):
+        from utils.types import InternGuild
+        guilds = InternGuild.get_all_values()
+        return CustomResponse(response=guilds).get_success_response()

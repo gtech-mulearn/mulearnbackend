@@ -8,13 +8,23 @@ from rest_framework.views import APIView
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternSubmissionStatus, InternGuildStatus, InternHashtag
-from db.intern import InternDailyTimesheet, UserInternGuildLink
+from db.intern import InternDailyTimesheet, UserInternGuildLink, InternWeeklyReview
 from db.task import KarmaActivityLog, TaskList, Wallet
 from db.achievement import UserStreak
+from utils.utils import CommonUtils
+from .serializers import ManageInternWeeklyReviewSerializer, ManageInternTimesheetSerializer
 
 
 class InternTimesheetReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request, timesheet_id):
+        timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id).first()
+        if not timesheet:
+            return CustomResponse(general_message="Timesheet not found.").get_failure_response()
+        serializer = ManageInternTimesheetSerializer(timesheet)
+        return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, timesheet_id):
@@ -38,11 +48,20 @@ class InternTimesheetReviewAPI(APIView):
                 user_id = timesheet.user_id
                 streak, _ = UserStreak.objects.get_or_create(user_id=user_id, streak_type='intern_timesheet')
                 
-                # Use entry_date to determine consecutiveness logically
+                # Use entry_date to determine consecutiveness logically (skip weekends)
                 if streak.last_active:
-                    if streak.last_active == timesheet.entry_date - timedelta(days=1):
+                    days_diff = (timesheet.entry_date - streak.last_active).days
+                    is_consecutive = False
+                    
+                    if days_diff == 1:
+                        is_consecutive = True
+                    elif days_diff == 3 and timesheet.entry_date.weekday() == 0 and streak.last_active.weekday() == 4:
+                        # Friday to Monday
+                        is_consecutive = True
+                        
+                    if is_consecutive:
                         streak.current_streak += 1
-                    elif streak.last_active == timesheet.entry_date:
+                    elif days_diff == 0:
                         pass # Same day, no increment
                     else:
                         streak.current_streak = 1
@@ -78,9 +97,9 @@ class InternTimesheetReviewAPI(APIView):
                         created_at=now()
                     )
                     
-                    wallet, _ = Wallet.objects.get_or_create(user_id=user_id)
-                    wallet.karma += karma_to_award
-                    wallet.save()
+                    from django.db.models import F
+                    wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
+                    Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
 
                 milestones = {
                     7: (InternHashtag.STREAK_7_HASHTAG.value, InternHashtag.STREAK_7_KARMA.value),
@@ -105,9 +124,9 @@ class InternTimesheetReviewAPI(APIView):
                             created_by_id=admin_id,
                             created_at=now()
                         )
-                        wallet, _ = Wallet.objects.get_or_create(user_id=user_id)
-                        wallet.karma += bonus_karma
-                        wallet.save()
+                        from django.db.models import F
+                        wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
+                        Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + bonus_karma)
                         
                 streak.save()
                 
@@ -127,6 +146,14 @@ class InternTimesheetReviewAPI(APIView):
 
 class InternWeeklyReviewReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request, review_id):
+        review = InternWeeklyReview.objects.filter(id=review_id).first()
+        if not review:
+            return CustomResponse(general_message="Weekly review not found.").get_failure_response()
+        serializer = ManageInternWeeklyReviewSerializer(review)
+        return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, review_id):
@@ -184,9 +211,9 @@ class InternWeeklyReviewReviewAPI(APIView):
                         created_at=now()
                     )
                     
-                    wallet, _ = Wallet.objects.get_or_create(user_id=user_id)
-                    wallet.karma += karma_to_award
-                    wallet.save()
+                    from django.db.models import F
+                    wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
+                    Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
                     
                 streak.save()
 
@@ -198,3 +225,55 @@ class InternWeeklyReviewReviewAPI(APIView):
                 
             review.save()
             return CustomResponse(general_message=f"Weekly review {action}ed successfully.").get_success_response()
+
+
+class InternWeeklyReviewListAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        reviews = InternWeeklyReview.objects.all().order_by('-created_at')
+        
+        status = request.query_params.get('status')
+        if status:
+            reviews = reviews.filter(status=status)
+            
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            reviews, request,
+            ['user__full_name', 'status', 'team'],
+            {'created_at': 'created_at', 'status': 'status'}
+        )
+        
+        serializer = ManageInternWeeklyReviewSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination")
+            }
+        ).get_success_response()
+
+
+class InternTimesheetListAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        timesheets = InternDailyTimesheet.objects.all().order_by('-created_at')
+        
+        status = request.query_params.get('status')
+        if status:
+            timesheets = timesheets.filter(status=status)
+            
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            timesheets, request,
+            ['user__full_name', 'status', 'category'],
+            {'created_at': 'created_at', 'status': 'status'}
+        )
+        
+        serializer = ManageInternTimesheetSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination")
+            }
+        ).get_success_response()

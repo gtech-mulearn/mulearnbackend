@@ -7,7 +7,7 @@ urlpatterns = [
     path("leave/", include("api.dashboard.manage_interns.leave.urls")),
     
     path("status/", interns_views.ManageInternStatusAPI.as_view(), name="manage-intern-status"),
-    path("export/", interns_views.ManageInternExportAPI.as_view(), name="manage-intern-export"),
-    path("", interns_views.ManageInternAPI.as_view(), name="manage-intern-list-create"),
-    path("<str:intern_id>/", interns_views.ManageInternAPI.as_view(), name="manage-intern-update"),
+    path("interns/export/", interns_views.ManageInternExportAPI.as_view(), name="manage-intern-export"),
+    path("interns/", interns_views.ManageInternAPI.as_view(), name="manage-intern-list-create"),
+    path("interns/<str:intern_id>/", interns_views.ManageInternAPI.as_view(), name="manage-intern-update-delete"),
 ]

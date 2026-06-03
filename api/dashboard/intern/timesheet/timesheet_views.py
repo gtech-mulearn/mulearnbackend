@@ -16,6 +16,32 @@ class InternTimesheetAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    def get(self, request, timesheet_id=None):
+        user_id = JWTUtils.fetch_user_id(request)
+        if timesheet_id:
+            timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id, user_id=user_id).first()
+            if not timesheet:
+                return CustomResponse(general_message="Timesheet not found.").get_failure_response()
+            serializer = InternTimesheetHistorySerializer(timesheet)
+            return CustomResponse(response=serializer.data).get_success_response()
+            
+        timesheets = InternDailyTimesheet.objects.filter(user_id=user_id).order_by('-entry_date')
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            timesheets, request,
+            ['entry_date', 'status', 'category'],
+            {'entry_date': 'entry_date', 'status': 'status'}
+        )
+        
+        serializer = InternTimesheetHistorySerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination")
+            }
+        ).get_success_response()
+
+    @role_required([RoleType.INTERN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()

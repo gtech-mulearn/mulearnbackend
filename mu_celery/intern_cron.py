@@ -20,16 +20,24 @@ def intern_daily_status_cron():
     
     for intern in active_interns:
         missed_count = 0
-        for i in range(1, 6):
-            check_date = today - timedelta(days=i)
+        days_checked = 0
+        days_back = 1
+        
+        while days_checked < 5:
+            check_date = today - timedelta(days=days_back)
+            days_back += 1
             
-            # Simple check, we assume 5 consecutive previous days
+            if check_date.weekday() > 4:
+                continue
+                
             has_timesheet = InternDailyTimesheet.objects.filter(
                 user_id=intern.user_id, entry_date=check_date
             ).exists()
             
             if not has_timesheet:
                 missed_count += 1
+                
+            days_checked += 1
                 
         new_status = intern.status
         if missed_count >= 5:

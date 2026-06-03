@@ -15,6 +15,32 @@ class InternWeeklyReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    def get(self, request, review_id=None):
+        user_id = JWTUtils.fetch_user_id(request)
+        if review_id:
+            review = InternWeeklyReview.objects.filter(id=review_id, user_id=user_id).first()
+            if not review:
+                return CustomResponse(general_message="Weekly review not found.").get_failure_response()
+            serializer = InternWeeklyReviewHistorySerializer(review)
+            return CustomResponse(response=serializer.data).get_success_response()
+            
+        reviews = InternWeeklyReview.objects.filter(user_id=user_id).order_by('-iso_year', '-iso_week')
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            reviews, request,
+            ['iso_year', 'iso_week', 'status'],
+            {'iso_year': 'iso_year', 'iso_week': 'iso_week', 'status': 'status'}
+        )
+        
+        serializer = InternWeeklyReviewHistorySerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination")
+            }
+        ).get_success_response()
+
+    @role_required([RoleType.INTERN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()

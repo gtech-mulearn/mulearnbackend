@@ -25,7 +25,7 @@ class ManageInternTaskAPI(APIView):
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks, request,
-            ['title', 'status', 'category', 'assigned_to__fullname'],
+            ['title', 'status', 'category', 'assigned_to__full_name'],
             {'created_at': 'created_at', 'status': 'status'}
         )
         
@@ -51,9 +51,12 @@ class ManageInternTaskAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     def patch(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
+        
         task = InternTask.objects.filter(id=task_id).first()
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
+            
+        request_data = request.data
             
         old_data = {
             "title": task.title,
@@ -64,13 +67,13 @@ class ManageInternTaskAPI(APIView):
             "status": task.status
         }
             
-        serializer = ManageInternTaskSerializer(task, data=request.data, partial=True, context={'user_id': user_id})
+        serializer = ManageInternTaskSerializer(task, data=request_data, partial=True, context={'user_id': user_id})
         
         if serializer.is_valid():
             serializer.save()
             
             from db.mentor import SystemActionLog
-            new_data = {k: v for k, v in request.data.items() if k in old_data}
+            new_data = {k: v for k, v in request_data.items() if k in old_data}
             
             if new_data:
                 SystemActionLog.objects.create(

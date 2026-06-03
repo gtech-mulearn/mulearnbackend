@@ -16,6 +16,7 @@ class DbConfig(AppConfig):
         from db import task as _task          # noqa: F401 — registers InterestGroup etc.
         from db import mentor as _mentor      # noqa: F401 — registers MentorshipSession etc.
         from db import events as _events      # noqa: F401 — registers Event model
+        from db import company as _company    # noqa: F401 — registers Company model
         _ready = super().ready()
         self.check_system_user_exists()
         return _ready

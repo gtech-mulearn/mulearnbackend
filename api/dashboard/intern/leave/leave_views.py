@@ -15,6 +15,32 @@ class InternLeaveRequestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    def get(self, request, leave_id=None):
+        user_id = JWTUtils.fetch_user_id(request)
+        if leave_id:
+            leave = InternLeaveRequest.objects.filter(id=leave_id, user_id=user_id).first()
+            if not leave:
+                return CustomResponse(general_message="Leave request not found.").get_failure_response()
+            serializer = InternLeaveHistorySerializer(leave)
+            return CustomResponse(response=serializer.data).get_success_response()
+            
+        leaves = InternLeaveRequest.objects.filter(user_id=user_id).order_by('-created_at')
+        
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            leaves, request,
+            ['leave_type', 'status'],
+            {'created_at': 'created_at', 'status': 'status'}
+        )
+        
+        serializer = InternLeaveHistorySerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination")
+            }
+        ).get_success_response()
+
+    @role_required([RoleType.INTERN.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = InternLeaveRequestSerializer(data=request.data, context={'user_id': user_id})
@@ -94,23 +120,23 @@ class InternLeaveBalanceAPI(APIView):
         sick_used = approved_leaves.filter(
             leave_type='SICK',
             start_date__gte=month_start
-        ).count()
+        ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
         
         casual_used = approved_leaves.filter(
             leave_type='CASUAL',
             start_date__gte=month_start
-        ).count()
+        ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
         
         wfh_used = approved_leaves.filter(
             leave_type='WFH',
             start_date__gte=week_start
-        ).count()
+        ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
         
         data = {
             "SICK": {"limit": 2, "used": sick_used, "remaining": max(0, 2 - sick_used), "period": "month"},
             "CASUAL": {"limit": 1, "used": casual_used, "remaining": max(0, 1 - casual_used), "period": "month"},
             "WFH": {"limit": 2, "used": wfh_used, "remaining": max(0, 2 - wfh_used), "period": "week"},
-            "EMERGENCY": {"limit": None, "used": approved_leaves.filter(leave_type='EMERGENCY').count(), "remaining": None, "period": "unlimited"}
+            "EMERGENCY": {"limit": None, "used": approved_leaves.filter(leave_type='EMERGENCY').aggregate(Sum('duration_days'))['duration_days__sum'] or 0, "remaining": None, "period": "unlimited"}
         }
         
         return CustomResponse(response=data).get_success_response()

@@ -3,4 +3,5 @@ from . import tasks_views
 
 urlpatterns = [
     path("mine/", tasks_views.InternTaskMineAPI.as_view(), name="intern-tasks-mine"),
+    path("<str:task_id>/", tasks_views.InternTaskMineAPI.as_view(), name="intern-tasks-update"),
 ]

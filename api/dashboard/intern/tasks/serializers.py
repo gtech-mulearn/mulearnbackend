@@ -2,8 +2,8 @@ from rest_framework import serializers
 from db.intern import InternTask
 
 class InternTaskSerializer(serializers.ModelSerializer):
-    assigned_to_name = serializers.CharField(source='assigned_to.fullname', read_only=True)
-    created_by_name = serializers.CharField(source='created_by.fullname', read_only=True)
+    assigned_to_name = serializers.CharField(source='assigned_to.full_name', read_only=True)
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
 
     class Meta:
         model = InternTask

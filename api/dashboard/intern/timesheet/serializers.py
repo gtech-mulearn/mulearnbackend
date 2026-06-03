@@ -6,15 +6,32 @@ from db.intern import InternDailyTimesheet, InternTask
 from utils.types import InternSubmissionStatus
 
 class InternTimesheetSerializer(serializers.ModelSerializer):
+    log_description = serializers.CharField(required=False, write_only=True)
+    hours_worked = serializers.DecimalField(max_digits=4, decimal_places=2, required=False, write_only=True)
+
     class Meta:
         model = InternDailyTimesheet
         fields = [
             'entry_date', 'task', 'category', 'description',
             'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason'
+            'end_of_day_note', 'edit_reason', 'log_description', 'hours_worked'
         ]
 
     def validate(self, data):
+        log_description = data.pop('log_description', None)
+        if log_description:
+            data['description'] = log_description
+            
+        hours_worked = data.pop('hours_worked', None)
+        if hours_worked is not None:
+            data['hours'] = hours_worked
+            
+        if not data.get('description'):
+            raise serializers.ValidationError({"description": "Description (or log_description) is required."})
+            
+        if not data.get('hours'):
+            raise serializers.ValidationError({"hours": "Hours (or hours_worked) is required."})
+
         entry_date = data.get('entry_date')
         today = now().date()
         yesterday = today - timedelta(days=1)

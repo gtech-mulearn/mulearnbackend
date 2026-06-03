@@ -11,9 +11,9 @@ class UserInternGuildLink(models.Model):
     guild = models.CharField(max_length=75)
     status = models.CharField(max_length=15, default='ACTIVE')
     previous_status = models.CharField(max_length=15, null=True, blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_guild_created')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_guild_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_guild_updated')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_guild_updated', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -25,7 +25,7 @@ class InternTask(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=150)
     description = models.TextField()
-    assigned_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assigned_intern_tasks')
+    assigned_to = models.ForeignKey(User, on_delete=models.CASCADE, related_name='assigned_intern_tasks', db_column='assigned_to')
     team = models.CharField(max_length=75)
     category = models.CharField(max_length=50)
     status = models.CharField(max_length=20, default='NOT_STARTED')
@@ -33,9 +33,9 @@ class InternTask(models.Model):
     deadline = models.DateField()
     iso_week = models.IntegerField()
     is_archived = models.BooleanField(default=False)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_created')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_updated')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_updated', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -45,7 +45,7 @@ class InternTask(models.Model):
 
 class InternDailyTimesheet(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_daily_timesheets')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_daily_timesheets', db_column='user_id')
     entry_date = models.DateField()
     task = models.ForeignKey(InternTask, on_delete=models.SET_NULL, null=True, blank=True, related_name='timesheets')
     category = models.CharField(max_length=50)
@@ -58,12 +58,12 @@ class InternDailyTimesheet(models.Model):
     edit_reason = models.CharField(max_length=300, null=True, blank=True)
     status = models.CharField(max_length=15, default='PENDING')
     karma_awarded = models.IntegerField(default=0)
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_timesheet_reviews')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_timesheet_reviews', db_column='reviewed_by')
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.CharField(max_length=300, null=True, blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_timesheet_created')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_timesheet_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_timesheet_updated')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_timesheet_updated', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -73,7 +73,7 @@ class InternDailyTimesheet(models.Model):
 
 class InternWeeklyReview(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_weekly_reviews')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_weekly_reviews', db_column='user_id')
     iso_year = models.SmallIntegerField()
     iso_week = models.IntegerField()
     week_start_date = models.DateField()
@@ -91,12 +91,12 @@ class InternWeeklyReview(models.Model):
     is_late = models.BooleanField(default=False)
     status = models.CharField(max_length=15, default='PENDING')
     karma_awarded = models.IntegerField(default=0)
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_weekly_reviews_reviewed')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_weekly_reviews_reviewed', db_column='reviewed_by')
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.CharField(max_length=300, null=True, blank=True)
-    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_weekly_review_created')
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_weekly_review_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
-    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_weekly_review_updated')
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_weekly_review_updated', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
@@ -106,17 +106,19 @@ class InternWeeklyReview(models.Model):
 
 class InternLeaveRequest(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_leave_requests')
+    user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_leave_requests', db_column='user_id')
     leave_type = models.CharField(max_length=20)
     start_date = models.DateField()
     end_date = models.DateField()
     duration_days = models.SmallIntegerField()
     reason = models.TextField()
     status = models.CharField(max_length=15, default='PENDING')
-    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_leave_reviews')
+    reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_leave_reviews', db_column='reviewed_by')
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.CharField(max_length=300, null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_leave_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_leave_updated', db_column='updated_by')
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:

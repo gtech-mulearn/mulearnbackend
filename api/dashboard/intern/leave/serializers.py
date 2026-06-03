@@ -5,11 +5,21 @@ from utils.types import InternLeaveStatus
 class InternLeaveRequestSerializer(serializers.ModelSerializer):
     class Meta:
         model = InternLeaveRequest
-        fields = ['leave_type', 'start_date', 'end_date', 'reason']
+        fields = ['leave_type', 'start_date', 'end_date', 'reason', 'duration_days']
+        extra_kwargs = {
+            'duration_days': {'required': False, 'allow_null': True}
+        }
 
     def validate(self, data):
-        if data.get('start_date') > data.get('end_date'):
-            raise serializers.ValidationError({"start_date": "Start date must be before or equal to end date."})
+        start_date = data.get('start_date')
+        end_date = data.get('end_date')
+        
+        if start_date and end_date:
+            if start_date > end_date:
+                raise serializers.ValidationError({"start_date": "Start date must be before or equal to end date."})
+            
+            if 'duration_days' not in data or data.get('duration_days') is None:
+                data['duration_days'] = (end_date - start_date).days + 1
         return data
 
     def create(self, validated_data):
