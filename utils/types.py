@@ -231,3 +231,78 @@ class SocialPlatformType(Enum):
     @classmethod
     def get_all_values(cls):
         return [member.value for member in cls]
+
+class InternHashtag(Enum):
+    DAILY_LOG_KARMA = 10
+    DAILY_LOG_HASHTAG = "#intern-daily-log"
+    WEEKLY_REVIEW_KARMA = 50
+    WEEKLY_REVIEW_HASHTAG = "#intern-weekly-review"
+    STREAK_7_KARMA = 20
+    STREAK_7_HASHTAG = "#intern-streak-7"
+    STREAK_14_KARMA = 50
+    STREAK_14_HASHTAG = "#intern-streak-14"
+    STREAK_30_KARMA = 100
+    STREAK_30_HASHTAG = "#intern-streak-30"
+    STREAK_60_KARMA = 200
+    STREAK_60_HASHTAG = "#intern-streak-60"
+    STREAK_90_KARMA = 500
+    STREAK_90_HASHTAG = "#intern-streak-90"
+
+class InternGuild(Enum):
+    FRONTEND = "Frontend Guild"
+    BACKEND = "Backend Guild"
+    DESIGN = "Design Guild"
+    MOBILE = "Mobile Guild"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+class InternTaskCategory(Enum):
+    BACKEND = ["Backend API", "Auth API", "Bot", "Database", "DevOps", "Documentation"]
+    FRONTEND = ["UI Components", "API Integration", "Bug Fix", "Performance", "Accessibility", "Documentation"]
+    DESIGN = ["Wireframes", "Prototyping", "Branding", "Research"]
+
+class InternTaskStatus(Enum):
+    NOT_STARTED = "NOT_STARTED"
+    IN_PROGRESS = "IN_PROGRESS"
+    COMPLETED = "COMPLETED"
+    WAITING_FOR_REVIEW = "WAITING_FOR_REVIEW"
+
+class InternTaskComplexity(Enum):
+    LOW = ("LOW", 1)
+    MEDIUM = ("MEDIUM", 2)
+    HIGH = ("HIGH", 3)
+    CRITICAL = ("CRITICAL", 5)
+
+class InternSubmissionStatus(Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+
+class InternLeaveType(Enum):
+    SICK = ("SICK", 2)        # 2/month
+    CASUAL = ("CASUAL", 1)    # 1/month
+    EMERGENCY = ("EMERGENCY", 0)  # no cap
+    WFH = ("WFH", 2)         # 2/week
+
+class InternLeaveStatus(Enum):
+    PENDING = "PENDING"
+    APPROVED = "APPROVED"
+    REJECTED = "REJECTED"
+    CANCELLED = "CANCELLED"
+
+class InternGuildStatus(Enum):
+    ACTIVE = "ACTIVE"
+    AT_RISK = "AT_RISK"
+    ON_LEAVE = "ON_LEAVE"
+    INACTIVE = "INACTIVE"
+
+class InternLeaderboardWeights:
+    """Point-value multipliers for leaderboard scoring.
+    Tunable without code changes - only this class needs updating."""
+    KARMA_MULTIPLIER = 1           # karma value used directly
+    DAILY_STREAK_MULTIPLIER = 50   # each streak day = 50 points
+    WEEKLY_STREAK_MULTIPLIER = 200 # each streak week = 200 points
+    COMPLETED_TASKS_MULTIPLIER = 30  # each completed task = 30 points
+    COMPLEXITY_SCORE_MULTIPLIER = 20 # each complexity point = 20 points

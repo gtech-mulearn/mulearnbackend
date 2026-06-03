@@ -256,6 +256,11 @@ class SystemActionLog(models.Model):
         MANUAL_HOURS_LOG = 'MANUAL_HOURS_LOG', 'Manual Hours Log'
         IG_CONTENT_UPDATE = 'IG_CONTENT_UPDATE', 'IG Content Update'
         OPPORTUNITY_POST = 'OPPORTUNITY_POST', 'Opportunity Post'
+        INTERN_TASK_UPDATE = 'INTERN_TASK_UPDATE', 'Intern Task Update'
+        INTERN_LEAVE_REQUEST = 'INTERN_LEAVE_REQUEST', 'Intern Leave Request'
+        INTERN_LEAVE_REVIEW = 'INTERN_LEAVE_REVIEW', 'Intern Leave Review'
+        INTERN_TIMESHEET_EDIT = 'INTERN_TIMESHEET_EDIT', 'Intern Timesheet Edit'
+        INTERN_GUILD_REASSIGN = 'INTERN_GUILD_REASSIGN', 'Intern Guild Reassign'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     action_type = models.CharField(max_length=25, choices=ActionType.choices)

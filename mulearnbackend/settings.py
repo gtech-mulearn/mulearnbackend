@@ -312,3 +312,10 @@ import socket
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS = [f"{ip[:-1]}1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
 DEFAULT_CHARSET = "utf-8"
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'intern-daily-status-cron': {
+        'task': 'mu_celery.intern_cron.intern_daily_status_cron',
+        'schedule': crontab(hour=0, minute=5),
+    },
+}
