@@ -109,17 +109,16 @@ class CompanyProfileAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Company'],
-        description="Retrieve the profile of a verified company.",
+        description="Retrieve the profile of the authenticated company (creator or approved company mentor).",
         responses={200: serializers.CompanyDetailSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
+        company = _get_company_for_user(user_id)
         
         if not company:
             return CustomResponse(
-                general_message="Company profile not found."
+                general_message="Company profile not found or access denied."
             ).get_failure_response(status_code=404)
             
         serializer = serializers.CompanyDetailSerializer(company)
@@ -127,18 +126,17 @@ class CompanyProfileAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Company'],
-        description="Update the profile of a verified company.",
+        description="Update the profile of the authenticated company (creator or approved company mentor).",
         request=serializers.CompanyUpdateSerializer,
         responses={200: serializers.CompanyUpdateSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
+        company = _get_company_for_user(user_id)
         
         if not company:
             return CustomResponse(
-                general_message="Company profile not found."
+                general_message="Company profile not found or access denied."
             ).get_failure_response(status_code=404)
             
         serializer = serializers.CompanyUpdateSerializer(
@@ -308,3 +306,118 @@ class CompanyAdminSummaryAPI(APIView):
         }
         
         return CustomResponse(response=data).get_success_response()
+
+
+# ---------------------------------------------------------------------------
+# Shared helper — resolves Company for both creator and approved COMPANY_MENTOR
+# ---------------------------------------------------------------------------
+from db.user import UserMentor as _UserMentor
+from db.organization import Organization as _Org
+from utils.types import OrganizationType as _OrgType
+
+
+def _get_company_for_user(user_id):
+    """
+    Returns the verified Company for a user if they are:
+    - the company creator (company_user_id == user_id), OR
+    - an approved COMPANY_MENTOR for that company.
+    """
+    company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+    if company:
+        return company
+
+    mentor = _UserMentor.objects.filter(
+        user_id=user_id,
+        mentor_tier=_UserMentor.MentorTier.COMPANY_MENTOR,
+        status=_UserMentor.Status.APPROVED,
+    ).select_related("org").first()
+
+    if mentor and mentor.org:
+        return Company.objects.filter(name=mentor.org.title, status="verified").first()
+
+    return None
+
+
+# ---------------------------------------------------------------------------
+# Company Mentor — Nomination endpoints
+# ---------------------------------------------------------------------------
+
+class CompanyMentorNominateAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=["Dashboard - Company Mentor"],
+        description=(
+            "Nominate a platform user as a Company Mentor for your company. "
+            "Provide the user's **muid** (e.g. `john-doe@mulearn`). "
+            "The user must already be a member of the company's organisation "
+            "(i.e. they appear in `UserOrganizationLink` for this company). "
+            "Only the verified company creator can nominate. "
+            "The nomination enters PENDING state until an admin approves it."
+        ),
+        request=serializers.CompanyMentorNominateSerializer,
+        responses={200: serializers.CompanyMentorListSerializer},
+    )
+    @role_required([RoleType.COMPANY.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+
+        if not company:
+            return CustomResponse(
+                general_message="You must have a verified company profile to nominate mentors."
+            ).get_failure_response(status_code=403)
+
+        serializer = serializers.CompanyMentorNominateSerializer(
+            data=request.data,
+            context={"user_id": user_id, "company": company},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(message=serializer.errors).get_failure_response()
+
+        mentor = serializer.save()
+        return CustomResponse(
+            general_message="User nominated as Company Mentor. Pending admin approval.",
+            response=serializers.CompanyMentorListSerializer(mentor).data,
+        ).get_success_response()
+
+
+class CompanyMentorListAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=["Dashboard - Company Mentor"],
+        description="List all Company Mentor nominations for the authenticated company.",
+        responses={200: serializers.CompanyMentorListSerializer(many=True)},
+    )
+    @role_required([RoleType.COMPANY.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+
+        if not company:
+            return CustomResponse(
+                general_message="Verified company profile not found."
+            ).get_failure_response(status_code=404)
+
+        from db.organization import Organization
+        from utils.types import OrganizationType
+        org = Organization.objects.filter(
+            title=company.name,
+            org_type=OrganizationType.COMPANY.value,
+        ).first()
+
+        if not org:
+            return CustomResponse(
+                general_message="Company organization record not found."
+            ).get_failure_response(status_code=404)
+
+        from db.user import UserMentor
+        mentors = UserMentor.objects.filter(
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            org=org,
+        ).select_related("user").order_by("-created_at")
+
+        serializer = serializers.CompanyMentorListSerializer(mentors, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+

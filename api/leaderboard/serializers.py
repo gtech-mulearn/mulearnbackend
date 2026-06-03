@@ -1,5 +1,7 @@
 from datetime import timedelta
 
+from db.user import UserMentor
+
 from django.db.models import Sum
 from rest_framework import serializers
 
@@ -102,3 +104,42 @@ class WadhwaniZoneLeaderboardSerializer(serializers.Serializer):
     zone_name = serializers.CharField()
     total_karma = serializers.IntegerField()
     students = serializers.IntegerField()
+
+
+class IGMentorLeaderboardSerializer(serializers.Serializer):
+    mentor_id = serializers.CharField(source='user.id')
+    mentor_name = serializers.CharField(source='user.full_name')
+    profile_pic = serializers.SerializerMethodField()
+    ig_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+
+    def get_profile_pic(self, obj):
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_ig_name(self, obj):
+        ig = self.context.get('ig')
+        return ig.name if ig else None
+
+    def get_rank(self, obj):
+        return self.context.get('rankings', {}).get(obj.id, None)
+
+
+class CampusMentorLeaderboardSerializer(serializers.Serializer):
+    mentor_id = serializers.CharField(source='user.id')
+    mentor_name = serializers.CharField(source='user.full_name')
+    profile_pic = serializers.SerializerMethodField()
+    campus_name = serializers.SerializerMethodField()
+    total_karma = serializers.IntegerField()
+    completed_sessions = serializers.IntegerField()
+    rank = serializers.SerializerMethodField()
+
+    def get_profile_pic(self, obj):
+        return str(obj.user.profile_pic) if obj.user.profile_pic else None
+
+    def get_campus_name(self, obj):
+        return obj.org.title if obj.org else None
+
+    def get_rank(self, obj):
+        return self.context.get('rankings', {}).get(obj.id, None)

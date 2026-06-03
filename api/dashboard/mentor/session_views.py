@@ -14,42 +14,56 @@ class MentorSessionCreateAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
-        description="Create a new mentorship session.",
+        description=(
+            "Create a new mentorship session. "
+            "For IG mentors, provide an 'ig' field. "
+            "For company mentors, entity_id and session_type are auto-resolved from the mentor's company org."
+        ),
         request=serializers.SessionCreateSerializer,
         responses={200: serializers.SessionCreateSerializer},
     )
     @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        ig_id = request.data.get("ig")
-        
-        # Verify mentor is assigned to this IG
-        if not UserIgLink.objects.filter(
-            user_id=user_id, 
-            ig_id=ig_id, 
-            assignment_type=UserIgLink.AssignmentType.MENTOR,
-            is_active=True
-        ).exists():
-            return CustomResponse(
-                general_message="You are not assigned as a mentor for this Interest Group."
-            ).get_failure_response(status_code=403)
-
         data = request.data.copy()
-        data["entity_id"] = ig_id
-        data["session_type"] = MentorshipSession.SessionType.IG_SESSION
+
+        # ── Company Mentor path ──────────────────────────────────────────────
+        from db.user import UserMentor
+        company_mentor = UserMentor.objects.filter(
+            user_id=user_id,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            status=UserMentor.Status.APPROVED,
+        ).select_related("org").first()
+
+        if company_mentor and company_mentor.org:
+            data["entity_id"] = str(company_mentor.org.id)
+            data["session_type"] = MentorshipSession.SessionType.COMPANY_SESSION
+        else:
+            # ── IG Mentor path ───────────────────────────────────────────────
+            ig_id = request.data.get("ig")
+            if not UserIgLink.objects.filter(
+                user_id=user_id,
+                ig_id=ig_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True
+            ).exists():
+                return CustomResponse(
+                    general_message="You are not assigned as a mentor for this Interest Group."
+                ).get_failure_response(status_code=403)
+            data["entity_id"] = ig_id
+            data["session_type"] = MentorshipSession.SessionType.IG_SESSION
 
         serializer = serializers.SessionCreateSerializer(
             data=data, context={"user_id": user_id}
         )
-
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
                 general_message="Session created successfully and is pending approval.",
                 response=serializer.data
             ).get_success_response()
-            
         return CustomResponse(message=serializer.errors).get_failure_response()
+
 
 class MentorSessionListAPI(APIView):
     permission_classes = [CustomizePermission]
@@ -228,28 +242,48 @@ class AvailableSessionListAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Learner Session'],
-        description="List all scheduled sessions for the IGs the user belongs to.",
+        description=(
+            "List all scheduled sessions available to the user — "
+            "includes IG sessions for their groups and company sessions for linked company orgs."
+        ),
         responses={200: serializers.SessionListSerializer(many=True)},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        
+
+        from django.db.models import Q
         from db.task import UserIgLink
-        user_ig_ids = UserIgLink.objects.filter(user_id=user_id).values_list('ig_id', flat=True)
-        
+        from db.organization import UserOrganizationLink
+
+        # IGs the user belongs to
+        user_ig_ids = UserIgLink.objects.filter(
+            user_id=user_id
+        ).values_list('ig_id', flat=True)
+
+        # Company orgs the user is linked to
+        company_org_ids = UserOrganizationLink.objects.filter(
+            user_id=user_id,
+            org__org_type='Company',
+        ).values_list('org_id', flat=True)
+
         sessions = MentorshipSession.objects.filter(
-            entity_id__in=user_ig_ids, 
-            session_type=MentorshipSession.SessionType.IG_SESSION,
-            status=MentorshipSession.Status.SCHEDULED, 
-            is_deleted=False
+            Q(
+                entity_id__in=user_ig_ids,
+                session_type=MentorshipSession.SessionType.IG_SESSION,
+            ) | Q(
+                entity_id__in=company_org_ids,
+                session_type=MentorshipSession.SessionType.COMPANY_SESSION,
+            ),
+            status=MentorshipSession.Status.SCHEDULED,
+            is_deleted=False,
         )
-        
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            sessions, request, 
+            sessions, request,
             search_fields=["title", "description"],
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
-        
+
         serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
         return CustomResponse(
             response={

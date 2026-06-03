@@ -154,12 +154,29 @@ class MentorVerifySerializer(serializers.Serializer):
                             ig_link.save(
                                 update_fields=["assignment_type", "is_active", "assigned_by_id"]
                             )
-                        
+
+            # Auto-link COMPANY_MENTOR to the company's Organization
+            if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
+                from db.organization import UserOrganizationLink
+                org_link, created = UserOrganizationLink.objects.get_or_create(
+                    user=instance.user,
+                    org=instance.org,
+                    defaults={
+                        "verified": True,
+                        "created_by_id": user_id,
+                        "created_at": DateTimeUtils.get_current_utc_time(),
+                    },
+                )
+                if not created and not org_link.verified:
+                    org_link.verified = True
+                    org_link.save(update_fields=["verified"])
+
         elif status == UserMentor.Status.REJECTED:
             instance.verification_note = validated_data.get("verification_note")
             
         instance.save()
         return instance
+
 
 from db.mentor import MentorshipSession
 from db.organization import Organization
@@ -261,7 +278,10 @@ class SessionListSerializer(serializers.ModelSerializer):
         if obj.session_type == MentorshipSession.SessionType.IG_SESSION:
             ig = InterestGroup.objects.filter(id=obj.entity_id).first()
             return ig.name if ig else None
-        elif obj.session_type == MentorshipSession.SessionType.CAMPUS_SESSION:
+        elif obj.session_type in (
+            MentorshipSession.SessionType.CAMPUS_SESSION,
+            MentorshipSession.SessionType.COMPANY_SESSION,
+        ):
             org = Organization.objects.filter(id=obj.entity_id).first()
             return org.title if org else None
         return None

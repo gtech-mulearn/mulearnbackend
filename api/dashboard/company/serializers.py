@@ -179,10 +179,14 @@ class CompanyVerifySerializer(serializers.Serializer):
             instance.verified_by = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
 
-            org = Organization.objects.filter(title=instance.name, org_type=OrganizationType.COMPANY.value).first()
+            # ── Ensure the company's Organization row exists ─────────────────
+            org = Organization.objects.filter(
+                title=instance.name,
+                org_type=OrganizationType.COMPANY.value,
+            ).first()
             if not org:
                 org_code = generate_unique_code()
-                Organization.objects.create(
+                org = Organization.objects.create(
                     title=instance.name,
                     code=org_code,
                     org_type=OrganizationType.COMPANY.value,
@@ -190,20 +194,34 @@ class CompanyVerifySerializer(serializers.Serializer):
                     created_by_id=user_id,
                     updated_by_id=user_id,
                     created_at=DateTimeUtils.get_current_utc_time(),
-                    updated_at=DateTimeUtils.get_current_utc_time()
+                    updated_at=DateTimeUtils.get_current_utc_time(),
                 )
-            
+
+            # ── Link the company creator to the org ──────────────────────────
+            from db.organization import UserOrganizationLink
+            UserOrganizationLink.objects.get_or_create(
+                user=instance.company_user,
+                org=org,
+                defaults={
+                    "verified": True,
+                    "created_by_id": user_id,
+                    "created_at": DateTimeUtils.get_current_utc_time(),
+                },
+            )
+
+            # ── Grant the COMPANY role ───────────────────────────────────────
             company_role = Role.objects.filter(title=RoleType.COMPANY.value).first()
             if company_role:
                 UserRoleLink.objects.update_or_create(
                     user=instance.company_user,
                     role=company_role,
                     defaults={
-                        "verified": True, 
+                        "verified": True,
                         "created_by": instance.company_user,
-                        "created_at": DateTimeUtils.get_current_utc_time()
-                    }
+                        "created_at": DateTimeUtils.get_current_utc_time(),
+                    },
                 )
+
                 
         elif status == "rejected":
             instance.rejection_reason = validated_data.get("rejection_reason")
@@ -241,4 +259,117 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
             "perks",
             "testimonials",
             "gallery"
+        ]
+
+
+# ---------------------------------------------------------------------------
+# Company Mentor serializers
+# ---------------------------------------------------------------------------
+
+from db.user import User as _User, UserMentor
+
+
+class CompanyMentorNominateSerializer(serializers.Serializer):
+    """Nominate an existing platform user as a Company Mentor for the company.
+
+    The nominated user is identified by their ``muid`` (e.g. john-doe@mulearn)
+    and must already be linked to the company's Organisation record.
+    """
+
+    muid = serializers.CharField(
+        help_text="MuID of the platform user to nominate (e.g. john-doe@mulearn)."
+    )
+    reason = serializers.CharField(
+        required=False, allow_blank=True,
+        help_text="Optional reason / note to pass with the nomination.",
+    )
+
+    def validate(self, data):
+        company = self.context.get("company")
+        muid = data.get("muid")
+
+        # ── Resolve muid → User ──────────────────────────────────────────────
+        user = _User.objects.filter(muid=muid).first()
+        if not user:
+            raise serializers.ValidationError(
+                {"muid": f"No platform user found with muid '{muid}'."}
+            )
+
+        # ── Resolve company → Organization row ──────────────────────────────
+        org = Organization.objects.filter(
+            title=company.name,
+            org_type=OrganizationType.COMPANY.value,
+        ).first()
+        if not org:
+            raise serializers.ValidationError(
+                "Company organization record not found. Ensure the company is verified."
+            )
+
+        # ── Validate org membership ──────────────────────────────────────────
+        from db.organization import UserOrganizationLink as _UOL
+        if not _UOL.objects.filter(user=user, org=org).exists():
+            raise serializers.ValidationError(
+                {"muid": f"User '{muid}' is not a member of this company's organisation."}
+            )
+
+        # ── Prevent duplicate active nominations ─────────────────────────────
+        existing = UserMentor.objects.filter(
+            user=user,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            org=org,
+        ).exclude(status=UserMentor.Status.REJECTED).first()
+        if existing:
+            raise serializers.ValidationError(
+                f"This user already has a {existing.status} Company Mentor nomination for your company."
+            )
+
+        data["_user"] = user
+        data["_org"] = org
+        return data
+
+    def save(self):
+        nominator_id = self.context.get("user_id")
+        user = self.validated_data["_user"]
+        reason = self.validated_data.get("reason", "")
+        org = self.validated_data["_org"]
+
+        from utils.utils import DateTimeUtils
+        current_time = DateTimeUtils.get_current_utc_time()
+
+        mentor = UserMentor.objects.create(
+            id=str(uuid.uuid4()),
+            user=user,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            org=org,
+            reason=reason,
+            status=UserMentor.Status.PENDING,
+            created_by_id=nominator_id,
+            updated_by_id=nominator_id,
+            created_at=current_time,
+            updated_at=current_time,
+        )
+        return mentor
+
+
+
+class CompanyMentorListSerializer(serializers.ModelSerializer):
+    """Serializer for listing Company Mentor nominations."""
+
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    user_email = serializers.CharField(source="user.email", read_only=True)
+    org_name = serializers.CharField(source="org.title", read_only=True, default=None)
+
+    class Meta:
+        model = UserMentor
+        fields = [
+            "id",
+            "user_id",
+            "user_name",
+            "user_email",
+            "org_name",
+            "mentor_tier",
+            "status",
+            "reason",
+            "verification_note",
+            "verified_at",
         ]

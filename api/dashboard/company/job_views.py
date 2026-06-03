@@ -9,6 +9,7 @@ from db.job import CompanyJob, UserJobApplication
 from db.company import Company
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import job_serializers
+from .company_views import _get_company_for_user
 
 class CompanyJobAPI(APIView):
     permission_classes = [CustomizePermission]
@@ -19,43 +20,42 @@ class CompanyJobAPI(APIView):
         request=job_serializers.JobCreateSerializer,
         responses={200: job_serializers.JobCreateSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        serializer = job_serializers.JobCreateSerializer(
-            data=request.data, context={"user_id": user_id}
-        )
+        company = _get_company_for_user(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Verified company profile not found or access denied."
+            ).get_failure_response(status_code=403)
 
+        serializer = job_serializers.JobCreateSerializer(
+            data=request.data, context={"user_id": user_id, "company": company}
+        )
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
                 general_message="Job posted successfully.",
                 response=serializer.data
             ).get_success_response()
-            
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
-        description="List all jobs for the logged-in company.",
+        description="List all jobs for the authenticated company (creator or company mentor).",
         responses={200: job_serializers.JobListSerializer(many=True)},
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-        
+        company = _get_company_for_user(user_id)
         if not company:
-            return CustomResponse(general_message="Company profile not found.").get_failure_response(status_code=404)
+            return CustomResponse(general_message="Company profile not found or access denied.").get_failure_response(status_code=404)
 
         jobs = CompanyJob.objects.filter(company=company, is_deleted=False)
-        
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            jobs, request, 
+            jobs, request,
             search_fields=["title", "location", "job_type"],
             sort_fields={"title": "title", "created_at": "created_at"}
         )
-        
         serializer = job_serializers.JobListSerializer(paginated_queryset.get("queryset"), many=True)
         return CustomResponse(
             response={
@@ -73,15 +73,12 @@ class CompanyJobDetailAPI(APIView):
         description="Retrieve details of a specific job.",
         responses={200: job_serializers.JobListSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-        
+        company = _get_company_for_user(user_id)
         job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
         if not job:
-            return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
-            
+            return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
         serializer = job_serializers.JobListSerializer(job)
         return CustomResponse(response=serializer.data).get_success_response()
 
@@ -91,44 +88,35 @@ class CompanyJobDetailAPI(APIView):
         request=job_serializers.JobUpdateSerializer,
         responses={200: job_serializers.JobUpdateSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def patch(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-        
+        company = _get_company_for_user(user_id)
         job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
         if not job:
-            return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
-            
+            return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
         serializer = job_serializers.JobUpdateSerializer(job, data=request.data, partial=True, context={'user_id': user_id})
-        
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
                 general_message="Job updated successfully.",
                 response=serializer.data
             ).get_success_response()
-            
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
         description="Delete a specific job.",
     )
-    @role_required([RoleType.COMPANY.value])
     def delete(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-        
+        company = _get_company_for_user(user_id)
         job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
         if not job:
-            return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
-            
+            return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
         job.is_deleted = True
         job.updated_at = DateTimeUtils.get_current_utc_time()
         job.updated_by = user_id
         job.save()
-        
         return CustomResponse(general_message="Job deleted successfully.").get_success_response()
 
 class PublicJobAPI(APIView):
@@ -189,26 +177,21 @@ class JobApplicationAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
-        description="List all applications for a specific job.",
+        description="List all applications for a specific job (creator or company mentor).",
         responses={200: job_serializers.ApplicationTrackingSerializer(many=True)},
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-
+        company = _get_company_for_user(user_id)
         job = CompanyJob.objects.filter(id=job_id, company=company).first()
         if not job:
             return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
-
         applications = UserJobApplication.objects.filter(job=job)
-        
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            applications, request, 
+            applications, request,
             search_fields=["user__full_name", "status"],
             sort_fields={"applied_at": "applied_at", "status": "status"}
         )
-        
         serializer = job_serializers.ApplicationTrackingSerializer(paginated_queryset.get("queryset"), many=True)
         return CustomResponse(
             response={
@@ -222,30 +205,25 @@ class ApplicationStatusAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
-        description="Update the status of a job application.",
+        description="Update the status of a job application (creator or company mentor).",
         request=job_serializers.ApplicationTrackingSerializer,
         responses={200: job_serializers.ApplicationTrackingSerializer},
     )
-    @role_required([RoleType.COMPANY.value])
     def patch(self, request, app_id):
         user_id = JWTUtils.fetch_user_id(request)
-        company = Company.objects.filter(company_user_id=user_id).first()
-
+        company = _get_company_for_user(user_id)
         application = UserJobApplication.objects.filter(id=app_id, job__company=company).first()
         if not application:
             return CustomResponse(general_message="Application not found or access denied.").get_failure_response(status_code=404)
-
         serializer = job_serializers.ApplicationTrackingSerializer(
             application, data=request.data, partial=True
         )
-
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
                 general_message="Application status updated successfully.",
                 response=serializer.data
             ).get_success_response()
-            
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class PublicCompanyJobListAPI(APIView):

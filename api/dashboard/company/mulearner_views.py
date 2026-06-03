@@ -1,19 +1,20 @@
 from rest_framework.views import APIView
 from django.db.models import Q
-from utils.permission import CustomizePermission, role_required
+from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.user import User
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import mulearner_serializers
+from .company_views import _get_company_for_user
 
 class CompanyMulearnerDirectoryAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
-        description="Directory of MuLearners available to companies.",
+        description="Directory of MuLearners available to companies (creator or company mentor).",
         parameters=[
             OpenApiParameter("min_karma", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("max_karma", OpenApiTypes.INT, OpenApiParameter.QUERY, required=False),
@@ -28,8 +29,12 @@ class CompanyMulearnerDirectoryAPI(APIView):
         ],
         responses={200: mulearner_serializers.MulearnerDirectorySerializer(many=True)},
     )
-    @role_required([RoleType.COMPANY.value])
     def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not _get_company_for_user(user_id):
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
         users = User.objects.filter(user_settings_user__is_public=True)
         min_karma = request.query_params.get('min_karma')
         max_karma = request.query_params.get('max_karma')
