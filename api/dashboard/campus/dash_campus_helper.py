@@ -2,7 +2,7 @@ import uuid
 
 from db.organization import UserOrganizationLink
 from db.campus import CampusIGChapter
-from db.user import Role, UserRoleLink
+from db.user import Role, UserRoleLink, UserMentor
 from utils.types import OrganizationType, RoleType
 
 
@@ -11,6 +11,55 @@ def get_user_college_link(user_id):
         user_id=user_id,
         org__org_type=OrganizationType.COLLEGE.value
     ).first()
+
+
+def is_approved_campus_mentor(user_id, org):
+    """
+    Return True if the user is an APPROVED CAMPUS_MENTOR scoped to the given org.
+    """
+    if org is None:
+        return False
+    return UserMentor.objects.filter(
+        user_id=user_id,
+        mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        status=UserMentor.Status.APPROVED,
+        org=org,
+    ).exists()
+
+
+def campus_staff_required(view_func):
+    """
+    Decorator that allows access to Campus Leads, Lead Enablers,
+    AND approved Campus Mentors (read-only campus dashboard endpoints).
+
+    Usage:
+        @campus_staff_required
+        def get(self, request): ...
+    """
+    from utils.permission import JWTUtils
+    from utils.response import CustomResponse
+
+    _STAFF_ROLES = {RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value}
+
+    def wrapped(obj, request, *args, **kwargs):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = set(JWTUtils.fetch_role(request))
+
+        # Fast path: JWT role is Campus Lead or Lead Enabler
+        if roles & _STAFF_ROLES:
+            return view_func(obj, request, *args, **kwargs)
+
+        # Slow path: check if the user is an approved Campus Mentor
+        # for *their* campus (fetched from org link)
+        user_link = get_user_college_link(user_id)
+        if user_link and is_approved_campus_mentor(user_id, user_link.org):
+            return view_func(obj, request, *args, **kwargs)
+
+        return CustomResponse(
+            general_message="You do not have the required role to access this page."
+        ).get_failure_response()
+
+    return wrapped
 
 
 def get_campus_context(request):

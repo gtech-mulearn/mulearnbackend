@@ -12,7 +12,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
-from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters
+from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters, campus_staff_required
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
@@ -102,8 +102,7 @@ class CampusDetailsAPI(APIView):
 
     authentication_classes = [CustomizePermission]
 
-    # Use the role_required decorator to specify the allowed roles for this view
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus Details.",
@@ -193,7 +192,7 @@ class CampusStudentInEachLevelAPI(APIView):
 class CampusStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus Student Details.",
@@ -209,6 +208,7 @@ class CampusStudentDetailsAPI(APIView):
         is_alumni_filter = None
         if is_alumni is not None:
             is_alumni_filter = str(is_alumni).lower() == "true"
+
 
         if user_org_link.org is None:
             return CustomResponse(
@@ -318,10 +318,10 @@ class CampusStudentDetailsAPI(APIView):
 class CampusStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
-        description="Retrieve Campus Student Details C S V.",
+        description="Retrieve Campus Student Details CSV.",
         responses={200: serializers.CampusStudentDetailsSerializer},
     )
     def get(self, request):
@@ -334,6 +334,7 @@ class CampusStudentDetailsCSVAPI(APIView):
         is_alumni_filter = None
         if is_alumni is not None:
             is_alumni_filter = str(is_alumni).lower() == "true"
+
 
         if user_org_link.org is None:
             return CustomResponse(
@@ -996,7 +997,7 @@ class CampusKarmaByClusterAPI(APIView):
 class CampusIGChapterAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus I G Chapter.",
@@ -1174,7 +1175,7 @@ class CampusSocialLinkAPI(APIView):
 class CampusStudentActivityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus Student Activity.",
@@ -1215,7 +1216,7 @@ class CampusStudentActivityAPI(APIView):
 class CampusShowcaseAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus Showcase.",

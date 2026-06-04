@@ -1,9 +1,9 @@
 from rest_framework.views import APIView
 from rest_framework import status
 from utils.response import CustomResponse
-from utils.permission import CustomizePermission, role_required
+from utils.permission import CustomizePermission
 from utils.types import RoleType
-from .dash_campus_helper import get_campus_context
+from .dash_campus_helper import get_campus_context, campus_staff_required
 from db.task import KarmaActivityLog
 from django.db.models.functions import TruncDate
 from django.db.models import Sum
@@ -19,7 +19,7 @@ from rest_framework import serializers as s
 class CampusKarmaTrendAPI(APIView):
     authentication_classes = [CustomizePermission]
     
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Karma Trend.",
         responses={200: inline_serializer(
             name="CampusKarmaTrendResponse",
@@ -79,7 +79,7 @@ class CampusKarmaTrendAPI(APIView):
 class CampusGrowthAPI(APIView):
     authentication_classes = [CustomizePermission]
     
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Growth.",
         responses={200: inline_serializer(
             name="CampusGrowthResponse",
