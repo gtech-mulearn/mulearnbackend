@@ -155,27 +155,13 @@ class CampusStudentInEachLevelAPI(APIView):
         )},
     )
     def get(self, request, org_id=None):
-        if org_id:
-            org = Organization.objects.filter(
-                id=org_id, org_type=OrganizationType.COLLEGE.value
-            ).first()
-            if not org:
-                return CustomResponse(
-                    general_message="College not found"
-                ).get_failure_response()
-        else:
-            user_id = JWTUtils.fetch_user_id(request)
-
-            if not (user_org_link := get_user_college_link(user_id)):
-                return CustomResponse(
-                    general_message="User have no organization"
-                ).get_failure_response()
-
-            if user_org_link.org is None:
-                return CustomResponse(
-                    general_message="Campus lead has no college"
-                ).get_failure_response()
-            org = user_org_link.org
+        from .dash_campus_helper import get_campus_context
+        org, error_response = get_campus_context(request)
+        if error_response:
+            return error_response
+            
+        if org_id and str(org.id) != org_id:
+            return CustomResponse(general_message="Unauthorized access").get_failure_response(status_code=403)
 
         level_with_student_count = Level.objects.annotate(
             students=Count(
@@ -448,27 +434,13 @@ class WeeklyKarmaAPI(APIView):
         responses={200: serializers.WeeklyKarmaSerializer},
     )
     def get(self, request, org_id=None):
-        if org_id:
-            org = Organization.objects.filter(
-                id=org_id, org_type=OrganizationType.COLLEGE.value
-            ).first()
-            if not org:
-                return CustomResponse(
-                    general_message="College not found"
-                ).get_failure_response()
-        else:
-            user_id = JWTUtils.fetch_user_id(request)
-
-            if not (user_org_link := get_user_college_link(user_id)):
-                return CustomResponse(
-                    general_message="User have no organization"
-                ).get_failure_response()
-
-            if user_org_link.org is None:
-                return CustomResponse(
-                    general_message="Campus lead has no college"
-                ).get_failure_response()
-            org = user_org_link.org
+        from .dash_campus_helper import get_campus_context
+        org, error_response = get_campus_context(request)
+        if error_response:
+            return error_response
+            
+        if org_id and str(org.id) != org_id:
+            return CustomResponse(general_message="Unauthorized access").get_failure_response(status_code=403)
 
         serializer = serializers.WeeklyKarmaSerializer(org, many=False)
         return CustomResponse(response=serializer.data).get_success_response()
@@ -782,21 +754,13 @@ class CampusStudentLeaderboardAPI(APIView):
     )
     def get(self, request, org_id=None):
 
-        if not org_id:
-            return CustomResponse(
-                general_message="College not found"
-            ).get_failure_response()
-                                        
-  
-        org = Organization.objects.filter(
-            id=org_id,
-            org_type=OrganizationType.COLLEGE.value
-        ).first()
-  
-        if org is None:
-            return CustomResponse(
-                general_message="Campus not found"
-            ).get_failure_response()
+        from .dash_campus_helper import get_campus_context
+        org, error_response = get_campus_context(request)
+        if error_response:
+            return error_response
+            
+        if org_id and str(org.id) != org_id:
+            return CustomResponse(general_message="Unauthorized access").get_failure_response(status_code=403)
         
        
        
@@ -931,20 +895,13 @@ class CampusKarmaByClusterAPI(APIView):
     )
     def get(self, request, org_id=None):
 
-        if not org_id:
-            return CustomResponse(
-                general_message="College not found"
-            ).get_failure_response()
-
-        org = Organization.objects.filter(
-            id=org_id,
-            org_type=OrganizationType.COLLEGE.value
-        ).first()
-
-        if org is None:
-            return CustomResponse(
-                general_message="Campus not found"
-            ).get_failure_response()
+        from .dash_campus_helper import get_campus_context
+        org, error_response = get_campus_context(request)
+        if error_response:
+            return error_response
+            
+        if org_id and str(org.id) != org_id:
+            return CustomResponse(general_message="Unauthorized access").get_failure_response(status_code=403)
 
         # Subquery: fetch each user's karma once — no JOIN fan-out
         wallet_karma_sq = Wallet.objects.filter(
