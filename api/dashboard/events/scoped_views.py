@@ -12,6 +12,7 @@ from utils.response import CustomResponse
 from utils.utils import CommonUtils
 
 from .serializers import EventListItemSerializer, get_live_events
+from drf_spectacular.utils import extend_schema
 
 
 def _viewer_id(request):
@@ -32,6 +33,11 @@ class IGEventListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve I G Event List.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request, ig_id):
         ig = InterestGroup.objects.filter(id=ig_id).first()
         if not ig:
@@ -67,6 +73,11 @@ class ClusterEventListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Cluster Event List.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request, cluster):
         ig_ids = list(
             InterestGroup.objects.filter(category__iexact=cluster)
@@ -107,6 +118,11 @@ class CampusEventListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Campus Event List.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request, campus_id):
         org = Organization.objects.filter(id=campus_id).first()
         if not org:
@@ -149,6 +165,11 @@ class CampusIGEventListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Campus I G Event List.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request, campus_ig_id):
         events = get_live_events().select_related('category', 'organiser_ig', 'organiser_org').filter(
             organiser_ci_id=campus_ig_id,
@@ -177,6 +198,11 @@ class CompanyEventListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Company Event List.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request, company_id):
         org = Organization.objects.filter(id=company_id).first()
         if not org:

@@ -2,9 +2,27 @@ from django.db import connection
 from rest_framework.views import APIView
 
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class Leaderboard(APIView):
+    @extend_schema(tags=['Top100 Coders'], description="Retrieve Leaderboard.",
+        responses={200: inline_serializer(
+            name='Top100LeaderboardItem',
+            fields={
+                'id': s.CharField(),
+                'full_name': s.CharField(),
+                'profile_pic': s.CharField(allow_null=True),
+                'total_karma': s.IntegerField(allow_null=True),
+                'org': s.CharField(allow_null=True),
+                'dis': s.CharField(allow_null=True),
+                'state': s.CharField(allow_null=True),
+                'time_': s.DateTimeField(allow_null=True),
+            },
+            many=True,
+        )},
+    )
     def get(self, request):
         query = """
         SELECT 

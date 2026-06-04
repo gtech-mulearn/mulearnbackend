@@ -24,6 +24,8 @@ from .serializers import (
     get_live_events,
     EventCalendarItemSerializer,
 )
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 def _get_viewer_id(request):
@@ -154,6 +156,11 @@ class EventListAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Event List.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request):
         events, user_id = _public_events_queryset(request, featured_only=False)
 
@@ -183,6 +190,11 @@ class EventFeaturedAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Event Featured.",
+        responses={200: EventListItemSerializer},
+    )
     def get(self, request):
         events, user_id = _public_events_queryset(request, featured_only=True)
 
@@ -211,6 +223,11 @@ class EventDetailAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Event Detail.",
+        responses={200: EventDetailSerializer},
+    )
     def get(self, request, event_id):
         user_id = _get_viewer_id(request)
 
@@ -263,6 +280,16 @@ class EventInterestAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Create Event Interest.",
+        responses={200: inline_serializer(
+            name='EventInterestCreateResponse',
+            fields={
+                'event_id': s.CharField(),
+                'user_id': s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
+    )
     def post(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -303,6 +330,9 @@ class EventInterestAPI(APIView):
             response={'event_id': event_id, 'user_id': user_id, 'status': 'interested'},
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Events'], description="Delete Event Interest.",
+        responses={200: OpenApiResponse(description="Interest removed successfully.")},
+    )
     def delete(self, request, event_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -329,6 +359,11 @@ class EventCalendarAPI(APIView):
       - end_date   (YYYY-MM-DD, mandatory)
     """
 
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description="Retrieve Event Calendar.",
+        responses={200: EventCalendarItemSerializer},
+    )
     def get(self, request):
         start_date = request.query_params.get('start_date')
         end_date = request.query_params.get('end_date')

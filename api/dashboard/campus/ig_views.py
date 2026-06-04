@@ -7,11 +7,17 @@ from utils.utils import CommonUtils
 from .dash_campus_helper import get_campus_context
 from api.dashboard.ig import services as ig_services
 from . import serializers
+from drf_spectacular.utils import extend_schema
 
 class CampusIGsAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus I Gs.",
+        responses={200: serializers.CampusIGListSerializer},
+    )
     def get(self, request):
         org, error = get_campus_context(request)
         if error: return error
@@ -31,6 +37,11 @@ class CampusIGMembersAPI(APIView):
     authentication_classes = [CustomizePermission]
     
     @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve Campus I G Members.",
+        responses={200: serializers.CampusIGMemberSerializer},
+    )
     def get(self, request, ig_id):
         org, error = get_campus_context(request)
         if error: return error

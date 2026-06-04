@@ -44,6 +44,8 @@ class CustomizePermission(BasePermission):
         try:
             JWTUtils.is_jwt_authenticated(request)
             return True
+        except UnauthorizedAccessException as e:
+            raise e
         except Exception as e:
             raise UnauthorizedAccessException(str(e))
 

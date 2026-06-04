@@ -23,6 +23,7 @@ from db.user import Role, UserMentor, UserRoleLink
 from db.notification import Notification
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
+from drf_spectacular.utils import extend_schema
 
 
 def _validate_muids(request_data, fields=("leads", "mentors")):
@@ -64,6 +65,11 @@ def _validate_muids(request_data, fields=("leads", "mentors")):
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Retrieve Interest Group.",
+        responses={200: InterestGroupSerializer},
+    )
     def get(self, request):
         ig_queryset = (
             InterestGroup.objects.select_related("created_by", "updated_by")
@@ -99,6 +105,12 @@ class InterestGroupAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Create Interest Group.",
+        request=InterestGroupCreateUpdateSerializer,
+        responses={200: RoleDashboardSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -199,6 +211,12 @@ class InterestGroupAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Update Interest Group.",
+        request=InterestGroupCreateUpdateSerializer,
+        responses={200: InterestGroupSerializer},
+    )
     def put(self, request, pk):
         user_id = JWTUtils.fetch_user_id(request)
         ig = InterestGroup.objects.get(id=pk)
@@ -279,6 +297,9 @@ class InterestGroupAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Ig'], description="Delete Interest Group.",
+        responses={200: InterestGroupSerializer},
+    )
     def delete(self, request, pk):
         ig = InterestGroup.objects.filter(id=pk).first()
 
@@ -312,6 +333,11 @@ class InterestGroupCSV(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Retrieve Interest Group C S V.",
+        responses={200: InterestGroupSerializer},
+    )
     def get(self, request):
         ig_serializer = (
             InterestGroup.objects.select_related("created_by", "updated_by")
@@ -328,6 +354,11 @@ class InterestGroupCSV(APIView):
 class InterestGroupGetAPI(APIView):
     authentication_classes = [CustomizePermission]
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Retrieve Interest Group Get.",
+        responses={200: InterestGroupSerializer},
+    )
     def get(self, request, pk):
         ig_data = InterestGroup.objects.filter(id=pk).first()
 
@@ -343,6 +374,12 @@ class InterestGroupGetAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Partially update Interest Group Get.",
+        request=InterestGroupCreateUpdateSerializer,
+        responses={200: InterestGroupSerializer},
+    )
     def patch(self, request, pk):
         """Allow IG Lead or Admin to update IG editable fields."""
         user_id = JWTUtils.fetch_user_id(request)
@@ -470,6 +507,11 @@ class InterestGroupRequestAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Retrieve Interest Group Request.",
+        responses={200: InterestGroupSerializer},
+    )
     def get(self, request):
         """Retrieve Interest Group requests created by a company user.
         
@@ -534,6 +576,12 @@ class InterestGroupRequestAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Create Interest Group Request.",
+        request=InterestGroupRequestSerializer,
+        responses={200: InterestGroupSerializer},
+    )
     def post(self, request):
         """Submit a new Interest Group creation request."""
         user_id = JWTUtils.fetch_user_id(request)
@@ -582,6 +630,11 @@ class InterestGroupRequestAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Partially update Interest Group Request.",
+        responses={200: InterestGroupSerializer},
+    )
     def patch(self, request, pk):
         """Update Interest Group request status (Admin only).
         
@@ -628,6 +681,11 @@ class InterestGroupRequestAPI(APIView):
 
 class InterestGroupListApi(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Retrieve Interest Group List Api.",
+        responses={200: InterestGroupSerializer},
+    )
     def get(self, request):
         ig = (
             InterestGroup.objects.all()

@@ -5,6 +5,7 @@ from rest_framework.views import APIView
 from db.user import User
 from utils.response import CustomResponse
 from .external_api_serializer import ExternalUserDetailsSerializer
+from drf_spectacular.utils import extend_schema
 
 
 def rate_limit(max_requests=100, time_window=60):
@@ -55,6 +56,11 @@ class ExternalUserDetailsAPI(APIView):
     """
 
     @rate_limit(max_requests=100, time_window=60)
+    @extend_schema(
+        tags=['Common'],
+        description="Retrieve External User Details.",
+        responses={200: ExternalUserDetailsSerializer},
+    )
     def get(self, request):
         """
         Fetch basic user details by muid.

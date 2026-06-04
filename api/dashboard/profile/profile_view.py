@@ -1,6 +1,9 @@
 from datetime import datetime, timedelta
 from io import BytesIO
 
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.types import OpenApiTypes
+from rest_framework import serializers as s
 import qrcode
 import requests
 from django.conf import settings
@@ -46,6 +49,11 @@ from .profile_serializer import UserTermSerializer
 class UserProfileEditView(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Profile Edit.",
+        responses={200: profile_serializer.UserProfileEditSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -59,6 +67,11 @@ class UserProfileEditView(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Partially update User Profile Edit.",
+        responses={200: profile_serializer.UserProfileEditSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
@@ -80,6 +93,9 @@ class UserProfileEditView(APIView):
 
         return CustomResponse(response=serializer.errors).get_failure_response()
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Delete User Profile Edit.",
+        responses={200: profile_serializer.UserProfileEditSerializer},
+    )
     def delete(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id).delete()
@@ -94,6 +110,9 @@ class UserProfileCoverView(APIView):
 
     MAX_COVER_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve User Profile Cover.",
+        responses={200: profile_serializer.UserProfileSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -107,6 +126,9 @@ class UserProfileCoverView(APIView):
             response={"cover_pic": user.cover_pic}
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Create User Profile Cover.",
+        responses={200: profile_serializer.UserProfileSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -146,6 +168,9 @@ class UserProfileCoverView(APIView):
             response={"cover_pic": uploaded_url}
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Delete User Profile Cover.",
+        responses={200: profile_serializer.UserProfileSerializer},
+    )
     def delete(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.filter(id=user_id).first()
@@ -173,6 +198,11 @@ class UserProfileCoverView(APIView):
 class UserIgEditView(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Ig Edit.",
+        responses={200: profile_serializer.UserIgListSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -182,6 +212,11 @@ class UserIgEditView(APIView):
 
         return CustomResponse(response=serializer.data).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Partially update User Ig Edit.",
+        responses={200: profile_serializer.UserIgEditSerializer},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user = User.objects.get(id=user_id)
@@ -207,6 +242,11 @@ class UserIgEditView(APIView):
 
 
 class UserProfileAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Profile.",
+        responses={200: profile_serializer.UserProfileSerializer},
+    )
     def get(self, request, muid=None):
         if not muid:
             JWTUtils.is_jwt_authenticated(request)
@@ -249,6 +289,11 @@ class UserProfileAPI(APIView):
 
 
 class UserLogAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Log.",
+        responses={200: profile_serializer.UserLogSerializer},
+    )
     def get(self, request, muid=None):
         if muid is not None:
             user = User.objects.filter(muid=muid).first()
@@ -289,6 +334,11 @@ class UserLogAPI(APIView):
 class ShareUserProfileAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Update Share User Profile.",
+        responses={200: profile_serializer.ShareUserProfileUpdateSerializer},
+    )
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_settings = UserSettings.objects.filter(user_id=user_id).first()
@@ -319,6 +369,9 @@ class ShareUserProfileAPI(APIView):
 
     # function for generating profile qr code
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Share User Profile.",
+        responses={200: profile_serializer.ShareUserProfileUpdateSerializer},
+    )
     def get(self, request, uuid=None):
         fs = FileSystemStorage()
         if uuid is not None:
@@ -395,6 +448,11 @@ class ShareUserProfileAPI(APIView):
 
 
 class UserLevelsAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Levels.",
+        responses={200: profile_serializer.UserLevelSerializer},
+    )
     def get(self, request, muid=None):
         if muid is not None:
             user = User.objects.filter(muid=muid).first()
@@ -425,6 +483,11 @@ class UserLevelsAPI(APIView):
 
 
 class UserRankAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Rank.",
+        responses={200: profile_serializer.UserRankSerializer},
+    )
     def get(self, request, muid):
         user = User.objects.filter(muid=muid).first()
 
@@ -440,6 +503,9 @@ class UserRankAPI(APIView):
 
 
 class GetSocialsAPI(APIView):
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Get Socials.",
+        responses={200: profile_serializer.LinkSocials},
+    )
     def get(self, request, muid=None):
         if muid is not None:
             user = User.objects.filter(muid=muid).first()
@@ -470,6 +536,9 @@ class GetSocialsAPI(APIView):
 class SocialsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Update Socials.",
+        responses={200: OpenApiResponse(description="Success")},
+    )
     def put(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         social_instance = Socials.objects.filter(user_id=user_id).first()
@@ -491,6 +560,9 @@ class SocialsAPI(APIView):
 class ResetPasswordAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Create Reset Password.",
+        responses={200: OpenApiResponse(description="Success")},
+    )
     def post(self, request):
         user_muid = JWTUtils.fetch_muid(request)
         user = User.objects.filter(muid=user_muid).first()
@@ -522,6 +594,9 @@ class ResetPasswordAPI(APIView):
 
 
 class QrcodeRetrieveAPI(APIView):
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Qrcode Retrieve.",
+        responses={200: profile_serializer.UserShareQrcode},
+    )
     def get(self, request, uuid):
         try:
             user = User.objects.prefetch_related().get(
@@ -548,6 +623,12 @@ class QrcodeRetrieveAPI(APIView):
 
 
 class BadgesAPI(APIView):
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Badges.",
+        responses={200: inline_serializer("ProfileBadgesResponse", fields={
+            "full_name": s.CharField(),
+            "completed_tasks": s.ListField(child=s.CharField()),
+        })},
+    )
     def get(self, request, muid):
         try:
             user = User.objects.get(muid=muid)
@@ -566,6 +647,11 @@ class BadgesAPI(APIView):
 
 
 class UsertermAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Create Userterm.",
+        responses={200: UserTermSerializer},
+    )
     def post(self, request, muid):
         try:
             user = User.objects.get(muid=muid)
@@ -598,6 +684,9 @@ class UsertermAPI(APIView):
                 return CustomResponse(response=response_data).get_failure_response()
         return CustomResponse(response="Invalid data provided").get_failure_response()
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Userterm.",
+        responses={200: UserTermSerializer},
+    )
     def get(self, request, muid):
         try:
             user = User.objects.get(muid=muid)
@@ -621,12 +710,20 @@ class UsertermAPI(APIView):
             return CustomResponse(response=response_data).get_failure_response()
 
 
-from datetime import datetime, timedelta
-from django.db.models import Sum
-from rest_framework.views import APIView
-
-
 class KarmaFeedAPI(APIView):
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve Karma Feed.",
+        responses={200: inline_serializer("ProfileKarmaFeedResponse", fields={
+            "top_user": inline_serializer("ProfileKarmaFeedTopUser", fields={
+                "karma": s.IntegerField(),
+                "full_name": s.CharField(allow_null=True),
+                "muid": s.CharField(allow_null=True),
+            }),
+            "top_college": inline_serializer("ProfileKarmaFeedTopCollege", fields={
+                "karma": s.IntegerField(),
+                "name": s.CharField(allow_null=True),
+            }),
+        })},
+    )
     def get(self, request):
         today = datetime.now().date()
 
@@ -708,6 +805,9 @@ class KarmaFeedAPI(APIView):
 class UserLevelFeedAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve User Level Feed.",
+        responses={200: profile_serializer.UserLevelSerializer},
+    )
     def get(self, request):
         if not JWTUtils.is_jwt_authenticated(request):
             return CustomResponse(general_message="Unauthorized").get_failure_response()
@@ -743,6 +843,16 @@ class UserLevelFeedAPI(APIView):
 class UserPreferencesAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Profile'], description="Retrieve User Preferences.",
+        responses={200: inline_serializer("ProfileUserPreferencesResponse", fields={
+            "domains": s.ListField(child=s.CharField()),
+            "endgoals": s.ListField(child=s.CharField()),
+            "orgs": s.ListField(child=inline_serializer("ProfileUserPreferencesOrg", fields={
+                "id": s.CharField(allow_null=True),
+                "name": s.CharField(allow_null=True),
+            })),
+        })},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         domains = UserDomains.objects.filter(user_id=user_id).values_list(
@@ -774,6 +884,11 @@ class UserPreferencesAPI(APIView):
             }
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Partially update User Preferences.",
+        responses={200: OpenApiResponse(description="Success")},
+    )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         user_settings = UserSettings.objects.filter(user_id=user_id).first()
@@ -798,6 +913,11 @@ class UserPreferencesAPI(APIView):
 
     
 class UserPermuteAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - Profile'],
+        description="Retrieve User Permute.",
+        responses={200: profile_serializer.UserPermuteSerializer},
+    )
     def get(self, request, muid):
         user = User.objects.prefetch_related("user_domains", "user_organization_link_user__org").filter(muid=muid).first()
         if user is None:
