@@ -23,6 +23,12 @@ urlpatterns = [
     path('admin/<str:event_id>/reject/', admin_views.AdminEventRejectAPI.as_view()),
     path('admin/<str:event_id>/feature/', admin_views.AdminEventFeatureAPI.as_view()),
 
+    # ── Mentor & Campus Approvals ────────────────────────────
+    path('mentor/<str:event_id>/approve/', manage_views.MentorEventApproveAPI.as_view()),
+    path('mentor/<str:event_id>/reject/', manage_views.MentorEventRejectAPI.as_view()),
+    path('campus/<str:event_id>/approve/', manage_views.CampusEventApproveAPI.as_view()),
+    path('campus/<str:event_id>/reject/', manage_views.CampusEventRejectAPI.as_view()),
+
     # ── Manage (BEFORE <event_id> wildcard) ──────────────────
     path('manage/', manage_views.ManageEventListCreateAPI.as_view()),
     path('manage/<str:event_id>/publish/', manage_views.ManageEventPublishAPI.as_view()),
