@@ -275,13 +275,20 @@ class SessionListSerializer(serializers.ModelSerializer):
         ]
 
     def get_entity_name(self, obj):
+        ig_map = self.context.get("ig_map")
+        org_map = self.context.get("org_map")
+        
         if obj.session_type == MentorshipSession.SessionType.IG_SESSION:
+            if ig_map is not None:
+                return ig_map.get(obj.entity_id)
             ig = InterestGroup.objects.filter(id=obj.entity_id).first()
             return ig.name if ig else None
         elif obj.session_type in (
             MentorshipSession.SessionType.CAMPUS_SESSION,
             MentorshipSession.SessionType.COMPANY_SESSION,
         ):
+            if org_map is not None:
+                return org_map.get(obj.entity_id)
             org = Organization.objects.filter(id=obj.entity_id).first()
             return org.title if org else None
         return None

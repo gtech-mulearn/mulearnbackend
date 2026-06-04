@@ -22,14 +22,22 @@ from .task_serializers import (
 def _save_task_skills(task_id, skill_ids, user_id):
     """Clear and re-create TaskSkillLink rows — mirrors admin implementation."""
     TaskSkillLink.objects.filter(task_id=task_id).delete()
-    for skill_id in skill_ids:
-        if Skill.objects.filter(id=skill_id, is_active=True).exists():
-            TaskSkillLink.objects.create(
+    
+    valid_skill_ids = set(Skill.objects.filter(id__in=skill_ids, is_active=True).values_list("id", flat=True))
+    
+    links_to_create = []
+    for skill_id in valid_skill_ids:
+        links_to_create.append(
+            TaskSkillLink(
                 id=str(uuid.uuid4()),
                 task_id=task_id,
                 skill_id=skill_id,
                 created_by_id=user_id,
             )
+        )
+        
+    if links_to_create:
+        TaskSkillLink.objects.bulk_create(links_to_create)
 
 class MentorIGDropdownAPI(APIView):
     permission_classes = [CustomizePermission]

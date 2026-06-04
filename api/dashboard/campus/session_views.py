@@ -23,25 +23,33 @@ class CampusMentorSessionCreateAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         
         # Verify the user is an approved Campus Mentor
-        mentor = UserMentor.objects.filter(
+        active_assignments = UserMentor.objects.filter(
             user_id=user_id, 
             status=UserMentor.Status.APPROVED, 
             mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR
-        ).first()
+        )
 
-        if not mentor:
+        if not active_assignments.exists():
             return CustomResponse(
                 general_message="You are not an approved Campus Mentor."
             ).get_failure_response(status_code=403)
 
-        user_org_link = get_user_college_link(user_id)
-        if not user_org_link:
-            return CustomResponse(
-                general_message="You are not associated with any campus."
-            ).get_failure_response(status_code=404)
-
         data = request.data.copy()
-        data["entity_id"] = user_org_link.org_id
+        
+        org_id = request.data.get("org_id")
+        if not org_id:
+            if active_assignments.count() > 1:
+                 return CustomResponse(
+                     general_message="You are assigned to multiple campuses. Please specify the org_id."
+                 ).get_failure_response(status_code=400)
+            org_id = active_assignments.first().org_id
+
+        if not active_assignments.filter(org_id=org_id).exists():
+             return CustomResponse(
+                 general_message="You are not assigned as a Campus Mentor for this organization."
+             ).get_failure_response(status_code=403)
+
+        data["entity_id"] = str(org_id)
         data["session_type"] = MentorshipSession.SessionType.CAMPUS_SESSION
 
         serializer = mentor_serializers.SessionCreateSerializer(
@@ -72,19 +80,33 @@ class CampusSessionListAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         
         user_org_link = get_user_college_link(user_id)
-        if not user_org_link:
+        student_org_id = user_org_link.org_id if user_org_link else None
+        
+        mentor_org_ids = UserMentor.objects.filter(
+            user_id=user_id,
+            status=UserMentor.Status.APPROVED,
+            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR
+        ).values_list("org_id", flat=True)
+        
+        all_allowed_org_ids = set()
+        if student_org_id:
+            all_allowed_org_ids.add(student_org_id)
+        all_allowed_org_ids.update(mentor_org_ids)
+
+        if not all_allowed_org_ids:
             return CustomResponse(
                 general_message="You are not associated with any campus."
             ).get_failure_response(status_code=404)
 
+        from django.db.models import Q
         sessions = MentorshipSession.objects.filter(
-            entity_id=user_org_link.org_id, 
+            entity_id__in=all_allowed_org_ids, 
             session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
             is_deleted=False
-        )
+        ).select_related("created_by")
 
         roles = JWTUtils.fetch_role(request)
-        is_elevated = any(
+        is_global_elevated = any(
             role in roles
             for role in [
                 RoleType.ADMIN.value,
@@ -92,21 +114,24 @@ class CampusSessionListAPI(APIView):
                 RoleType.LEAD_ENABLER.value,
             ]
         )
-        if not is_elevated:
-            is_elevated = UserMentor.objects.filter(
-                user_id=user_id,
-                status=UserMentor.Status.APPROVED,
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                org_id=user_org_link.org_id,
-            ).exists()
 
-        if is_elevated:
-            status = request.query_params.get("status")
-            if status:
-                sessions = sessions.filter(status=status)
+        status_filter = request.query_params.get("status")
+        
+        if is_global_elevated:
+            if status_filter:
+                sessions = sessions.filter(status=status_filter)
         else:
-            # Regular students can only see scheduled sessions
-            sessions = sessions.filter(status=MentorshipSession.Status.SCHEDULED)
+            if status_filter:
+                # If they filter by a status other than SCHEDULED, they won't see student org sessions
+                student_q = Q(entity_id=student_org_id, status=MentorshipSession.Status.SCHEDULED) if status_filter == MentorshipSession.Status.SCHEDULED else Q(pk__isnull=True)
+                sessions = sessions.filter(
+                    Q(entity_id__in=mentor_org_ids, status=status_filter) | student_q
+                )
+            else:
+                sessions = sessions.filter(
+                    Q(entity_id__in=mentor_org_ids) |
+                    Q(entity_id=student_org_id, status=MentorshipSession.Status.SCHEDULED)
+                )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request, 
@@ -114,7 +139,14 @@ class CampusSessionListAPI(APIView):
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
         
-        serializer = mentor_serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        qs = paginated_queryset.get("queryset")
+        org_ids = [s.entity_id for s in qs if s.session_type in (MentorshipSession.SessionType.CAMPUS_SESSION, MentorshipSession.SessionType.COMPANY_SESSION)]
+        from db.organization import Organization
+        org_map = dict(Organization.objects.filter(id__in=org_ids).values_list('id', 'title'))
+        
+        serializer = mentor_serializers.SessionListSerializer(
+            qs, many=True, context={"ig_map": {}, "org_map": org_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,

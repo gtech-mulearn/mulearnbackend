@@ -219,14 +219,18 @@ class TaskListAPI(APIView):
         TaskSkillLink.objects.filter(task_id=task_id).delete()
         
         # Create new links
-        for skill_id in skill_ids:
-            if Skill.objects.filter(id=skill_id, is_active=True).exists():
-                TaskSkillLink.objects.create(
-                    id=str(uuid.uuid4()),
-                    task_id=task_id,
-                    skill_id=skill_id,
-                    created_by_id=user_id,
-                )
+        valid_skill_ids = set(Skill.objects.filter(id__in=skill_ids, is_active=True).values_list("id", flat=True))
+        links_to_create = [
+            TaskSkillLink(
+                id=str(uuid.uuid4()),
+                task_id=task_id,
+                skill_id=skill_id,
+                created_by_id=user_id,
+            )
+            for skill_id in valid_skill_ids
+        ]
+        if links_to_create:
+            TaskSkillLink.objects.bulk_create(links_to_create)
 
 
 class TaskAPI(APIView):
@@ -295,14 +299,18 @@ class TaskAPI(APIView):
         TaskSkillLink.objects.filter(task_id=task_id).delete()
         
         # Create new links
-        for skill_id in skill_ids:
-            if Skill.objects.filter(id=skill_id, is_active=True).exists():
-                TaskSkillLink.objects.create(
-                    id=str(uuid.uuid4()),
-                    task_id=task_id,
-                    skill_id=skill_id,
-                    created_by_id=user_id,
-                )
+        valid_skill_ids = set(Skill.objects.filter(id__in=skill_ids, is_active=True).values_list("id", flat=True))
+        links_to_create = [
+            TaskSkillLink(
+                id=str(uuid.uuid4()),
+                task_id=task_id,
+                skill_id=skill_id,
+                created_by_id=user_id,
+            )
+            for skill_id in valid_skill_ids
+        ]
+        if links_to_create:
+            TaskSkillLink.objects.bulk_create(links_to_create)
 
     @role_required(
         [

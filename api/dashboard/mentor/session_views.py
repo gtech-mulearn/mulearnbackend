@@ -87,7 +87,9 @@ class MentorSessionListAPI(APIView):
             serializer = serializers.SessionDetailSerializer(session)
             return CustomResponse(response=serializer.data).get_success_response()
             
-        sessions = MentorshipSession.objects.filter(created_by_id=user_id, is_deleted=False)
+        sessions = MentorshipSession.objects.filter(
+            created_by_id=user_id, is_deleted=False
+        ).select_related("created_by")
         
         status = request.query_params.get("status")
         if status:
@@ -99,7 +101,17 @@ class MentorSessionListAPI(APIView):
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
         
-        serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        qs = paginated_queryset.get("queryset")
+        ig_ids = [s.entity_id for s in qs if s.session_type == MentorshipSession.SessionType.IG_SESSION]
+        org_ids = [s.entity_id for s in qs if s.session_type in (MentorshipSession.SessionType.CAMPUS_SESSION, MentorshipSession.SessionType.COMPANY_SESSION)]
+        from db.task import InterestGroup
+        from db.organization import Organization
+        ig_map = dict(InterestGroup.objects.filter(id__in=ig_ids).values_list('id', 'name'))
+        org_map = dict(Organization.objects.filter(id__in=org_ids).values_list('id', 'title'))
+        
+        serializer = serializers.SessionListSerializer(
+            qs, many=True, context={"ig_map": ig_map, "org_map": org_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -178,7 +190,7 @@ class AdminSessionListAPI(APIView):
     )
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        sessions = MentorshipSession.objects.filter(is_deleted=False)
+        sessions = MentorshipSession.objects.filter(is_deleted=False).select_related("created_by")
         
         status = request.query_params.get("status")
         ig_id = request.query_params.get("ig_id")
@@ -194,7 +206,17 @@ class AdminSessionListAPI(APIView):
             sort_fields={"starts_at": "starts_at", "created_at": "created_at", "status": "status"}
         )
         
-        serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        qs = paginated_queryset.get("queryset")
+        ig_ids = [s.entity_id for s in qs if s.session_type == MentorshipSession.SessionType.IG_SESSION]
+        org_ids = [s.entity_id for s in qs if s.session_type in (MentorshipSession.SessionType.CAMPUS_SESSION, MentorshipSession.SessionType.COMPANY_SESSION)]
+        from db.task import InterestGroup
+        from db.organization import Organization
+        ig_map = dict(InterestGroup.objects.filter(id__in=ig_ids).values_list('id', 'name'))
+        org_map = dict(Organization.objects.filter(id__in=org_ids).values_list('id', 'title'))
+        
+        serializer = serializers.SessionListSerializer(
+            qs, many=True, context={"ig_map": ig_map, "org_map": org_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -276,7 +298,7 @@ class AvailableSessionListAPI(APIView):
             ),
             status=MentorshipSession.Status.SCHEDULED,
             is_deleted=False,
-        )
+        ).select_related("created_by")
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request,
@@ -284,7 +306,17 @@ class AvailableSessionListAPI(APIView):
             sort_fields={"created_at": "created_at", "starts_at": "starts_at"}
         )
 
-        serializer = serializers.SessionListSerializer(paginated_queryset.get("queryset"), many=True)
+        qs = paginated_queryset.get("queryset")
+        ig_ids = [s.entity_id for s in qs if s.session_type == MentorshipSession.SessionType.IG_SESSION]
+        org_ids = [s.entity_id for s in qs if s.session_type in (MentorshipSession.SessionType.CAMPUS_SESSION, MentorshipSession.SessionType.COMPANY_SESSION)]
+        from db.task import InterestGroup
+        from db.organization import Organization
+        ig_map = dict(InterestGroup.objects.filter(id__in=ig_ids).values_list('id', 'name'))
+        org_map = dict(Organization.objects.filter(id__in=org_ids).values_list('id', 'title'))
+        
+        serializer = serializers.SessionListSerializer(
+            qs, many=True, context={"ig_map": ig_map, "org_map": org_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
