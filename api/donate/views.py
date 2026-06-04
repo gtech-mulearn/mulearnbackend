@@ -20,6 +20,7 @@ from reportlab.lib import colors
 from reportlab.lib.styles import ParagraphStyle
 from reportlab.platypus import Paragraph, Table, TableStyle
 from reportlab.lib.units import mm
+from drf_spectacular.utils import extend_schema
 
 razorpay_client = razorpay.Client(auth=(RAZORPAY_ID, RAZORPAY_SECRET))
 
@@ -422,6 +423,12 @@ def get_or_create_donor(email, donor_data):
 
 
 class RazorPayOrderAPI(APIView):
+    @extend_schema(
+        tags=['Donate'],
+        description="Create Razor Pay Order.",
+        request=OrderSerializer,
+        responses={200: OrderSerializer},
+    )
     def post(self, request):
         try:
             serializer = OrderSerializer(data=request.data)
@@ -452,6 +459,12 @@ class RazorPayOrderAPI(APIView):
 
 
 class RazorPayVerification(APIView):
+    @extend_schema(
+        tags=['Donate'],
+        description="Create Razor Pay Verification.",
+        request=DonationSerializer,
+        responses={200: DonationSerializer},
+    )
     def post(self, request):
         try:
             razorpay_client.utility.verify_payment_signature(
@@ -578,6 +591,12 @@ class RazorPayVerification(APIView):
 
 class RazorPaySubscriptionAPI(APIView):
     
+    @extend_schema(
+        tags=['Donate'],
+        description="Create Razor Pay Subscription.",
+        request=SubscriptionSerializer,
+        responses={200: SubscriptionSerializer},
+    )
     def post(self, request):
         try:
             serializer = SubscriptionSerializer(data=request.data)
@@ -674,6 +693,12 @@ class RazorPaySubscriptionAPI(APIView):
 
 class RazorPaySubscriptionVerification(APIView):
     
+    @extend_schema(
+        tags=['Donate'],
+        description="Create Razor Pay Subscription Verification.",
+        request=DonationSerializer,
+        responses={200: DonationSerializer},
+    )
     def post(self, request):
         try:
             subscription_id = request.data.get("razorpay_subscription_id")
@@ -813,6 +838,12 @@ class BankTransferAPI(APIView):
     Creates a pending verification record without triggering Razorpay or emails.
     """
     
+    @extend_schema(
+        tags=['Donate'],
+        description="Create Bank Transfer.",
+        request=BankTransferSerializer,
+        responses={200: BankTransferSerializer},
+    )
     def post(self, request):
         try:
             serializer = BankTransferSerializer(data=request.data)

@@ -22,11 +22,22 @@ from openpyxl import load_workbook
 from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
+from utils.schema_utils import CustomResponseSerializer
 
 
 class TaskPublicListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task Public List.",
+        responses={200: inline_serializer("TaskPublicListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org"
@@ -93,6 +104,14 @@ class TaskListAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task List.",
+        responses={200: inline_serializer("TaskListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
@@ -157,6 +176,12 @@ class TaskListAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Create Task List.",
+        request=TaskModifySerializer,
+        responses={200: OpenApiResponse(description="Task Created Successfully")},
+    )
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -214,6 +239,11 @@ class TaskAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task.",
+        responses={200: TaskModifySerializer},
+    )
     def get(self, request, task_id):
         task_queryset = TaskList.objects.get(pk=task_id)
         task_serializer = TaskModifySerializer(task_queryset, many=False)
@@ -225,6 +255,9 @@ class TaskAPI(APIView):
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Update Task.",
+        responses={200: TaskModifySerializer},
     )
     def put(self, request, task_id):  # edit
 
@@ -278,6 +311,9 @@ class TaskAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Delete Task.",
+        responses={200: TaskModifySerializer},
+    )
     def delete(self, request, task_id):  # delete
         task = TaskList.objects.get(id=task_id)
         task.delete()
@@ -296,6 +332,11 @@ class TaskListCSV(APIView):
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
         ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task List C S V.",
+        responses={200: OpenApiResponse(description="CSV file download of the task list")},
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
@@ -316,6 +357,12 @@ class ImportTaskListCSV(APIView):
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
         ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Create Import Task List C S V.",
+        request=TaskImportSerializer,
+        responses={200: TaskImportSerializer},
     )
     def post(self, request):
         try:
@@ -514,6 +561,12 @@ class ChannelDropdownAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Channel Dropdown.",
+        responses={200: inline_serializer("TaskChannelDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
+    )
     def get(self, request):
         channels = Channel.objects.values("id", "name")
 
@@ -530,6 +583,12 @@ class IGDropdownAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve I G Dropdown.",
+        responses={200: inline_serializer("TaskIGDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
+    )
     def get(self, request):
         igs = InterestGroup.objects.values("id", "name")
         return CustomResponse(response=igs).get_success_response()
@@ -544,6 +603,12 @@ class OrganizationDropdownAPI(APIView):
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Organization Dropdown.",
+        responses={200: inline_serializer("TaskOrganizationDropdownResponse", fields={
+            "id": s.CharField(),
+            "title": s.CharField(),
+        })},
     )
     def get(self, request):
         organizations = Organization.objects.values("id", "title")
@@ -560,6 +625,12 @@ class LevelDropdownAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Level Dropdown.",
+        responses={200: inline_serializer("TaskLevelDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
+    )
     def get(self, request):
         levels = Level.objects.values("id", "name")
         return CustomResponse(response=levels).get_success_response()
@@ -575,6 +646,9 @@ class TaskTypesDropDownAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Types Drop Down.",
+        responses={200: TasktypeSerializer},
+    )
     def get(self, request):
         task_types = TaskType.objects.values("id", "title")
         return CustomResponse(response=task_types).get_success_response()
@@ -588,6 +662,11 @@ class EventDropDownApi(APIView):
             RoleType.ADMIN.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Event Drop Down Api.",
+        responses={200: inline_serializer("TaskEventDropdownResponse", fields={
+            "events": s.ListField(child=s.CharField()),
+        })},
+    )
     def get(self, request):
         events = Events.get_all_values()
         return CustomResponse(response=events).get_success_response()
@@ -596,6 +675,9 @@ class EventDropDownApi(APIView):
 class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Base Template.",
+        responses={200: OpenApiResponse(description="Excel template file download (task_base_template.xlsx)")},
+    )
     def get(self, request):
         wb = load_workbook("./excel-templates/task_base_template.xlsx")
         ws = wb["Data Definitions"]
@@ -640,6 +722,11 @@ class TaskTypeCrudAPI(APIView):
             RoleType.ADMIN.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task Type Crud.",
+        responses={200: TasktypeSerializer},
+    )
     def get(self, request):
         taskType = TaskType.objects.all()
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -661,6 +748,12 @@ class TaskTypeCrudAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Create Task Type Crud.",
+        request=TaskTypeCreateUpdateSerializer,
+        responses={200: TasktypeSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = TaskTypeCreateUpdateSerializer(
@@ -675,6 +768,9 @@ class TaskTypeCrudAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Task'], description="Delete Task Type Crud.",
+        responses={200: TasktypeSerializer},
+    )
     def delete(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
         if taskType is None:
@@ -687,6 +783,11 @@ class TaskTypeCrudAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Update Task Type Crud.",
+        responses={200: TaskTypeCreateUpdateSerializer},
+    )
     def put(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
         if taskType is None:
@@ -719,27 +820,68 @@ class AdminTaskApprovalAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Admin Task Approval.",
+        responses={200: inline_serializer("TaskAdminApprovalListResponse", fields={
+            "tasks": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
     def get(self, request):
-        """List all tasks with approval_status='pending'."""
+        """List tasks with filtering."""
         from django.utils import timezone as tz
 
         queryset = (
             TaskList.objects
-            .filter(approval_status="pending")
-            .select_related("ig", "type", "submitted_by_company")
+            .select_related("ig", "type", "requested_by", "requested_by__company_profile")
             .order_by("created_at")
         )
+
+        approval_status = request.query_params.get("approval_status", "pending")
+        if approval_status:
+            queryset = queryset.filter(approval_status=approval_status)
+
+        source = request.query_params.get("source")
+        role = request.query_params.get("role") or source
+        
+        if role == "mentor":
+            queryset = queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
+            )
+        elif role == "company":
+            queryset = queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+            )
+        elif role == "admin":
+            queryset = queryset.filter(requested_by__isnull=True)
+
+        company_name = request.query_params.get("company_name")
+        if company_name:
+            queryset = queryset.filter(requested_by__company_profile__name__icontains=company_name)
+
+        mentor_name = request.query_params.get("mentor_name")
+        if mentor_name:
+            queryset = queryset.filter(
+                requested_by__full_name__icontains=mentor_name,
+                requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
+            )
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
             request,
-            search_fields=["title", "hashtag", "submitted_by_company__name"],
+            search_fields=[
+                "title", "hashtag",
+                "requested_by__company_profile__name",
+                "requested_by__full_name",
+            ],
             sort_fields={"createdAt": "created_at", "title": "title"},
             is_pagination=True,
         )
 
         data = []
         for task in paginated["queryset"]:
+            company_profile = getattr(task.requested_by, "company_profile", None) if task.requested_by else None
             data.append({
                 "id":                   str(task.id),
                 "title":                task.title,
@@ -749,19 +891,31 @@ class AdminTaskApprovalAPI(APIView):
                 "approval_status":      task.approval_status,
                 "ig":                   {"id": str(task.ig.id), "name": task.ig.name} if task.ig else None,
                 "type":                 {"id": str(task.type.id), "title": task.type.title} if task.type else None,
-                "submitted_by_company": {
-                    "id": str(task.submitted_by_company.id),
-                    "name": task.submitted_by_company.name,
-                } if task.submitted_by_company else None,
-                "created_at":           task.created_at.isoformat(),
+                "company_name":         company_profile.name if company_profile else None,
+                "requested_by": {
+                    "id":        str(task.requested_by.id),
+                    "full_name": task.requested_by.full_name,
+                } if task.requested_by else None,
+                "requested_at": task.requested_at.isoformat() if task.requested_at else None,
+                "created_at":   task.created_at.isoformat(),
             })
 
         return CustomResponse(
-            general_message="Pending tasks fetched successfully.",
+            general_message="Tasks fetched successfully.",
             response={"tasks": data, "pagination": paginated["pagination"]},
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Task'], description="Partially update Admin Task Approval.",
+        responses={200: inline_serializer("TaskAdminApprovalActionResponse", fields={
+            "task_id": s.CharField(),
+            "approval_status": s.CharField(),
+            "active": s.BooleanField(),
+            "rejection_reason": s.CharField(allow_null=True),
+            "reviewed_by": s.CharField(allow_null=True),
+            "reviewed_at": s.CharField(allow_null=True),
+        })},
+    )
     def patch(self, request, task_id):
         """
         Approve or reject a pending task.

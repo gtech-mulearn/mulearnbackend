@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import campus_views
+from . import campus_views, session_views as campus_session_views
 from . import dashboard_views
 from . import events_views
 from . import ig_views
@@ -175,6 +175,23 @@ urlpatterns = [
         "showcase/",
         campus_views.CampusShowcaseAPI.as_view(),
         name="campus-showcase",
+    ),
+
+    path(
+        "assign-mentor/",
+        campus_views.AssignCampusMentorAPI.as_view(),
+        name="assign-campus-mentor",
+    ),
+
+    path(
+        "sessions/create/",
+        campus_session_views.CampusMentorSessionCreateAPI.as_view(),
+        name="campus-mentor-session-create",
+    ),
+    path(
+        "sessions/list/",
+        campus_session_views.CampusSessionListAPI.as_view(),
+        name="campus-session-list",
     ),
 
     # Catch-all org_id routes MUST be last (they match any single-segment path)

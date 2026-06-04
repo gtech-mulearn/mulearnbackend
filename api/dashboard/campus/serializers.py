@@ -413,8 +413,7 @@ class ExecomMemberSerializer(serializers.ModelSerializer):
 
     def get_ig_name(self, obj):
         title = obj.role.title
-        # IG campus lead roles end with 'CampusLead'
-        # Handles both 'pythonCampusLead' and 'WEBDEV CampusLead'
+        # IG campus lead roles use canonical format: "{ig_code} CampusLead"
         if title not in (
             RoleType.CAMPUS_LEAD.value,
             RoleType.LEAD_ENABLER.value,

@@ -1,16 +1,24 @@
-from django.db.models import Sum, F, Value, Count, Q, Prefetch
+from django.db.models import Sum, F, Value, Count, Q, Prefetch, Subquery, OuterRef, IntegerField
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.views import APIView
 from . import serializers
-from db.task import TaskList
+from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
-from db.user import User, UserRoleLink
+from db.user import User, UserRoleLink, UserMentor
+from db.mentor import MentorshipSession, MentorshipSessionUserLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class StudentsLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description="Retrieve Students Leaderboard.",
+        responses={200: serializers.StudentLeaderboardSerializer},
+    )
     def get(self, request):
         students_leaderboard = (
             User.objects.filter(
@@ -41,6 +49,17 @@ class StudentsLeaderboard(APIView):
 
 
 class StudentsMonthlyLeaderboard(APIView):
+    @extend_schema(tags=['Leaderboard'], description="Retrieve Students Monthly Leaderboard.",
+        responses={200: inline_serializer(
+            name='LeaderboardStudentsMonthlyItem',
+            fields={
+                'full_name': s.CharField(),
+                'total_karma': s.IntegerField(),
+                'institution': s.CharField(allow_null=True),
+            },
+            many=True,
+        )},
+    )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
         print("REquest reeceivd")
@@ -84,6 +103,9 @@ class StudentsMonthlyLeaderboard(APIView):
 
 
 class CollegeLeaderboard(APIView):
+    @extend_schema(tags=['Leaderboard'], description="Retrieve College Leaderboard.",
+        responses={200: serializers.WadhwaniCollegeLeaderboardSerializer},
+    )
     def get(self, request):
         college_leaderboard = (
             Organization.objects.filter(
@@ -104,6 +126,17 @@ class CollegeLeaderboard(APIView):
 
 
 class CollegeMonthlyLeaderboard(APIView):
+    @extend_schema(tags=['Leaderboard'], description="Retrieve College Monthly Leaderboard.",
+        responses={200: inline_serializer(
+            name='LeaderboardCollegeMonthlyItem',
+            fields={
+                'code': s.CharField(),
+                'total_karma': s.IntegerField(),
+                'students': s.IntegerField(),
+            },
+            many=True,
+        )},
+    )
     def get(self, request):
         start_date, end_date = DateTimeUtils.get_start_and_end_of_previous_month()
         college_monthly_leaderboard = (
@@ -140,6 +173,11 @@ class CollegeMonthlyLeaderboard(APIView):
         ).get_success_response()
 
 class WadhwaniCollegeLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description="Retrieve Wadhwani College Leaderboard.",
+        responses={200: serializers.WadhwaniCollegeLeaderboardSerializer},
+    )
     def get(self, request):
         wadhwani_hashtags = [
             "#lp24-interpersonalskills",
@@ -188,6 +226,11 @@ class WadhwaniCollegeLeaderboard(APIView):
 
 
 class WadhwaniZonalLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description="Retrieve Wadhwani Zonal Leaderboard.",
+        responses={200: serializers.WadhwaniZoneLeaderboardSerializer},
+    )
     def get(self, request):
         wadhwani_hashtags = [
             "#lp24-interpersonalskills",
@@ -235,3 +278,117 @@ class WadhwaniZonalLeaderboard(APIView):
 
         response_data = serializers.WadhwaniZoneLeaderboardSerializer(zone_leaderboard, many=True).data
         return CustomResponse(response=response_data).get_success_response()
+
+
+class IGMentorLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description=(
+            "Retrieve the mentor leaderboard for a specific Interest Group. "
+            "Mentors are ranked primarily by the number of COMPLETED sessions in that IG, "
+            "with total karma as a tiebreaker."
+        ),
+        responses={200: serializers.IGMentorLeaderboardSerializer(many=True)},
+    )
+    def get(self, request, ig_id):
+        ig = InterestGroup.objects.filter(id=ig_id).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group not found").get_failure_response()
+
+        # Sessions completed in this IG by the mentor (linked via MentorshipSessionUserLink)
+        completed_sessions_subquery = (
+            MentorshipSessionUserLink.objects.filter(
+                user_id=OuterRef('user_id'),
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                session__session_type=MentorshipSession.SessionType.IG_SESSION,
+                session__entity_id=ig_id,
+                session__status=MentorshipSession.Status.COMPLETED,
+            )
+            .values('user_id')
+            .annotate(cnt=Count('id'))
+            .values('cnt')
+        )
+
+        mentor_qs = (
+            UserMentor.objects.filter(
+                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                status=UserMentor.Status.APPROVED,
+                user__user_ig_link_user__ig=ig,
+                user__user_ig_link_user__assignment_type='MENTOR',
+                user__user_ig_link_user__is_active=True,
+            )
+            .select_related('user__wallet_user', 'org')
+            .annotate(
+                total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
+                completed_sessions=Coalesce(
+                    Subquery(completed_sessions_subquery, output_field=IntegerField()),
+                    Value(0),
+                ),
+            )
+            .distinct()
+            .order_by('-completed_sessions', '-total_karma')
+        )
+
+        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        serialized = serializers.IGMentorLeaderboardSerializer(
+            mentor_qs,
+            many=True,
+            context={'ig': ig, 'rankings': rankings},
+        )
+        return CustomResponse(response=serialized.data).get_success_response()
+
+
+class CampusMentorLeaderboard(APIView):
+    @extend_schema(
+        tags=['Leaderboard'],
+        description=(
+            "Retrieve the mentor leaderboard for a specific campus. "
+            "Mentors are ranked primarily by the number of COMPLETED campus sessions, "
+            "with total karma as a tiebreaker."
+        ),
+        responses={200: serializers.CampusMentorLeaderboardSerializer(many=True)},
+    )
+    def get(self, request, campus_id):
+        campus = Organization.objects.filter(
+            id=campus_id, org_type=OrganizationType.COLLEGE.value
+        ).first()
+        if not campus:
+            return CustomResponse(general_message="Campus not found").get_failure_response()
+
+        completed_sessions_subquery = (
+            MentorshipSessionUserLink.objects.filter(
+                user_id=OuterRef('user_id'),
+                participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                session__session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
+                session__entity_id=campus_id,
+                session__status=MentorshipSession.Status.COMPLETED,
+            )
+            .values('user_id')
+            .annotate(cnt=Count('id'))
+            .values('cnt')
+        )
+
+        mentor_qs = (
+            UserMentor.objects.filter(
+                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                status=UserMentor.Status.APPROVED,
+                org=campus,
+            )
+            .select_related('user__wallet_user', 'org')
+            .annotate(
+                total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
+                completed_sessions=Coalesce(
+                    Subquery(completed_sessions_subquery, output_field=IntegerField()),
+                    Value(0),
+                ),
+            )
+            .order_by('-completed_sessions', '-total_karma')
+        )
+
+        rankings = {mentor.id: idx + 1 for idx, mentor in enumerate(mentor_qs)}
+        serialized = serializers.CampusMentorLeaderboardSerializer(
+            mentor_qs,
+            many=True,
+            context={'rankings': rankings},
+        )
+        return CustomResponse(response=serialized.data).get_success_response()

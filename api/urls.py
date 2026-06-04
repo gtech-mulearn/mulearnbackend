@@ -16,5 +16,6 @@ urlpatterns = [
     path('top100/', include('api.top100_coders.urls')),
     path('launchpad/', include('api.launchpad.urls')),
     path('donate/', include('api.donate.urls')),
+    path('calendar/', include('api.calendar.urls')),
     path("__debug__/", include(debug_toolbar.urls)),
 ]

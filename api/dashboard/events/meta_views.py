@@ -8,6 +8,8 @@ from db.organization import Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class EventCategoriesAPI(APIView):
@@ -17,6 +19,17 @@ class EventCategoriesAPI(APIView):
     No authentication required.
     """
 
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Event Categories.",
+        responses={200: inline_serializer(
+            name='EventCategoryItem',
+            fields={
+                'id': s.CharField(),
+                'name': s.CharField(),
+                'description': s.CharField(allow_null=True),
+            },
+            many=True,
+        )},
+    )
     def get(self, request):
         categories = Category.objects.filter(
             entity_type=Category.EntityType.EVENT,
@@ -36,6 +49,18 @@ class OrganizerOptionsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Organizer Options.",
+        responses={200: inline_serializer(
+            name='EventOrganizerOptions',
+            fields={
+                'can_create_as_ig': s.ListField(child=s.DictField()),
+                'can_create_as_campus_ig': s.ListField(child=s.DictField()),
+                'can_create_as_campus': s.ListField(child=s.DictField()),
+                'can_create_as_company': s.ListField(child=s.DictField()),
+                'can_create_as_admin': s.BooleanField(),
+            },
+        )},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
@@ -122,6 +147,17 @@ class CollaborationTargetsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Collaboration Targets.",
+        responses={200: inline_serializer(
+            name='EventCollaborationTargets',
+            fields={
+                'ig': s.ListField(child=s.DictField()),
+                'campus': s.ListField(child=s.DictField()),
+                'company': s.ListField(child=s.DictField()),
+                'campus_ig': s.ListField(child=s.DictField()),
+            },
+        )},
+    )
     def get(self, request):
         search = request.query_params.get('search', '').strip()
         filter_type = request.query_params.get('type', '').strip()
