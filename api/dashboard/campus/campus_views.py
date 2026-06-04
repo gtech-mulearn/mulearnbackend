@@ -56,7 +56,9 @@ class CampusDetailsPublicAPI(APIView):
         get(request): Handles GET requests to retrieve campus details for the authenticated user.
     """
 
-    authentication_classes = [CustomizePermission]
+    from rest_framework.permissions import AllowAny
+    authentication_classes = []
+    permission_classes = [AllowAny]
 
     # Use the role_required decorator to specify the allowed roles for this view
     # @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
