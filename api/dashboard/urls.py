@@ -32,6 +32,8 @@ urlpatterns = [
 
     path("category/", include("api.dashboard.category.urls")),
     path("mentor/", include("api.dashboard.mentor.urls")),
+    path("intern/", include("api.dashboard.intern.urls")),
+    path("manage-interns/", include("api.dashboard.manage_interns.urls")),
     path("company/", include("api.dashboard.company.urls")),
     # mentorship/ has been consolidated into mentor/ — do not re-add
 ]
