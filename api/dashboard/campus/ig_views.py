@@ -1,10 +1,10 @@
 from rest_framework.views import APIView
 from rest_framework import status
 from utils.response import CustomResponse
-from utils.permission import CustomizePermission, role_required
+from utils.permission import CustomizePermission
 from utils.types import RoleType
 from utils.utils import CommonUtils
-from .dash_campus_helper import get_campus_context
+from .dash_campus_helper import get_campus_context, campus_staff_required
 from api.dashboard.ig import services as ig_services
 from . import serializers
 from drf_spectacular.utils import extend_schema
@@ -12,7 +12,7 @@ from drf_spectacular.utils import extend_schema
 class CampusIGsAPI(APIView):
     authentication_classes = [CustomizePermission]
     
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus I Gs.",
@@ -36,7 +36,7 @@ class CampusIGsAPI(APIView):
 class CampusIGMembersAPI(APIView):
     authentication_classes = [CustomizePermission]
     
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus I G Members.",

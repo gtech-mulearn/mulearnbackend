@@ -17,6 +17,7 @@ from .dash_campus_helper import (
     get_user_college_link,
     get_campus_events_qs,
     validate_campus_member,
+    campus_staff_required,
 )
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
@@ -30,7 +31,7 @@ class CampusEventsAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus Events.",
@@ -98,7 +99,7 @@ class CampusEventDistributionAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Event Distribution.",
         responses={200: inline_serializer(
             name="CampusEventDistributionResponse",
@@ -123,6 +124,7 @@ class CampusEventDistributionAPI(APIView):
         )},
     )
     def get(self, request):
+
         user_id = JWTUtils.fetch_user_id(request)
 
         if not (user_org_link := get_user_college_link(user_id)):
@@ -161,13 +163,14 @@ class CampusExecomAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve Campus Execom.",
         responses={200: campus_serializers.ExecomMemberSerializer},
     )
     def get(self, request):
+
         user_id = JWTUtils.fetch_user_id(request)
 
         if not (user_org_link := get_user_college_link(user_id)):
@@ -212,7 +215,7 @@ class CampusExecomAPI(APIView):
             response={"data": serializer.data}
         ).get_success_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Create Campus Execom.",
@@ -324,10 +327,11 @@ class CampusExecomAPI(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Delete Campus Execom.",
         responses={200: campus_serializers.ExecomMemberSerializer},
     )
+
     def delete(self, request, member_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -391,7 +395,7 @@ class CampusExecomRoleAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value])
+    @campus_staff_required
     @extend_schema(tags=['Dashboard - Campus'], description="Retrieve Campus Execom Role.",
         responses={200: inline_serializer(
             name="CampusExecomRoleListResponse",
@@ -437,7 +441,8 @@ class CampusExecomRoleAPI(APIView):
 
         return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
 
-    @role_required([RoleType.CAMPUS_LEAD.value])
+
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     @extend_schema(tags=['Dashboard - Campus'], description="Create Campus Execom Role.",
         responses={200: OpenApiResponse(description="Role created or already exists")},
     )
