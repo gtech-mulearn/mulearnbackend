@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import public_views, manage_views, admin_views, scoped_views, meta_views
+from . import public_views, manage_views, admin_views, scoped_views, meta_views, task_views, analytics_views
 
 urlpatterns = [
 
@@ -36,6 +36,14 @@ urlpatterns = [
     path('manage/<str:event_id>/collaborators/<str:collaborator_id>/accept/', manage_views.ManageEventCollaboratorAcceptAPI.as_view()),
     path('manage/<str:event_id>/collaborators/<str:collaborator_id>/reject/', manage_views.ManageEventCollaboratorRejectAPI.as_view()),
     path('manage/<str:event_id>/collaborators/<str:collaborator_id>/', manage_views.ManageEventCollaboratorRemoveAPI.as_view()),
+
+    # Event Tasks
+    path('manage/<str:event_id>/tasks/meta/', task_views.EventTaskMetaAPI.as_view()),
+    path('manage/<str:event_id>/tasks/<str:task_id>/', task_views.EventTaskDetailAPI.as_view()),
+    path('manage/<str:event_id>/tasks/', task_views.EventTaskListCreateAPI.as_view()),
+
+    # Event Analytics
+    path('manage/<str:event_id>/analytics/', analytics_views.EventAnalyticsAPI.as_view()),
 
     # Manage event detail (GET / PUT / PATCH / DELETE)
     path('manage/<str:event_id>/', manage_views.ManageEventDetailAPI.as_view()),
