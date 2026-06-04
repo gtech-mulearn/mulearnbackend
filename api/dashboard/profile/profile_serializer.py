@@ -63,6 +63,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
     role_verification = serializers.SerializerMethodField()
+    lead_enabler_verified = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -81,6 +82,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "muid",
             "roles",
             "role_verification",
+            "lead_enabler_verified",
             "college_id",
             "college_code",
             "org_district_id",
@@ -235,6 +237,18 @@ class UserProfileSerializer(serializers.ModelSerializer):
             })
         
         return interest_groups
+    
+    def get_lead_enabler_verified(self, obj):
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        for link in role_links:
+            role_title = getattr(getattr(link, "role", None), "title", None)
+            if (
+                role_title == RoleType.LEAD_ENABLER.value
+                and getattr(link, "verified", False)
+                and getattr(link, "is_active", False)
+            ):
+                return True
+        return False
 
 
 class UserLevelSerializer(serializers.ModelSerializer):

@@ -509,8 +509,7 @@ class ChangeStudentTypeAPI(APIView):
 
 class TransferLeadRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
-
-    @role_required([RoleType.CAMPUS_LEAD.value])
+    @role_required([RoleType.CAMPUS_LEAD.value,RoleType.LEAD_ENABLER.value])
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Create Transfer Lead Role.",
