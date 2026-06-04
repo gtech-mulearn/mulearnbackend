@@ -177,6 +177,62 @@ class LinkedTaskSerializer(serializers.ModelSerializer):
 
 
 # ─────────────────────────────────────────────────────────────
+# EVENT TASK MANAGEMENT  (full CRUD serializers)
+# ─────────────────────────────────────────────────────────────
+
+class EventTaskSerializer(serializers.ModelSerializer):
+    """Read serializer for event-linked tasks (list + detail responses)."""
+    type = serializers.SerializerMethodField()
+    ig = MinimalIGSerializer(read_only=True)
+    level = serializers.SerializerMethodField()
+    channel = serializers.CharField(source='channel.name', default=None)
+    org = serializers.CharField(source='org.title', default=None)
+    created_by = MinimalUserSerializer(read_only=True)
+
+    class Meta:
+        model = TaskList
+        fields = [
+            'id', 'hashtag', 'title', 'description', 'karma',
+            'approval_status', 'active', 'type', 'ig', 'level',
+            'channel', 'org', 'variable_karma', 'usage_count',
+            'bonus_time', 'bonus_karma',
+            'created_by', 'created_at', 'updated_at',
+        ]
+
+    def get_type(self, obj):
+        if obj.type:
+            return {'id': str(obj.type.id), 'title': obj.type.title}
+        return None
+
+    def get_level(self, obj):
+        if obj.level:
+            return {'id': str(obj.level.id), 'name': obj.level.name}
+        return None
+
+
+class EventTaskWriteSerializer(serializers.ModelSerializer):
+    """Write serializer for creating/updating event-linked tasks."""
+
+    class Meta:
+        model = TaskList
+        fields = [
+            'hashtag', 'title', 'description', 'karma',
+            'type', 'ig', 'level', 'org', 'bonus_time',
+        ]
+        extra_kwargs = {
+            'hashtag': {'required': True},
+            'title': {'required': True},
+            'type': {'required': True},
+            'description': {'required': False, 'allow_blank': True},
+            'karma': {'required': False},
+            'ig': {'required': False, 'allow_null': True},
+            'level': {'required': False, 'allow_null': True},
+            'org': {'required': False, 'allow_null': True},
+            'bonus_time': {'required': False, 'allow_null': True},
+        }
+
+
+# ─────────────────────────────────────────────────────────────
 # EVENT LIST ITEM  (lean — for paginated feeds)
 # ─────────────────────────────────────────────────────────────
 
