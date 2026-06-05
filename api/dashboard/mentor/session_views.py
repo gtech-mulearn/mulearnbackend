@@ -17,7 +17,9 @@ class MentorSessionCreateAPI(APIView):
         description=(
             "Create a new mentorship session. "
             "For IG mentors, provide an 'ig' field. "
-            "For company mentors, entity_id and session_type are auto-resolved from the mentor's company org."
+            "For company mentors, entity_id and session_type are auto-resolved from the mentor's company org. "
+            "To create a recurring session, set is_recurring=true, recurrence_type ('DAILY', 'WEEKLY', 'MONTHLY'), "
+            "recurrence_interval, and recurrence_end_date. This returns the parent session while auto-spawning children."
         ),
         request=serializers.SessionCreateSerializer,
         responses={200: serializers.SessionCreateSerializer},
@@ -52,6 +54,9 @@ class MentorSessionCreateAPI(APIView):
                 ).get_failure_response(status_code=403)
             data["entity_id"] = ig_id
             data["session_type"] = MentorshipSession.SessionType.IG_SESSION
+
+        # Pop 'ig' to prevent DRF unknown field validation errors
+        data.pop("ig", None)
 
         serializer = serializers.SessionCreateSerializer(
             data=data, context={"user_id": user_id}

@@ -181,6 +181,7 @@ class MentorVerifySerializer(serializers.Serializer):
 from db.mentor import MentorshipSession
 from db.organization import Organization
 from db.task import InterestGroup
+from .session_recurrence_helper import generate_recurring_sessions
 
 class SessionCreateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -195,12 +196,38 @@ class SessionCreateSerializer(serializers.ModelSerializer):
             "ends_at",
             "meeting_link",
             "venue",
-            "max_participants"
+            "max_participants",
+            "is_recurring",
+            "recurrence_type",
+            "recurrence_interval",
+            "recurrence_end_date"
         ]
 
     def validate(self, data):
+        user_id = self.context.get("user_id")
+        if MentorshipSession.objects.filter(
+            title=data.get('title'),
+            starts_at=data.get('starts_at'),
+            entity_id=data.get('entity_id'),
+            created_by_id=user_id,
+            is_deleted=False
+        ).exists():
+            raise serializers.ValidationError("A session with this exact title and start time already exists.")
+
         if data.get('starts_at') >= data.get('ends_at'):
             raise serializers.ValidationError("Session start time must be before end time.")
+            
+        is_recurring = data.get('is_recurring', False)
+        if is_recurring:
+            if not data.get('recurrence_type'):
+                raise serializers.ValidationError("recurrence_type is required when is_recurring is true.")
+            if not data.get('recurrence_interval') or data.get('recurrence_interval') < 1:
+                raise serializers.ValidationError("recurrence_interval must be a positive integer.")
+            if not data.get('recurrence_end_date'):
+                raise serializers.ValidationError("recurrence_end_date is required when is_recurring is true.")
+            if data.get('recurrence_end_date') <= data.get('starts_at').date():
+                raise serializers.ValidationError("recurrence_end_date must be after the session starts_at date.")
+                
         return data
 
     def create(self, validated_data):
@@ -212,6 +239,10 @@ class SessionCreateSerializer(serializers.ModelSerializer):
             updated_by_id=user_id,
             **validated_data
         )
+        
+        if session.is_recurring:
+            generate_recurring_sessions(session)
+            
         return session
 
 class SessionUpdateSerializer(serializers.ModelSerializer):
