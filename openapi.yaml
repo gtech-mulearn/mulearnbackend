@@ -168,6 +168,310 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/calendar/campus-mentor/{campus_id}/sessions/:
+    get:
+      operationId: calendar_campus_mentor_sessions_list
+      description: 'Calendar view of mentorship sessions for a specific campus. Returns
+        sessions grouped as upcoming, ongoing, and completed. Filter by month using
+        the `month` query parameter (format: YYYY-MM).'
+      parameters:
+      - in: path
+        name: campus_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: SCHEDULED, COMPLETED, CANCELLED'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorshipSessionCalendar'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/calendar/company/{company_org_id}/sessions/:
+    get:
+      operationId: calendar_company_sessions_list
+      description: 'Calendar view of mentorship sessions for a specific company org.
+        Returns sessions grouped as upcoming, ongoing, and completed. Filter by month
+        using the `month` query parameter (format: YYYY-MM).'
+      parameters:
+      - in: path
+        name: company_org_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: SCHEDULED, COMPLETED, CANCELLED'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorshipSessionCalendar'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/calendar/events/:
+    get:
+      operationId: calendar_events_list
+      description: Global platform events calendar. Returns events grouped as upcoming,
+        ongoing, and completed. Supports optional filtering by month (YYYY-MM) and
+        scope.
+      parameters:
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: scope
+        schema:
+          type: string
+        description: 'Filter by scope: ig, campus, global, company'
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: ongoing, upcoming, completed'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventCalendar'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/calendar/ig-mentor/{ig_id}/sessions/:
+    get:
+      operationId: calendar_ig_mentor_sessions_list
+      description: 'Calendar view of mentorship sessions for a specific Interest Group.
+        Returns sessions grouped as upcoming, ongoing, and completed. Filter by month
+        using the `month` query parameter (format: YYYY-MM).'
+      parameters:
+      - in: path
+        name: ig_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: SCHEDULED, COMPLETED, CANCELLED'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorshipSessionCalendar'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/calendar/ig/{ig_id}/events/:
+    get:
+      operationId: calendar_ig_events_list
+      description: Events calendar scoped to a specific Interest Group. Returns events
+        grouped as upcoming, ongoing, and completed. Supports optional month filtering.
+      parameters:
+      - in: path
+        name: ig_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: ongoing, upcoming, completed'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventCalendar'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/achievement/audit/{muid}/:
     get:
       operationId: dashboard_achievement_audit_retrieve
@@ -1420,6 +1724,17 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/dashboard/campus/assign-mentor/:
+    post:
+      operationId: dashboard_campus_assign_mentor_create
+      tags:
+      - Campus
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/campus/campus-details/:
     get:
       operationId: dashboard_campus_campus_details_retrieve
@@ -1975,6 +2290,107 @@ paths:
                           type: string
                   response:
                     $ref: '#/components/schemas/CampusRecentActivityResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/campus/sessions/create/:
+    post:
+      operationId: dashboard_campus_sessions_create_create
+      description: Create a new mentorship session for the campus.
+      tags:
+      - Campus
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/SessionCreate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/SessionCreate'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/campus/sessions/list/:
+    get:
+      operationId: dashboard_campus_sessions_list_list
+      description: List campus mentorship sessions. Admins, campus leads, enablers,
+        and approved campus mentors see all statuses; other users see only scheduled
+        sessions.
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+      tags:
+      - Campus
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/SessionList'
                 required:
                 - hasError
                 - statusCode
@@ -2845,7 +3261,8 @@ paths:
   /api/v1/dashboard/company/analytics/gigs/:
     get:
       operationId: dashboard_company_analytics_gigs_retrieve
-      description: Retrieve analytics data for company gigs.
+      description: Retrieve analytics data for company gigs (creator or approved company
+        mentor).
       tags:
       - Company
       security:
@@ -2915,7 +3332,7 @@ paths:
   /api/v1/dashboard/company/applications/{app_id}/status/:
     patch:
       operationId: dashboard_company_applications_status_partial_update
-      description: Update the status of a job application.
+      description: Update the status of a job application (creator or company mentor).
       parameters:
       - in: path
         name: app_id
@@ -3033,7 +3450,8 @@ paths:
   /api/v1/dashboard/company/jobs/:
     get:
       operationId: dashboard_company_jobs_list
-      description: List all jobs for the logged-in company.
+      description: List all jobs for the authenticated company (creator or company
+        mentor).
       tags:
       - Company
       security:
@@ -3246,7 +3664,7 @@ paths:
   /api/v1/dashboard/company/jobs/{job_id}/applications/:
     get:
       operationId: dashboard_company_jobs_applications_list
-      description: List all applications for a specific job.
+      description: List all applications for a specific job (creator or company mentor).
       parameters:
       - in: path
         name: job_id
@@ -3324,7 +3742,7 @@ paths:
   /api/v1/dashboard/company/jobs/{job_id}/apply/:
     get:
       operationId: dashboard_company_jobs_apply_list
-      description: List all applications for a specific job.
+      description: List all applications for a specific job (creator or company mentor).
       parameters:
       - in: path
         name: job_id
@@ -3508,10 +3926,109 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/company/mentor/list/:
+    get:
+      operationId: dashboard_company_mentor_list_list
+      description: List all Company Mentor nominations for the authenticated company.
+      tags:
+      - Company
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CompanyMentorList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/company/mentor/nominate/:
+    post:
+      operationId: dashboard_company_mentor_nominate_create
+      description: Nominate a platform user as a Company Mentor for your company.
+        Provide the user's **muid** (e.g. `john-doe@mulearn`). The user must already
+        be a member of the company's organisation (i.e. they appear in `UserOrganizationLink`
+        for this company). Only the verified company creator can nominate. The nomination
+        enters PENDING state until an admin approves it.
+      tags:
+      - Company
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CompanyMentorNominate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/CompanyMentorNominate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/CompanyMentorNominate'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/CompanyMentorList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/company/mulearners/:
     get:
       operationId: dashboard_company_mulearners_list
-      description: Directory of MuLearners available to companies.
+      description: Directory of MuLearners available to companies (creator or company
+        mentor).
       parameters:
       - in: query
         name: achievement
@@ -3594,7 +4111,8 @@ paths:
   /api/v1/dashboard/company/profile/:
     get:
       operationId: dashboard_company_profile_retrieve
-      description: Retrieve the profile of a verified company.
+      description: Retrieve the profile of the authenticated company (creator or approved
+        company mentor).
       tags:
       - Company
       security:
@@ -3633,7 +4151,8 @@ paths:
           description: ''
     patch:
       operationId: dashboard_company_profile_partial_update
-      description: Update the profile of a verified company.
+      description: Update the profile of the authenticated company (creator or approved
+        company mentor).
       tags:
       - Company
       requestBody:
@@ -3906,8 +4425,8 @@ paths:
   /api/v1/dashboard/company/tasks/:
     get:
       operationId: dashboard_company_tasks_retrieve
-      description: List all tasks submitted by the authenticated company user (filtered
-        by requested_by). Supports pagination, search, and sort.
+      description: List all tasks submitted by the authenticated company user (creator
+        or company mentor). Supports pagination, search, and sort.
       parameters:
       - in: query
         name: approval_status
@@ -5963,6 +6482,51 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/events/manage/{event_id}/analytics/:
+    get:
+      operationId: dashboard_events_manage_analytics_retrieve
+      description: Retrieve analytics and performance stats for an event.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventAnalyticsResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/events/manage/{event_id}/co-owners/:
     get:
       operationId: dashboard_events_manage_co_owners_retrieve
@@ -6380,6 +6944,313 @@ paths:
                           type: string
                   response:
                     $ref: '#/components/schemas/EventPublishResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/events/manage/{event_id}/tasks/:
+    get:
+      operationId: dashboard_events_manage_tasks_list
+      description: List all tasks linked to an event.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventTask'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: dashboard_events_manage_tasks_create
+      description: Create a new task linked to an event. Task will require admin approval.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventTaskWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/EventTaskWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/EventTaskWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventTask'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/events/manage/{event_id}/tasks/{task_id}/:
+    get:
+      operationId: dashboard_events_manage_tasks_retrieve
+      description: Retrieve a specific task linked to an event.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventTask'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    patch:
+      operationId: dashboard_events_manage_tasks_partial_update
+      description: Partially update a task linked to an event.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedEventTaskWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedEventTaskWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedEventTaskWrite'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventTask'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: dashboard_events_manage_tasks_destroy
+      description: Delete a task linked to an event.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventTaskDeleteResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/events/manage/{event_id}/tasks/meta/:
+    get:
+      operationId: dashboard_events_manage_tasks_meta_retrieve
+      description: Retrieve dropdown metadata for event task forms.
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventTaskMetaResponse'
                 required:
                 - hasError
                 - statusCode
@@ -6953,6 +7824,492 @@ paths:
         required: true
       tags:
       - Ig
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/guilds/:
+    get:
+      operationId: dashboard_intern_guilds_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leaderboard/:
+    get:
+      operationId: dashboard_intern_leaderboard_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leaderboard/me/:
+    get:
+      operationId: dashboard_intern_leaderboard_me_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leave/:
+    get:
+      operationId: dashboard_intern_leave_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_leave_create
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_leave_partial_update
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leave/{leave_id}/:
+    get:
+      operationId: dashboard_intern_leave_retrieve_2
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_leave_create_2
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_leave_partial_update_2
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leave/{leave_id}/cancel/:
+    get:
+      operationId: dashboard_intern_leave_cancel_retrieve
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_leave_cancel_create
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_leave_cancel_partial_update
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leave/balance/:
+    get:
+      operationId: dashboard_intern_leave_balance_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/leave/history/:
+    get:
+      operationId: dashboard_intern_leave_history_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/overview/activity/:
+    get:
+      operationId: dashboard_intern_overview_activity_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/overview/leaderboard/top/:
+    get:
+      operationId: dashboard_intern_overview_leaderboard_top_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/overview/status/:
+    get:
+      operationId: dashboard_intern_overview_status_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/reviews/:
+    get:
+      operationId: dashboard_intern_reviews_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_reviews_create
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_reviews_partial_update
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/reviews/{review_id}/:
+    get:
+      operationId: dashboard_intern_reviews_retrieve_2
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_reviews_create_2
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_reviews_partial_update_2
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/reviews/current/:
+    get:
+      operationId: dashboard_intern_reviews_current_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/reviews/history/:
+    get:
+      operationId: dashboard_intern_reviews_history_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/tasks/{task_id}/:
+    get:
+      operationId: dashboard_intern_tasks_retrieve
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_tasks_partial_update
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/tasks/mine/:
+    get:
+      operationId: dashboard_intern_tasks_mine_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_tasks_mine_partial_update
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/timesheets/:
+    get:
+      operationId: dashboard_intern_timesheets_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_timesheets_create
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_timesheets_partial_update
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/timesheets/{timesheet_id}/:
+    get:
+      operationId: dashboard_intern_timesheets_retrieve_2
+      parameters:
+      - in: path
+        name: timesheet_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_timesheets_create_2
+      parameters:
+      - in: path
+        name: timesheet_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_intern_timesheets_partial_update_2
+      parameters:
+      - in: path
+        name: timesheet_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/timesheets/history/:
+    get:
+      operationId: dashboard_intern_timesheets_history_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/timesheets/summary/:
+    get:
+      operationId: dashboard_intern_timesheets_summary_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/timesheets/today/:
+    get:
+      operationId: dashboard_intern_timesheets_today_retrieve
+      tags:
+      - Intern
       security:
       - jwtAuth: []
       - {}
@@ -10058,6 +11415,399 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/manage-interns/interns/:
+    get:
+      operationId: dashboard_manage_interns_interns_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_manage_interns_interns_create
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_manage_interns_interns_partial_update
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_manage_interns_interns_destroy
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/manage-interns/interns/{intern_id}/:
+    get:
+      operationId: dashboard_manage_interns_interns_retrieve_2
+      parameters:
+      - in: path
+        name: intern_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_manage_interns_interns_create_2
+      parameters:
+      - in: path
+        name: intern_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_manage_interns_interns_partial_update_2
+      parameters:
+      - in: path
+        name: intern_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_manage_interns_interns_destroy_2
+      parameters:
+      - in: path
+        name: intern_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/manage-interns/interns/export/:
+    get:
+      operationId: dashboard_manage_interns_interns_export_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/leave/:
+    get:
+      operationId: dashboard_manage_interns_leave_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/leave/{leave_id}/review/:
+    patch:
+      operationId: dashboard_manage_interns_leave_review_partial_update
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/reviews/:
+    get:
+      operationId: dashboard_manage_interns_reviews_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/reviews/reviews/{review_id}/review/:
+    get:
+      operationId: dashboard_manage_interns_reviews_reviews_review_retrieve
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_manage_interns_reviews_reviews_review_partial_update
+      parameters:
+      - in: path
+        name: review_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/reviews/timesheets/:
+    get:
+      operationId: dashboard_manage_interns_reviews_timesheets_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/reviews/timesheets/{timesheet_id}/review/:
+    get:
+      operationId: dashboard_manage_interns_reviews_timesheets_review_retrieve
+      parameters:
+      - in: path
+        name: timesheet_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_manage_interns_reviews_timesheets_review_partial_update
+      parameters:
+      - in: path
+        name: timesheet_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/status/:
+    get:
+      operationId: dashboard_manage_interns_status_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/tasks/:
+    get:
+      operationId: dashboard_manage_interns_tasks_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_manage_interns_tasks_create
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_manage_interns_tasks_partial_update
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_manage_interns_tasks_destroy
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/manage-interns/tasks/{task_id}/:
+    get:
+      operationId: dashboard_manage_interns_tasks_retrieve_2
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_manage_interns_tasks_create_2
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_manage_interns_tasks_partial_update_2
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_manage_interns_tasks_destroy_2
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/mentor/activity/:
+    get:
+      operationId: dashboard_mentor_activity_list
+      description: Get recent activity of the currently logged-in mentor (sessions
+        created, tasks appraised).
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorActivity'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/mentor/availability/:
     get:
       operationId: dashboard_mentor_availability_list
@@ -10875,7 +12625,8 @@ paths:
   /api/v1/dashboard/mentor/session/available/:
     get:
       operationId: dashboard_mentor_session_available_list
-      description: List all scheduled sessions for the IGs the user belongs to.
+      description: List all scheduled sessions available to the user — includes IG
+        sessions for their groups and company sessions for linked company orgs.
       tags:
       - Mentor
       security:
@@ -10917,7 +12668,9 @@ paths:
   /api/v1/dashboard/mentor/session/create/:
     post:
       operationId: dashboard_mentor_session_create_create
-      description: Create a new mentorship session.
+      description: Create a new mentorship session. For IG mentors, provide an 'ig'
+        field. For company mentors, entity_id and session_type are auto-resolved from
+        the mentor's company org.
       tags:
       - Mentor
       requestBody:
@@ -20207,6 +21960,57 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/leaderboard/campus-mentor/{campus_id}/:
+    get:
+      operationId: leaderboard_campus_mentor_list
+      description: Retrieve the mentor leaderboard for a specific campus. Mentors
+        are ranked primarily by the number of COMPLETED campus sessions, with total
+        karma as a tiebreaker.
+      parameters:
+      - in: path
+        name: campus_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leaderboard
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/CampusMentorLeaderboard'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/leaderboard/college/:
     get:
       operationId: leaderboard_college_retrieve
@@ -20285,6 +22089,57 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/LeaderboardCollegeMonthlyItem'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/leaderboard/ig-mentor/{ig_id}/:
+    get:
+      operationId: leaderboard_ig_mentor_list
+      description: Retrieve the mentor leaderboard for a specific Interest Group.
+        Mentors are ranked primarily by the number of COMPLETED sessions in that IG,
+        with total karma as a tiebreaker.
+      parameters:
+      - in: path
+        name: ig_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Leaderboard
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/IGMentorLeaderboard'
                 required:
                 - hasError
                 - statusCode
@@ -23764,6 +25619,34 @@ components:
       - key
       - label
       - percentage
+    CampusMentorLeaderboard:
+      type: object
+      properties:
+        mentor_id:
+          type: string
+        mentor_name:
+          type: string
+        profile_pic:
+          type: string
+          readOnly: true
+        campus_name:
+          type: string
+          readOnly: true
+        total_karma:
+          type: integer
+        completed_sessions:
+          type: integer
+        rank:
+          type: string
+          readOnly: true
+      required:
+      - campus_name
+      - completed_sessions
+      - mentor_id
+      - mentor_name
+      - profile_pic
+      - rank
+      - total_karma
     CampusRecentActivityData:
       type: object
       properties:
@@ -25227,6 +27110,82 @@ components:
       - name
       - slug
       - state_name
+    CompanyMentorList:
+      type: object
+      description: Serializer for listing Company Mentor nominations.
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        user_id:
+          type: string
+          readOnly: true
+        user_name:
+          type: string
+          readOnly: true
+        user_email:
+          type: string
+          readOnly: true
+        org_name:
+          type: string
+          readOnly: true
+        mentor_tier:
+          enum:
+          - IG_MENTOR
+          - MENTOR
+          - COMPANY_MENTOR
+          - CAMPUS_MENTOR
+          type: string
+          description: |-
+            * `IG_MENTOR` - IG Mentor
+            * `MENTOR` - Mentor
+            * `COMPANY_MENTOR` - Company Mentor
+            * `CAMPUS_MENTOR` - Campus Mentor
+          x-spec-enum-id: 502a7e5c2300b154
+        status:
+          enum:
+          - PENDING
+          - APPROVED
+          - REJECTED
+          type: string
+          description: |-
+            * `PENDING` - Pending
+            * `APPROVED` - Approved
+            * `REJECTED` - Rejected
+          x-spec-enum-id: 1f00471a47c591be
+        reason:
+          type: string
+          nullable: true
+          maxLength: 1000
+        verification_note:
+          type: string
+          nullable: true
+          maxLength: 500
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - org_name
+      - user_email
+      - user_id
+      - user_name
+    CompanyMentorNominate:
+      type: object
+      description: |-
+        Nominate an existing platform user as a Company Mentor for the company.
+
+        The nominated user is identified by their ``muid`` (e.g. john-doe@mulearn)
+        and must already be linked to the company's Organisation record.
+      properties:
+        muid:
+          type: string
+          description: MuID of the platform user to nominate (e.g. john-doe@mulearn).
+        reason:
+          type: string
+          description: Optional reason / note to pass with the nomination.
+      required:
+      - muid
     CompanyRegister:
       type: object
       properties:
@@ -25776,6 +27735,138 @@ components:
       - profile_pic
       - rank
       - roles
+    EventAnalyticsResponse:
+      type: object
+      properties:
+        summary:
+          type: object
+          additionalProperties: {}
+        interest_trend:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        task_breakdown:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - interest_trend
+      - summary
+      - task_breakdown
+    EventCalendar:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        title:
+          type: string
+          maxLength: 200
+        slug:
+          type: string
+          maxLength: 220
+        status:
+          enum:
+          - draft
+          - pending_campus_approval
+          - pending_approval
+          - pending_mentor_approval
+          - published
+          - ongoing
+          - completed
+          - cancelled
+          type: string
+          description: |-
+            * `draft` - Draft
+            * `pending_campus_approval` - Pending Campus Approval
+            * `pending_approval` - Pending Approval
+            * `pending_mentor_approval` - Pending Mentor Approval
+            * `published` - Published
+            * `ongoing` - Ongoing
+            * `completed` - Completed
+            * `cancelled` - Cancelled
+          x-spec-enum-id: 6dc92067376f0014
+        start_datetime:
+          type: string
+          format: date-time
+        end_datetime:
+          type: string
+          format: date-time
+        venue_type:
+          enum:
+          - physical
+          - online
+          - hybrid
+          type: string
+          description: |-
+            * `physical` - Physical
+            * `online` - Online
+            * `hybrid` - Hybrid
+          x-spec-enum-id: 3a5e8fc6a728bf38
+        venue_city:
+          type: string
+          nullable: true
+          maxLength: 100
+        venue_online_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        scope:
+          enum:
+          - global
+          - campus
+          - ig
+          - campus_ig
+          - company
+          type: string
+          description: |-
+            * `global` - Global
+            * `campus` - Campus
+            * `ig` - Interest Group
+            * `campus_ig` - Campus IG
+            * `company` - Company
+          x-spec-enum-id: 76e3ce91196df376
+        cover_image:
+          type: string
+          nullable: true
+          maxLength: 512
+        organiser_type:
+          enum:
+          - global_ig
+          - campus_ig
+          - campus
+          - company
+          - admin
+          type: string
+          description: |-
+            * `global_ig` - Global IG
+            * `campus_ig` - Campus IG
+            * `campus` - Campus
+            * `company` - Company
+            * `admin` - Admin
+          x-spec-enum-id: 1f717c4d9d7fa8e6
+        is_featured:
+          type: boolean
+        interest_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        ig_name:
+          type: string
+          readOnly: true
+        org_name:
+          type: string
+          readOnly: true
+      required:
+      - end_datetime
+      - ig_name
+      - org_name
+      - slug
+      - start_datetime
+      - title
     EventCalendarItem:
       type: object
       properties:
@@ -26308,6 +28399,168 @@ components:
       required:
       - id
       - status
+    EventTask:
+      type: object
+      description: Read serializer for event-linked tasks (list + detail responses).
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        approval_status:
+          enum:
+          - approved
+          - pending
+          - rejected
+          type: string
+          description: |-
+            * `approved` - Approved
+            * `pending` - Pending
+            * `rejected` - Rejected
+          x-spec-enum-id: e9436f319d54eebe
+        active:
+          type: boolean
+        type:
+          type: string
+          readOnly: true
+        ig:
+          allOf:
+          - $ref: '#/components/schemas/MinimalIG'
+          readOnly: true
+        level:
+          type: string
+          readOnly: true
+        channel:
+          type: string
+        org:
+          type: string
+        variable_karma:
+          type: boolean
+        usage_count:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+        bonus_time:
+          type: string
+          format: date-time
+          nullable: true
+        bonus_karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        created_by:
+          allOf:
+          - $ref: '#/components/schemas/MinimalUser'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - created_by
+      - hashtag
+      - ig
+      - level
+      - title
+      - type
+      - updated_at
+    EventTaskDeleteResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    EventTaskMetaResponse:
+      type: object
+      properties:
+        task_types:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        interest_groups:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        levels:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        channels:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+        organizations:
+          type: array
+          items:
+            type: object
+            additionalProperties: {}
+      required:
+      - channels
+      - interest_groups
+      - levels
+      - organizations
+      - task_types
+    EventTaskWrite:
+      type: object
+      description: Write serializer for creating/updating event-linked tasks.
+      properties:
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        type:
+          type: string
+        ig:
+          type: string
+          nullable: true
+        level:
+          type: string
+          nullable: true
+        org:
+          type: string
+          nullable: true
+        bonus_time:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - hashtag
+      - title
+      - type
     EventVenue:
       type: object
       description: Flattens venue_* fields from the Event model.
@@ -26605,6 +28858,34 @@ components:
       - activity_dates
       - last_activity_at
       - streak_days
+    IGMentorLeaderboard:
+      type: object
+      properties:
+        mentor_id:
+          type: string
+        mentor_name:
+          type: string
+        profile_pic:
+          type: string
+          readOnly: true
+        ig_name:
+          type: string
+          readOnly: true
+        total_karma:
+          type: integer
+        completed_sessions:
+          type: integer
+        rank:
+          type: string
+          readOnly: true
+      required:
+      - completed_sessions
+      - ig_name
+      - mentor_id
+      - mentor_name
+      - profile_pic
+      - rank
+      - total_karma
     InstitutesRetrival:
       type: object
       properties:
@@ -28224,6 +30505,29 @@ components:
       required:
       - id
       - name
+    MentorActivity:
+      type: object
+      properties:
+        id:
+          type: string
+        activity_type:
+          type: string
+        title:
+          type: string
+        description:
+          type: string
+          nullable: true
+        date:
+          type: string
+          format: date-time
+        status:
+          type: string
+          nullable: true
+      required:
+      - activity_type
+      - date
+      - id
+      - title
     MentorDetail:
       type: object
       properties:
@@ -28609,6 +30913,71 @@ components:
           format: int64
         preferred_ig_ids:
           nullable: true
+    MentorshipSessionCalendar:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        status:
+          enum:
+          - SCHEDULED
+          - PENDING_APPROVAL
+          - COMPLETED
+          - CANCELLED
+          - REJECTED
+          type: string
+          description: |-
+            * `SCHEDULED` - Scheduled
+            * `PENDING_APPROVAL` - Pending Approval
+            * `COMPLETED` - Completed
+            * `CANCELLED` - Cancelled
+            * `REJECTED` - Rejected
+          x-spec-enum-id: 829e033712bec382
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
+        mentor_name:
+          type: string
+          readOnly: true
+        mentee_count:
+          type: string
+          readOnly: true
+      required:
+      - ends_at
+      - mentee_count
+      - mentor_name
+      - starts_at
+      - status
+      - title
     MinimalCampus:
       type: object
       properties:
@@ -29228,6 +31597,39 @@ components:
           x-spec-enum-id: 3001a7a51be9bcf9
         rejection_reason:
           type: string
+    PatchedEventTaskWrite:
+      type: object
+      description: Write serializer for creating/updating event-linked tasks.
+      properties:
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        type:
+          type: string
+        ig:
+          type: string
+          nullable: true
+        level:
+          type: string
+          nullable: true
+        org:
+          type: string
+          nullable: true
+        bonus_time:
+          type: string
+          format: date-time
+          nullable: true
     PatchedJobUpdate:
       type: object
       properties:
@@ -29930,9 +32332,21 @@ components:
     SessionCreate:
       type: object
       properties:
-        ig:
+        entity_id:
           type: string
           nullable: true
+          maxLength: 36
+        session_type:
+          enum:
+          - ig_session
+          - campus_session
+          - company_session
+          type: string
+          description: |-
+            * `ig_session` - IG Session
+            * `campus_session` - Campus Session
+            * `company_session` - Company Session
+          x-spec-enum-id: ab9317e33b7b40a3
         title:
           type: string
           maxLength: 150
@@ -29979,13 +32393,24 @@ components:
         id:
           type: string
           maxLength: 36
-        ig_id:
+        entity_id:
           type: string
           nullable: true
-          readOnly: true
-        ig_name:
+          maxLength: 36
+        entity_name:
           type: string
           readOnly: true
+        session_type:
+          enum:
+          - ig_session
+          - campus_session
+          - company_session
+          type: string
+          description: |-
+            * `ig_session` - IG Session
+            * `campus_session` - Campus Session
+            * `company_session` - Company Session
+          x-spec-enum-id: ab9317e33b7b40a3
         title:
           type: string
           maxLength: 150
@@ -30041,8 +32466,7 @@ components:
       - created_by_id
       - created_by_name
       - ends_at
-      - ig_id
-      - ig_name
+      - entity_name
       - starts_at
       - status
       - title
@@ -30765,6 +33189,9 @@ components:
         role_verification:
           type: string
           readOnly: true
+        lead_enabler_verified:
+          type: string
+          readOnly: true
         college_id:
           type: string
           readOnly: true
@@ -30806,6 +33233,7 @@ components:
       - interest_groups
       - joined
       - karma_distribution
+      - lead_enabler_verified
       - muid
       - org_district_id
       - percentile

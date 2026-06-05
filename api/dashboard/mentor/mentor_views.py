@@ -7,8 +7,11 @@ from utils.utils import CommonUtils
 from db.user import UserMentor
 from db.mentor import MentorshipSession
 from db.task import KarmaActivityLog
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, inline_serializer
+from rest_framework import serializers as rest_serializers
 from . import serializers
+from .dash_mentor_helper import get_mentor_overview
+
 
 class MentorRegistrationAPI(APIView):
     permission_classes = [CustomizePermission]
@@ -331,3 +334,41 @@ class MentorPublicProfileAPI(APIView):
             
         serializer = serializers.MentorDetailSerializer(mentor)
         return CustomResponse(response=serializer.data).get_success_response()
+
+class MentorOverviewAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Retrieve an overview dashboard of metrics aggregated dynamically based on the authenticated mentor's active scopes (Campus, Company, IG).",
+        responses={
+            200: inline_serializer(
+                name='MentorOverviewData',
+                fields={
+                    'scopes': inline_serializer(
+                        name='MentorScopeMetrics',
+                        fields={
+                            'scope_type': rest_serializers.CharField(),
+                            'scope_id': rest_serializers.CharField(),
+                            'scope_name': rest_serializers.CharField(allow_null=True),
+                            'metrics': rest_serializers.DictField()
+                        },
+                        many=True
+                    )
+                }
+            )
+        }
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        scopes = get_mentor_overview(user_id)
+        
+        if not scopes:
+            return CustomResponse(
+                general_message="No active mentor scopes found for this user."
+            ).get_failure_response(status_code=403)
+            
+        return CustomResponse(
+            general_message="Mentor dashboard fetched successfully.",
+            response={"scopes": scopes}
+        ).get_success_response()

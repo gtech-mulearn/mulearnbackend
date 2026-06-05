@@ -10,4 +10,6 @@ urlpatterns = [
     path('csv/', dash_ig_view.InterestGroupCSV.as_view()),  # for IG data CSV download
     path('<str:pk>/', dash_ig_view.InterestGroupAPI.as_view()),  # for edit and delete
     path('get/<str:pk>/', dash_ig_view.InterestGroupGetAPI.as_view()),  # for edit and delete
+    path('<str:pk>/join/', dash_ig_view.InterestGroupMembershipAPI.as_view()),
+    path('<str:pk>/leave/', dash_ig_view.InterestGroupMembershipAPI.as_view()),
 ]

@@ -12,6 +12,7 @@ from db.organization import Organization
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
+from api.dashboard.events.serializers import EventCalendarItemSerializer
 
 
 def _parse_month(month_str):
@@ -87,7 +88,7 @@ class IGMentorSessionCalendar(APIView):
         responses={200: serializers.MentorshipSessionCalendarSerializer(many=True)},
     )
     def get(self, request, ig_id):
-        ig = InterestGroup.objects.filter(id=ig_id).first()
+        ig = InterestGroup.objects.filter(id=ig_id.strip()).first()
         if not ig:
             return CustomResponse(general_message="Interest Group not found").get_failure_response()
 
@@ -136,7 +137,7 @@ class CampusMentorSessionCalendar(APIView):
     )
     def get(self, request, campus_id):
         campus = Organization.objects.filter(
-            id=campus_id, org_type=OrganizationType.COLLEGE.value
+            id=campus_id.strip(), org_type=OrganizationType.COLLEGE.value
         ).first()
         if not campus:
             return CustomResponse(general_message="Campus not found").get_failure_response()
@@ -196,13 +197,13 @@ class EventCalendar(APIView):
             OpenApiParameter('scope', OpenApiTypes.STR, description='Filter by scope: ig, campus, global, company', required=False),
             OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
         ],
-        responses={200: serializers.EventCalendarSerializer(many=True)},
+        responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request):
         qs = Event.objects.filter(
             status__in=EVENT_STATUSES_VISIBLE,
             deleted_at__isnull=True,
-        ).select_related('scope_ig', 'scope_org').order_by('start_datetime')
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime')
 
         month_str = request.query_params.get('month')
         start, end = _parse_month(month_str)
@@ -226,7 +227,7 @@ class EventCalendar(APIView):
         upcoming, ongoing, completed = _group_events(qs)
 
         def serialize(events):
-            return serializers.EventCalendarSerializer(events, many=True).data
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),
@@ -246,10 +247,10 @@ class IGEventCalendar(APIView):
             OpenApiParameter('month', OpenApiTypes.STR, description='Filter by month (YYYY-MM)', required=False),
             OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
         ],
-        responses={200: serializers.EventCalendarSerializer(many=True)},
+        responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request, ig_id):
-        ig = InterestGroup.objects.filter(id=ig_id).first()
+        ig = InterestGroup.objects.filter(id=ig_id.strip()).first()
         if not ig:
             return CustomResponse(general_message="Interest Group not found").get_failure_response()
 
@@ -258,7 +259,7 @@ class IGEventCalendar(APIView):
             deleted_at__isnull=True,
         ).filter(
             Q(scope_ig=ig) | Q(organiser_ig=ig)
-        ).select_related('scope_ig', 'scope_org').order_by('start_datetime').distinct()
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime').distinct()
 
         month_str = request.query_params.get('month')
         start, end = _parse_month(month_str)
@@ -278,7 +279,7 @@ class IGEventCalendar(APIView):
         upcoming, ongoing, completed = _group_events(qs)
 
         def serialize(events):
-            return serializers.EventCalendarSerializer(events, many=True).data
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),
@@ -307,7 +308,7 @@ class CompanySessionCalendar(APIView):
     )
     def get(self, request, company_org_id):
         company_org = Organization.objects.filter(
-            id=company_org_id, org_type=OrganizationType.COMPANY.value
+            id=company_org_id.strip(), org_type=OrganizationType.COMPANY.value
         ).first()
         if not company_org:
             return CustomResponse(general_message="Company org not found").get_failure_response()
@@ -331,6 +332,114 @@ class CompanySessionCalendar(APIView):
 
         def serialize(sessions):
             return serializers.MentorshipSessionCalendarSerializer(sessions, many=True).data
+
+        return CustomResponse(response={
+            'upcoming': serialize(upcoming),
+            'ongoing': serialize(ongoing),
+            'completed': serialize(completed),
+        }).get_success_response()
+
+
+class CampusEventCalendar(APIView):
+    @extend_schema(
+        tags=['Calendar'],
+        description=(
+            "Events calendar scoped to a specific Campus. Returns events grouped as "
+            "upcoming, ongoing, and completed. Supports optional month filtering."
+        ),
+        parameters=[
+            OpenApiParameter('month', OpenApiTypes.STR, description='Filter by month (YYYY-MM)', required=False),
+            OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
+        ],
+        responses={200: EventCalendarItemSerializer(many=True)},
+    )
+    def get(self, request, campus_id):
+        campus = Organization.objects.filter(
+            id=campus_id.strip(), org_type=OrganizationType.COLLEGE.value
+        ).first()
+        if not campus:
+            return CustomResponse(general_message="Campus not found").get_failure_response()
+
+        qs = Event.objects.filter(
+            status__in=EVENT_STATUSES_VISIBLE,
+            deleted_at__isnull=True,
+        ).filter(
+            Q(scope_org=campus) | Q(organiser_org=campus)
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime').distinct()
+
+        month_str = request.query_params.get('month')
+        start, end = _parse_month(month_str)
+        if start and end:
+            qs = qs.filter(start_datetime__gte=start, start_datetime__lt=end)
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            sf = status_filter.lower()
+            if sf == 'upcoming':
+                qs = qs.filter(status=Event.Status.PUBLISHED)
+            elif sf == 'ongoing':
+                qs = qs.filter(status=Event.Status.ONGOING)
+            elif sf == 'completed':
+                qs = qs.filter(status=Event.Status.COMPLETED)
+
+        upcoming, ongoing, completed = _group_events(qs)
+
+        def serialize(events):
+            return EventCalendarItemSerializer(events, many=True).data
+
+        return CustomResponse(response={
+            'upcoming': serialize(upcoming),
+            'ongoing': serialize(ongoing),
+            'completed': serialize(completed),
+        }).get_success_response()
+
+
+class CompanyEventCalendar(APIView):
+    @extend_schema(
+        tags=['Calendar'],
+        description=(
+            "Events calendar scoped to a specific Company. Returns events grouped as "
+            "upcoming, ongoing, and completed. Supports optional month filtering."
+        ),
+        parameters=[
+            OpenApiParameter('month', OpenApiTypes.STR, description='Filter by month (YYYY-MM)', required=False),
+            OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
+        ],
+        responses={200: EventCalendarItemSerializer(many=True)},
+    )
+    def get(self, request, company_id):
+        company = Organization.objects.filter(
+            id=company_id.strip(), org_type=OrganizationType.COMPANY.value
+        ).first()
+        if not company:
+            return CustomResponse(general_message="Company not found").get_failure_response()
+
+        qs = Event.objects.filter(
+            status__in=EVENT_STATUSES_VISIBLE,
+            deleted_at__isnull=True,
+        ).filter(
+            Q(scope_org=company) | Q(organiser_org=company)
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime').distinct()
+
+        month_str = request.query_params.get('month')
+        start, end = _parse_month(month_str)
+        if start and end:
+            qs = qs.filter(start_datetime__gte=start, start_datetime__lt=end)
+
+        status_filter = request.query_params.get('status')
+        if status_filter:
+            sf = status_filter.lower()
+            if sf == 'upcoming':
+                qs = qs.filter(status=Event.Status.PUBLISHED)
+            elif sf == 'ongoing':
+                qs = qs.filter(status=Event.Status.ONGOING)
+            elif sf == 'completed':
+                qs = qs.filter(status=Event.Status.COMPLETED)
+
+        upcoming, ongoing, completed = _group_events(qs)
+
+        def serialize(events):
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),

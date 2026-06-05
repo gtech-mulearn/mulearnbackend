@@ -17,6 +17,7 @@ from .task_serializers import (
     CompanyTaskCreateSerializer,
     CompanyTaskListSerializer,
     CompanyTaskUpdateSerializer,
+    CompanyTaskPatchSerializer,
 )
 
 
@@ -89,7 +90,7 @@ class CompanyTaskListCreateAPI(APIView):
 
         queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(requested_by_id=user_id)
+        ).filter(requested_by_id=user_id, active=True)
 
         approval_status = request.query_params.get("approval_status")
         if approval_status:
@@ -272,7 +273,78 @@ class CompanyTaskDetailAPI(APIView):
 
     @extend_schema(
         tags=["Dashboard - Company Task"],
-        description="Delete a pending task submitted by the company.",
+        description="Update a task submitted by the company (partial update). Regardless of the current approval_status, the task reverts to pending and active=False.",
+        request=CompanyTaskPatchSerializer,
+        responses={200: CompanyTaskListSerializer},
+    )
+    def patch(self, request, task_id):
+        from rest_framework import status
+        user_id = JWTUtils.fetch_user_id(request)
+        company = get_verified_company(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
+
+        task = TaskList.objects.filter(
+            id=task_id, requested_by_id=user_id
+        ).first()
+
+        if not task:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404)
+
+        from db.user import User
+        user = User.objects.get(id=user_id)
+
+        serializer = CompanyTaskPatchSerializer(
+            data=request.data,
+            context={"task_id": task_id}
+        )
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message="Invalid task submission data.",
+                message={"error_code": "VALIDATION_ERROR", "errors": serializer.errors},
+            ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
+
+        data = serializer.validated_data
+
+        from db.task import InterestGroup, TaskType, Level
+        from db.channels import Channel
+        
+        # Resolve FKs if provided
+        if "ig_id" in data:
+            task.ig = InterestGroup.objects.get(id=data["ig_id"])
+        if "type_id" in data:
+            task.type = TaskType.objects.get(id=data["type_id"])
+        if "channel_id" in data:
+            task.channel = Channel.objects.filter(id=data["channel_id"]).first() if data["channel_id"] else None
+        if "level_id" in data:
+            task.level = Level.objects.filter(id=data["level_id"]).first() if data["level_id"] else None
+
+        for field in ["title", "hashtag", "description", "karma"]:
+            if field in data:
+                setattr(task, field, data[field])
+
+        # Enforce reset business rules
+        task.active = False
+        task.approval_status = "pending"
+        task.rejection_reason = None
+        task.reviewed_by_admin = None
+        task.reviewed_at = None
+        task.updated_by = user
+
+        task.save()
+
+        return CustomResponse(
+            general_message="Task updated successfully and submitted for admin review.",
+            response=CompanyTaskListSerializer(task).data,
+        ).get_success_response()
+
+    @extend_schema(
+        tags=["Dashboard - Company Task"],
+        description="Soft-delete a task submitted by the company by marking it inactive.",
         responses={200: OpenApiResponse(description="Task deleted successfully.")},
     )
     def delete(self, request, task_id):
@@ -292,15 +364,19 @@ class CompanyTaskDetailAPI(APIView):
                 general_message="Task not found."
             ).get_failure_response(status_code=404)
 
-        if task.approval_status != "pending":
-            return CustomResponse(
-                general_message=(
-                    f"Cannot delete a task with status '{task.approval_status}'. "
-                    "Only pending tasks can be deleted."
-                )
-            ).get_failure_response()
+        from db.user import User
+        user = User.objects.get(id=user_id)
 
-        task.delete()
+        # Soft delete
+        task.active = False
+        task.updated_by = user
+        task.save(update_fields=["active", "updated_by", "updated_at"])
+
         return CustomResponse(
-            general_message="Task deleted successfully."
+            general_message="Task deleted successfully.",
+            response={
+                "task_id": str(task.id),
+                "deleted_at": task.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+            }
         ).get_success_response()
+
