@@ -5,6 +5,8 @@ from db.user import UserMentor, UserRoleLink, Role
 from db.task import InterestGroup, UserIgLink
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
+from django.db import transaction
+from django.db.models import Q
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
     class Meta:
@@ -181,11 +183,15 @@ class MentorVerifySerializer(serializers.Serializer):
 from db.mentor import MentorshipSession
 from db.organization import Organization
 from db.task import InterestGroup
+from .session_recurrence_helper import generate_recurring_sessions
 
 class SessionCreateSerializer(serializers.ModelSerializer):
+    child_session_ids = serializers.SerializerMethodField()
+
     class Meta:
         model = MentorshipSession
         fields = [
+            "id",
             "entity_id",
             "session_type",
             "title",
@@ -195,12 +201,59 @@ class SessionCreateSerializer(serializers.ModelSerializer):
             "ends_at",
             "meeting_link",
             "venue",
-            "max_participants"
+            "max_participants",
+            "is_recurring",
+            "recurrence_type",
+            "recurrence_interval",
+            "recurrence_end_date",
+            "child_session_ids"
         ]
 
+    def get_child_session_ids(self, obj):
+        if obj.is_recurring:
+            if hasattr(obj, '_child_session_ids'):
+                return obj._child_session_ids
+            return list(
+                MentorshipSession.objects.filter(
+                    parent_session_id=obj.id,
+                    is_deleted=False
+                ).values_list('id', flat=True)
+            )
+        return []
+
     def validate(self, data):
+        user_id = self.context.get("user_id")
+        if MentorshipSession.objects.filter(
+            title=data.get('title'),
+            starts_at=data.get('starts_at'),
+            entity_id=data.get('entity_id'),
+            created_by_id=user_id,
+            is_deleted=False
+        ).exists():
+            raise serializers.ValidationError("A session with this exact title and start time already exists.")
+
         if data.get('starts_at') >= data.get('ends_at'):
             raise serializers.ValidationError("Session start time must be before end time.")
+            
+        is_recurring = data.get('is_recurring', False)
+        if is_recurring:
+            errors = {}
+            if not data.get('recurrence_type'):
+                errors['recurrence_type'] = "recurrence_type is required when is_recurring is true."
+            if not data.get('recurrence_interval') or data.get('recurrence_interval') < 1:
+                errors['recurrence_interval'] = "recurrence_interval must be a positive integer when is_recurring is true."
+            if not data.get('recurrence_end_date'):
+                errors['recurrence_end_date'] = "recurrence_end_date is required when is_recurring is true."
+            elif data.get('starts_at') and data.get('recurrence_end_date') <= data.get('starts_at').date():
+                errors['recurrence_end_date'] = "recurrence_end_date must be after the session starts_at date."
+            
+            if errors:
+                raise serializers.ValidationError(errors)
+        else:
+            data['recurrence_type'] = None
+            data['recurrence_interval'] = None
+            data['recurrence_end_date'] = None
+            
         return data
 
     def create(self, validated_data):
@@ -212,6 +265,13 @@ class SessionCreateSerializer(serializers.ModelSerializer):
             updated_by_id=user_id,
             **validated_data
         )
+        
+        if session.is_recurring:
+            child_sessions = generate_recurring_sessions(session)
+            session._child_session_ids = [c.id for c in child_sessions]
+        else:
+            session._child_session_ids = []
+            
         return session
 
 class SessionUpdateSerializer(serializers.ModelSerializer):
@@ -255,6 +315,7 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
 class SessionListSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
     entity_name = serializers.SerializerMethodField()
+    parent_session_id = serializers.CharField(read_only=True, allow_null=True)
 
     class Meta:
         model = MentorshipSession
@@ -271,7 +332,12 @@ class SessionListSerializer(serializers.ModelSerializer):
             "created_by_id",
             "created_by_name",
             "created_at",
-            "max_participants"
+            "max_participants",
+            "is_recurring",
+            "parent_session_id",
+            "recurrence_type",
+            "recurrence_interval",
+            "recurrence_end_date"
         ]
 
     def get_entity_name(self, obj):
@@ -299,19 +365,45 @@ class AdminSessionVerifySerializer(serializers.Serializer):
         MentorshipSession.Status.SCHEDULED, 
         MentorshipSession.Status.REJECTED
     ])
+    apply_to_series = serializers.BooleanField(default=False, required=False)
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
         status = validated_data.get("status")
+        apply_to_series = validated_data.get("apply_to_series", False)
         
-        instance.status = status
-        instance.updated_by_id = user_id
+        now = DateTimeUtils.get_current_utc_time()
         
-        if status == MentorshipSession.Status.SCHEDULED:
-            instance.approved_by_id = user_id
-            instance.approved_at = DateTimeUtils.get_current_utc_time()
+        with transaction.atomic():
+            # 1. Update and save the targeted session instance (triggers cache signal once)
+            instance.status = status
+            instance.updated_by_id = user_id
             
-        instance.save()
+            if status == MentorshipSession.Status.SCHEDULED:
+                instance.approved_by_id = user_id
+                instance.approved_at = now
+                
+            instance.save()
+            
+            # 2. Bulk update all other pending sessions in the series if requested (bypasses signal overhead)
+            if apply_to_series:
+                root_id = instance.parent_session_id or instance.id
+                update_kwargs = {
+                    "status": status,
+                    "updated_by_id": user_id,
+                }
+                if status == MentorshipSession.Status.SCHEDULED:
+                    update_kwargs["approved_by_id"] = user_id
+                    update_kwargs["approved_at"] = now
+                    
+                MentorshipSession.objects.filter(
+                    Q(id=root_id) | Q(parent_session_id=root_id),
+                    status=MentorshipSession.Status.PENDING_APPROVAL,
+                    is_deleted=False
+                ).exclude(id=instance.id).update(**update_kwargs)
+                
+        # Make sure apply_to_series is available for view layer formatting
+        validated_data['apply_to_series'] = apply_to_series
         return instance
 
 from db.mentor import MentorAvailabilitySlot

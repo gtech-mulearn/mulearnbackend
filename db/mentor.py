@@ -22,6 +22,11 @@ class MentorshipSession(models.Model):
         CAMPUS_SESSION  = 'campus_session',  'Campus Session'
         COMPANY_SESSION = 'company_session', 'Company Session'
 
+    class RecurrenceType(models.TextChoices):
+        DAILY   = 'DAILY',   'Daily'
+        WEEKLY  = 'WEEKLY',  'Weekly'
+        MONTHLY = 'MONTHLY', 'Monthly'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     session_type = models.CharField(max_length=20, choices=SessionType.choices, default=SessionType.IG_SESSION)
     entity_id = models.CharField(max_length=36, blank=True, null=True)
@@ -36,6 +41,12 @@ class MentorshipSession(models.Model):
     max_participants = models.IntegerField(blank=True, null=True)
     is_deleted = models.BooleanField(default=False)
     
+    is_recurring = models.BooleanField(default=False)
+    recurrence_type = models.CharField(max_length=20, choices=RecurrenceType.choices, blank=True, null=True)
+    recurrence_interval = models.IntegerField(blank=True, null=True)
+    recurrence_end_date = models.DateField(blank=True, null=True)
+    parent_session = models.ForeignKey('self', on_delete=models.SET_NULL, null=True, blank=True, db_column='parent_session_id', related_name='child_sessions')
+
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="created_by", related_name="mentorship_session_created_by")
     created_at = models.DateTimeField(auto_now_add=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, db_column="updated_by", related_name="mentorship_session_updated_by")
