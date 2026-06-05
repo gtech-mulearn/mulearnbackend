@@ -800,7 +800,7 @@ class ListAllLevelInfo(APIView):
         levels = Level.objects.all().order_by("level_order")
         response = []
         for level in levels:
-            tasks = TaskList.objects.filter(level=level).select_related("ig", "channel")
+            tasks = TaskList.objects.filter(level=level, active=True).select_related("ig", "channel")
             task_list = []
             for task in tasks:
                 task_list.append({

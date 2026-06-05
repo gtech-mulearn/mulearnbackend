@@ -41,7 +41,7 @@ class TaskPublicListAPI(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org"
-        ).all()
+        ).filter(active=True)
 
         ig_id = request.query_params.get("ig_id")
         if ig_id:
@@ -115,7 +115,7 @@ class TaskListAPI(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-        ).all()
+        ).filter(active=True)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
@@ -341,7 +341,7 @@ class TaskListCSV(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-        ).all()
+        ).filter(active=True)
 
         task_serializer_data = TaskListSerializer(task_queryset, many=True).data
 
