@@ -229,6 +229,126 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/calendar/campus/{campus_id}/events/:
+    get:
+      operationId: calendar_campus_events_list
+      description: Events calendar scoped to a specific Campus. Returns events grouped
+        as upcoming, ongoing, and completed. Supports optional month filtering.
+      parameters:
+      - in: path
+        name: campus_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: ongoing, upcoming, completed'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventCalendarItem'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/calendar/company/{company_id}/events/:
+    get:
+      operationId: calendar_company_events_list
+      description: Events calendar scoped to a specific Company. Returns events grouped
+        as upcoming, ongoing, and completed. Supports optional month filtering.
+      parameters:
+      - in: path
+        name: company_id
+        schema:
+          type: string
+        required: true
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Filter by month (YYYY-MM)
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: ongoing, upcoming, completed'
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventCalendarItem'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/calendar/company/{company_org_id}/sessions/:
     get:
       operationId: calendar_company_sessions_list
@@ -344,7 +464,7 @@ paths:
                   response:
                     type: array
                     items:
-                      $ref: '#/components/schemas/EventCalendar'
+                      $ref: '#/components/schemas/EventCalendarItem'
                 required:
                 - hasError
                 - statusCode
@@ -465,7 +585,7 @@ paths:
                   response:
                     type: array
                     items:
-                      $ref: '#/components/schemas/EventCalendar'
+                      $ref: '#/components/schemas/EventCalendarItem'
                 required:
                 - hasError
                 - statusCode
@@ -5856,7 +5976,7 @@ paths:
       operationId: dashboard_events_admin_reject_create
       description: |-
         POST /events/admin/<event_id>/reject/
-        Rejects a pending event, returning it to 'draft'.
+        Rejects a pending event, changing its status to 'rejected'.
         Body: { "reason": "..." }
       parameters:
       - in: path
@@ -6003,6 +6123,40 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/events/campus/{event_id}/approve/:
+    post:
+      operationId: dashboard_events_campus_approve_create
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/events/campus/{event_id}/reject/:
+    post:
+      operationId: dashboard_events_campus_reject_create
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/events/company/{company_id}/:
     get:
       operationId: dashboard_events_company_retrieve
@@ -7257,6 +7411,40 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/events/mentor/{event_id}/approve/:
+    post:
+      operationId: dashboard_events_mentor_approve_create
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/events/mentor/{event_id}/reject/:
+    post:
+      operationId: dashboard_events_mentor_reject_create
+      parameters:
+      - in: path
+        name: event_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/events/meta/categories/:
     get:
       operationId: dashboard_events_meta_categories_list
@@ -12256,6 +12444,47 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/mentor/overview/:
+    get:
+      operationId: dashboard_mentor_overview_retrieve
+      description: Retrieve an overview dashboard of metrics aggregated dynamically
+        based on the authenticated mentor's active scopes (Campus, Company, IG).
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/MentorOverviewData'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/mentor/profile/:
     get:
       operationId: dashboard_mentor_profile_retrieve
@@ -12670,7 +12899,9 @@ paths:
       operationId: dashboard_mentor_session_create_create
       description: Create a new mentorship session. For IG mentors, provide an 'ig'
         field. For company mentors, entity_id and session_type are auto-resolved from
-        the mentor's company org.
+        the mentor's company org. To create a recurring session, set is_recurring=true,
+        recurrence_type ('DAILY', 'WEEKLY', 'MONTHLY'), recurrence_interval, and recurrence_end_date.
+        This returns the parent session while auto-spawning children.
       tags:
       - Mentor
       requestBody:
@@ -27755,118 +27986,6 @@ components:
       - interest_trend
       - summary
       - task_breakdown
-    EventCalendar:
-      type: object
-      properties:
-        id:
-          type: string
-          maxLength: 36
-        title:
-          type: string
-          maxLength: 200
-        slug:
-          type: string
-          maxLength: 220
-        status:
-          enum:
-          - draft
-          - pending_campus_approval
-          - pending_approval
-          - pending_mentor_approval
-          - published
-          - ongoing
-          - completed
-          - cancelled
-          type: string
-          description: |-
-            * `draft` - Draft
-            * `pending_campus_approval` - Pending Campus Approval
-            * `pending_approval` - Pending Approval
-            * `pending_mentor_approval` - Pending Mentor Approval
-            * `published` - Published
-            * `ongoing` - Ongoing
-            * `completed` - Completed
-            * `cancelled` - Cancelled
-          x-spec-enum-id: 6dc92067376f0014
-        start_datetime:
-          type: string
-          format: date-time
-        end_datetime:
-          type: string
-          format: date-time
-        venue_type:
-          enum:
-          - physical
-          - online
-          - hybrid
-          type: string
-          description: |-
-            * `physical` - Physical
-            * `online` - Online
-            * `hybrid` - Hybrid
-          x-spec-enum-id: 3a5e8fc6a728bf38
-        venue_city:
-          type: string
-          nullable: true
-          maxLength: 100
-        venue_online_link:
-          type: string
-          nullable: true
-          maxLength: 500
-        scope:
-          enum:
-          - global
-          - campus
-          - ig
-          - campus_ig
-          - company
-          type: string
-          description: |-
-            * `global` - Global
-            * `campus` - Campus
-            * `ig` - Interest Group
-            * `campus_ig` - Campus IG
-            * `company` - Company
-          x-spec-enum-id: 76e3ce91196df376
-        cover_image:
-          type: string
-          nullable: true
-          maxLength: 512
-        organiser_type:
-          enum:
-          - global_ig
-          - campus_ig
-          - campus
-          - company
-          - admin
-          type: string
-          description: |-
-            * `global_ig` - Global IG
-            * `campus_ig` - Campus IG
-            * `campus` - Campus
-            * `company` - Company
-            * `admin` - Admin
-          x-spec-enum-id: 1f717c4d9d7fa8e6
-        is_featured:
-          type: boolean
-        interest_count:
-          type: integer
-          maximum: 4294967295
-          minimum: 0
-          format: int64
-        ig_name:
-          type: string
-          readOnly: true
-        org_name:
-          type: string
-          readOnly: true
-      required:
-      - end_datetime
-      - ig_name
-      - org_name
-      - slug
-      - start_datetime
-      - title
     EventCalendarItem:
       type: object
       properties:
@@ -27889,6 +28008,7 @@ components:
           - ongoing
           - completed
           - cancelled
+          - rejected
           type: string
           description: |-
             * `draft` - Draft
@@ -27899,7 +28019,8 @@ components:
             * `ongoing` - Ongoing
             * `completed` - Completed
             * `cancelled` - Cancelled
-          x-spec-enum-id: 6dc92067376f0014
+            * `rejected` - Rejected
+          x-spec-enum-id: 5369d79da504087c
         start:
           type: string
           format: date-time
@@ -28103,6 +28224,7 @@ components:
           - ongoing
           - completed
           - cancelled
+          - rejected
           type: string
           description: |-
             * `draft` - Draft
@@ -28113,7 +28235,8 @@ components:
             * `ongoing` - Ongoing
             * `completed` - Completed
             * `cancelled` - Cancelled
-          x-spec-enum-id: 6dc92067376f0014
+            * `rejected` - Rejected
+          x-spec-enum-id: 5369d79da504087c
         scope:
           enum:
           - global
@@ -28278,6 +28401,7 @@ components:
           - ongoing
           - completed
           - cancelled
+          - rejected
           type: string
           description: |-
             * `draft` - Draft
@@ -28288,7 +28412,8 @@ components:
             * `ongoing` - Ongoing
             * `completed` - Completed
             * `cancelled` - Cancelled
-          x-spec-enum-id: 6dc92067376f0014
+            * `rejected` - Rejected
+          x-spec-enum-id: 5369d79da504087c
         scope:
           enum:
           - global
@@ -28565,30 +28690,25 @@ components:
       type: object
       description: Flattens venue_* fields from the Event model.
       properties:
-        type:
+        venue_type:
           type: string
-        address:
-          type: string
-          nullable: true
-        city:
+        venue_address:
           type: string
           nullable: true
-        maps_url:
+        venue_city:
           type: string
           nullable: true
-        online_link:
+        venue_maps_url:
           type: string
           nullable: true
-        platform:
+        venue_online_link:
+          type: string
+          nullable: true
+        venue_platform:
           type: string
           nullable: true
       required:
-      - address
-      - city
-      - maps_url
-      - online_link
-      - platform
-      - type
+      - venue_type
     EventWrite:
       type: object
       description: Input serializer for POST /manage/ and PUT/PATCH /manage/<id>/.
@@ -30677,6 +30797,15 @@ components:
       - user_email
       - user_full_name
       - user_id
+    MentorOverviewData:
+      type: object
+      properties:
+        scopes:
+          type: array
+          items:
+            $ref: '#/components/schemas/MentorScopeMetrics'
+      required:
+      - scopes
     MentorRegister:
       type: object
       properties:
@@ -30698,6 +30827,24 @@ components:
           format: int64
         preferred_ig_ids:
           nullable: true
+    MentorScopeMetrics:
+      type: object
+      properties:
+        scope_type:
+          type: string
+        scope_id:
+          type: string
+        scope_name:
+          type: string
+          nullable: true
+        metrics:
+          type: object
+          additionalProperties: {}
+      required:
+      - metrics
+      - scope_id
+      - scope_name
+      - scope_type
     MentorTaskCreate:
       type: object
       description: |-
@@ -31315,26 +31462,25 @@ components:
       type: object
       description: Reads organiser fields off the Event model directly.
       properties:
-        type:
+        organiser_type:
           type: string
-        ig:
-          type: string
-          readOnly: true
-        campus:
+        organiser_ig:
           type: string
           readOnly: true
-        company:
+        organiser_campus:
           type: string
           readOnly: true
-        campus_ig_id:
+        organiser_company:
+          type: string
+          readOnly: true
+        organiser_ci_id:
           type: string
           nullable: true
       required:
-      - campus
-      - campus_ig_id
-      - company
-      - ig
-      - type
+      - organiser_campus
+      - organiser_company
+      - organiser_ig
+      - organiser_type
     ParticipantList:
       type: object
       properties:
@@ -31433,6 +31579,9 @@ components:
             * `SCHEDULED` - SCHEDULED
             * `REJECTED` - REJECTED
           x-spec-enum-id: a2b796bef1a02f76
+        apply_to_series:
+          type: boolean
+          default: false
     PatchedApplicationTracking:
       type: object
       properties:
@@ -32332,6 +32481,9 @@ components:
     SessionCreate:
       type: object
       properties:
+        id:
+          type: string
+          maxLength: 36
         entity_id:
           type: string
           nullable: true
@@ -32383,7 +32535,36 @@ components:
           maximum: 2147483647
           minimum: -2147483648
           nullable: true
+        is_recurring:
+          type: boolean
+        recurrence_type:
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ''
+          - null
+          type: string
+          description: |-
+            * `DAILY` - Daily
+            * `WEEKLY` - Weekly
+            * `MONTHLY` - Monthly
+          x-spec-enum-id: 91602d667f73d24e
+          nullable: true
+        recurrence_interval:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+        child_session_ids:
+          type: string
+          readOnly: true
       required:
+      - child_session_ids
       - ends_at
       - starts_at
       - title
@@ -32461,12 +32642,42 @@ components:
           maximum: 2147483647
           minimum: -2147483648
           nullable: true
+        is_recurring:
+          type: boolean
+        parent_session_id:
+          type: string
+          readOnly: true
+          nullable: true
+        recurrence_type:
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ''
+          - null
+          type: string
+          description: |-
+            * `DAILY` - Daily
+            * `WEEKLY` - Weekly
+            * `MONTHLY` - Monthly
+          x-spec-enum-id: 91602d667f73d24e
+          nullable: true
+        recurrence_interval:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
       required:
       - created_at
       - created_by_id
       - created_by_name
       - ends_at
       - entity_name
+      - parent_session_id
       - starts_at
       - status
       - title
