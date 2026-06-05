@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from django.db.models import Sum
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -12,6 +13,11 @@ class InternLeaderboardAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value, RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve the full paginated intern leaderboard with scores and ranks.",
+        responses={200: OpenApiResponse(description="Paginated leaderboard data with rank and score.")},
+    )
     def get(self, request):
         interns = UserInternGuildLink.objects.filter(
             status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
@@ -88,6 +94,11 @@ class InternLeaderboardMeAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve the current intern's rank and score on the leaderboard.",
+        responses={200: OpenApiResponse(description="Intern rank and score.")},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         

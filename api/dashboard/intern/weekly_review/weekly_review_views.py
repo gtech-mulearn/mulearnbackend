@@ -2,6 +2,7 @@ from django.db import IntegrityError
 from django.utils.timezone import now
 
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -15,6 +16,11 @@ class InternWeeklyReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve weekly review(s). Pass a review_id to get a specific review.",
+        responses={200: InternWeeklyReviewHistorySerializer},
+    )
     def get(self, request, review_id=None):
         user_id = JWTUtils.fetch_user_id(request)
         if review_id:
@@ -41,6 +47,12 @@ class InternWeeklyReviewAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Submit a new weekly review.",
+        request=InternWeeklyReviewSerializer,
+        responses={200: OpenApiResponse(description="Weekly review submitted successfully.")},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
@@ -58,6 +70,12 @@ class InternWeeklyReviewAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Edit a pending weekly review for the current week.",
+        request=InternWeeklyReviewSerializer,
+        responses={200: OpenApiResponse(description="Weekly review updated successfully.")},
+    )
     def patch(self, request, review_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -80,6 +98,11 @@ class InternWeeklyReviewCurrentAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve the current week's submitted weekly review.",
+        responses={200: InternWeeklyReviewHistorySerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         today = now().date()
@@ -96,6 +119,11 @@ class InternWeeklyReviewHistoryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve paginated intern weekly review history.",
+        responses={200: InternWeeklyReviewHistorySerializer(many=True)},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         reviews = InternWeeklyReview.objects.filter(user_id=user_id).order_by('-iso_year', '-iso_week')

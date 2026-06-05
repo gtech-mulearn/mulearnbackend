@@ -2,6 +2,7 @@ from django.db import IntegrityError
 from django.utils.timezone import now
 
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -16,6 +17,11 @@ class InternTimesheetAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve intern timesheet(s). Pass a timesheet_id to retrieve a specific entry.",
+        responses={200: InternTimesheetHistorySerializer},
+    )
     def get(self, request, timesheet_id=None):
         user_id = JWTUtils.fetch_user_id(request)
         if timesheet_id:
@@ -42,6 +48,12 @@ class InternTimesheetAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Submit a new daily timesheet entry.",
+        request=InternTimesheetSerializer,
+        responses={200: OpenApiResponse(description="Timesheet submitted successfully.")},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
@@ -59,6 +71,11 @@ class InternTimesheetAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Edit remark or end-of-day note on a timesheet entry.",
+        responses={200: OpenApiResponse(description="Timesheet updated successfully.")},
+    )
     def patch(self, request, timesheet_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -108,6 +125,11 @@ class InternTimesheetTodayAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve today's timesheet entry for the current intern.",
+        responses={200: InternTimesheetHistorySerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         today = now().date()
@@ -123,6 +145,11 @@ class InternTimesheetHistoryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve paginated intern timesheet history.",
+        responses={200: InternTimesheetHistorySerializer(many=True)},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         timesheets = InternDailyTimesheet.objects.filter(user_id=user_id).order_by('-entry_date')
@@ -145,6 +172,11 @@ class InternTimesheetSummaryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve current timesheet streak stats (current and longest streak).",
+        responses={200: OpenApiResponse(description="Streak stats for the intern.")},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         streak = UserStreak.objects.filter(user_id=user_id, streak_type='intern_timesheet').first()

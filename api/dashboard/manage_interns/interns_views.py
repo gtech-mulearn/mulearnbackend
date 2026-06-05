@@ -1,5 +1,6 @@
 from django.db.models import Count
 from rest_framework.views import APIView
+from drf_spectacular.utils import OpenApiResponse, extend_schema
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -13,6 +14,11 @@ class ManageInternAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve intern(s) or intern detail.",
+        responses={200: ManageInternSerializer(many=True)},
+    )
     def get(self, request, intern_id=None):
         if intern_id:
             intern = UserInternGuildLink.objects.filter(id=intern_id).first()
@@ -38,6 +44,11 @@ class ManageInternAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Onboard a new intern.",
+        responses={200: OpenApiResponse(description="Intern onboarded successfully.")},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = ManageInternSerializer(data=request.data, context={'user_id': user_id})
@@ -49,6 +60,11 @@ class ManageInternAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Update intern details (partial update).",
+        responses={200: OpenApiResponse(description="Intern details updated successfully.")},
+    )
     def patch(self, request, intern_id):
         user_id = JWTUtils.fetch_user_id(request)
         intern = UserInternGuildLink.objects.filter(id=intern_id).first()
@@ -83,6 +99,11 @@ class ManageInternAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Deactivate (soft-delete) an intern.",
+        responses={200: OpenApiResponse(description="Intern deactivated successfully.")},
+    )
     def delete(self, request, intern_id):
         from django.db import transaction
         from db.user import UserRoleLink
@@ -108,6 +129,11 @@ class ManageInternStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve intern status statistics.",
+        responses={200: OpenApiResponse(description="Intern status counts.")},
+    )
     def get(self, request):
         stats = UserInternGuildLink.objects.values('status').annotate(count=Count('id'))
         
@@ -127,6 +153,11 @@ class ManageInternExportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Export interns list as CSV.",
+        responses={200: OpenApiResponse(description="CSV attachment of interns.")},
+    )
     def get(self, request):
         interns = UserInternGuildLink.objects.all().select_related('user')
         
