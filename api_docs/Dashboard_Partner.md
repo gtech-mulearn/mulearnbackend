@@ -52,7 +52,7 @@ All endpoints return a `CustomResponse` wrapper:
 }
 ```
 
-HTTP status codes follow `statusCode` in the body (typically `400` or `404` on failure).
+HTTP status codes may not always match `statusCode` in the body. Clients should rely on `hasError` and `statusCode` in the response body for error handling, not the HTTP status code.
 
 ### Authentication
 

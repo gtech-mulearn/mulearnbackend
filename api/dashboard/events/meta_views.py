@@ -58,6 +58,7 @@ class OrganizerOptionsAPI(APIView):
                 'can_create_as_campus': s.ListField(child=s.DictField()),
                 'can_create_as_company': s.ListField(child=s.DictField()),
                 'can_create_as_admin': s.BooleanField(),
+                'can_create_as_partner': s.ListField(child=s.DictField()),
             },
         )},
     )
@@ -169,6 +170,7 @@ class CollaborationTargetsAPI(APIView):
                 'campus': s.ListField(child=s.DictField()),
                 'company': s.ListField(child=s.DictField()),
                 'campus_ig': s.ListField(child=s.DictField()),
+                'partner': s.ListField(child=s.DictField()),
             },
         )},
     )

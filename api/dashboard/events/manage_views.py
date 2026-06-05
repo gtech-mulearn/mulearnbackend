@@ -41,8 +41,8 @@ MANAGEABLE_ROLES = {
     RoleType.COMPANY.value,
     RoleType.ENABLER.value,
     RoleType.LEAD_ENABLER.value,
-    RoleType.PARTNER.value,   # Partners can create events
-    RoleType.MENTOR.value,
+    RoleType.PARTNER.value,  
+    RoleType.MENTOR.value,    
 }
 
 

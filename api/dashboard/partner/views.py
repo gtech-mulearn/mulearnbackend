@@ -1,7 +1,7 @@
 """
 Partner dashboard views — partner-facing endpoints (1–6).
 """
-from django.db.models import Case, CharField, Q, Value, When
+from django.db.models import Case, CharField, Count, Q, Value, When
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
@@ -337,12 +337,19 @@ class PartnerEventListAPI(APIView):
             },
         )
 
-        data = []
-        for event in paginated["queryset"]:
-            learner_count = EventConnection.objects.filter(
-                event_id=event.id,
+        # Batch learner counts in one query (avoids N+1)
+        page_events = list(paginated["queryset"])
+        event_ids = [e.id for e in page_events]
+        learner_counts = {
+            row["event_id"]: row["cnt"]
+            for row in EventConnection.objects.filter(
+                event_id__in=event_ids,
                 entity_type=EventConnection.EntityType.USER_TICKET,
-            ).count()
+            ).values("event_id").annotate(cnt=Count("id"))
+        }
+
+        data = []
+        for event in page_events:
             data.append({
                 "id": event.id,
                 "title": event.title,
@@ -354,7 +361,7 @@ class PartnerEventListAPI(APIView):
                 "venue_city": event.venue_city,
                 "cover_image": event.cover_image,
                 "partner_role": event.partner_role,
-                "learner_count": learner_count,
+                "learner_count": learner_counts.get(event.id, 0),
             })
 
         return CustomResponse(

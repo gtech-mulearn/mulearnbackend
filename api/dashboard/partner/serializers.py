@@ -152,6 +152,11 @@ class PartnerVerifySerializer(serializers.Serializer):
     rejection_reason = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
+        if data.get("status") == "verified":
+            if not Role.objects.filter(title=RoleType.PARTNER.value).exists():
+                raise serializers.ValidationError(
+                    {"status": "Partner role not found in the database. Ensure the role has been seeded before approving."}
+                )
         if data.get("status") == "rejected" and not data.get("rejection_reason"):
             raise serializers.ValidationError(
                 {"rejection_reason": "Rejection reason is required when rejecting."}
