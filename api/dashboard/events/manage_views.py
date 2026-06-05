@@ -41,6 +41,7 @@ MANAGEABLE_ROLES = {
     RoleType.COMPANY.value,
     RoleType.ENABLER.value,
     RoleType.LEAD_ENABLER.value,
+    RoleType.MENTOR.value,
 }
 
 
@@ -98,9 +99,46 @@ class ManageEventListCreateAPI(APIView):
                 Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
             )
 
-        # Optional status filter
+        # Optional status filter & Queue Scoping
         if status := request.query_params.get('status'):
-            events = events.filter(status=status)
+            if not is_admin:
+                if status == Event.Status.PENDING_MENTOR_APPROVAL and RoleType.MENTOR.value in roles:
+                    from db.user import UserMentor
+                    mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
+                    if mentor:
+                        if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR:
+                            events = _get_manageable_events().filter(
+                                status=status,
+                                organiser_type=Event.OrganiserType.CAMPUS_IG,
+                                scope_org_id=mentor.org_id
+                            )
+                        elif mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                            from db.task import UserIgLink
+                            user_ig_ids = UserIgLink.objects.filter(
+                                user_id=user_id,
+                                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                                is_active=True
+                            ).values_list('ig_id', flat=True)
+                            events = _get_manageable_events().filter(
+                                status=status,
+                                organiser_type=Event.OrganiserType.GLOBAL_IG,
+                                organiser_ig_id__in=user_ig_ids
+                            )
+                        else:
+                            events = _get_manageable_events().none()
+                    else:
+                        events = _get_manageable_events().none()
+                elif status == Event.Status.PENDING_CAMPUS_APPROVAL and bool(set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value}):
+                    from db.organization import UserOrganizationLink
+                    user_org_ids = UserOrganizationLink.objects.filter(user_id=user_id).values_list('org_id', flat=True)
+                    events = _get_manageable_events().filter(
+                        status=status,
+                        scope_org_id__in=user_org_ids
+                    )
+                else:
+                    events = events.filter(status=status)
+            else:
+                events = events.filter(status=status)
 
         paginated = CommonUtils.get_paginated_queryset(
             events.select_related('category', 'organiser_ig', 'organiser_org'), request,
@@ -130,6 +168,41 @@ class ManageEventListCreateAPI(APIView):
             return CustomResponse(
                 general_message='You do not have permission to create events.'
             ).get_failure_response()
+
+        # Enforce Mentor Creation Scopes
+        if RoleType.MENTOR.value in roles and not (set(roles) & MANAGEABLE_ROLES - {RoleType.MENTOR.value}):
+            # User is ONLY a mentor
+            from db.user import UserMentor
+            mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
+            if not mentor:
+                return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
+            
+            payload_organiser_type = request.data.get('organiser_type')
+            
+            if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR:
+                if payload_organiser_type != Event.OrganiserType.CAMPUS_IG.value:
+                    return CustomResponse(general_message='Campus Mentors can only create Campus IG events.').get_failure_response()
+            elif mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
+                if payload_organiser_type != Event.OrganiserType.COMPANY.value:
+                    return CustomResponse(general_message='Company Mentors can only create Company events.').get_failure_response()
+            elif mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                if payload_organiser_type != Event.OrganiserType.GLOBAL_IG.value:
+                    return CustomResponse(general_message='IG Mentors can only create Global IG events.').get_failure_response()
+                # Verify that the IG being requested is one they mentor
+                payload_organiser_ig = request.data.get('organiser_ig')
+                if not payload_organiser_ig:
+                    return CustomResponse(general_message='organiser_ig is required.').get_failure_response()
+                from db.task import UserIgLink
+                is_assigned = UserIgLink.objects.filter(
+                    user_id=user_id,
+                    ig_id=payload_organiser_ig,
+                    assignment_type=UserIgLink.AssignmentType.MENTOR,
+                    is_active=True
+                ).exists()
+                if not is_assigned:
+                    return CustomResponse(general_message='You are not authorized to create events for this Interest Group.').get_failure_response()
+            else:
+                return CustomResponse(general_message='This mentor tier is not authorized to create events yet.').get_failure_response()
 
         payload, merge_error = merge_event_write_payload(
             request, partial=False, event=None,
@@ -237,6 +310,42 @@ class ManageEventDetailAPI(APIView):
         if merge_error:
             return CustomResponse(general_message=merge_error).get_failure_response()
 
+        # Enforce Mentor Update Scopes
+        roles = JWTUtils.fetch_role(request)
+        if RoleType.MENTOR.value in roles and not (set(roles) & MANAGEABLE_ROLES - {RoleType.MENTOR.value}):
+            # User is ONLY a mentor
+            from db.user import UserMentor
+            mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
+            if not mentor:
+                return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
+                
+            payload_organiser_type = payload.get('organiser_type', event.organiser_type)
+            
+            if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR:
+                if payload_organiser_type != Event.OrganiserType.CAMPUS_IG.value:
+                    return CustomResponse(general_message='Campus Mentors can only manage Campus IG events.').get_failure_response()
+            elif mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
+                if payload_organiser_type != Event.OrganiserType.COMPANY.value:
+                    return CustomResponse(general_message='Company Mentors can only manage Company events.').get_failure_response()
+            elif mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                if payload_organiser_type != Event.OrganiserType.GLOBAL_IG.value:
+                    return CustomResponse(general_message='IG Mentors can only manage Global IG events.').get_failure_response()
+                # Verify that the IG being updated/requested is one they mentor
+                payload_organiser_ig = payload.get('organiser_ig', event.organiser_ig_id)
+                if not payload_organiser_ig:
+                    return CustomResponse(general_message='organiser_ig is required.').get_failure_response()
+                from db.task import UserIgLink
+                is_assigned = UserIgLink.objects.filter(
+                    user_id=user_id,
+                    ig_id=payload_organiser_ig,
+                    assignment_type=UserIgLink.AssignmentType.MENTOR,
+                    is_active=True
+                ).exists()
+                if not is_assigned:
+                    return CustomResponse(general_message='You are not authorized to manage events for this Interest Group.').get_failure_response()
+            else:
+                return CustomResponse(general_message='This mentor tier is not authorized to manage events yet.').get_failure_response()
+
         serializer = EventWriteSerializer(
             event, data=payload,
             partial=partial,
@@ -326,9 +435,9 @@ class ManageEventPublishAPI(APIView):
                 general_message='You do not have permission to manage this event.'
             ).get_failure_response()
 
-        if event.status != Event.Status.DRAFT:
+        if event.status not in (Event.Status.DRAFT, Event.Status.REJECTED):
             return CustomResponse(
-                general_message=f'Only draft events can be published (current: {event.status}).'
+                general_message=f'Only draft or rejected events can be published (current: {event.status}).'
             ).get_failure_response()
 
         # Validate required fields are filled
@@ -348,14 +457,46 @@ class ManageEventPublishAPI(APIView):
         if RoleType.ADMIN.value in roles:
             new_status = Event.Status.PUBLISHED
         elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-            new_status = Event.Status.PENDING_CAMPUS_APPROVAL
+            # Check if creator is an approved CAMPUS_MENTOR for this campus
+            from db.user import UserMentor
+            is_campus_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                org_id=event.scope_org_id,
+                status=UserMentor.Status.APPROVED
+            ).exists()
+            if is_campus_mentor:
+                new_status = Event.Status.PENDING_CAMPUS_APPROVAL
+            else:
+                new_status = Event.Status.PENDING_MENTOR_APPROVAL
         elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-            new_status = Event.Status.PENDING_MENTOR_APPROVAL
-        elif event.organiser_type in (Event.OrganiserType.CAMPUS, Event.OrganiserType.COMPANY):
-            new_status = Event.Status.PENDING_APPROVAL
+            # Check if creator is an approved IG_MENTOR for this IG
+            from db.user import UserMentor
+            from db.task import UserIgLink
+            is_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                status=UserMentor.Status.APPROVED
+            ).exists()
+            is_assigned = UserIgLink.objects.filter(
+                user_id=user_id,
+                ig_id=event.organiser_ig_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True
+            ).exists()
+            if is_mentor and is_assigned:
+                new_status = Event.Status.PENDING_APPROVAL
+            else:
+                new_status = Event.Status.PENDING_MENTOR_APPROVAL
+        elif event.organiser_type == Event.OrganiserType.CAMPUS:
+            if RoleType.CAMPUS_LEAD.value in roles:
+                new_status = Event.Status.PENDING_APPROVAL
+            else:
+                new_status = Event.Status.PENDING_CAMPUS_APPROVAL
         else:
             new_status = Event.Status.PENDING_APPROVAL
 
+        old_status = event.status
         event.status = new_status
         event.updated_by_id = user_id
         event.save()
@@ -364,7 +505,7 @@ class ManageEventPublishAPI(APIView):
             event=event,
             user_id=user_id,
             action=EventLog.Action.PUBLISHED,
-            changes={'Status': {'from': Event.Status.DRAFT, 'to': new_status}},
+            changes={'Status': {'from': old_status, 'to': new_status}},
             details={'new_status': new_status},
         )
 
@@ -402,10 +543,13 @@ class ManageEventCoOwnerAPI(APIView):
                 general_message='Permission denied.'
             ).get_failure_response()
 
-        co_owners = event.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER)
+        co_owners = list(event.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER).select_related('created_by'))
+        user_ids = [c.entity_id for c in co_owners]
+        users = {str(u.id): u for u in User.objects.filter(id__in=user_ids)}
+
         return CustomResponse(
             general_message='Co-owners retrieved.',
-            response=EventCoOwnerSerializer(co_owners, many=True).data,
+            response=EventCoOwnerSerializer(co_owners, many=True, context={'users_map': users}).data,
         ).get_success_response()
 
     @extend_schema(
@@ -605,10 +749,21 @@ class ManageEventCollaboratorAPI(APIView):
         if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
-        collabs = event.connections.filter(entity_type__in=COLLAB_TYPES)
+        collabs = list(event.connections.filter(entity_type__in=COLLAB_TYPES))
+        ig_ids = [c.entity_id for c in collabs if c.entity_type == EventConnection.EntityType.COLLAB_IG]
+        org_ids = [c.entity_id for c in collabs if c.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+
+        from db.task import InterestGroup
+        from db.organization import Organization
+        igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+        orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
         return CustomResponse(
             general_message='Collaborators retrieved.',
-            response=EventCollaboratorSerializer(collabs, many=True).data,
+            response=EventCollaboratorSerializer(
+                collabs, many=True,
+                context={'request': request, 'igs_map': igs, 'orgs_map': orgs}
+            ).data,
         ).get_success_response()
 
     @extend_schema(
@@ -875,8 +1030,17 @@ class MyEventInvitesAPI(APIView):
                 invite_status=EventConnection.InviteStatus.PENDING,
                 entity_type__in=COLLAB_TYPES
             ).select_related('event').order_by('-created_at')
+            invites_list = list(invites)
+            ig_ids = [inv.entity_id for inv in invites_list if inv.entity_type == EventConnection.EntityType.COLLAB_IG]
+            org_ids = [inv.entity_id for inv in invites_list if inv.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+            
+            from db.task import InterestGroup
+            from db.organization import Organization
+            igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+            orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
             serializer = MyEventInviteSerializer(
-                invites, many=True, context={'request': request},
+                invites_list, many=True, context={'request': request, 'igs_map': igs, 'orgs_map': orgs},
             )
             return CustomResponse(
                 general_message='Global pending invites retrieved.',
@@ -928,10 +1092,208 @@ class MyEventInvitesAPI(APIView):
             invite_status=EventConnection.InviteStatus.PENDING,
         ).select_related('event').order_by('-created_at')
         
+        invites_list = list(invites)
+        ig_ids = [inv.entity_id for inv in invites_list if inv.entity_type == EventConnection.EntityType.COLLAB_IG]
+        org_ids = [inv.entity_id for inv in invites_list if inv.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+        
+        from db.task import InterestGroup
+        from db.organization import Organization
+        igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+        orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
         serializer = MyEventInviteSerializer(
-            invites, many=True, context={'request': request},
+            invites_list, many=True, context={'request': request, 'igs_map': igs, 'orgs_map': orgs},
         )
         return CustomResponse(
             general_message='Pending invites retrieved.',
             response=serializer.data
         ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# MENTOR APPROVAL ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class MentorEventApproveAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        if RoleType.MENTOR.value not in roles:
+            return CustomResponse(general_message='Mentor role required.').get_failure_response()
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message='Event is not pending mentor approval.').get_failure_response()
+
+        from db.user import UserMentor
+        mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
+        if not mentor:
+            return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
+
+        if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
+            if mentor.mentor_tier != UserMentor.MentorTier.CAMPUS_MENTOR or str(mentor.org_id) != str(event.scope_org_id):
+                return CustomResponse(general_message='You are not authorized to approve this Campus IG event.').get_failure_response()
+            new_status = Event.Status.PENDING_CAMPUS_APPROVAL
+        elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
+            if mentor.mentor_tier != UserMentor.MentorTier.IG_MENTOR:
+                return CustomResponse(general_message='You are not authorized to approve this Global IG event.').get_failure_response()
+            from db.task import UserIgLink
+            is_assigned = UserIgLink.objects.filter(
+                user_id=user_id,
+                ig_id=event.organiser_ig_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True
+            ).exists()
+            if not is_assigned:
+                return CustomResponse(general_message='You are not a mentor for this Interest Group.').get_failure_response()
+            new_status = Event.Status.PENDING_APPROVAL
+        else:
+            return CustomResponse(general_message='Event type not supported for mentor approval.').get_failure_response()
+
+        event.status = new_status
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
+        return CustomResponse(general_message='Event approved successfully.').get_success_response()
+
+
+class MentorEventRejectAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        if RoleType.MENTOR.value not in roles:
+            return CustomResponse(general_message='Mentor role required.').get_failure_response()
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message='Event is not pending mentor approval.').get_failure_response()
+
+        from db.user import UserMentor
+        mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
+        if not mentor:
+            return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
+
+        if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
+            if mentor.mentor_tier != UserMentor.MentorTier.CAMPUS_MENTOR or str(mentor.org_id) != str(event.scope_org_id):
+                return CustomResponse(general_message='You are not authorized to reject this Campus IG event.').get_failure_response()
+        elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
+            if mentor.mentor_tier != UserMentor.MentorTier.IG_MENTOR:
+                return CustomResponse(general_message='You are not authorized to reject this Global IG event.').get_failure_response()
+            from db.task import UserIgLink
+            is_assigned = UserIgLink.objects.filter(
+                user_id=user_id,
+                ig_id=event.organiser_ig_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True
+            ).exists()
+            if not is_assigned:
+                return CustomResponse(general_message='You are not a mentor for this Interest Group.').get_failure_response()
+
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return CustomResponse(general_message='A rejection reason is required.').get_failure_response()
+
+        old_status = event.status
+        event.status = Event.Status.REJECTED
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+        return CustomResponse(general_message='Event rejected successfully.').get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CAMPUS APPROVAL ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CampusEventApproveAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        
+        # Must be campus lead or higher
+        if not set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ADMIN.value}:
+            return CustomResponse(general_message='Campus lead role required.').get_failure_response()
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_CAMPUS_APPROVAL:
+            return CustomResponse(general_message='Event is not pending campus approval.').get_failure_response()
+
+        # Verify campus lead matches the campus of the event (event.scope_org_id)
+        if RoleType.ADMIN.value not in roles:
+            from db.organization import UserOrganizationLink
+            is_member = UserOrganizationLink.objects.filter(
+                user_id=user_id,
+                org_id=event.scope_org_id
+            ).exists()
+            if not is_member:
+                return CustomResponse(general_message='You are not authorized to approve events for this campus.').get_failure_response()
+        
+        event.status = Event.Status.PENDING_APPROVAL
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_CAMPUS_APPROVAL, 'to': Event.Status.PENDING_APPROVAL}})
+        return CustomResponse(general_message='Event approved successfully.').get_success_response()
+
+
+class CampusEventRejectAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        
+        if not set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ADMIN.value}:
+            return CustomResponse(general_message='Campus lead role required.').get_failure_response()
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_CAMPUS_APPROVAL:
+            return CustomResponse(general_message='Event is not pending campus approval.').get_failure_response()
+
+        # Verify campus lead matches the campus of the event (event.scope_org_id)
+        if RoleType.ADMIN.value not in roles:
+            from db.organization import UserOrganizationLink
+            is_member = UserOrganizationLink.objects.filter(
+                user_id=user_id,
+                org_id=event.scope_org_id
+            ).exists()
+            if not is_member:
+                return CustomResponse(general_message='You are not authorized to reject events for this campus.').get_failure_response()
+
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return CustomResponse(general_message='A rejection reason is required.').get_failure_response()
+
+        old_status = event.status
+        event.status = Event.Status.REJECTED
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+        return CustomResponse(general_message='Event rejected successfully.').get_success_response()

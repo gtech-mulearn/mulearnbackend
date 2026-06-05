@@ -39,7 +39,7 @@ class IGEventListAPI(APIView):
         responses={200: EventListItemSerializer},
     )
     def get(self, request, ig_id):
-        ig = InterestGroup.objects.filter(id=ig_id).first()
+        ig = InterestGroup.objects.filter(id=ig_id.strip()).first()
         if not ig:
             return CustomResponse(general_message='Interest Group not found.').get_failure_response()
 
@@ -124,7 +124,7 @@ class CampusEventListAPI(APIView):
         responses={200: EventListItemSerializer},
     )
     def get(self, request, campus_id):
-        org = Organization.objects.filter(id=campus_id).first()
+        org = Organization.objects.filter(id=campus_id.strip()).first()
         if not org:
             return CustomResponse(general_message='Campus not found.').get_failure_response()
 
@@ -204,7 +204,7 @@ class CompanyEventListAPI(APIView):
         responses={200: EventListItemSerializer},
     )
     def get(self, request, company_id):
-        org = Organization.objects.filter(id=company_id).first()
+        org = Organization.objects.filter(id=company_id.strip()).first()
         if not org:
             return CustomResponse(general_message='Company not found.').get_failure_response()
 
