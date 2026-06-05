@@ -58,6 +58,7 @@ class OrganizerOptionsAPI(APIView):
                 'can_create_as_campus': s.ListField(child=s.DictField()),
                 'can_create_as_company': s.ListField(child=s.DictField()),
                 'can_create_as_admin': s.BooleanField(),
+                'can_create_as_partner': s.ListField(child=s.DictField()),
             },
         )},
     )
@@ -66,14 +67,15 @@ class OrganizerOptionsAPI(APIView):
         roles = JWTUtils.fetch_role(request)
 
         options = {
-            'can_create_as_ig': [],      # IGs the user leads globally
-            'can_create_as_campus_ig': [],      # Campus IG chapters the user leads (code present in roles)
-            'can_create_as_campus': [],         # Campus orgs the user leads
-            'can_create_as_company': [],        # Companies the user belongs to with Company role
-            'can_create_as_admin': False,       # True if user is admin
+            'can_create_as_ig': [],
+            'can_create_as_campus_ig': [],
+            'can_create_as_campus': [],
+            'can_create_as_company': [],
+            'can_create_as_admin': False,
+            'can_create_as_partner': [],
         }
 
-        # Admin can create events as admin
+        # Admin
         if RoleType.ADMIN.value in roles:
             options['can_create_as_admin'] = True
 
@@ -99,7 +101,7 @@ class OrganizerOptionsAPI(APIView):
             )
             options['can_create_as_campus_ig'] = list(igs)
 
-        # Campus Lead or Zonal/District leads can create campus events
+        # Campus Lead or Zonal/District leads
         campus_lead_roles = {
             RoleType.CAMPUS_LEAD.value,
             RoleType.ZONAL_CAMPUS_LEAD.value,
@@ -117,7 +119,7 @@ class OrganizerOptionsAPI(APIView):
                         'org_type': link.org.org_type,
                     })
 
-        # Company: user with Company role in a company org
+        # Company
         if RoleType.COMPANY.value in roles:
             user_orgs = UserOrganizationLink.objects.filter(
                 user_id=user_id, verified=True
@@ -128,6 +130,19 @@ class OrganizerOptionsAPI(APIView):
                         'id': link.org.id,
                         'title': link.org.title,
                     })
+
+        # Partner — verified partner whose user_link_id == user_id
+        if RoleType.PARTNER.value in roles:
+            from db.partner import UserPartner
+            partner = UserPartner.objects.filter(
+                user_link_id=user_id, status='verified'
+            ).first()
+            if partner:
+                options['can_create_as_partner'] = [{
+                    'id': partner.id,
+                    'name': partner.name,
+                    'slug': partner.slug,
+                }]
 
         return CustomResponse(
             general_message='Organiser options retrieved.',
@@ -155,6 +170,7 @@ class CollaborationTargetsAPI(APIView):
                 'campus': s.ListField(child=s.DictField()),
                 'company': s.ListField(child=s.DictField()),
                 'campus_ig': s.ListField(child=s.DictField()),
+                'partner': s.ListField(child=s.DictField()),
             },
         )},
     )
@@ -167,6 +183,7 @@ class CollaborationTargetsAPI(APIView):
             'campus': [],
             'company': [],
             'campus_ig': [],
+            'partner': [],
         }
 
         if not filter_type or filter_type in ('ig', 'campus_ig'):
@@ -177,7 +194,6 @@ class CollaborationTargetsAPI(APIView):
             if not filter_type or filter_type == 'ig':
                 results['ig'] = ig_results
             if not filter_type or filter_type == 'campus_ig':
-                # campus_ig collaborators are identified by their IG; return as campus_ig key
                 results['campus_ig'] = ig_results
 
         if not filter_type or filter_type == 'campus':
@@ -191,6 +207,13 @@ class CollaborationTargetsAPI(APIView):
             if search:
                 qs = qs.filter(title__icontains=search)
             results['company'] = list(qs.values('id', 'title', 'org_type')[:20])
+
+        if not filter_type or filter_type == 'partner':
+            from db.partner import UserPartner
+            qs = UserPartner.objects.filter(status='verified')
+            if search:
+                qs = qs.filter(name__icontains=search)
+            results['partner'] = list(qs.values('id', 'name', 'slug', 'logo')[:20])
 
         return CustomResponse(
             general_message='Collaboration targets retrieved.',

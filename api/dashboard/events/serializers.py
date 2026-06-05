@@ -125,6 +125,16 @@ class EventCollaboratorSerializer(serializers.ModelSerializer):
                 return MinimalCampusSerializer(org).data if org else None
             elif obj.entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
                 return {'campus_ig_id': obj.entity_id}
+            elif obj.entity_type == EventConnection.EntityType.COLLAB_PARTNER:
+                from db.partner import UserPartner
+                partner = UserPartner.objects.filter(id=obj.entity_id).first()
+                if partner:
+                    return {
+                        'id': partner.id,
+                        'name': partner.name,
+                        'slug': partner.slug,
+                        'logo': partner.logo,
+                    }
         except Exception:
             return None
         return None
