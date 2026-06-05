@@ -235,9 +235,16 @@ class AdminSessionVerifyAPI(APIView):
         )
         
         if serializer.is_valid():
-            serializer.save()
+            instance = serializer.save()
+            status = serializer.validated_data.get('status')
+            apply_to_series = serializer.validated_data.get('apply_to_series', False)
+            
+            message = f"Session status updated to {status} successfully."
+            if apply_to_series and instance.is_recurring:
+                message = f"Session and its pending series chain updated to {status} successfully."
+                
             return CustomResponse(
-                general_message=f"Session status updated to {serializer.validated_data.get('status')} successfully."
+                general_message=message
             ).get_success_response()
             
         return CustomResponse(message=serializer.errors).get_failure_response()
