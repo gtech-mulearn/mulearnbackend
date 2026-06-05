@@ -127,3 +127,46 @@ class CompanyTaskListSerializer(serializers.ModelSerializer):
             {"id": link.skill.id, "name": link.skill.name, "code": link.skill.code}
             for link in skill_links
         ]
+
+
+class CompanyTaskPatchSerializer(serializers.Serializer):
+    """
+    Validates the payload when a company updates an existing task.
+    All fields are optional to support partial updates.
+    """
+    title       = serializers.CharField(max_length=75, required=False)
+    hashtag     = serializers.CharField(max_length=75, required=False)
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    karma       = serializers.IntegerField(min_value=1, required=False)
+    ig_id       = serializers.CharField(max_length=36, required=False)
+    type_id     = serializers.CharField(max_length=36, required=False)
+    channel_id  = serializers.CharField(max_length=36, required=False, allow_null=True)
+    level_id    = serializers.CharField(max_length=36, required=False, allow_null=True)
+
+    def validate_hashtag(self, value):
+        value = value.strip()
+        if not value.startswith('#'):
+            raise serializers.ValidationError("hashtag must start with '#'")
+        
+        # Unique validation excluding the current task instance
+        task_id = self.context.get("task_id")
+        from db.task import TaskList
+        qs = TaskList.objects.filter(hashtag__iexact=value)
+        if task_id:
+            qs = qs.exclude(id=task_id)
+        if qs.exists():
+            raise serializers.ValidationError(f"A task with hashtag '{value}' already exists.")
+        return value
+
+    def validate_ig_id(self, value):
+        from db.task import InterestGroup
+        if not InterestGroup.objects.filter(id=value).exists():
+            raise serializers.ValidationError(f"Interest Group with id '{value}' does not exist.")
+        return value
+
+    def validate_type_id(self, value):
+        from db.task import TaskType
+        if not TaskType.objects.filter(id=value).exists():
+            raise serializers.ValidationError(f"TaskType with id '{value}' does not exist.")
+        return value
+

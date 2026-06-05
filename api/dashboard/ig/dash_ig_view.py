@@ -1,6 +1,6 @@
 from django.db.models import Count
 from rest_framework.views import APIView
-
+from django.db import transaction
 from db.task import InterestGroup
 from db.user import User, Role
 from utils.permission import CustomizePermission
@@ -18,7 +18,7 @@ import uuid
 from django.utils.decorators import method_decorator
 from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
-from db.task import UserIgLink
+from db.task import UserIgLink,UserIgLvlLink, Level
 from db.user import Role, UserMentor, UserRoleLink
 from db.notification import Notification
 from utils.types import RoleType
@@ -699,3 +699,94 @@ class InterestGroupListApi(APIView):
         return CustomResponse(
             response={"interestGroup": serializer.data}
         ).get_success_response()
+
+class InterestGroupMembershipAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Join Interest Group instantly.",
+        responses={200: InterestGroupSerializer},
+    )
+    def post(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        ig = InterestGroup.objects.filter(id=pk, status='active').first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group not found or inactive").get_failure_response()
+
+        with transaction.atomic():
+            existing_link = UserIgLink.objects.filter(
+                user_id=user_id,
+                ig_id=pk,
+                assignment_type=UserIgLink.AssignmentType.LEARNER
+            ).first()
+
+            if existing_link and existing_link.is_active:
+                return CustomResponse(general_message="Already joined this Interest Group").get_success_response()
+
+            active_learner_ig_count = UserIgLink.objects.filter(
+                user_id=user_id,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+                is_active=True
+            ).count()
+
+            # enforce max 3 selected learner IGs
+            if not existing_link and active_learner_ig_count >= 3:
+                return CustomResponse(general_message="Cannot join more than 3 interest groups").get_failure_response()
+
+            if existing_link:
+                existing_link.is_active = True
+                existing_link.unassigned_at = None
+                existing_link.assigned_by_id = user_id
+                existing_link.save(update_fields=["is_active", "unassigned_at", "assigned_by"])
+            else:
+                UserIgLink.objects.create(
+                    id=uuid.uuid4(),
+                    user_id=user_id,
+                    ig_id=pk,
+                    assignment_type=UserIgLink.AssignmentType.LEARNER,
+                    is_active=True,
+                    assigned_by_id=user_id,
+                    created_by_id=user_id,
+                )
+
+            # ensure level-1 IG link exists
+            level_1 = Level.objects.filter(level_order=1).first()
+            if level_1:
+                UserIgLvlLink.objects.get_or_create(
+                    user_id=user_id,
+                    ig_id=pk,
+                    defaults={
+                        "id": uuid.uuid4(),
+                        "level_id": level_1.id,
+                        "created_by_id": user_id,
+                        "updated_by_id": user_id,
+                    },
+                )
+
+        return CustomResponse(general_message="Joined Interest Group successfully").get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Leave Interest Group instantly.",
+        responses={200: InterestGroupSerializer},
+    )
+    def delete(self, request, pk):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        link = UserIgLink.objects.filter(
+            user_id=user_id,
+            ig_id=pk,
+            assignment_type=UserIgLink.AssignmentType.LEARNER
+        ).first()
+
+        if not link or not link.is_active:
+            return CustomResponse(general_message="Already left this Interest Group").get_success_response()
+
+        link.is_active = False
+        link.unassigned_at = DateTimeUtils.get_current_utc_time()
+        link.save(update_fields=["is_active", "unassigned_at"])
+
+       
+        return CustomResponse(general_message="Left Interest Group successfully").get_success_response()

@@ -1,6 +1,6 @@
 from utils.utils import DateTimeUtils
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, F
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -338,4 +338,105 @@ class UserAppliedJobsAPI(APIView):
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
+
+
+class TrackJobViewAPIView(APIView):
+    """
+    POST /company/jobs/<job_id>/view/
+
+    Increments the view count for a specific job listing.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Increment the view count for a specific job listing.",
+    )
+    def post(self, request, job_id):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            company = _get_company_for_user(user_id)
+            if not company:
+                return CustomResponse(
+                    general_message="Company profile not found or access denied."
+                ).get_failure_response(status_code=404)
+
+            # Get the job
+            job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
+            if not job:
+                return CustomResponse(
+                    general_message="Job not found or access denied.",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(status_code=404)
+
+            # Increment views
+            job.total_views = F('total_views') + 1
+            job.save(update_fields=['total_views'])
+
+            return CustomResponse(
+                general_message="Job view tracked successfully.",
+                response={}
+            ).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(
+                general_message="Something went wrong",
+                message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(status_code=500)
+
+
+class CompanyJobEngagementAnalyticsAPIView(APIView):
+    """
+    GET /company/jobs/<job_id>/analytics/
+
+    Fetches detailed view, application, and hired statistics for a specific job posting.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Fetches detailed view, application, and hired statistics for a specific job posting.",
+    )
+    def get(self, request, job_id):
+        try:
+            user_id = JWTUtils.fetch_user_id(request)
+            company = _get_company_for_user(user_id)
+            if not company:
+                return CustomResponse(
+                    general_message="Company profile not found or access denied."
+                ).get_failure_response(status_code=404)
+
+            # Get the job
+            job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
+            if not job:
+                return CustomResponse(
+                    general_message="Job not found or access denied.",
+                    message={"error_code": "JOB_NOT_FOUND"}
+                ).get_failure_response(status_code=404)
+
+            # Aggregate metrics
+            total_views = job.total_views
+            total_applications = UserJobApplication.objects.filter(job=job).count()
+            total_hired = UserJobApplication.objects.filter(job=job, status='Selected').count()
+
+            response_data = {
+                "job_id": str(job.id),
+                "job_title": job.title,
+                "total_views": total_views,
+                "total_applications": total_applications,
+                "total_hired": total_hired,
+                "conversion_rate_percentage": round((total_applications / total_views) * 100, 2) if total_views > 0 else 0.0
+            }
+
+            return CustomResponse(
+                response=response_data,
+                general_message="Job analytics fetched successfully"
+            ).get_success_response()
+
+        except Exception as e:
+            return CustomResponse(
+                general_message="Something went wrong",
+                message={"error_code": "SERVER_ERROR"}
+            ).get_failure_response(status_code=500)
+
 

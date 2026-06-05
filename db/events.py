@@ -19,6 +19,7 @@ class Event(models.Model):
         ONGOING = 'ongoing', 'Ongoing'
         COMPLETED = 'completed', 'Completed'
         CANCELLED = 'cancelled', 'Cancelled'
+        REJECTED = 'rejected', 'Rejected'
 
     class VenueType(models.TextChoices):
         PHYSICAL = 'physical', 'Physical'

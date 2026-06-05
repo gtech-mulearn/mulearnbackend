@@ -206,7 +206,9 @@ class UserIgEditView(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        user_ig = InterestGroup.objects.filter(user_ig_link_ig__user_id=user_id).all()
+        user_ig = InterestGroup.objects.filter(user_ig_link_ig__user_id=user_id,
+    user_ig_link_ig__is_active=True,
+    user_ig_link_ig__assignment_type=UserIgLink.AssignmentType.LEARNER).all()
 
         serializer = profile_serializer.UserIgListSerializer(user_ig, many=True)
 

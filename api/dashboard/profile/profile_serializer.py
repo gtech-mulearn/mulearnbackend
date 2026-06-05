@@ -211,7 +211,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         
         # Get user's currently selected IGs
         selected_ig_ids = set(
-            UserIgLink.objects.filter(user=obj).values_list('ig_id', flat=True)
+            UserIgLink.objects.filter(user=obj, is_active=True, assignment_type=UserIgLink.AssignmentType.LEARNER).values_list('ig_id', flat=True)
         )
         
         interest_groups = []

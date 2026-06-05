@@ -96,23 +96,32 @@ class EventAnalyticsAPI(APIView):
             total=Sum('karma')
         )['total'] or 0
 
+        # Group and aggregate completions and karma per task
+        completions_aggregate = completion_logs.values('task_id').annotate(
+            completions_count=Count('id'),
+            total_karma=Sum('karma')
+        )
+        # Build a map of task_id -> {completions_count, total_karma} for O(1) lookups
+        task_stats = {
+            str(item['task_id']): {
+                'completions_count': item['completions_count'],
+                'total_karma': item['total_karma'] or 0
+            }
+            for item in completions_aggregate
+        }
+
         # Per-task breakdown
         task_breakdown = []
         for task in linked_tasks.select_related('type'):
-            task_completions = completion_logs.filter(task=task)
-            completions_count = task_completions.count()
-            task_karma = task_completions.aggregate(
-                total=Sum('karma')
-            )['total'] or 0
-
+            stats = task_stats.get(str(task.id), {'completions_count': 0, 'total_karma': 0})
             task_breakdown.append({
                 'task_id': str(task.id),
                 'title': task.title,
                 'hashtag': task.hashtag,
                 'karma': task.karma,
                 'approval_status': task.approval_status,
-                'completions': completions_count,
-                'total_karma_awarded': task_karma,
+                'completions': stats['completions_count'],
+                'total_karma_awarded': stats['total_karma'],
             })
 
         return CustomResponse(

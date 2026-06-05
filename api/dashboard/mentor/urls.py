@@ -1,9 +1,11 @@
 from django.urls import path
 from . import mentor_views, session_views, availability_views, participant_views, task_views
 
+
 urlpatterns = [
     path('public/profile/<str:mentor_id>/', mentor_views.MentorPublicProfileAPI.as_view(), name='mentor-public-profile'),
     path('public/availability/<str:mentor_id>/', availability_views.MentorPublicAvailabilityAPI.as_view(), name='mentor-public-availability'),
+    path('overview/', mentor_views.MentorOverviewAPI.as_view(), name='mentor-overview'),
     path('register/', mentor_views.MentorRegistrationAPI.as_view(), name='mentor-register'),
     path('status/', mentor_views.MentorStatusAPI.as_view(), name='mentor-status'),
     path('profile/', mentor_views.MentorProfileAPI.as_view(), name='mentor-profile'),

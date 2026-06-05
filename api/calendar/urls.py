@@ -7,4 +7,6 @@ urlpatterns = [
     path('company/<str:company_org_id>/sessions/', calendar_view.CompanySessionCalendar.as_view()),
     path('events/', calendar_view.EventCalendar.as_view()),
     path('ig/<str:ig_id>/events/', calendar_view.IGEventCalendar.as_view()),
+    path('campus/<str:campus_id>/events/', calendar_view.CampusEventCalendar.as_view()),
+    path('company/<str:company_id>/events/', calendar_view.CompanyEventCalendar.as_view()),
 ]

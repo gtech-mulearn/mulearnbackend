@@ -12,6 +12,7 @@ class CompanyJob(models.Model):
     job_type = models.CharField(max_length=20) # Enum: Hybrid, Full-Time, Remote, Part-Time, Internship, Gig
     status = models.CharField(max_length=20, default='Draft') # Enum: Draft, Active, Closed, Expired
     is_deleted = models.BooleanField(default=False)
+    total_views = models.IntegerField(default=0)
     duration_value = models.PositiveSmallIntegerField(null=True, blank=True)
     duration_unit = models.CharField(max_length=20, null=True, blank=True) # Enum: days, weeks, months
     hourly_rate = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
