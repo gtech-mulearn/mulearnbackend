@@ -52,11 +52,11 @@ class MinimalCampusIGSerializer(serializers.Serializer):
 
 class OrganizerInfoSerializer(serializers.Serializer):
     """Reads organiser fields off the Event model directly."""
-    organiser_type = serializers.CharField(source='organiser_type')
+    organiser_type = serializers.CharField()
     organiser_ig = serializers.SerializerMethodField()
     organiser_campus = serializers.SerializerMethodField()
     organiser_company = serializers.SerializerMethodField()
-    organiser_ci_id = serializers.CharField(source='organiser_ci_id', allow_null=True)
+    organiser_ci_id = serializers.CharField(allow_null=True, required=False)
 
     def get_organiser_ig(self, obj):
         if obj.organiser_type in (Event.OrganiserType.GLOBAL_IG, Event.OrganiserType.CAMPUS_IG) and obj.organiser_ig:
@@ -80,12 +80,12 @@ class OrganizerInfoSerializer(serializers.Serializer):
 
 class EventVenueSerializer(serializers.Serializer):
     """Flattens venue_* fields from the Event model."""
-    venue_type = serializers.CharField(source='venue_type')
-    venue_address = serializers.CharField(source='venue_address', allow_null=True)
-    venue_city = serializers.CharField(source='venue_city', allow_null=True)
-    venue_maps_url = serializers.CharField(source='venue_maps_url', allow_null=True)
-    venue_online_link = serializers.CharField(source='venue_online_link', allow_null=True)
-    venue_platform = serializers.CharField(source='venue_platform', allow_null=True)
+    venue_type = serializers.CharField()
+    venue_address = serializers.CharField(allow_null=True, required=False)
+    venue_city = serializers.CharField(allow_null=True, required=False)
+    venue_maps_url = serializers.CharField(allow_null=True, required=False)
+    venue_online_link = serializers.CharField(allow_null=True, required=False)
+    venue_platform = serializers.CharField(allow_null=True, required=False)
 
 
 # ─────────────────────────────────────────────────────────────

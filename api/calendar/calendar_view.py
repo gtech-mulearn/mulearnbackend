@@ -88,7 +88,7 @@ class IGMentorSessionCalendar(APIView):
         responses={200: serializers.MentorshipSessionCalendarSerializer(many=True)},
     )
     def get(self, request, ig_id):
-        ig = InterestGroup.objects.filter(id=ig_id).first()
+        ig = InterestGroup.objects.filter(id=ig_id.strip()).first()
         if not ig:
             return CustomResponse(general_message="Interest Group not found").get_failure_response()
 
@@ -137,7 +137,7 @@ class CampusMentorSessionCalendar(APIView):
     )
     def get(self, request, campus_id):
         campus = Organization.objects.filter(
-            id=campus_id, org_type=OrganizationType.COLLEGE.value
+            id=campus_id.strip(), org_type=OrganizationType.COLLEGE.value
         ).first()
         if not campus:
             return CustomResponse(general_message="Campus not found").get_failure_response()
@@ -250,7 +250,7 @@ class IGEventCalendar(APIView):
         responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request, ig_id):
-        ig = InterestGroup.objects.filter(id=ig_id).first()
+        ig = InterestGroup.objects.filter(id=ig_id.strip()).first()
         if not ig:
             return CustomResponse(general_message="Interest Group not found").get_failure_response()
 
@@ -308,7 +308,7 @@ class CompanySessionCalendar(APIView):
     )
     def get(self, request, company_org_id):
         company_org = Organization.objects.filter(
-            id=company_org_id, org_type=OrganizationType.COMPANY.value
+            id=company_org_id.strip(), org_type=OrganizationType.COMPANY.value
         ).first()
         if not company_org:
             return CustomResponse(general_message="Company org not found").get_failure_response()
@@ -355,7 +355,7 @@ class CampusEventCalendar(APIView):
     )
     def get(self, request, campus_id):
         campus = Organization.objects.filter(
-            id=campus_id, org_type=OrganizationType.COLLEGE.value
+            id=campus_id.strip(), org_type=OrganizationType.COLLEGE.value
         ).first()
         if not campus:
             return CustomResponse(general_message="Campus not found").get_failure_response()
@@ -409,7 +409,7 @@ class CompanyEventCalendar(APIView):
     )
     def get(self, request, company_id):
         company = Organization.objects.filter(
-            id=company_id, org_type=OrganizationType.COMPANY.value
+            id=company_id.strip(), org_type=OrganizationType.COMPANY.value
         ).first()
         if not company:
             return CustomResponse(general_message="Company not found").get_failure_response()
