@@ -1,6 +1,7 @@
 import json
 from rest_framework.views import APIView
 from django.utils.timezone import now
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -13,6 +14,11 @@ class ManageInternTaskAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve intern task(s) or task detail.",
+        responses={200: ManageInternTaskSerializer(many=True)},
+    )
     def get(self, request, task_id=None):
         if task_id:
             task = InternTask.objects.filter(id=task_id).first()
@@ -38,6 +44,11 @@ class ManageInternTaskAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Create an intern task.",
+        responses={200: OpenApiResponse(description="Task created successfully.")},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = ManageInternTaskSerializer(data=request.data, context={'user_id': user_id})
@@ -49,6 +60,11 @@ class ManageInternTaskAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Update an intern task (partial update).",
+        responses={200: OpenApiResponse(description="Task updated successfully.")},
+    )
     def patch(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -91,6 +107,11 @@ class ManageInternTaskAPI(APIView):
         return CustomResponse(response=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Delete an intern task.",
+        responses={200: OpenApiResponse(description="Task deleted successfully.")},
+    )
     def delete(self, request, task_id):
         task = InternTask.objects.filter(id=task_id).first()
         if not task:

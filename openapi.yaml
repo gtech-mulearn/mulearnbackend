@@ -13199,7 +13199,9 @@ paths:
       operationId: dashboard_mentor_session_create_create
       description: Create a new mentorship session. For IG mentors, provide an 'ig'
         field. For company mentors, entity_id and session_type are auto-resolved from
-        the mentor's company org.
+        the mentor's company org. To create a recurring session, set is_recurring=true,
+        recurrence_type ('DAILY', 'WEEKLY', 'MONTHLY'), recurrence_interval, and recurrence_end_date.
+        This returns the parent session while auto-spawning children.
       tags:
       - Mentor
       requestBody:
@@ -31877,6 +31879,9 @@ components:
             * `SCHEDULED` - SCHEDULED
             * `REJECTED` - REJECTED
           x-spec-enum-id: a2b796bef1a02f76
+        apply_to_series:
+          type: boolean
+          default: false
     PatchedApplicationTracking:
       type: object
       properties:
@@ -32808,6 +32813,9 @@ components:
     SessionCreate:
       type: object
       properties:
+        id:
+          type: string
+          maxLength: 36
         entity_id:
           type: string
           nullable: true
@@ -32859,7 +32867,36 @@ components:
           maximum: 2147483647
           minimum: -2147483648
           nullable: true
+        is_recurring:
+          type: boolean
+        recurrence_type:
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ''
+          - null
+          type: string
+          description: |-
+            * `DAILY` - Daily
+            * `WEEKLY` - Weekly
+            * `MONTHLY` - Monthly
+          x-spec-enum-id: 91602d667f73d24e
+          nullable: true
+        recurrence_interval:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
+        child_session_ids:
+          type: string
+          readOnly: true
       required:
+      - child_session_ids
       - ends_at
       - starts_at
       - title
@@ -32937,12 +32974,42 @@ components:
           maximum: 2147483647
           minimum: -2147483648
           nullable: true
+        is_recurring:
+          type: boolean
+        parent_session_id:
+          type: string
+          readOnly: true
+          nullable: true
+        recurrence_type:
+          enum:
+          - DAILY
+          - WEEKLY
+          - MONTHLY
+          - ''
+          - null
+          type: string
+          description: |-
+            * `DAILY` - Daily
+            * `WEEKLY` - Weekly
+            * `MONTHLY` - Monthly
+          x-spec-enum-id: 91602d667f73d24e
+          nullable: true
+        recurrence_interval:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        recurrence_end_date:
+          type: string
+          format: date
+          nullable: true
       required:
       - created_at
       - created_by_id
       - created_by_name
       - ends_at
       - entity_name
+      - parent_session_id
       - starts_at
       - status
       - title

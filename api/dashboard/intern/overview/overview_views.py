@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
 from django.db.models import Sum
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -13,6 +14,11 @@ class InternOverviewStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve intern overview status including karma, streaks, tasks, and score.",
+        responses={200: OpenApiResponse(description="Intern status overview data.")},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
@@ -58,6 +64,11 @@ class InternOverviewActivityAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve paginated intern karma activity log.",
+        responses={200: OpenApiResponse(description="List of intern karma activity entries.")},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         logs = KarmaActivityLog.objects.filter(
@@ -90,6 +101,11 @@ class InternOverviewLeaderboardTopAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve the top 3 interns on the leaderboard.",
+        responses={200: OpenApiResponse(description="Top 3 intern leaderboard entries.")},
+    )
     def get(self, request):
         interns = UserInternGuildLink.objects.filter(
             status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
@@ -149,6 +165,11 @@ class InternGuildsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.INTERN.value, RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve all available intern guilds.",
+        responses={200: OpenApiResponse(description="List of all intern guild values.")},
+    )
     def get(self, request):
         from utils.types import InternGuild
         guilds = InternGuild.get_all_values()

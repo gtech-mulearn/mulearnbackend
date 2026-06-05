@@ -132,7 +132,10 @@ def db_signals(sender, instance, created=None, *args, **kwargs):
 
 def invalidate_scope_cache(scope_type, scope_id):
     if scope_id:
-        cache.delete(f"mentor_dash_scope:{scope_type}:{scope_id}")
+        try:
+            cache.delete(f"mentor_dash_scope:{scope_type}:{scope_id}")
+        except Exception:
+            pass
 
 @receiver(post_save, sender=UserOrganizationLink)
 @receiver(post_delete, sender=UserOrganizationLink)
