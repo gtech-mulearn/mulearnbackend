@@ -1,6 +1,7 @@
 from django.utils.timezone import now
 from rest_framework.views import APIView
 from django.db import transaction
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -14,6 +15,11 @@ class ManageInternLeaveAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="List intern leave requests.",
+        responses={200: ManageInternLeaveSerializer(many=True)},
+    )
     def get(self, request):
         leaves = InternLeaveRequest.objects.all().order_by('-created_at')
         
@@ -35,6 +41,11 @@ class ManageInternLeaveReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Review (approve/reject) an intern leave request.",
+        responses={200: OpenApiResponse(description="Leave request reviewed successfully.")},
+    )
     def patch(self, request, leave_id):
         admin_id = JWTUtils.fetch_user_id(request)
         action = request.data.get("action")

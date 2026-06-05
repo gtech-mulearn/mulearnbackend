@@ -4,6 +4,7 @@ import uuid
 from django.db import transaction
 from django.utils.timezone import now
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -19,6 +20,11 @@ class InternTimesheetReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve a timesheet for review.",
+        responses={200: ManageInternTimesheetSerializer},
+    )
     def get(self, request, timesheet_id):
         timesheet = InternDailyTimesheet.objects.filter(id=timesheet_id).first()
         if not timesheet:
@@ -27,6 +33,11 @@ class InternTimesheetReviewAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Approve or reject a timesheet.",
+        responses={200: OpenApiResponse(description="Timesheet reviewed successfully.")},
+    )
     def patch(self, request, timesheet_id):
         admin_id = JWTUtils.fetch_user_id(request)
         action = request.data.get("action")
@@ -148,6 +159,11 @@ class InternWeeklyReviewReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Retrieve a weekly review for detail.",
+        responses={200: ManageInternWeeklyReviewSerializer},
+    )
     def get(self, request, review_id):
         review = InternWeeklyReview.objects.filter(id=review_id).first()
         if not review:
@@ -156,6 +172,11 @@ class InternWeeklyReviewReviewAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Approve or reject a weekly review.",
+        responses={200: OpenApiResponse(description="Weekly review reviewed successfully.")},
+    )
     def patch(self, request, review_id):
         admin_id = JWTUtils.fetch_user_id(request)
         action = request.data.get("action")
@@ -231,6 +252,11 @@ class InternWeeklyReviewListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="List weekly reviews with filters.",
+        responses={200: ManageInternWeeklyReviewSerializer(many=True)},
+    )
     def get(self, request):
         reviews = InternWeeklyReview.objects.all().order_by('-created_at')
         
@@ -257,6 +283,11 @@ class InternTimesheetListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="List timesheets with filters.",
+        responses={200: ManageInternTimesheetSerializer(many=True)},
+    )
     def get(self, request):
         timesheets = InternDailyTimesheet.objects.all().order_by('-created_at')
         
