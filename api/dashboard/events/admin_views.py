@@ -45,7 +45,7 @@ class AdminEventListAPI(APIView):
         responses={200: EventListItemSerializer},
     )
     def get(self, request):
-        events = Event.objects.all()
+        events = Event.objects.all().select_related('category', 'organiser_ig', 'organiser_org')
 
         params = request.query_params
         if status := params.get('status'):
@@ -137,7 +137,7 @@ class AdminEventApproveAPI(APIView):
 class AdminEventRejectAPI(APIView):
     """
     POST /events/admin/<event_id>/reject/
-    Rejects a pending event, returning it to 'draft'.
+    Rejects a pending event, changing its status to 'rejected'.
     Body: { "reason": "..." }
     """
     authentication_classes = [CustomizePermission]
@@ -172,7 +172,7 @@ class AdminEventRejectAPI(APIView):
             ).get_failure_response()
 
         old_status = event.status
-        event.status = Event.Status.DRAFT
+        event.status = Event.Status.REJECTED
         event.updated_by_id = user_id
         event.save()
 
@@ -180,13 +180,13 @@ class AdminEventRejectAPI(APIView):
             event=event,
             user_id=user_id,
             action=EventLog.Action.REJECTED,
-            changes={'Status': {'from': old_status, 'to': Event.Status.DRAFT}},
+            changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}},
             details={'reason': reason},
         )
 
         return CustomResponse(
-            general_message=f'Event rejected and returned to draft (was: {old_status}).',
-            response={'id': event.id, 'status': Event.Status.DRAFT, 'reason': reason},
+            general_message=f'Event rejected (was: {old_status}).',
+            response={'id': event.id, 'status': Event.Status.REJECTED, 'reason': reason},
         ).get_success_response()
 
 

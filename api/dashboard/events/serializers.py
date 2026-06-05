@@ -52,23 +52,23 @@ class MinimalCampusIGSerializer(serializers.Serializer):
 
 class OrganizerInfoSerializer(serializers.Serializer):
     """Reads organiser fields off the Event model directly."""
-    type = serializers.CharField(source='organiser_type')
-    ig = serializers.SerializerMethodField()
-    campus = serializers.SerializerMethodField()
-    company = serializers.SerializerMethodField()
-    campus_ig_id = serializers.CharField(source='organiser_ci_id', allow_null=True)
+    organiser_type = serializers.CharField(source='organiser_type')
+    organiser_ig = serializers.SerializerMethodField()
+    organiser_campus = serializers.SerializerMethodField()
+    organiser_company = serializers.SerializerMethodField()
+    organiser_ci_id = serializers.CharField(source='organiser_ci_id', allow_null=True)
 
-    def get_ig(self, obj):
+    def get_organiser_ig(self, obj):
         if obj.organiser_type in (Event.OrganiserType.GLOBAL_IG, Event.OrganiserType.CAMPUS_IG) and obj.organiser_ig:
             return MinimalIGSerializer(obj.organiser_ig).data
         return None
 
-    def get_campus(self, obj):
+    def get_organiser_campus(self, obj):
         if obj.organiser_type == Event.OrganiserType.CAMPUS and obj.organiser_org:
             return MinimalCampusSerializer(obj.organiser_org).data
         return None
 
-    def get_company(self, obj):
+    def get_organiser_company(self, obj):
         if obj.organiser_type == Event.OrganiserType.COMPANY and obj.organiser_org:
             return MinimalCampusSerializer(obj.organiser_org).data
         return None
@@ -80,12 +80,12 @@ class OrganizerInfoSerializer(serializers.Serializer):
 
 class EventVenueSerializer(serializers.Serializer):
     """Flattens venue_* fields from the Event model."""
-    type = serializers.CharField(source='venue_type')
-    address = serializers.CharField(source='venue_address', allow_null=True)
-    city = serializers.CharField(source='venue_city', allow_null=True)
-    maps_url = serializers.CharField(source='venue_maps_url', allow_null=True)
-    online_link = serializers.CharField(source='venue_online_link', allow_null=True)
-    platform = serializers.CharField(source='venue_platform', allow_null=True)
+    venue_type = serializers.CharField(source='venue_type')
+    venue_address = serializers.CharField(source='venue_address', allow_null=True)
+    venue_city = serializers.CharField(source='venue_city', allow_null=True)
+    venue_maps_url = serializers.CharField(source='venue_maps_url', allow_null=True)
+    venue_online_link = serializers.CharField(source='venue_online_link', allow_null=True)
+    venue_platform = serializers.CharField(source='venue_platform', allow_null=True)
 
 
 # ─────────────────────────────────────────────────────────────
@@ -105,14 +105,23 @@ class EventCollaboratorSerializer(serializers.ModelSerializer):
 
     def get_entity_detail(self, obj):
         try:
+            igs_map = self.context.get('igs_map')
+            orgs_map = self.context.get('orgs_map')
+
             if obj.entity_type == EventConnection.EntityType.COLLAB_IG:
-                ig = InterestGroup.objects.filter(id=obj.entity_id).first()
+                if igs_map is not None:
+                    ig = igs_map.get(str(obj.entity_id))
+                else:
+                    ig = InterestGroup.objects.filter(id=obj.entity_id).first()
                 return MinimalIGSerializer(ig).data if ig else None
             elif obj.entity_type in (
                 EventConnection.EntityType.COLLAB_CAMPUS,
                 EventConnection.EntityType.COLLAB_COMPANY,
             ):
-                org = Organization.objects.filter(id=obj.entity_id).first()
+                if orgs_map is not None:
+                    org = orgs_map.get(str(obj.entity_id))
+                else:
+                    org = Organization.objects.filter(id=obj.entity_id).first()
                 return MinimalCampusSerializer(org).data if org else None
             elif obj.entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
                 return {'campus_ig_id': obj.entity_id}
@@ -154,7 +163,11 @@ class EventCoOwnerSerializer(serializers.ModelSerializer):
         fields = ['id', 'entity_id', 'user', 'added_by', 'added_at']
 
     def get_user(self, obj):
-        user = User.objects.filter(id=obj.entity_id).first()
+        users_map = self.context.get('users_map')
+        if users_map is not None:
+            user = users_map.get(str(obj.entity_id))
+        else:
+            user = User.objects.filter(id=obj.entity_id).first()
         return MinimalUserSerializer(user).data if user else None
 
     def get_added_by(self, obj):
@@ -344,11 +357,27 @@ class EventDetailSerializer(serializers.ModelSerializer):
         if not is_manage_view:
             # Public view: only accepted collaborators
             qs = qs.filter(invite_status=EventConnection.InviteStatus.ACCEPTED)
-        return EventCollaboratorSerializer(qs, many=True).data
+        collabs = list(qs)
+        ig_ids = [c.entity_id for c in collabs if c.entity_type == EventConnection.EntityType.COLLAB_IG]
+        org_ids = [c.entity_id for c in collabs if c.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+
+        igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+        orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
+        return EventCollaboratorSerializer(
+            collabs, many=True,
+            context={**self.context, 'igs_map': igs, 'orgs_map': orgs}
+        ).data
 
     def get_co_owners(self, obj):
-        qs = obj.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER)
-        return EventCoOwnerSerializer(qs, many=True).data
+        qs = obj.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER).select_related('created_by')
+        co_owners = list(qs)
+        user_ids = [c.entity_id for c in co_owners]
+        users = {str(u.id): u for u in User.objects.filter(id__in=user_ids)}
+        return EventCoOwnerSerializer(
+            co_owners, many=True,
+            context={**self.context, 'users_map': users}
+        ).data
 
     def get_linked_tasks(self, obj):
         # Use event_fk_id (raw UUID) to avoid Django's FK type-check

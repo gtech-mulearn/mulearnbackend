@@ -435,9 +435,9 @@ class ManageEventPublishAPI(APIView):
                 general_message='You do not have permission to manage this event.'
             ).get_failure_response()
 
-        if event.status != Event.Status.DRAFT:
+        if event.status not in (Event.Status.DRAFT, Event.Status.REJECTED):
             return CustomResponse(
-                general_message=f'Only draft events can be published (current: {event.status}).'
+                general_message=f'Only draft or rejected events can be published (current: {event.status}).'
             ).get_failure_response()
 
         # Validate required fields are filled
@@ -496,6 +496,7 @@ class ManageEventPublishAPI(APIView):
         else:
             new_status = Event.Status.PENDING_APPROVAL
 
+        old_status = event.status
         event.status = new_status
         event.updated_by_id = user_id
         event.save()
@@ -504,7 +505,7 @@ class ManageEventPublishAPI(APIView):
             event=event,
             user_id=user_id,
             action=EventLog.Action.PUBLISHED,
-            changes={'Status': {'from': Event.Status.DRAFT, 'to': new_status}},
+            changes={'Status': {'from': old_status, 'to': new_status}},
             details={'new_status': new_status},
         )
 
@@ -542,10 +543,13 @@ class ManageEventCoOwnerAPI(APIView):
                 general_message='Permission denied.'
             ).get_failure_response()
 
-        co_owners = event.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER)
+        co_owners = list(event.connections.filter(entity_type=EventConnection.EntityType.CO_OWNER).select_related('created_by'))
+        user_ids = [c.entity_id for c in co_owners]
+        users = {str(u.id): u for u in User.objects.filter(id__in=user_ids)}
+
         return CustomResponse(
             general_message='Co-owners retrieved.',
-            response=EventCoOwnerSerializer(co_owners, many=True).data,
+            response=EventCoOwnerSerializer(co_owners, many=True, context={'users_map': users}).data,
         ).get_success_response()
 
     @extend_schema(
@@ -745,10 +749,21 @@ class ManageEventCollaboratorAPI(APIView):
         if not (RoleType.ADMIN.value in roles or can_manage_event(user_id, event)):
             return CustomResponse(general_message='Permission denied.').get_failure_response()
 
-        collabs = event.connections.filter(entity_type__in=COLLAB_TYPES)
+        collabs = list(event.connections.filter(entity_type__in=COLLAB_TYPES))
+        ig_ids = [c.entity_id for c in collabs if c.entity_type == EventConnection.EntityType.COLLAB_IG]
+        org_ids = [c.entity_id for c in collabs if c.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+
+        from db.task import InterestGroup
+        from db.organization import Organization
+        igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+        orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
         return CustomResponse(
             general_message='Collaborators retrieved.',
-            response=EventCollaboratorSerializer(collabs, many=True).data,
+            response=EventCollaboratorSerializer(
+                collabs, many=True,
+                context={'request': request, 'igs_map': igs, 'orgs_map': orgs}
+            ).data,
         ).get_success_response()
 
     @extend_schema(
@@ -1015,8 +1030,17 @@ class MyEventInvitesAPI(APIView):
                 invite_status=EventConnection.InviteStatus.PENDING,
                 entity_type__in=COLLAB_TYPES
             ).select_related('event').order_by('-created_at')
+            invites_list = list(invites)
+            ig_ids = [inv.entity_id for inv in invites_list if inv.entity_type == EventConnection.EntityType.COLLAB_IG]
+            org_ids = [inv.entity_id for inv in invites_list if inv.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+            
+            from db.task import InterestGroup
+            from db.organization import Organization
+            igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+            orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
             serializer = MyEventInviteSerializer(
-                invites, many=True, context={'request': request},
+                invites_list, many=True, context={'request': request, 'igs_map': igs, 'orgs_map': orgs},
             )
             return CustomResponse(
                 general_message='Global pending invites retrieved.',
@@ -1068,8 +1092,17 @@ class MyEventInvitesAPI(APIView):
             invite_status=EventConnection.InviteStatus.PENDING,
         ).select_related('event').order_by('-created_at')
         
+        invites_list = list(invites)
+        ig_ids = [inv.entity_id for inv in invites_list if inv.entity_type == EventConnection.EntityType.COLLAB_IG]
+        org_ids = [inv.entity_id for inv in invites_list if inv.entity_type in (EventConnection.EntityType.COLLAB_CAMPUS, EventConnection.EntityType.COLLAB_COMPANY)]
+        
+        from db.task import InterestGroup
+        from db.organization import Organization
+        igs = {str(ig.id): ig for ig in InterestGroup.objects.filter(id__in=ig_ids)}
+        orgs = {str(org.id): org for org in Organization.objects.filter(id__in=org_ids)}
+
         serializer = MyEventInviteSerializer(
-            invites, many=True, context={'request': request},
+            invites_list, many=True, context={'request': request, 'igs_map': igs, 'orgs_map': orgs},
         )
         return CustomResponse(
             general_message='Pending invites retrieved.',
@@ -1207,8 +1240,15 @@ class CampusEventApproveAPI(APIView):
         if event.status != Event.Status.PENDING_CAMPUS_APPROVAL:
             return CustomResponse(general_message='Event is not pending campus approval.').get_failure_response()
 
-        # In a real app, verify they are the lead for event.scope_org_id specifically.
-        # Assuming the generic campus_staff_required equivalent checks are handled or we bypass for simplicity
+        # Verify campus lead matches the campus of the event (event.scope_org_id)
+        if RoleType.ADMIN.value not in roles:
+            from db.organization import UserOrganizationLink
+            is_member = UserOrganizationLink.objects.filter(
+                user_id=user_id,
+                org_id=event.scope_org_id
+            ).exists()
+            if not is_member:
+                return CustomResponse(general_message='You are not authorized to approve events for this campus.').get_failure_response()
         
         event.status = Event.Status.PENDING_APPROVAL
         event.updated_by_id = user_id
@@ -1235,6 +1275,16 @@ class CampusEventRejectAPI(APIView):
 
         if event.status != Event.Status.PENDING_CAMPUS_APPROVAL:
             return CustomResponse(general_message='Event is not pending campus approval.').get_failure_response()
+
+        # Verify campus lead matches the campus of the event (event.scope_org_id)
+        if RoleType.ADMIN.value not in roles:
+            from db.organization import UserOrganizationLink
+            is_member = UserOrganizationLink.objects.filter(
+                user_id=user_id,
+                org_id=event.scope_org_id
+            ).exists()
+            if not is_member:
+                return CustomResponse(general_message='You are not authorized to reject events for this campus.').get_failure_response()
 
         reason = request.data.get('reason', '').strip()
         if not reason:

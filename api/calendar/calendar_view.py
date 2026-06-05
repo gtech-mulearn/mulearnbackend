@@ -12,6 +12,7 @@ from db.organization import Organization
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
+from api.dashboard.events.serializers import EventCalendarItemSerializer
 
 
 def _parse_month(month_str):
@@ -196,13 +197,13 @@ class EventCalendar(APIView):
             OpenApiParameter('scope', OpenApiTypes.STR, description='Filter by scope: ig, campus, global, company', required=False),
             OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
         ],
-        responses={200: serializers.EventCalendarSerializer(many=True)},
+        responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request):
         qs = Event.objects.filter(
             status__in=EVENT_STATUSES_VISIBLE,
             deleted_at__isnull=True,
-        ).select_related('scope_ig', 'scope_org').order_by('start_datetime')
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime')
 
         month_str = request.query_params.get('month')
         start, end = _parse_month(month_str)
@@ -226,7 +227,7 @@ class EventCalendar(APIView):
         upcoming, ongoing, completed = _group_events(qs)
 
         def serialize(events):
-            return serializers.EventCalendarSerializer(events, many=True).data
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),
@@ -246,7 +247,7 @@ class IGEventCalendar(APIView):
             OpenApiParameter('month', OpenApiTypes.STR, description='Filter by month (YYYY-MM)', required=False),
             OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
         ],
-        responses={200: serializers.EventCalendarSerializer(many=True)},
+        responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request, ig_id):
         ig = InterestGroup.objects.filter(id=ig_id).first()
@@ -258,7 +259,7 @@ class IGEventCalendar(APIView):
             deleted_at__isnull=True,
         ).filter(
             Q(scope_ig=ig) | Q(organiser_ig=ig)
-        ).select_related('scope_ig', 'scope_org').order_by('start_datetime').distinct()
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime').distinct()
 
         month_str = request.query_params.get('month')
         start, end = _parse_month(month_str)
@@ -278,7 +279,7 @@ class IGEventCalendar(APIView):
         upcoming, ongoing, completed = _group_events(qs)
 
         def serialize(events):
-            return serializers.EventCalendarSerializer(events, many=True).data
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),
@@ -350,7 +351,7 @@ class CampusEventCalendar(APIView):
             OpenApiParameter('month', OpenApiTypes.STR, description='Filter by month (YYYY-MM)', required=False),
             OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
         ],
-        responses={200: serializers.EventCalendarSerializer(many=True)},
+        responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request, campus_id):
         campus = Organization.objects.filter(
@@ -364,7 +365,7 @@ class CampusEventCalendar(APIView):
             deleted_at__isnull=True,
         ).filter(
             Q(scope_org=campus) | Q(organiser_org=campus)
-        ).select_related('scope_ig', 'scope_org').order_by('start_datetime').distinct()
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime').distinct()
 
         month_str = request.query_params.get('month')
         start, end = _parse_month(month_str)
@@ -384,7 +385,7 @@ class CampusEventCalendar(APIView):
         upcoming, ongoing, completed = _group_events(qs)
 
         def serialize(events):
-            return serializers.EventCalendarSerializer(events, many=True).data
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),
@@ -404,7 +405,7 @@ class CompanyEventCalendar(APIView):
             OpenApiParameter('month', OpenApiTypes.STR, description='Filter by month (YYYY-MM)', required=False),
             OpenApiParameter('status', OpenApiTypes.STR, description='Filter by status: ongoing, upcoming, completed', required=False),
         ],
-        responses={200: serializers.EventCalendarSerializer(many=True)},
+        responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request, company_id):
         company = Organization.objects.filter(
@@ -418,7 +419,7 @@ class CompanyEventCalendar(APIView):
             deleted_at__isnull=True,
         ).filter(
             Q(scope_org=company) | Q(organiser_org=company)
-        ).select_related('scope_ig', 'scope_org').order_by('start_datetime').distinct()
+        ).select_related('category', 'organiser_ig', 'organiser_org').order_by('start_datetime').distinct()
 
         month_str = request.query_params.get('month')
         start, end = _parse_month(month_str)
@@ -438,7 +439,7 @@ class CompanyEventCalendar(APIView):
         upcoming, ongoing, completed = _group_events(qs)
 
         def serialize(events):
-            return serializers.EventCalendarSerializer(events, many=True).data
+            return EventCalendarItemSerializer(events, many=True).data
 
         return CustomResponse(response={
             'upcoming': serialize(upcoming),
