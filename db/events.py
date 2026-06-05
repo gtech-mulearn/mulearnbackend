@@ -35,9 +35,10 @@ class Event(models.Model):
     class OrganiserType(models.TextChoices):
         GLOBAL_IG = 'global_ig', 'Global IG'
         CAMPUS_IG = 'campus_ig', 'Campus IG'
-        CAMPUS = 'campus', 'Campus'
-        COMPANY = 'company', 'Company'
-        ADMIN = 'admin', 'Admin'
+        CAMPUS    = 'campus',    'Campus'
+        COMPANY   = 'company',   'Company'
+        ADMIN     = 'admin',     'Admin'
+        PARTNER   = 'partner',   'Partner'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)
@@ -139,12 +140,14 @@ class EventConnection(models.Model):
         COLLAB_CAMPUS = 'collab_campus', 'Collaborating Campus'
         COLLAB_CAMPUS_IG = 'collab_campus_ig', 'Collaborating Campus IG'
         COLLAB_COMPANY = 'collab_company', 'Collaborating Company'
+        COLLAB_PARTNER = 'collab_partner', 'Collaborating Partner'
 
     COLLABORATOR_TYPES = [
         EntityType.COLLAB_IG,
         EntityType.COLLAB_CAMPUS,
         EntityType.COLLAB_CAMPUS_IG,
         EntityType.COLLAB_COMPANY,
+        EntityType.COLLAB_PARTNER,
     ]
 
     class InviteStatus(models.TextChoices):

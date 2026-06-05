@@ -41,6 +41,7 @@ MANAGEABLE_ROLES = {
     RoleType.COMPANY.value,
     RoleType.ENABLER.value,
     RoleType.LEAD_ENABLER.value,
+    RoleType.PARTNER.value,   # Partners can create events
 }
 
 
@@ -528,6 +529,7 @@ COLLAB_TYPES = [
     EventConnection.EntityType.COLLAB_CAMPUS,
     EventConnection.EntityType.COLLAB_CAMPUS_IG,
     EventConnection.EntityType.COLLAB_COMPANY,
+    EventConnection.EntityType.COLLAB_PARTNER,
 ]
 
 
@@ -550,6 +552,10 @@ def _resolve_entity_name(entity_type, entity_id):
             return org.title if org else entity_id
         elif entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
             return f'Campus-IG ({entity_id})'
+        elif entity_type == EventConnection.EntityType.COLLAB_PARTNER:
+            from db.partner import UserPartner
+            partner = UserPartner.objects.filter(id=entity_id).first()
+            return partner.name if partner else entity_id
     except Exception:
         pass
     return entity_id
@@ -580,6 +586,12 @@ def _caller_can_respond(conn, user_id, roles):
         )
     elif conn.entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
         return any(r.endswith(' CampusLead') for r in roles)
+    elif conn.entity_type == EventConnection.EntityType.COLLAB_PARTNER:
+        from db.partner import UserPartner
+        partner = UserPartner.objects.filter(
+            id=conn.entity_id, status='verified'
+        ).first()
+        return partner is not None and partner.user_link_id == user_id
     return False
 
 
@@ -916,6 +928,18 @@ class MyEventInvitesAPI(APIView):
             
         if has_any_campus_lead_role:
             query |= Q(entity_type=EventConnection.EntityType.COLLAB_CAMPUS_IG)
+
+        # Partner invites — verified partner whose user_link_id == this user
+        if RoleType.PARTNER.value in roles:
+            from db.partner import UserPartner
+            partner = UserPartner.objects.filter(
+                user_link_id=user_id, status='verified'
+            ).first()
+            if partner:
+                query |= Q(
+                    entity_type=EventConnection.EntityType.COLLAB_PARTNER,
+                    entity_id=partner.id,
+                )
             
         if not query:
             return CustomResponse(

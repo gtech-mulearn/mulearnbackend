@@ -46,6 +46,7 @@ class RoleType(Enum):
     LEAD_ENABLER = "Lead Enabler"
     MULEARNER = "Mulearner"
     COMPANY = "Company"
+    PARTNER = "Partner"
 
     @classmethod
     def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):
@@ -61,6 +62,20 @@ class OrganizationType(Enum):
     COMPANY = "Company"
     COMMUNITY = "Community"
     SCHOOL = "School"
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
+
+
+class PartnerType(Enum):
+    INDUSTRY   = "Industry"
+    NGO        = "NGO"
+    ACADEMIA   = "Academia"
+    GOVERNMENT = "Government"
+    COMMUNITY  = "Community"
+    MEDIA      = "Media"
+    STARTUP    = "Startup"
 
     @classmethod
     def get_all_values(cls):
