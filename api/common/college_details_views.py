@@ -1,111 +1,72 @@
 from rest_framework.views import APIView
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
-from django.db.models import Count, F, Sum, Q
-
-from db.organization import Organization
-from db.user import User
-from db.task import InterestGroup
-from db.learning_circle import LearningCircle
+from django.db.models import Sum, Count, F, Q
 
 from utils.response import CustomResponse
+from db.organization import Organization, UserOrganizationLink
+from db.task import UserIgLink
+from db.learning_circle import LearningCircle
 from utils.types import OrganizationType
-
 from api.dashboard.campus.serializers import CampusDetailsPublicSerializer
+from rest_framework.throttling import AnonRateThrottle
 
-class CollegeDetailsRateThrottle(AnonRateThrottle):
+class CampusDetailsRateThrottle(AnonRateThrottle):
     rate = '60/minute'
 
-    def allow_request(self, request, view):
-        try:
-            return super().allow_request(request, view)
-        except Exception:
-            # Fallback to True if Redis cache is not available (e.g. locally)
-            return True
-
 class CollegeDetailsAPI(APIView):
-    throttle_classes = [CollegeDetailsRateThrottle]
+    throttle_classes = [CampusDetailsRateThrottle]
 
     def get(self, request, college_code):
+        # 1. Basic campus details & MuLearn details
         org = Organization.objects.filter(code=college_code, org_type=OrganizationType.COLLEGE.value).first()
-        if not org:
+        if org is None:
             return CustomResponse(general_message="College not found").get_failure_response()
 
-        # 1. Basic Campus Details
-        basic_campus_details = CampusDetailsPublicSerializer(org, many=False).data
-        # Remove UUID and social_links
-        basic_campus_details.pop("org_id", None)
-        basic_campus_details.pop("social_links", None)
+        campus_details = CampusDetailsPublicSerializer(org, many=False).data
 
-        # 2. All Students & Top 20 Leaderboard
-        all_students_qs = (
-            User.objects.filter(
-                user_organization_link_user__org=org,
-                user_organization_link_user__is_alumni=False
-            )
-            .annotate(
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name")
-            )
-            .order_by("-karma", "-created_at")
-            .values("full_name", "muid", "karma", "level")
-        )
+        # 2. Top 20 learner leaderboard with karma
+        top_20_learners_data = []
+        top_20_learners_qs = UserOrganizationLink.objects.filter(
+            org=org,
+            verified=True,
+            user__wallet_user__isnull=False
+        ).select_related('user', 'user__wallet_user').order_by('-user__wallet_user__karma')[:20]
 
-        all_students = []
-        for index, student in enumerate(all_students_qs):
-            all_students.append({
-                "full_name": student["full_name"],
-                "muid": student["muid"],
-                "karma": student["karma"] or 0,
-                "rank": index + 1,
-                "level": student["level"]
+        for link in top_20_learners_qs:
+            top_20_learners_data.append({
+                "full_name": link.user.full_name,
+                "muid": link.user.muid,
+                "karma": link.user.wallet_user.karma,
+                "profile_pic": link.user.profile_pic
             })
 
-        top_20_leaderboard = all_students[:20]
+        # 3. Campus IG details
+        ig_details = UserIgLink.objects.filter(
+            user__user_organization_link_user__org=org,
+            user__user_organization_link_user__verified=True
+        ).values(
+            ig_name=F('ig__name'),
+            ig_code=F('ig__code')
+        ).annotate(
+            members=Count('user', distinct=True),
+            total_karma=Sum('user__wallet_user__karma')
+        ).order_by('-members')
 
-        # 3. Active IGs
-        active_igs_qs = (
-            InterestGroup.objects.filter(
-                user_ig_link_ig__user__user_organization_link_user__org=org,
-                user_ig_link_ig__user__user_organization_link_user__verified=True,
-                status="active"
-            )
-            .annotate(
-                member_count=Count("user_ig_link_ig", filter=Q(user_ig_link_ig__user__user_organization_link_user__org=org), distinct=True)
-            )
-            .values("name", "code", "member_count")
-        )
+        # 4. Campus Learning Circle details
+        lc_details = LearningCircle.objects.filter(
+            org=org
+        ).values(
+            'title',
+            ig_code=F('ig__code'),
+            ig_name=F('ig__name')
+        ).annotate(
+            members=Count('user_circle_link_circle', filter=Q(user_circle_link_circle__accepted=True), distinct=True)
+        ).order_by('-members')
 
-        active_igs = []
-        for ig in active_igs_qs:
-            active_igs.append({
-                "ig_name": ig["name"],
-                "ig_code": ig["code"],
-                "member_count": ig["member_count"]
-            })
+        data = {
+            "campus_details": campus_details,
+            "top_learners": top_20_learners_data,
+            "ig_details": ig_details,
+            "lc_details": lc_details
+        }
 
-        # 4. Learning Circles
-        learning_circles_qs = (
-            LearningCircle.objects.filter(org=org)
-            .annotate(
-                member_count=Count("user_circle_link_circle")
-            )
-            .values("title", "ig__name", "member_count")
-        )
-
-        learning_circles = []
-        for lc in learning_circles_qs:
-            learning_circles.append({
-                "circle_name": lc["title"],
-                "ig_name": lc["ig__name"],
-                "member_count": lc["member_count"]
-            })
-
-        return CustomResponse(
-            response={
-                "basic_campus_details": basic_campus_details,
-                "all_students": all_students,
-                "top_20_leaderboard": top_20_leaderboard,
-                "active_igs": active_igs,
-                "learning_circles": learning_circles
-            }
-        ).get_success_response()
+        return CustomResponse(response=data).get_success_response()
