@@ -3,8 +3,10 @@ from django.urls import path
 from .common_views import *
 from .external_api_views import ExternalUserDetailsAPI
 from . import common_views
+from . import college_details_views
 
 urlpatterns = [
+    path('campus-details/<str:college_code>/', college_details_views.CollegeDetailsAPI.as_view()),
     path('lc-list', common_views.LcListAPI.as_view()),
     path('<str:circle_id>/lc-details/', common_views.LcDetailsAPI.as_view()),
     path('lc-dashboard/', common_views.LcDashboardAPI.as_view()),
