@@ -77,12 +77,21 @@ class UserGetPatchDeleteAPI(APIView):
         responses={200: dash_user_serializer.UserDetailsSerializer},
     )
     def delete(self, request, user_id):
+        from django.db.models import ProtectedError
+        from django.db import IntegrityError
         try:
-            user = User.objects.get(id=user_id).delete()
+            user = User.objects.get(id=user_id)
+            user.delete()
             return CustomResponse(
                 general_message="User deleted successfully"
             ).get_success_response()
         except User.DoesNotExist as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
+        except (ProtectedError, IntegrityError) as e:
+            return CustomResponse(
+                general_message="Cannot delete user as they are linked to other data."
+            ).get_failure_response()
+        except Exception as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
