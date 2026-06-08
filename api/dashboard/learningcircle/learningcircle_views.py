@@ -213,6 +213,17 @@ class LearningCircleMeetingView(APIView):
     )
     def post(self, request, circle_id: str):
         user_id = JWTUtils.fetch_user_id(request)
+        try:
+            circle = LearningCircle.objects.get(id=circle_id)
+        except LearningCircle.DoesNotExist:
+            return CustomResponse(
+                general_message="Learning Circle not found"
+            ).get_failure_response()
+        # Only accepted members (including the lead/creator) may create meetings.
+        if not _is_member_or_creator(circle, user_id):
+            return CustomResponse(
+                general_message="Only circle members can create meetings"
+            ).get_failure_response()
         meet_code = generate_code()
         request_data = request.data.copy()
         request_data['circle_id'] = circle_id
@@ -284,6 +295,10 @@ class LearningCircleRSVPAPI(APIView):
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        if not _is_member_or_creator(circle_meeting.circle_id, user_id):
+            return CustomResponse(
+                general_message="Only circle members can RSVP to this meeting"
+            ).get_failure_response()
         now = DateTimeUtils.get_current_utc_time()
         if circle_meeting.meet_time <= now:
             return CustomResponse(
@@ -322,6 +337,10 @@ class LearningCircleJoinAPI(APIView):
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
         circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        if not _is_member_or_creator(circle_meeting.circle_id, user_id):
+            return CustomResponse(
+                general_message="Only circle members can join this meeting"
+            ).get_failure_response()
         now = DateTimeUtils.get_current_utc_time()
         if circle_meeting.meet_time > now:
             return CustomResponse(
@@ -883,6 +902,15 @@ def _is_lead_or_creator(circle, user_id):
         return True
     return UserCircleLink.objects.filter(
         circle=circle, user_id=user_id, accepted=True, lead=True
+    ).exists()
+
+
+def _is_member_or_creator(circle, user_id):
+    """Returns True if the user is the circle creator OR an accepted member (incl. leads)."""
+    if circle.created_by_id == user_id:
+        return True
+    return UserCircleLink.objects.filter(
+        circle=circle, user_id=user_id, accepted=True
     ).exists()
 
 
