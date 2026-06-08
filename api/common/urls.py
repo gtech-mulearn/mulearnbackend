@@ -3,6 +3,7 @@ from django.urls import path
 from .common_views import *
 from .external_api_views import ExternalUserDetailsAPI
 from . import common_views
+from .college_details_views import CollegeDetailsAPI
 from api.dashboard.company import job_views
 
 urlpatterns = [
@@ -13,6 +14,7 @@ urlpatterns = [
     path('college-wise-lc-report/', common_views.CollegeWiseLcReport.as_view()),
     path('college-wise-lc-report/csv/', common_views.CollegeWiseLcReportCSV.as_view()),
     path('lc-report/csv/', common_views.LcReportDownloadAPI.as_view()),
+    path('college-details/<str:college_code>/', CollegeDetailsAPI.as_view()),
     path('lc-enrollment/', common_views.LearningCircleEnrollment.as_view()),
     path('lc-enrollment/csv/', common_views.LearningCircleEnrollmentCSV.as_view()),
 

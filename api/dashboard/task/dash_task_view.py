@@ -559,6 +559,8 @@ class ChannelDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Channel Dropdown.",
@@ -581,6 +583,8 @@ class IGDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve I G Dropdown.",
@@ -602,6 +606,8 @@ class OrganizationDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Organization Dropdown.",
@@ -623,6 +629,8 @@ class LevelDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Level Dropdown.",
@@ -644,6 +652,8 @@ class TaskTypesDropDownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
     @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Types Drop Down.",
