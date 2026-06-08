@@ -720,6 +720,8 @@ class TaskTypeCrudAPI(APIView):
     @role_required(
         [
             RoleType.ADMIN.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
     @extend_schema(
