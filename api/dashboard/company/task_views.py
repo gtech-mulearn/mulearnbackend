@@ -90,7 +90,7 @@ class CompanyTaskListCreateAPI(APIView):
 
         queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(requested_by_id=user_id, active=True)
+        ).filter(requested_by_id=user_id)
 
         approval_status = request.query_params.get("approval_status")
         if approval_status:

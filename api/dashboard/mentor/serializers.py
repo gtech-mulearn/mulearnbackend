@@ -74,6 +74,7 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
 class MentorListSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
+    muid = serializers.CharField(source='user.muid', read_only=True)
 
     class Meta:
         model = UserMentor
@@ -82,6 +83,11 @@ class MentorListSerializer(serializers.ModelSerializer):
             "user_id",
             "user_full_name",
             "user_email",
+            "muid",
+            "about",
+            "expertise",
+            "verification_note",
+            "verified_at",
             "mentor_tier",
             "status",
             "created_at",
