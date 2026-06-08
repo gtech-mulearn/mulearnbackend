@@ -1,3 +1,4 @@
+import uuid
 from datetime import datetime, timedelta, timezone
 
 import pytz
@@ -73,7 +74,23 @@ class LearningCircleCreateEditSerialzier(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context.get("user_id")
         validated_data["created_by_id"] = user_id
-        return LearningCircle.objects.create(**validated_data)
+        circle = LearningCircle.objects.create(**validated_data)
+        # The creator is implicitly the lead and an accepted member. Create their
+        # UserCircleLink up-front so they are counted in member totals, the circle
+        # surfaces in their "My Circles" list, and membership checks stay
+        # consistent. Idempotent via get_or_create.
+        UserCircleLink.objects.get_or_create(
+            circle=circle,
+            user_id=user_id,
+            defaults={
+                "id": str(uuid.uuid4()),
+                "lead": True,
+                "is_invited": False,
+                "accepted": True,
+                "accepted_at": DateTimeUtils.get_current_utc_time(),
+            },
+        )
+        return circle
 
     def validate(self, attrs):
         return super().validate(attrs)
