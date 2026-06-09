@@ -170,7 +170,7 @@ class CompanyDashboardSummaryAPIView(APIView):
         jobs = CompanyJob.objects.filter(company=company, is_deleted=False)
         apps = UserJobApplication.objects.filter(job__company=company)
         period_jobs = jobs.filter(created_at__gte=since) if since else jobs
-        period_apps = apps.filter(created_at__gte=since) if since else apps
+        period_apps = apps.filter(applied_at__gte=since) if since else apps
 
         total_views = jobs.aggregate(total=Sum('total_views'))['total'] or 0
 
