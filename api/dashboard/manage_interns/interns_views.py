@@ -147,6 +147,8 @@ class ManageInternStatusAPI(APIView):
         for stat in stats:
             data[stat['status']] = stat['count']
             
+        data['total_interns'] = UserInternGuildLink.objects.count()
+            
         return CustomResponse(response=data).get_success_response()
 
 class ManageInternExportAPI(APIView):
