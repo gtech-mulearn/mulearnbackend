@@ -47,6 +47,8 @@ class InternOverviewStatusAPI(APIView):
                  completed_tasks * InternLeaderboardWeights.COMPLETED_TASKS_MULTIPLIER +
                  complexity_score * InternLeaderboardWeights.COMPLEXITY_SCORE_MULTIPLIER)
         
+        total_interns = UserInternGuildLink.objects.count()
+        
         data = {
             "guild": guild_link.guild,
             "status": guild_link.status,
@@ -55,7 +57,8 @@ class InternOverviewStatusAPI(APIView):
             "weekly_streak": w_streak_val,
             "completed_tasks": completed_tasks,
             "complexity_score": complexity_score,
-            "score": score
+            "score": score,
+            "total_interns": total_interns
         }
         return CustomResponse(response=data).get_success_response()
 
