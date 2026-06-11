@@ -261,7 +261,7 @@ class EventListItemSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'slug', 'cover_image',
-            'status', 'scope', 'start_datetime', 'end_datetime',
+            'status', 'scope', 'event_scope', 'start_datetime', 'end_datetime',
             'venue', 'organizer', 'is_featured', 'is_collaboration',
             'interest_count', 'min_karma', 'tags', 'user_limit',
             'category_id', 'category_name', 'viewer_interest_status',
@@ -330,7 +330,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description',
             'cover_image', 'banner_image', 'category_id', 'category_name',
-            'status', 'scope', 'scope_org', 'scope_ig', 'scope_ci_id',
+            'status', 'scope', 'event_scope', 'scope_org', 'scope_ig', 'scope_ci_id',
             'organizer', 'venue',
             'start_datetime', 'end_datetime',
             'registration_url', 'registration_deadline', 'min_karma',
@@ -453,6 +453,7 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'scope', 'scope_org', 'scope_ig', 'scope_ci_id',
             'organiser_type', 'organiser_ig', 'organiser_org', 'organiser_ci_id',
             'is_collaboration', 'is_featured', 'tags', 'user_limit',
+            'event_scope',
         ]
         extra_kwargs = {
             'description': {'required': False, 'allow_null': True},
@@ -477,6 +478,8 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'is_featured': {'required': False},
             'tags': {'required': False, 'allow_null': True},
             'user_limit': {'required': False},
+            # event_scope is required on create; on PATCH it is optional
+            'event_scope': {'required': False},
         }
 
     def validate_category(self, value):
@@ -499,7 +502,7 @@ class EventWriteSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         start = attrs.get('start_datetime')
         end = attrs.get('end_datetime')
-        
+
         # In a partial update (PATCH), if only one is provided, compare against the existing instance
         if self.instance:
             if not start:
@@ -507,9 +510,31 @@ class EventWriteSerializer(serializers.ModelSerializer):
             if not end:
                 end = self.instance.end_datetime
 
-        if start and end and end <= start:
-            raise serializers.ValidationError({'end_datetime': 'Must be after start_datetime.'})
-            
+        if start and end:
+            # End date must not be before the start date
+            if end.date() < start.date():
+                raise serializers.ValidationError(
+                    {'end_datetime': 'End date cannot be before the start date.'}
+                )
+            # For same-day events, end time must be strictly after start time
+            if end.date() == start.date() and end <= start:
+                raise serializers.ValidationError(
+                    {'end_datetime': 'For same-day events, end time must be after start time.'}
+                )
+
+        # event_scope is required on creation (POST), optional on PATCH
+        if not self.instance and not attrs.get('event_scope'):
+            raise serializers.ValidationError(
+                {'event_scope': 'This field is required. Allowed values: maker, coder, manager, creative.'}
+            )
+
+        # Validate event_scope value against the allowed enum choices
+        event_scope = attrs.get('event_scope')
+        if event_scope and event_scope not in Event.EventScope.values:
+            raise serializers.ValidationError(
+                {'event_scope': f'Invalid value. Allowed: {", ".join(Event.EventScope.values)}.'}
+            )
+
         # Enforce Campus Scope Ownership Validation
         organiser_type = attrs.get('organiser_type', self.instance.organiser_type if self.instance else None)
         scope = attrs.get('scope', self.instance.scope if self.instance else None)
