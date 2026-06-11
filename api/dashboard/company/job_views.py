@@ -346,7 +346,7 @@ class TrackJobViewAPIView(APIView):
 
     Increments the view count for a specific job listing.
     """
-    permission_classes = [CustomizePermission]
+    permission_classes = []
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -354,15 +354,8 @@ class TrackJobViewAPIView(APIView):
     )
     def post(self, request, job_id):
         try:
-            user_id = JWTUtils.fetch_user_id(request)
-            company = _get_company_for_user(user_id)
-            if not company:
-                return CustomResponse(
-                    general_message="Company profile not found or access denied."
-                ).get_failure_response(status_code=404)
-
             # Get the job
-            job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
+            job = CompanyJob.objects.filter(id=job_id, status='Active', is_deleted=False).first()
             if not job:
                 return CustomResponse(
                     general_message="Job not found or access denied.",
