@@ -212,6 +212,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         mentor_tier = validated_data.pop("mentor_tier", None)
         ig_ids      = validated_data.pop("ig_ids", []) or []
         org         = validated_data.pop("_org", None)
+        org_id      = validated_data.pop("org_id", None)
         is_mentor_role = validated_data.pop("_is_mentor_role", False)
         is_intern_role = validated_data.pop("_is_intern_role", False)
         admin_user_id  = JWTUtils.fetch_user_id(self.context.get("request"))
