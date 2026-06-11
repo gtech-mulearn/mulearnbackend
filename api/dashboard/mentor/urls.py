@@ -30,4 +30,6 @@ urlpatterns = [
     path('tasks/ig-dropdown/',   task_views.MentorIGDropdownAPI.as_view(),       name='mentor-task-ig-dropdown'),
     path('tasks/',               task_views.MentorTaskListCreateAPI.as_view(),    name='mentor-task-list-create'),
     path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
+    path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
+    path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
 ]
