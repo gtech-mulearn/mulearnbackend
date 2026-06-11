@@ -343,6 +343,10 @@ class UserRole(APIView):
         # the UserMentor profile was freshly created or already existed.
         if hasattr(role_link, '_mentor_profile_created'):
             response_data["mentor_profile_created"] = role_link._mentor_profile_created
+        # If this was an Intern role assignment, tell the admin whether
+        # the UserInternGuildLink was freshly created or an existing record was reactivated.
+        if hasattr(role_link, '_intern_guild_created'):
+            response_data["intern_guild_created"] = role_link._intern_guild_created
 
         return CustomResponse(
             general_message="Role Added Successfully",
