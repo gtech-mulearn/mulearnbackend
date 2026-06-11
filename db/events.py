@@ -40,6 +40,12 @@ class Event(models.Model):
         COMPANY = 'company', 'Company'
         ADMIN = 'admin', 'Admin'
 
+    class EventScope(models.TextChoices):
+        MAKER = 'maker', 'Maker'
+        CODER = 'coder', 'Coder'
+        MANAGER = 'manager', 'Manager'
+        CREATIVE = 'creative', 'Creative'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)
     slug = models.CharField(max_length=220, unique=True, db_index=True)
@@ -93,6 +99,11 @@ class Event(models.Model):
         db_column='organiser_org_id', related_name='event_organiser_org'
     )
     organiser_ci_id = models.CharField(max_length=36, blank=True, null=True)  # campus_ig reference
+
+    # Event scope (audience type)
+    event_scope = models.CharField(
+        max_length=20, choices=EventScope.choices
+    )
 
     # Flags & counters
     is_featured = models.BooleanField(default=False)
