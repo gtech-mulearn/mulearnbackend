@@ -179,9 +179,10 @@ class DiscordWebhooks:
         content = f"{category}<|=|>{action}"
         for value in values:
             content = f"{content}<|=|>{value}"
-        url = config("DISCORD_WEBHOOK_LINK")
-        data = {"content": content}
-        requests.post(url, json=data)
+        url = config("DISCORD_WEBHOOK_LINK", default="")
+        if url:
+            data = {"content": content}
+            requests.post(url, json=data)
 
 
 class ImportCSV:
