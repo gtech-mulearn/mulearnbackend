@@ -575,3 +575,200 @@ class MentorActivitySerializer(serializers.Serializer):
     date = serializers.DateTimeField()
     status = serializers.CharField(allow_null=True, required=False)
 
+
+class AdminAssignMentorSerializer(serializers.Serializer):
+    """
+    Validates and performs bulk admin assignment of users as mentors.
+
+    The caller supplies a list of user_muids plus tier-specific fields.
+    All DB side-effects for every user in the list are executed inside a
+    single atomic transaction — if validation passes for the whole batch.
+    """
+
+    from db.user import User as _User
+    from db.organization import Organization as _Organization
+    from utils.types import OrganizationType as _OrganizationType
+
+    user_muids   = serializers.ListField(
+        child=serializers.CharField(),
+        min_length=1,
+        help_text="List of user muids to assign as mentor."
+    )
+    mentor_tier  = serializers.ChoiceField(choices=UserMentor.MentorTier.choices)
+    org_id       = serializers.CharField(required=False, allow_null=True, default=None)
+    ig_ids       = serializers.ListField(
+        child=serializers.CharField(),
+        required=False,
+        allow_empty=True,
+        default=list,
+        help_text="List of InterestGroup UUIDs — required for IG_MENTOR tier."
+    )
+    about        = serializers.CharField(required=False, allow_blank=True, default=None)
+    expertise    = serializers.CharField(required=False, allow_blank=True, default=None)
+    hours        = serializers.IntegerField(required=False, min_value=0, default=0)
+
+    def validate(self, data):
+        from db.user import User
+        from db.organization import Organization
+        from utils.types import OrganizationType
+
+        tier   = data["mentor_tier"]
+        errors = {}
+
+        # ── Resolve all user_muids ──────────────────────────────────────────
+        resolved_users = {}
+        invalid_muids  = []
+        for muid in data["user_muids"]:
+            user = User.objects.filter(muid=muid, suspended_at__isnull=True).first()
+            if user is None:
+                invalid_muids.append(muid)
+            else:
+                resolved_users[muid] = user
+
+        if invalid_muids:
+            errors["user_muids"] = (
+                f"The following muids are invalid or belong to suspended users: "
+                f"{', '.join(invalid_muids)}"
+            )
+
+        # ── Tier-specific validation ────────────────────────────────────────
+        if tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR):
+            org_id = data.get("org_id")
+            if not org_id:
+                errors["org_id"] = f"org_id is required for {tier}."
+            else:
+                expected_org_type = (
+                    OrganizationType.COLLEGE.value
+                    if tier == UserMentor.MentorTier.CAMPUS_MENTOR
+                    else OrganizationType.COMPANY.value
+                )
+                org = Organization.objects.filter(id=org_id, org_type=expected_org_type).first()
+                if org is None:
+                    errors["org_id"] = (
+                        f"org_id must reference a valid {expected_org_type} organisation."
+                    )
+                else:
+                    data["_org"] = org
+
+        if tier == UserMentor.MentorTier.IG_MENTOR:
+            ig_ids = data.get("ig_ids") or []
+            if not ig_ids:
+                errors["ig_ids"] = "ig_ids (non-empty list) is required for IG_MENTOR."
+            else:
+                invalid_igs = [
+                    ig_id for ig_id in ig_ids
+                    if not InterestGroup.objects.filter(id=ig_id).exists()
+                ]
+                if invalid_igs:
+                    errors["ig_ids"] = (
+                        f"The following IG IDs are invalid: {', '.join(invalid_igs)}"
+                    )
+
+        if errors:
+            raise serializers.ValidationError(errors)
+
+        data["_resolved_users"] = resolved_users
+        return data
+
+    def create(self, validated_data):
+        """
+        Atomically create/update UserMentor records + all linked DB objects
+        for every user in the bulk list.
+        Returns the list of muids that were successfully assigned.
+        """
+        admin_id      = self.context["user_id"]
+        tier          = validated_data["mentor_tier"]
+        org           = validated_data.get("_org")
+        ig_ids        = validated_data.get("ig_ids") or []
+        resolved_users = validated_data["_resolved_users"]
+        now           = DateTimeUtils.get_current_utc_time()
+
+        # Fetch the platform-wide Mentor role once (shared across all users)
+        mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+
+        with transaction.atomic():
+            for muid, user in resolved_users.items():
+                # ── 1. Create / update UserMentor record ───────────────────
+                mentor_record, _ = UserMentor.objects.get_or_create(
+                    user=user,
+                    mentor_tier=tier,
+                    org=org,
+                    defaults={
+                        "status":      UserMentor.Status.APPROVED,
+                        "about":       validated_data.get("about"),
+                        "expertise":   validated_data.get("expertise"),
+                        "hours":       validated_data.get("hours", 0),
+                        "preferred_ig_ids": ig_ids if ig_ids else None,
+                        "verified_by_id":   admin_id,
+                        "verified_at":      now,
+                        "updated_by_id":    admin_id,
+                        "updated_at":       now,
+                        "created_by_id":    admin_id,
+                        "created_at":       now,
+                    },
+                )
+                # Idempotent: if it already exists, force-approve it
+                if mentor_record.status != UserMentor.Status.APPROVED:
+                    mentor_record.status       = UserMentor.Status.APPROVED
+                    mentor_record.verified_by_id = admin_id
+                    mentor_record.verified_at  = now
+                    mentor_record.updated_by_id = admin_id
+                    mentor_record.updated_at   = now
+                    mentor_record.save(update_fields=[
+                        "status", "verified_by_id", "verified_at",
+                        "updated_by_id", "updated_at",
+                    ])
+
+                # ── 2. Assign global Mentor role ────────────────────────────
+                if mentor_role:
+                    role_link, created = UserRoleLink.objects.get_or_create(
+                        user=user,
+                        role=mentor_role,
+                        defaults={
+                            "verified":    True,
+                            "created_by_id": admin_id,
+                            "created_at":  now,
+                        },
+                    )
+                    if not created and not role_link.verified:
+                        role_link.verified = True
+                        role_link.save(update_fields=["verified"])
+
+                # ── 3. Tier-specific side-effects ───────────────────────────
+                if tier == UserMentor.MentorTier.IG_MENTOR and ig_ids:
+                    for ig_id in ig_ids:
+                        ig = InterestGroup.objects.filter(id=ig_id).first()
+                        if ig:
+                            ig_link, created = UserIgLink.objects.get_or_create(
+                                user=user,
+                                ig=ig,
+                                defaults={
+                                    "assignment_type": UserIgLink.AssignmentType.MENTOR,
+                                    "is_active":       True,
+                                    "assigned_by_id":  admin_id,
+                                    "created_by_id":   admin_id,
+                                    "created_at":      now,
+                                },
+                            )
+                            if not created:
+                                ig_link.assignment_type = UserIgLink.AssignmentType.MENTOR
+                                ig_link.is_active       = True
+                                ig_link.assigned_by_id  = admin_id
+                                ig_link.save(update_fields=["assignment_type", "is_active", "assigned_by_id"])
+
+                elif tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR) and org:
+                    from db.organization import UserOrganizationLink
+                    org_link, created = UserOrganizationLink.objects.get_or_create(
+                        user=user,
+                        org=org,
+                        defaults={
+                            "verified":    True,
+                            "created_by_id": admin_id,
+                            "created_at":  now,
+                        },
+                    )
+                    if not created and not org_link.verified:
+                        org_link.verified = True
+                        org_link.save(update_fields=["verified"])
+
+        return list(resolved_users.keys())
