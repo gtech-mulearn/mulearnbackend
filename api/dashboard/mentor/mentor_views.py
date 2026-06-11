@@ -372,3 +372,134 @@ class MentorOverviewAPI(APIView):
             general_message="Mentor dashboard fetched successfully.",
             response={"scopes": scopes}
         ).get_success_response()
+
+
+class AdminAssignMentorAPI(APIView):
+    """
+    Admin-only endpoint for bulk assigning / revoking mentor status.
+
+    POST  /api/v1/mentor/admin/assign/
+        Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+        Assigns all listed users as mentors atomically.
+
+    DELETE /api/v1/mentor/admin/assign/<user_muid>/
+        Revokes mentor assignment for the given user.
+        Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+    """
+    permission_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=["Dashboard - Mentor"],
+        description="Bulk assign users as mentors for a specific tier (admin only).",
+        request=serializers.AdminAssignMentorSerializer,
+        responses={200: None},
+    )
+    def post(self, request):
+        admin_id = JWTUtils.fetch_user_id(request)
+
+        ser = serializers.AdminAssignMentorSerializer(
+            data=request.data,
+            context={"user_id": admin_id},
+        )
+        if not ser.is_valid():
+            return CustomResponse(message=ser.errors).get_failure_response()
+
+        assigned_muids = ser.save()
+        return CustomResponse(
+            general_message="Mentors assigned successfully.",
+            response={"assigned_user_muids": assigned_muids},
+        ).get_success_response()
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=["Dashboard - Mentor"],
+        description=(
+            "Revoke mentor assignment for a user (admin only). "
+            "Supply ?mentor_tier=<tier> to target a single tier; "
+            "omit it to revoke all tiers."
+        ),
+        parameters=[
+            OpenApiParameter(
+                name="mentor_tier",
+                type=OpenApiTypes.STR,
+                location=OpenApiParameter.QUERY,
+                required=False,
+                description="Optional tier to restrict revocation scope.",
+            )
+        ],
+        responses={200: None},
+    )
+    def delete(self, request, user_muid):
+        from db.user import User, UserRoleLink, Role
+        from db.task import UserIgLink
+        from utils.types import RoleType as _RoleType
+        from django.db import transaction
+
+        admin_id = JWTUtils.fetch_user_id(request)
+
+        # Resolve user
+        user = User.objects.filter(muid=user_muid).first()
+        if not user:
+            return CustomResponse(
+                general_message=f"No user found with muid '{user_muid}'."
+            ).get_failure_response(status_code=404)
+
+        mentor_tier = request.query_params.get("mentor_tier")
+
+        # Build the queryset of UserMentor records to revoke
+        qs = UserMentor.objects.filter(user=user, status=UserMentor.Status.APPROVED)
+        if mentor_tier:
+            qs = qs.filter(mentor_tier=mentor_tier)
+
+        records = list(qs)
+        if not records:
+            return CustomResponse(
+                general_message="No approved mentor records found to revoke."
+            ).get_failure_response(status_code=404)
+
+        now = None
+        try:
+            from utils.utils import DateTimeUtils as _DTU
+            now = _DTU.get_current_utc_time()
+        except Exception:
+            from django.utils import timezone
+            now = timezone.now()
+
+        with transaction.atomic():
+            for record in records:
+                record.status = UserMentor.Status.REJECTED
+                record.updated_by_id = admin_id
+                record.updated_at = now
+                record.save(update_fields=["status", "updated_by_id", "updated_at"])
+
+                # Deactivate IG links for IG_MENTOR
+                if record.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                    UserIgLink.objects.filter(
+                        user=user,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                    ).update(is_active=False)
+
+                # Unverify org links for campus/company mentors
+                if record.mentor_tier in (
+                    UserMentor.MentorTier.CAMPUS_MENTOR,
+                    UserMentor.MentorTier.COMPANY_MENTOR,
+                ) and record.org:
+                    from db.organization import UserOrganizationLink
+                    UserOrganizationLink.objects.filter(
+                        user=user,
+                        org=record.org,
+                    ).update(verified=False)
+
+            # Strip the Mentor role only if no approved mentor records remain at all
+            remaining_approved = UserMentor.objects.filter(
+                user=user, status=UserMentor.Status.APPROVED
+            ).exists()
+            if not remaining_approved:
+                mentor_role = Role.objects.filter(title=_RoleType.MENTOR.value).first()
+                if mentor_role:
+                    UserRoleLink.objects.filter(user=user, role=mentor_role).delete()
+
+        return CustomResponse(
+            general_message="Mentor assignment revoked successfully."
+        ).get_success_response()
