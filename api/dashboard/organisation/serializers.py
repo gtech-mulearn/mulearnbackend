@@ -47,7 +47,7 @@ class InstitutionSerializer(serializers.ModelSerializer):
         ]
 
     def get_user_count(self, obj):
-        return obj.user_organization_link_org.annotate(user_count=Count("user")).count()
+        return obj.user_organization_link_org.filter(verified=True).count()
 
 
 # class InstitutionSerializer(serializers.ModelSerializer):

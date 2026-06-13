@@ -238,10 +238,10 @@ class InstitutionCSVAPI(APIView):
             Organization.objects.filter(org_type=org_type)
             .select_related(
                 "affiliation",
-                # "district__zone__state__country",
-                # "district__zone__state",
-                # "district__zone",
-                # "district",
+                "district__zone__state__country",
+                "district__zone__state",
+                "district__zone",
+                "district",
             )
             .prefetch_related(
                 Prefetch(
