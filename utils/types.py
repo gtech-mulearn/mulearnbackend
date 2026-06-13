@@ -281,10 +281,10 @@ class InternSubmissionStatus(Enum):
     REJECTED = "REJECTED"
 
 class InternLeaveType(Enum):
-    SICK = ("SICK", 2)        # 2/month
-    CASUAL = ("CASUAL", 1)    # 1/month
-    EMERGENCY = ("EMERGENCY", 0)  # no cap
-    WFH = ("WFH", 2)         # 2/week
+    SICK = "SICK"
+    CASUAL = "CASUAL"
+    EMERGENCY = "EMERGENCY"
+    WFH = "WFH"
 
 class InternLeaveStatus(Enum):
     PENDING = "PENDING"

@@ -18,6 +18,20 @@ class InternLeaveRequestSerializer(serializers.ModelSerializer):
             if start_date > end_date:
                 raise serializers.ValidationError({"start_date": "Start date must be before or equal to end date."})
             
+            user_id = self.context.get('user_id')
+            if user_id:
+                overlapping_leaves = InternLeaveRequest.objects.filter(
+                    user_id=user_id,
+                    status__in=[InternLeaveStatus.PENDING.value, InternLeaveStatus.APPROVED.value],
+                    start_date__lte=end_date,
+                    end_date__gte=start_date
+                ).exists()
+                
+                if overlapping_leaves:
+                    raise serializers.ValidationError(
+                        {"date_range": "You already have a pending or approved leave request during this period."}
+                    )
+            
             if 'duration_days' not in data or data.get('duration_days') is None:
                 data['duration_days'] = (end_date - start_date).days + 1
         return data
