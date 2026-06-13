@@ -135,10 +135,14 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
     )
     # Required for CAMPUS_MENTOR / COMPANY_MENTOR tiers.
     org_id = serializers.CharField(required=False, allow_null=True, default=None)
+    # Required when assigning the Company role — name and description for the company profile.
+    company_name = serializers.CharField(required=False, allow_null=True, default=None)
+    company_description = serializers.CharField(required=False, allow_null=True, default=None)
 
     class Meta:
         model = UserRoleLink
-        fields = ["user_id", "role_id", "guild", "mentor_tier", "ig_ids", "org_id"]
+        fields = ["user_id", "role_id", "guild", "mentor_tier", "ig_ids", "org_id",
+                  "company_name", "company_description"]
 
     def validate(self, data):
         from db.task import InterestGroup
@@ -152,9 +156,10 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         role_id     = data.get("role", {}).get("id") if isinstance(data.get("role"), dict) else None
 
         # Look up the actual role object for title check
-        role_obj      = Role.objects.filter(id=role_id).first() if role_id else None
+        role_obj       = Role.objects.filter(id=role_id).first() if role_id else None
         is_mentor_role = role_obj and role_obj.title == RoleType.MENTOR.value
         is_intern_role = role_obj and role_obj.title == RoleType.INTERN.value
+        is_company_role = role_obj and role_obj.title == RoleType.COMPANY.value
 
         errors = {}
 
@@ -200,22 +205,33 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
         if is_intern_role and not guild:
             errors["guild"] = "guild is required when assigning the Intern role."
 
+        # ── Company validation ──────────────────────────────────────────────
+        if is_company_role:
+            if not data.get("company_name"):
+                errors["company_name"] = "company_name is required when assigning the Company role."
+            if not data.get("company_description"):
+                errors["company_description"] = "company_description is required when assigning the Company role."
+
         if errors:
             raise serializers.ValidationError(errors)
 
-        data['_is_mentor_role'] = is_mentor_role
-        data['_is_intern_role'] = is_intern_role
+        data['_is_mentor_role']  = is_mentor_role
+        data['_is_intern_role']  = is_intern_role
+        data['_is_company_role'] = is_company_role
         return data
 
     def create(self, validated_data):
-        guild       = validated_data.pop("guild", None)
-        mentor_tier = validated_data.pop("mentor_tier", None)
-        ig_ids      = validated_data.pop("ig_ids", []) or []
-        org         = validated_data.pop("_org", None)
-        org_id      = validated_data.pop("org_id", None)
-        is_mentor_role = validated_data.pop("_is_mentor_role", False)
-        is_intern_role = validated_data.pop("_is_intern_role", False)
-        admin_user_id  = JWTUtils.fetch_user_id(self.context.get("request"))
+        guild               = validated_data.pop("guild", None)
+        mentor_tier         = validated_data.pop("mentor_tier", None)
+        ig_ids              = validated_data.pop("ig_ids", []) or []
+        org                 = validated_data.pop("_org", None)
+        org_id              = validated_data.pop("org_id", None)
+        company_name        = validated_data.pop("company_name", None)
+        company_description = validated_data.pop("company_description", None)
+        is_mentor_role  = validated_data.pop("_is_mentor_role", False)
+        is_intern_role  = validated_data.pop("_is_intern_role", False)
+        is_company_role = validated_data.pop("_is_company_role", False)
+        admin_user_id   = JWTUtils.fetch_user_id(self.context.get("request"))
 
         target_user_id = validated_data["user"]["id"]
         role_id        = validated_data["role"]["id"]
@@ -318,6 +334,78 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                 role_link._mentor_profile_created = created
             else:
                 role_link._mentor_profile_created = False
+
+            # --- Company-specific provisioning ---
+            # When the Company role is assigned, auto-create (or verify) the
+            # Company profile, an Organization row, and a UserOrganizationLink.
+            if is_company_role and company_name and company_description:
+                from db.company import Company
+                from db.organization import Organization as _Org, UserOrganizationLink as _UOL
+                from django.utils.text import slugify
+                from utils.types import OrganizationType
+
+                # 1. Ensure a unique slug for the company
+                base_slug = slugify(company_name)
+                slug = base_slug
+                counter = 1
+                while Company.objects.filter(slug=slug).exclude(
+                    company_user_id=target_user_id
+                ).exists():
+                    slug = f"{base_slug}-{counter}"
+                    counter += 1
+
+                # 2. Create or update the Company record → immediately verified
+                company_obj, company_created = Company.objects.get_or_create(
+                    company_user_id=target_user_id,
+                    defaults={
+                        "name":        company_name,
+                        "description": company_description,
+                        "slug":        slug,
+                        "status":      "verified",
+                        "verified_by": admin_user_id,
+                        "verified_at": now,
+                        "updated_by":  admin_user_id,
+                    },
+                )
+                if not company_created and company_obj.status != "verified":
+                    company_obj.status      = "verified"
+                    company_obj.verified_by = admin_user_id
+                    company_obj.verified_at = now
+                    company_obj.updated_by  = admin_user_id
+                    company_obj.save(update_fields=[
+                        "status", "verified_by", "verified_at", "updated_by"
+                    ])
+
+                # 3. Ensure an Organization row exists for this company
+                org_obj, _ = _Org.objects.get_or_create(
+                    title=company_obj.name,
+                    org_type=OrganizationType.COMPANY.value,
+                    defaults={
+                        "code":          company_obj.slug[:12],
+                        "created_by_id": admin_user_id,
+                        "updated_by_id": admin_user_id,
+                        "created_at":    now,
+                        "updated_at":    now,
+                    },
+                )
+
+                # 4. Link the user to the Organization (verified)
+                org_link, _ = _UOL.objects.get_or_create(
+                    user_id=target_user_id,
+                    org=org_obj,
+                    defaults={
+                        "verified":      True,
+                        "created_by_id": admin_user_id,
+                        "created_at":    now,
+                    },
+                )
+                if not org_link.verified:
+                    org_link.verified = True
+                    org_link.save(update_fields=["verified"])
+
+                role_link._company_created = company_created
+            else:
+                role_link._company_created = False
 
             # --- Intern-specific provisioning ---
             # When the Intern role is assigned, automatically create (or reactivate)
