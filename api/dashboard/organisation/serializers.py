@@ -129,6 +129,7 @@ class InstitutionCreateUpdateSerializer(serializers.ModelSerializer):
         user_id = self.context.get("user_id")
         instance.title = validated_data.get("title", instance.title)
         instance.code = validated_data.get("code", instance.code)
+        instance.org_type = validated_data.get("org_type", instance.org_type)
         instance.affiliation = validated_data.get("affiliation", instance.affiliation)
         instance.district = validated_data.get("district", instance.district)
         instance.updated_by_id = user_id
