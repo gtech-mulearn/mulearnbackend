@@ -1,4 +1,5 @@
 import uuid
+from django.db.models import Count, Q
 
 from rest_framework import status
 from rest_framework.views import APIView
@@ -116,6 +117,10 @@ class TaskListAPI(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+        ).prefetch_related(
+            "skill_links__skill"
+        ).annotate(
+            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
         ).filter(active=True)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -359,7 +364,55 @@ class TaskListCSV(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+        ).prefetch_related(
+            "skill_links__skill"
+        ).annotate(
+            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
         ).filter(active=True)
+
+        task_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset,
+            request,
+            search_fields=[
+                "hashtag",
+                "title",
+                "description",
+                "karma",
+                "channel__name",
+                "type__title",
+                "active",
+                "variable_karma",
+                "usage_count",
+                "level__name",
+                "org__title",
+                "ig__name",
+                "event",
+                "updated_at",
+                "updated_by__full_name",
+                "created_by__full_name",
+                "created_at",
+            ],
+            sort_fields={
+                "hashtag": "hashtag",
+                "title": "title",
+                "description": "description",
+                "karma": "karma",
+                "channels": "channel__name",
+                "type": "type__title",
+                "active": "active",
+                "variable_karma": "variable_karma",
+                "usage_count": "usage_count",
+                "level": "level__name",
+                "org": "org__title",
+                "ig": "ig__name",
+                "event": "event",
+                "updated_at": "updated_at",
+                "updated_by": "updated_by__full_name",
+                "created_by": "created_by__full_name",
+                "created_at": "created_at",
+            },
+            is_pagination=False,
+        )
 
         task_serializer_data = TaskListSerializer(task_queryset, many=True).data
 
@@ -383,9 +436,8 @@ class ImportTaskListCSV(APIView):
         responses={200: TaskImportSerializer},
     )
     def post(self, request):
-        try:
-            file_obj = request.FILES["task_list"]
-        except KeyError:
+        file_obj = request.FILES.get("task_list", request.FILES.get("file"))
+        if not file_obj:
             return CustomResponse(
                 general_message="File not found."
             ).get_failure_response()
@@ -536,7 +588,15 @@ class ImportTaskListCSV(APIView):
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
                 row["org_id"] = org_id or None
-                valid_rows.append(row)
+                
+                valid_fields = [
+                    "id", "hashtag", "discord_link", "title", "description", 
+                    "karma", "channel_id", "type_id", "org_id", "event", "level_id", "ig_id", 
+                    "active", "variable_karma", "usage_count", "created_by_id", 
+                    "updated_by_id", "created_at", "updated_at"
+                ]
+                clean_row = {k: v for k, v in row.items() if k in valid_fields}
+                valid_rows.append(clean_row)
 
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
         success_data = []
