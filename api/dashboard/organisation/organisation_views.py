@@ -109,7 +109,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
                 )
 
             if (
-                request.data.get("orgType") != OrganizationType.COMMUNITY.value
+                request.data.get("org_type") != OrganizationType.COMMUNITY.value
                 and old_type == OrganizationType.COMMUNITY.value
             ):
                 DiscordWebhooks.general_updates(
@@ -120,7 +120,7 @@ class InstitutionPostUpdateDeleteAPI(APIView):
 
             if (
                 old_type != OrganizationType.COMMUNITY.value
-                and request.data.get("orgType") == OrganizationType.COMMUNITY.value
+                and request.data.get("org_type") == OrganizationType.COMMUNITY.value
             ):
                 title = request.data.get("title") or old_title
                 DiscordWebhooks.general_updates(
@@ -238,10 +238,10 @@ class InstitutionCSVAPI(APIView):
             Organization.objects.filter(org_type=org_type)
             .select_related(
                 "affiliation",
-                # "district__zone__state__country",
-                # "district__zone__state",
-                # "district__zone",
-                # "district",
+                "district__zone__state__country",
+                "district__zone__state",
+                "district__zone",
+                "district",
             )
             .prefetch_related(
                 Prefetch(

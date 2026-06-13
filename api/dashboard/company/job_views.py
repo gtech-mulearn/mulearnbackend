@@ -355,7 +355,7 @@ class TrackJobViewAPIView(APIView):
     def post(self, request, job_id):
         try:
             # Get the job
-            job = CompanyJob.objects.filter(id=job_id, is_deleted=False).first()
+            job = CompanyJob.objects.filter(id=job_id, status='Active', is_deleted=False).first()
             if not job:
                 return CustomResponse(
                     general_message="Job not found or access denied.",

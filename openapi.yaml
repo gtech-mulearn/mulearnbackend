@@ -12296,6 +12296,104 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/mentor/admin/assign/:
+    post:
+      operationId: dashboard_mentor_admin_assign_create
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_mentor_admin_assign_destroy
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/mentor/admin/assign/{user_muid}/:
+    post:
+      operationId: dashboard_mentor_admin_assign_create_2
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      parameters:
+      - in: path
+        name: user_muid
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_mentor_admin_assign_destroy_2
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      parameters:
+      - in: path
+        name: user_muid
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/dashboard/mentor/availability/:
     get:
       operationId: dashboard_mentor_availability_list
@@ -23114,6 +23212,25 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/public/college-details/{college_code}/:
+    get:
+      operationId: public_college_details_retrieve
+      parameters:
+      - in: path
+        name: college_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - Public
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/public/college-wise-lc-report/:
     get:
       operationId: public_college_wise_lc_report_retrieve
@@ -31061,6 +31178,24 @@ components:
         user_email:
           type: string
           readOnly: true
+        muid:
+          type: string
+          readOnly: true
+        about:
+          type: string
+          nullable: true
+          maxLength: 1000
+        expertise:
+          type: string
+          nullable: true
+        verification_note:
+          type: string
+          nullable: true
+          maxLength: 500
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
         mentor_tier:
           enum:
           - IG_MENTOR
@@ -31094,6 +31229,7 @@ components:
           format: date-time
           nullable: true
       required:
+      - muid
       - user_email
       - user_full_name
       - user_id
