@@ -76,15 +76,15 @@ class TaskListSerializer(serializers.ModelSerializer):
         ]
 
     def get_total_karma_gainers(self, obj):
+        if hasattr(obj, 'total_karma_gainers_count'):
+            return obj.total_karma_gainers_count
         return obj.karma_activity_log_task.filter(appraiser_approved=True).count()
 
     def get_skills(self, obj):
         """Get all skills linked to this task"""
-        from db.skill import TaskSkillLink
-        skill_links = TaskSkillLink.objects.filter(task_id=obj.id).select_related('skill')
         return [
             {'id': link.skill.id, 'name': link.skill.name, 'code': link.skill.code}
-            for link in skill_links
+            for link in obj.skill_links.all()
         ]
 
 
