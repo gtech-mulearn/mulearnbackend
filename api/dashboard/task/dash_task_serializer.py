@@ -13,6 +13,7 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
 
     class Meta:
         model = TaskList
@@ -39,6 +40,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
     total_karma_gainers = serializers.SerializerMethodField()
     skills = serializers.SerializerMethodField()
 
@@ -87,6 +89,8 @@ class TaskListSerializer(serializers.ModelSerializer):
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
+
     class Meta:
         model = TaskList
         fields = (
@@ -201,6 +205,6 @@ class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
         instance.title = updated_title
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.updated_by_id = user_id
-        instance.updated_at = (DateTimeUtils.get_current_utc_time(),)
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
