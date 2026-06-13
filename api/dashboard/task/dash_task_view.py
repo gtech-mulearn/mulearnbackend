@@ -1,5 +1,6 @@
 import uuid
 
+from rest_framework import status
 from rest_framework.views import APIView
 
 from db.organization import Organization
@@ -245,7 +246,13 @@ class TaskAPI(APIView):
         responses={200: TaskModifySerializer},
     )
     def get(self, request, task_id):
-        task_queryset = TaskList.objects.get(pk=task_id)
+        try:
+            task_queryset = TaskList.objects.get(pk=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         task_serializer = TaskModifySerializer(task_queryset, many=False)
         return CustomResponse(response=task_serializer.data).get_success_response()
 
@@ -274,7 +281,12 @@ class TaskAPI(APIView):
             except:
                 skill_ids = None
 
-        task = TaskList.objects.get(pk=task_id)
+        try:
+            task = TaskList.objects.get(pk=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
         serializer = TaskModifySerializer(task, data=mutable_data, partial=True)
 
@@ -315,7 +327,13 @@ class TaskAPI(APIView):
         responses={200: TaskModifySerializer},
     )
     def delete(self, request, task_id):  # delete
-        task = TaskList.objects.get(id=task_id)
+        try:
+            task = TaskList.objects.get(id=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         task.delete()
 
         return CustomResponse(
@@ -404,6 +422,7 @@ class ImportTaskListCSV(APIView):
         excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
+        rows_to_validate = []
 
         hashtags_excel = set()
         hashtags_db = TaskList.objects.values_list("hashtag", flat=True)
@@ -418,17 +437,14 @@ class ImportTaskListCSV(APIView):
             if not hashtag:
                 row["error"] = "Missing hashtag."
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             elif hashtag in hashtags_excel:
                 row["error"] = f"Duplicate hashtag in excel: {hashtag}"
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             elif hashtag in hashtags_db:
                 row["error"] = f"Duplicate hashtag in database: {hashtag}"
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             else:
                 hashtags_excel.add(hashtag)
@@ -437,7 +453,6 @@ class ImportTaskListCSV(APIView):
             if not title:
                 row["error"] = "Missing title."
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
 
             level = row.get("level")
@@ -451,6 +466,7 @@ class ImportTaskListCSV(APIView):
             levels_to_fetch.add(level)
             igs_to_fetch.add(ig)
             orgs_to_fetch.add(org)
+            rows_to_validate.append(row)
 
         channels = Channel.objects.filter(name__in=channels_to_fetch).values(
             "id", "name"
@@ -475,7 +491,7 @@ class ImportTaskListCSV(APIView):
         orgs_dict = {org["code"]: org["id"] for org in orgs}
         events = Events.get_all_values()
 
-        for row in excel_data[1:]:
+        for row in rows_to_validate:
             level = row.pop("level")
             channel = row.pop("channel")
             task_type = row.pop("type")

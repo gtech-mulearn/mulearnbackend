@@ -1,12 +1,12 @@
 import uuid
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from rest_framework.views import APIView
 
 from db.user import Role, User, UserRoleLink
 from utils.permission import CustomizePermission, role_required, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
-from utils.utils import CommonUtils, DiscordWebhooks, ImportCSV
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, ImportCSV
 from . import dash_roles_serializer
 
 from openpyxl import load_workbook
@@ -243,8 +243,25 @@ class UserRoleLinkManagement(APIView):
     )
     def post(self, request, role_id):
         """
-        Assigns a large bunch of users a certain role
+        Assigns a large bunch of users a certain role.
+        Blocked for special roles (Mentor, Intern, Company) that require
+        per-user provisioning — use POST /dashboard/roles/user-role/ instead.
         """
+        # Guard: block bulk-assign for roles that require individual provisioning
+        _SPECIAL_ROLES = [
+            RoleType.MENTOR.value,
+            RoleType.INTERN.value,
+            RoleType.COMPANY.value,
+        ]
+        role_obj = Role.objects.filter(pk=role_id).first()
+        if role_obj and role_obj.title in _SPECIAL_ROLES:
+            return CustomResponse(
+                general_message=(
+                    f"The '{role_obj.title}' role cannot be bulk-assigned because it requires "
+                    f"additional provisioning. Use POST /dashboard/roles/user-role/ instead."
+                )
+            ).get_failure_response()
+
         request_data = request.data.copy()
         request_data["role"] = role_id
         request_data["created_by"] = JWTUtils.fetch_user_id(request)
@@ -347,6 +364,10 @@ class UserRole(APIView):
         # the UserInternGuildLink was freshly created or an existing record was reactivated.
         if hasattr(role_link, '_intern_guild_created'):
             response_data["intern_guild_created"] = role_link._intern_guild_created
+        # If this was a Company role assignment, tell the admin whether
+        # the Company profile was freshly created or an existing record was verified.
+        if hasattr(role_link, '_company_created'):
+            response_data["company_created"] = role_link._company_created
 
         return CustomResponse(
             general_message="Role Added Successfully",
@@ -358,21 +379,69 @@ class UserRole(APIView):
         responses={200: dash_roles_serializer.UserRoleCreateSerializer},
     )
     def delete(self, request):
-        serializer = dash_roles_serializer.UserRoleCreateSerializer(
-            data=request.data, context={"request": request}
-        )
+        user_id_str = request.data.get("user_id")
+        role_id     = request.data.get("role_id")
 
-        if not serializer.is_valid():
+        try:
+            user_role_link = UserRoleLink.objects.select_related("role", "user").get(
+                role_id=role_id, user_id=user_id_str
+            )
+        except UserRoleLink.DoesNotExist:
             return CustomResponse(
-                general_message=serializer.errors
+                general_message="Role link not found."
             ).get_failure_response()
 
-        user_id = request.data.get("user_id")
-        role_id = request.data.get("role_id")
+        role_title = user_role_link.role.title
+        user       = user_role_link.user
+        admin_id   = JWTUtils.fetch_user_id(request)
+        now        = DateTimeUtils.get_current_utc_time()
 
-        user_role_link = UserRoleLink.objects.get(role_id=role_id, user_id=user_id)
+        with transaction.atomic():
+            user_role_link.delete()
 
-        user_role_link.delete()
+            # ── Mentor cleanup ──────────────────────────────────────────────
+            if role_title == RoleType.MENTOR.value:
+                from db.user import UserMentor
+                from db.task import UserIgLink
+                mentor_records = UserMentor.objects.filter(
+                    user=user, status=UserMentor.Status.APPROVED
+                )
+                for record in mentor_records:
+                    record.status        = UserMentor.Status.REJECTED
+                    record.updated_by_id = admin_id
+                    record.updated_at    = now
+                    record.save(update_fields=["status", "updated_by_id", "updated_at"])
+
+                    if record.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                        UserIgLink.objects.filter(
+                            user=user,
+                            assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        ).update(is_active=False)
+
+                    if record.mentor_tier in (
+                        UserMentor.MentorTier.CAMPUS_MENTOR,
+                        UserMentor.MentorTier.COMPANY_MENTOR,
+                    ) and record.org:
+                        from db.organization import UserOrganizationLink
+                        UserOrganizationLink.objects.filter(
+                            user=user, org=record.org
+                        ).update(verified=False)
+
+            # ── Intern cleanup ──────────────────────────────────────────────
+            elif role_title == RoleType.INTERN.value:
+                from db.intern import UserInternGuildLink
+                from utils.types import InternGuildStatus
+                UserInternGuildLink.objects.filter(user=user).update(
+                    status=InternGuildStatus.INACTIVE.value,
+                    updated_by_id=admin_id,
+                )
+
+            # ── Company cleanup ──────────────────────────────────────────────
+            elif role_title == RoleType.COMPANY.value:
+                from db.company import Company
+                Company.objects.filter(
+                    company_user_id=user.id, status="verified"
+                ).update(status="suspended")
 
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_ROLE.value,

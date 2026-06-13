@@ -97,6 +97,10 @@ class CommonUtils:
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{csv_name}.csv"'
+
+        if not queryset:
+            return response
+
         fieldnames = list(queryset[0].keys())
         writer = csv.DictWriter(response, fieldnames=fieldnames)
         writer.writeheader()
