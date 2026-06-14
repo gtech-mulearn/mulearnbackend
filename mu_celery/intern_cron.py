@@ -93,6 +93,20 @@ def intern_daily_status_cron():
             # Leaving updated_by_id unchanged.
             intern.save(update_fields=['status'])
             
+    # 2.5. Handle approved leaves starting today: transition to ON_LEAVE
+    newly_on_leave = InternLeaveRequest.objects.filter(
+        status=InternLeaveStatus.APPROVED.value,
+        start_date__lte=today,
+        end_date__gte=today
+    ).values_list('user_id', flat=True)
+
+    for user_id in newly_on_leave:
+        guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
+        if guild_link and guild_link.status != InternGuildStatus.ON_LEAVE.value:
+            guild_link.previous_status = guild_link.status
+            guild_link.status = InternGuildStatus.ON_LEAVE.value
+            guild_link.save(update_fields=['status', 'previous_status'])
+            
     # 3. Handle ON_LEAVE -> ACTIVE restoration
     on_leave_interns = UserInternGuildLink.objects.filter(
         status=InternGuildStatus.ON_LEAVE.value
@@ -112,7 +126,11 @@ def intern_daily_status_cron():
         
         for intern in on_leave_interns:
             if intern.user_id not in active_leaves_today:
-                intern.status = InternGuildStatus.ACTIVE.value
-                # Limitation: No system-user convention exists for updated_by_id in cron jobs.
-                # Leaving updated_by_id unchanged.
-                intern.save(update_fields=['status'])
+                restored_status = intern.previous_status or InternGuildStatus.ACTIVE.value
+                valid_targets = [InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
+                if restored_status not in valid_targets:
+                    restored_status = InternGuildStatus.ACTIVE.value
+                
+                intern.status = restored_status
+                intern.previous_status = None
+                intern.save(update_fields=['status', 'previous_status'])

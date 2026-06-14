@@ -65,9 +65,11 @@ class ManageInternLeaveReviewAPI(APIView):
                 today = now().date()
                 if leave.start_date <= today <= leave.end_date:
                     guild_link = UserInternGuildLink.objects.filter(user_id=leave.user_id).first()
-                    if guild_link:
+                    if guild_link and guild_link.status != InternGuildStatus.ON_LEAVE.value:
+                        guild_link.previous_status = guild_link.status
                         guild_link.status = InternGuildStatus.ON_LEAVE.value
-                        guild_link.save()
+                        guild_link.updated_by_id = admin_id
+                        guild_link.save(update_fields=['status', 'previous_status', 'updated_by_id'])
                         
             elif action == "reject":
                 leave.status = InternLeaveStatus.REJECTED.value

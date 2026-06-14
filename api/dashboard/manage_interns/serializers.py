@@ -80,12 +80,17 @@ class ManageInternSerializer(serializers.ModelSerializer):
         user_id = self.context.get('user_id')
         validated_data['updated_by_id'] = user_id
         
+        old_status = instance.status
+        new_status = validated_data.get('status', old_status)
+        
+        if old_status == InternGuildStatus.ON_LEAVE.value and new_status != InternGuildStatus.ON_LEAVE.value:
+            validated_data['previous_status'] = None
+        
         with transaction.atomic():
             guild_link = super().update(instance, validated_data)
             
             # Sync user role based on status
-            status = validated_data.get('status', guild_link.status)
-            if status == InternGuildStatus.INACTIVE.value:
+            if new_status == InternGuildStatus.INACTIVE.value:
                 UserRoleLink.objects.filter(user=guild_link.user, role__title=RoleType.INTERN.value).delete()
             else:
                 intern_role = Role.objects.get(title=RoleType.INTERN.value)
