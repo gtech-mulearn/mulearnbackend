@@ -1,8 +1,8 @@
 from celery import shared_task
 from django.utils.timezone import now
 from datetime import timedelta
-from db.intern import UserInternGuildLink, InternDailyTimesheet
-from utils.types import InternGuildStatus
+from db.intern import UserInternGuildLink, InternDailyTimesheet, InternLeaveRequest
+from utils.types import InternGuildStatus, InternLeaveStatus
 
 @shared_task
 def intern_daily_status_cron():
@@ -18,6 +18,42 @@ def intern_daily_status_cron():
     
     today = now().date()
     
+    # 1. Batch fetch all timesheets for the last 10 days
+    date_range_start = today - timedelta(days=10)
+    active_intern_user_ids = list(active_interns.values_list('user_id', flat=True))
+    
+    # Using set of tuples for O(1) lookup
+    all_timesheets = set(
+        InternDailyTimesheet.objects.filter(
+            user_id__in=active_intern_user_ids,
+            entry_date__gte=date_range_start,
+            entry_date__lte=today
+        ).values_list('user_id', 'entry_date')
+    )
+    
+    # 2. Batch fetch all approved leaves for the last 10 days
+    approved_leaves_qs = InternLeaveRequest.objects.filter(
+        user_id__in=active_intern_user_ids,
+        status=InternLeaveStatus.APPROVED.value,
+        end_date__gte=date_range_start,
+        start_date__lte=today
+    ).values('user_id', 'start_date', 'end_date')
+    
+    # Map user_id to list of approved leaves
+    approved_leaves_by_user = {}
+    for leave in approved_leaves_qs:
+        user_id = leave['user_id']
+        if user_id not in approved_leaves_by_user:
+            approved_leaves_by_user[user_id] = []
+        approved_leaves_by_user[user_id].append((leave['start_date'], leave['end_date']))
+        
+    def is_on_leave(user_id, check_date):
+        leaves = approved_leaves_by_user.get(user_id, [])
+        for start, end in leaves:
+            if start <= check_date <= end:
+                return True
+        return False
+
     for intern in active_interns:
         missed_count = 0
         days_checked = 0
@@ -27,12 +63,16 @@ def intern_daily_status_cron():
             check_date = today - timedelta(days=days_back)
             days_back += 1
             
+            # Skip weekends
             if check_date.weekday() > 4:
                 continue
                 
-            has_timesheet = InternDailyTimesheet.objects.filter(
-                user_id=intern.user_id, entry_date=check_date
-            ).exists()
+            # Skip approved leave days
+            if is_on_leave(intern.user_id, check_date):
+                days_checked += 1
+                continue
+                
+            has_timesheet = (intern.user_id, check_date) in all_timesheets
             
             if not has_timesheet:
                 missed_count += 1
@@ -49,4 +89,30 @@ def intern_daily_status_cron():
             
         if intern.status != new_status:
             intern.status = new_status
-            intern.save()
+            # Limitation: No system-user convention exists for updated_by_id in cron jobs.
+            # Leaving updated_by_id unchanged.
+            intern.save(update_fields=['status'])
+            
+    # 3. Handle ON_LEAVE -> ACTIVE restoration
+    on_leave_interns = UserInternGuildLink.objects.filter(
+        status=InternGuildStatus.ON_LEAVE.value
+    )
+    
+    if on_leave_interns.exists():
+        on_leave_intern_user_ids = list(on_leave_interns.values_list('user_id', flat=True))
+        # Check active leaves covering today
+        active_leaves_today = set(
+            InternLeaveRequest.objects.filter(
+                user_id__in=on_leave_intern_user_ids,
+                status=InternLeaveStatus.APPROVED.value,
+                start_date__lte=today,
+                end_date__gte=today
+            ).values_list('user_id', flat=True)
+        )
+        
+        for intern in on_leave_interns:
+            if intern.user_id not in active_leaves_today:
+                intern.status = InternGuildStatus.ACTIVE.value
+                # Limitation: No system-user convention exists for updated_by_id in cron jobs.
+                # Leaving updated_by_id unchanged.
+                intern.save(update_fields=['status'])

@@ -52,6 +52,7 @@ class InternOverviewStatusAPI(APIView):
         data = {
             "guild": guild_link.guild,
             "status": guild_link.status,
+            "join_date": guild_link.created_at.date().isoformat() if guild_link.created_at else None,
             "total_intern_karma": total_intern_karma,
             "daily_streak": d_streak_val,
             "weekly_streak": w_streak_val,
