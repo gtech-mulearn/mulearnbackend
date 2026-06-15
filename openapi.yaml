@@ -12253,6 +12253,23 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/dashboard/manage-interns/tasks/{task_id}/verify/:
+    post:
+      operationId: dashboard_manage_interns_tasks_verify_create
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/mentor/activity/:
     get:
       operationId: dashboard_mentor_activity_list
@@ -28669,6 +28686,19 @@ components:
             * `campus_ig` - Campus IG
             * `company` - Company
           x-spec-enum-id: 76e3ce91196df376
+        event_scope:
+          enum:
+          - maker
+          - coder
+          - manager
+          - creative
+          type: string
+          description: |-
+            * `maker` - Maker
+            * `coder` - Coder
+            * `manager` - Manager
+            * `creative` - Creative
+          x-spec-enum-id: 5c207dceb722502f
         scope_org:
           allOf:
           - $ref: '#/components/schemas/MinimalCampus'
@@ -28767,6 +28797,7 @@ components:
       - created_at
       - created_by
       - end_datetime
+      - event_scope
       - linked_tasks
       - organizer
       - scope_ig
@@ -28846,6 +28877,19 @@ components:
             * `campus_ig` - Campus IG
             * `company` - Company
           x-spec-enum-id: 76e3ce91196df376
+        event_scope:
+          enum:
+          - maker
+          - coder
+          - manager
+          - creative
+          type: string
+          description: |-
+            * `maker` - Maker
+            * `coder` - Coder
+            * `manager` - Manager
+            * `creative` - Creative
+          x-spec-enum-id: 5c207dceb722502f
         start_datetime:
           type: string
           format: date-time
@@ -28894,6 +28938,7 @@ components:
       - category_name
       - cover_image
       - end_datetime
+      - event_scope
       - organizer
       - slug
       - start_datetime
@@ -29259,6 +29304,19 @@ components:
           maximum: 4294967295
           minimum: 0
           format: int64
+        event_scope:
+          enum:
+          - maker
+          - coder
+          - manager
+          - creative
+          type: string
+          description: |-
+            * `maker` - Maker
+            * `coder` - Coder
+            * `manager` - Manager
+            * `creative` - Creative
+          x-spec-enum-id: 5c207dceb722502f
       required:
       - end_datetime
       - start_datetime
