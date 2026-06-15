@@ -22843,6 +22843,218 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/notification/broadcast/create/:
+    post:
+      operationId: notification_broadcast_create_create
+      description: Admin only. Create a new global broadcast announcement.
+      tags:
+      - Notification
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/BroadcastNotificationAdmin'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/notification/broadcast/delete/all/:
+    delete:
+      operationId: notification_broadcast_delete_all_destroy
+      description: Delete all broadcast notifications. Admin role required.
+      tags:
+      - Notification
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/BroadcastNotification'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/notification/broadcast/delete/id/{broadcast_id}/:
+    delete:
+      operationId: notification_broadcast_delete_id_destroy
+      description: Delete a single broadcast notification by its ID. Admin role required.
+      parameters:
+      - in: path
+        name: broadcast_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Notification
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/BroadcastNotification'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/notification/broadcast/list/all/:
+    get:
+      operationId: notification_broadcast_list_all_list
+      description: Admin only. List all broadcast notifications. Each record includes
+        a `target_details` field with the resolved human-readable name of the target
+        audience.
+      tags:
+      - Notification
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/BroadcastNotificationAdmin'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/notification/broadcast/update/id/{broadcast_id}/:
+    patch:
+      operationId: notification_broadcast_update_id_partial_update
+      description: Admin only. Partially update a broadcast notification by its ID.
+        All fields are optional.
+      parameters:
+      - in: path
+        name: broadcast_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Notification
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/BroadcastNotificationAdmin'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/notification/delete/all/:
     delete:
       operationId: notification_delete_all_destroy
@@ -22930,12 +23142,11 @@ paths:
   /api/v1/notification/list/:
     get:
       operationId: notification_list_retrieve
-      description: Retrieve Notification Lists.
+      description: 'Retrieve all notifications for the authenticated user. Returns
+        two lists: `direct` (personal) and `broadcasts` (group/audience).'
       tags:
       - Notification
       security:
-      - cookieAuth: []
-      - basicAuth: []
       - jwtAuth: []
       - {}
       responses:
@@ -22961,7 +23172,7 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/Notification'
+                    $ref: '#/components/schemas/NotificationListResponse'
                 required:
                 - hasError
                 - statusCode
@@ -23114,6 +23325,25 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/public/college-details/{college_code}/:
+    get:
+      operationId: public_college_details_retrieve
+      parameters:
+      - in: path
+        name: college_code
+        schema:
+          type: string
+        required: true
+      tags:
+      - Public
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/public/college-wise-lc-report/:
     get:
       operationId: public_college_wise_lc_report_retrieve
@@ -25744,6 +25974,100 @@ components:
       - email
       - name
       - reference_code
+    BroadcastNotification:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 200
+        url:
+          type: string
+          nullable: true
+          maxLength: 100
+        target_type:
+          type: string
+          maxLength: 30
+        target_id:
+          type: string
+          nullable: true
+          maxLength: 36
+        created_at:
+          type: string
+          format: date-time
+        expires_at:
+          type: string
+          format: date-time
+        created_by:
+          type: string
+      required:
+      - created_at
+      - created_by
+      - description
+      - expires_at
+      - id
+      - target_type
+      - title
+    BroadcastNotificationAdmin:
+      type: object
+      description: |-
+        Extended serializer for admin CRUD on BroadcastNotification.
+        Adds a `target_details` field that resolves the human-readable name of
+        the target entity from target_type + target_id.
+      properties:
+        id:
+          type: string
+          format: uuid
+          readOnly: true
+        title:
+          type: string
+          maxLength: 50
+        description:
+          type: string
+          maxLength: 200
+        url:
+          type: string
+          nullable: true
+          maxLength: 100
+        target_type:
+          type: string
+          maxLength: 30
+        target_id:
+          type: string
+          nullable: true
+          maxLength: 36
+        target_details:
+          type: string
+          readOnly: true
+        created_by:
+          type: string
+          readOnly: true
+        created_by_name:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        expires_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - created_by
+      - created_by_name
+      - description
+      - expires_at
+      - id
+      - target_details
+      - target_type
+      - title
     CampusCircleHealthData:
       type: object
       properties:
@@ -28552,6 +28876,19 @@ components:
             * `campus_ig` - Campus IG
             * `company` - Company
           x-spec-enum-id: 76e3ce91196df376
+        event_scope:
+          enum:
+          - maker
+          - coder
+          - manager
+          - creative
+          type: string
+          description: |-
+            * `maker` - Maker
+            * `coder` - Coder
+            * `manager` - Manager
+            * `creative` - Creative
+          x-spec-enum-id: 5c207dceb722502f
         scope_org:
           allOf:
           - $ref: '#/components/schemas/MinimalCampus'
@@ -28650,6 +28987,7 @@ components:
       - created_at
       - created_by
       - end_datetime
+      - event_scope
       - linked_tasks
       - organizer
       - scope_ig
@@ -28729,6 +29067,19 @@ components:
             * `campus_ig` - Campus IG
             * `company` - Company
           x-spec-enum-id: 76e3ce91196df376
+        event_scope:
+          enum:
+          - maker
+          - coder
+          - manager
+          - creative
+          type: string
+          description: |-
+            * `maker` - Maker
+            * `coder` - Coder
+            * `manager` - Manager
+            * `creative` - Creative
+          x-spec-enum-id: 5c207dceb722502f
         start_datetime:
           type: string
           format: date-time
@@ -28777,6 +29128,7 @@ components:
       - category_name
       - cover_image
       - end_datetime
+      - event_scope
       - organizer
       - slug
       - start_datetime
@@ -29142,6 +29494,19 @@ components:
           maximum: 4294967295
           minimum: 0
           format: int64
+        event_scope:
+          enum:
+          - maker
+          - coder
+          - manager
+          - creative
+          type: string
+          description: |-
+            * `maker` - Maker
+            * `coder` - Coder
+            * `manager` - Manager
+            * `creative` - Creative
+          x-spec-enum-id: 5c207dceb722502f
       required:
       - end_datetime
       - start_datetime
@@ -31061,6 +31426,24 @@ components:
         user_email:
           type: string
           readOnly: true
+        muid:
+          type: string
+          readOnly: true
+        about:
+          type: string
+          nullable: true
+          maxLength: 1000
+        expertise:
+          type: string
+          nullable: true
+        verification_note:
+          type: string
+          nullable: true
+          maxLength: 500
+        verified_at:
+          type: string
+          format: date-time
+          nullable: true
         mentor_tier:
           enum:
           - IG_MENTOR
@@ -31094,6 +31477,7 @@ components:
           format: date-time
           nullable: true
       required:
+      - muid
       - user_email
       - user_full_name
       - user_id
@@ -31631,6 +32015,20 @@ components:
       - id
       - title
       - user
+    NotificationListResponse:
+      type: object
+      properties:
+        direct:
+          type: array
+          items:
+            $ref: '#/components/schemas/Notification'
+        broadcasts:
+          type: array
+          items:
+            $ref: '#/components/schemas/BroadcastNotification'
+      required:
+      - broadcasts
+      - direct
     Order:
       type: object
       description: Serializer for one-time order creation requests
