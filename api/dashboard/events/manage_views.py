@@ -59,6 +59,34 @@ def _get_manageable_events():
     return Event.objects.all()  # No deleted_at filter — managers see everything they own
 
 
+def _get_user_company_org_ids(user_id, roles):
+    """Returns a list of Organization IDs for companies where the user is a creator or mentor."""
+    company_org_ids = set()
+    
+    if RoleType.COMPANY.value in roles:
+        from db.company import Company
+        from db.organization import Organization
+        from utils.types import OrganizationType
+        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+        if company:
+            org = Organization.objects.filter(title=company.name, org_type=OrganizationType.COMPANY.value).first()
+            if org:
+                company_org_ids.add(org.id)
+                
+    if RoleType.MENTOR.value in roles:
+        from db.user import UserMentor
+        mentors = UserMentor.objects.filter(
+            user_id=user_id, 
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, 
+            status=UserMentor.Status.APPROVED
+        )
+        for mentor in mentors:
+            if mentor.org_id:
+                company_org_ids.add(mentor.org_id)
+                
+    return list(company_org_ids)
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MANAGE EVENT LIST + CREATE
 # ─────────────────────────────────────────────────────────────────────────────
@@ -94,10 +122,19 @@ class ManageEventListCreateAPI(APIView):
             )
 
             from django.db.models import Q
+            q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
+            
+            # Allow Company and Company Mentors to see all events for their company
+            if RoleType.COMPANY.value in roles or RoleType.MENTOR.value in roles:
+                company_org_ids = _get_user_company_org_ids(user_id, roles)
+                if company_org_ids:
+                    q_filter |= Q(
+                        organiser_type=Event.OrganiserType.COMPANY.value,
+                        organiser_org_id__in=company_org_ids
+                    )
+
             # Use _get_manageable_events() so cancelled events remain visible to their owner
-            events = _get_manageable_events().filter(
-                Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
-            )
+            events = _get_manageable_events().filter(q_filter)
 
         # Optional status filter & Queue Scoping
         if status := request.query_params.get('status'):

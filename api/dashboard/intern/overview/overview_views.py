@@ -112,7 +112,11 @@ class InternOverviewLeaderboardTopAPI(APIView):
     )
     def get(self, request):
         interns = UserInternGuildLink.objects.filter(
-            status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
+            status__in=[
+                InternGuildStatus.ACTIVE.value,
+                InternGuildStatus.AT_RISK.value,
+                InternGuildStatus.ON_LEAVE.value,
+            ]
         ).select_related('user')
         
         intern_user_ids = [intern.user_id for intern in interns]
