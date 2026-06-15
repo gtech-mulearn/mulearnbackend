@@ -20,7 +20,11 @@ class InternLeaderboardAPI(APIView):
     )
     def get(self, request):
         interns = UserInternGuildLink.objects.filter(
-            status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
+            status__in=[
+                InternGuildStatus.ACTIVE.value,
+                InternGuildStatus.AT_RISK.value,
+                InternGuildStatus.ON_LEAVE.value,
+            ]
         ).select_related('user')
         
         intern_user_ids = [intern.user_id for intern in interns]
@@ -117,7 +121,11 @@ class InternLeaderboardMeAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         
         interns = UserInternGuildLink.objects.filter(
-            status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
+            status__in=[
+                InternGuildStatus.ACTIVE.value,
+                InternGuildStatus.AT_RISK.value,
+                InternGuildStatus.ON_LEAVE.value,
+            ]
         )
         
         intern_user_ids = [intern.user_id for intern in interns]

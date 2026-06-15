@@ -99,12 +99,19 @@ class CommonUtils:
         response["Content-Disposition"] = f'attachment; filename="{csv_name}.csv"'
 
         if not queryset:
-            return response
+            fieldnames = []
+        else:
+            # Collect all unique keys across all rows
+            fieldnames = []
+            for row in queryset:
+                for key in row.keys():
+                    if key not in fieldnames:
+                        fieldnames.append(key)
 
-        fieldnames = list(queryset[0].keys())
-        writer = csv.DictWriter(response, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(queryset)
+        writer = csv.DictWriter(response, fieldnames=fieldnames, extrasaction='ignore')
+        if fieldnames:
+            writer.writeheader()
+            writer.writerows(queryset)
 
         compressed_response = HttpResponse(
             gzip.compress(response.content),

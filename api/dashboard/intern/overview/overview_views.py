@@ -52,6 +52,7 @@ class InternOverviewStatusAPI(APIView):
         data = {
             "guild": guild_link.guild,
             "status": guild_link.status,
+            "join_date": guild_link.created_at.date().isoformat() if guild_link.created_at else None,
             "total_intern_karma": total_intern_karma,
             "daily_streak": d_streak_val,
             "weekly_streak": w_streak_val,
@@ -111,7 +112,11 @@ class InternOverviewLeaderboardTopAPI(APIView):
     )
     def get(self, request):
         interns = UserInternGuildLink.objects.filter(
-            status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
+            status__in=[
+                InternGuildStatus.ACTIVE.value,
+                InternGuildStatus.AT_RISK.value,
+                InternGuildStatus.ON_LEAVE.value,
+            ]
         ).select_related('user')
         
         intern_user_ids = [intern.user_id for intern in interns]
