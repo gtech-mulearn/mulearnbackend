@@ -99,6 +99,7 @@ List endpoints use `CommonUtils.get_paginated_queryset`:
 6. [Leaderboard](#6-leaderboard)
    - [IG Mentor Leaderboard](#61-ig-mentor-leaderboard)
    - [Campus Mentor Leaderboard](#62-campus-mentor-leaderboard)
+7. [Event Management](#7-event-management)
 
 ---
 
@@ -1176,6 +1177,63 @@ Ranked by:
   ]
 }
 ```
+
+---
+
+## 7. Event Management
+
+Company Mentors can manage (CRUD) events for their company via the `/api/v1/dashboard/events/` endpoints. The `organiser_type` MUST be set to `Company` (`Event.OrganiserType.COMPANY`).
+
+### 7.1 View Company Events
+
+#### `GET /api/v1/dashboard/events/company/<company_id>/`
+List all published/ongoing events for the company. (Public feed)
+
+#### `GET /api/v1/dashboard/events/manage/`
+List all events the Company Mentor has permission to manage (including drafts and pending).
+
+#### `GET /api/v1/dashboard/events/manage/<event_id>/`
+Get full details of a specific event, including its edit history.
+
+### 7.2 Create Event
+
+#### `POST /api/v1/dashboard/events/manage/`
+Create a new company event. 
+
+**Auth:** JWT · verified `COMPANY_MENTOR`
+
+**Request body**
+```json
+{
+  "title": "Company Tech Talk",
+  "description": "Discussing the latest tech stack.",
+  "start_datetime": "2026-07-01T10:00:00Z",
+  "end_datetime": "2026-07-01T12:00:00Z",
+  "venue_type": "ONLINE",
+  "organiser_type": "Company"
+}
+```
+
+**Success response `200`**
+Returns the created event object.
+
+### 7.3 Update Event
+
+#### `PUT /api/v1/dashboard/events/manage/<event_id>/`
+Full update of an event.
+
+#### `PATCH /api/v1/dashboard/events/manage/<event_id>/`
+Partial update of an event. *Note: You cannot change `organiser_type` to anything other than `Company`.*
+
+### 7.4 Cancel Event
+
+#### `DELETE /api/v1/dashboard/events/manage/<event_id>/`
+Soft cancel an event (status becomes `CANCELLED`).
+
+### 7.5 Publish Event
+
+#### `POST /api/v1/dashboard/events/manage/<event_id>/publish/`
+Transition a `DRAFT` event into the approval pipeline (`PENDING_APPROVAL`).
 
 ---
 

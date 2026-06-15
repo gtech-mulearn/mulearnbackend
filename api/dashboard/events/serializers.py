@@ -661,9 +661,32 @@ def get_live_events():
 
 
 def can_manage_event(user_id, event):
-    """True if user is creator OR co-owner of this event."""
+    """True if user is creator OR co-owner of this event, OR if it's a company event they belong to."""
     if event.created_by_id == user_id:
         return True
+        
+    if event.organiser_type == Event.OrganiserType.COMPANY.value and event.organiser_org_id:
+        from db.organization import Organization
+        from db.company import Company
+        from db.user import UserMentor
+        
+        # Check if user is company creator for this org
+        org = Organization.objects.filter(id=event.organiser_org_id).first()
+        if org:
+            company = Company.objects.filter(name=org.title, company_user_id=user_id, status="verified").first()
+            if company:
+                return True
+                
+        # Check if user is company mentor for this org
+        mentor = UserMentor.objects.filter(
+            user_id=user_id,
+            org_id=event.organiser_org_id,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            status=UserMentor.Status.APPROVED
+        ).first()
+        if mentor:
+            return True
+
     return EventConnection.objects.filter(
         event=event,
         entity_type=EventConnection.EntityType.CO_OWNER,
