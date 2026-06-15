@@ -117,17 +117,34 @@ class OrganizerOptionsAPI(APIView):
                         'org_type': link.org.org_type,
                     })
 
-        # Company: user with Company role in a company org
+        # Company: user with Company role in a company org or UserMentor with COMPANY_MENTOR
+        company_options = {}
         if RoleType.COMPANY.value in roles:
             user_orgs = UserOrganizationLink.objects.filter(
                 user_id=user_id, verified=True
             ).select_related('org')
             for link in user_orgs:
                 if link.org.org_type == 'Company':
-                    options['can_create_as_company'].append({
+                    company_options[link.org.id] = {
                         'id': link.org.id,
                         'title': link.org.title,
-                    })
+                    }
+                    
+        if RoleType.MENTOR.value in roles:
+            from db.user import UserMentor
+            mentors = UserMentor.objects.filter(
+                user_id=user_id, 
+                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, 
+                status=UserMentor.Status.APPROVED
+            ).select_related('org')
+            for mentor in mentors:
+                if mentor.org:
+                    company_options[mentor.org.id] = {
+                        'id': mentor.org.id,
+                        'title': mentor.org.title,
+                    }
+
+        options['can_create_as_company'] = list(company_options.values())
 
         return CustomResponse(
             general_message='Organiser options retrieved.',
