@@ -22,7 +22,7 @@ class InternWeeklyReviewSerializer(serializers.ModelSerializer):
         ]
         extra_kwargs = {
             'hours_committed': {'required': False, 'allow_null': True},
-            'tasks_assigned': {'required': False, 'allow_blank': True, 'allow_null': True},
+            'tasks_assigned': {'required': False, 'allow_null': True},
             'tasks_completed': {'required': False, 'allow_blank': True, 'allow_null': True},
             'weekly_review': {'required': False, 'allow_blank': True, 'allow_null': True},
         }
@@ -85,8 +85,8 @@ class InternWeeklyReviewSerializer(serializers.ModelSerializer):
                 parts.append(f"Next Week Plan: {next_week_plan}")
             validated_data['weekly_review'] = "\n\n".join(parts) or "Weekly review submission"
             
-        # Ensure non-nullable database text fields have at least empty strings
-        validated_data['tasks_assigned'] = validated_data.get('tasks_assigned') or ""
+        # Ensure non-nullable database fields have default values
+        validated_data['tasks_assigned'] = validated_data.get('tasks_assigned') or {}
         validated_data['tasks_completed'] = validated_data.get('tasks_completed') or ""
         
         validated_data['user_id'] = user_id
@@ -110,6 +110,6 @@ class InternWeeklyReviewHistorySerializer(serializers.ModelSerializer):
             'id', 'iso_year', 'iso_week', 'week_start_date', 'week_end_date',
             'team', 'is_on_leave', 'tasks_assigned', 'tasks_completed',
             'weekly_review', 'task_remarks', 'hours_committed', 'blockers',
-            'leave_days', 'suggestions', 'is_late', 'status', 'karma_awarded',
+            'leave_days', 'suggestions', 'is_late', 'status',
             'review_note', 'created_at'
         ]
