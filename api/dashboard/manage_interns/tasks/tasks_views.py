@@ -72,6 +72,9 @@ class ManageInternTaskAPI(APIView):
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
             
+        if task.is_verified:
+            return CustomResponse(general_message="Task is already verified and cannot be edited.").get_failure_response()
+            
         request_data = request.data
             
         old_data = {

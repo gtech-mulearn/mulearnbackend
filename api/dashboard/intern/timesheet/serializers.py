@@ -50,6 +50,13 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
         if not task and task_status:
             raise serializers.ValidationError({"task_status": "Cannot provide task status without a task."})
             
+        if task and task.is_verified:
+            if task_status and task_status != task.status:
+                raise serializers.ValidationError({"task_status": "Cannot change the status of a verified task."})
+            task_output_link = data.get('task_output_link')
+            if task_output_link and task_output_link != task.output_link:
+                raise serializers.ValidationError({"task_output_link": "Cannot change the output link of a verified task."})
+                
         if task and task_status == 'COMPLETED':
             task_output_link = data.get('task_output_link')
             if not task_output_link and not task.output_link:

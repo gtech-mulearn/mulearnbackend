@@ -91,25 +91,6 @@ def intern_daily_status_cron():
             
         if intern.status != new_status:
             intern.status = new_status
-            intern.save()
-
-@shared_task
-def intern_task_deadline_cron():
-    """
-    Cron job to evaluate intern tasks deadline.
-    Rules:
-    - If deadline < today and status != COMPLETED and not verified -> OVERDUE
-    """
-    today = now().date()
-    overdue_tasks = InternTask.objects.filter(
-        deadline__lt=today,
-        is_verified=False
-    ).exclude(status=InternTaskStatus.COMPLETED.value).exclude(status=InternTaskStatus.OVERDUE.value)
-    
-    for task in overdue_tasks:
-        task.status = InternTaskStatus.OVERDUE.value
-        task.save()
-
             # Limitation: No system-user convention exists for updated_by_id in cron jobs.
             # Leaving updated_by_id unchanged.
             intern.save(update_fields=['status'])
@@ -155,3 +136,20 @@ def intern_task_deadline_cron():
                 intern.status = restored_status
                 intern.previous_status = None
                 intern.save(update_fields=['status', 'previous_status'])
+
+@shared_task
+def intern_task_deadline_cron():
+    """
+    Cron job to evaluate intern tasks deadline.
+    Rules:
+    - If deadline < today and status != COMPLETED and not verified -> OVERDUE
+    """
+    today = now().date()
+    overdue_tasks = InternTask.objects.filter(
+        deadline__lt=today,
+        is_verified=False
+    ).exclude(status=InternTaskStatus.COMPLETED.value).exclude(status=InternTaskStatus.OVERDUE.value)
+    
+    for task in overdue_tasks:
+        task.status = InternTaskStatus.OVERDUE.value
+        task.save()
