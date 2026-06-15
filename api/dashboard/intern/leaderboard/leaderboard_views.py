@@ -1,11 +1,11 @@
 from rest_framework.views import APIView
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
-from db.intern import UserInternGuildLink, InternTask
+from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
 from db.task import KarmaActivityLog
 from db.achievement import UserStreak
 
@@ -38,6 +38,16 @@ class InternLeaderboardAPI(APIView):
         for t in completed_tasks:
             tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
             
+        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
+        daily_ts_counts = {item['user_id']: item['total'] for item in approved_daily_timesheets}
+        
+        approved_weekly_reviews = InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
+        weekly_rv_counts = {item['user_id']: item['total'] for item in approved_weekly_reviews}
+        
+        verified_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, is_verified=True).values('assigned_to_id').annotate(total_karma=Sum('karma_awarded'))
+        verified_tasks_karma = {item['assigned_to_id']: item['total_karma'] for item in verified_tasks}
+
+            
         leaderboard_data = []
         for intern in interns:
             user_id = intern.user_id
@@ -52,12 +62,16 @@ class InternLeaderboardAPI(APIView):
             complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
             complexity_score = sum([complexity_map.get(t.complexity, 1) for t in user_tasks])
             
-            score = (total_intern_karma * InternLeaderboardWeights.KARMA_MULTIPLIER +
-                     d_streak_val * InternLeaderboardWeights.DAILY_STREAK_MULTIPLIER +
-                     w_streak_val * InternLeaderboardWeights.WEEKLY_STREAK_MULTIPLIER +
-                     completed_count * InternLeaderboardWeights.COMPLETED_TASKS_MULTIPLIER +
-                     complexity_score * InternLeaderboardWeights.COMPLEXITY_SCORE_MULTIPLIER)
-                     
+            approved_daily_timesheets_count = daily_ts_counts.get(user_id, 0)
+            approved_weekly_reviews_count = weekly_rv_counts.get(user_id, 0)
+            verified_intern_tasks_karma_sum = verified_tasks_karma.get(user_id, 0)
+            
+            score = (
+                approved_daily_timesheets_count * 25 +
+                approved_weekly_reviews_count * 50 +
+                complexity_score * verified_intern_tasks_karma_sum
+            )
+            
             leaderboard_data.append({
                 "user_id": user_id,
                 "full_name": intern.user.full_name,
@@ -121,6 +135,15 @@ class InternLeaderboardMeAPI(APIView):
         for t in completed_tasks:
             tasks_by_user.setdefault(t.assigned_to_id, []).append(t)
             
+        approved_daily_timesheets = InternDailyTimesheet.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
+        daily_ts_counts = {item['user_id']: item['total'] for item in approved_daily_timesheets}
+        
+        approved_weekly_reviews = InternWeeklyReview.objects.filter(user_id__in=intern_user_ids, status='APPROVED').values('user_id').annotate(total=Count('id'))
+        weekly_rv_counts = {item['user_id']: item['total'] for item in approved_weekly_reviews}
+        
+        verified_tasks = InternTask.objects.filter(assigned_to_id__in=intern_user_ids, is_verified=True).values('assigned_to_id').annotate(total_karma=Sum('karma_awarded'))
+        verified_tasks_karma = {item['assigned_to_id']: item['total_karma'] for item in verified_tasks}
+            
         leaderboard_data = []
         for intern in interns:
             uid = intern.user_id
@@ -135,12 +158,16 @@ class InternLeaderboardMeAPI(APIView):
             complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
             complexity_score = sum([complexity_map.get(t.complexity, 1) for t in user_tasks])
             
-            score = (total_intern_karma * InternLeaderboardWeights.KARMA_MULTIPLIER +
-                     d_streak_val * InternLeaderboardWeights.DAILY_STREAK_MULTIPLIER +
-                     w_streak_val * InternLeaderboardWeights.WEEKLY_STREAK_MULTIPLIER +
-                     completed_count * InternLeaderboardWeights.COMPLETED_TASKS_MULTIPLIER +
-                     complexity_score * InternLeaderboardWeights.COMPLEXITY_SCORE_MULTIPLIER)
-                     
+            approved_daily_timesheets_count = daily_ts_counts.get(uid, 0)
+            approved_weekly_reviews_count = weekly_rv_counts.get(uid, 0)
+            verified_intern_tasks_karma_sum = verified_tasks_karma.get(uid, 0)
+            
+            score = (
+                approved_daily_timesheets_count * 25 +
+                approved_weekly_reviews_count * 50 +
+                complexity_score * verified_intern_tasks_karma_sum
+            )
+            
             leaderboard_data.append({
                 "user_id": uid,
                 "score": score

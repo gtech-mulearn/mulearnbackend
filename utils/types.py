@@ -268,6 +268,7 @@ class InternTaskStatus(Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     WAITING_FOR_REVIEW = "WAITING_FOR_REVIEW"
+    OVERDUE = "OVERDUE"
 
 class InternTaskComplexity(Enum):
     LOW = ("LOW", 1)

@@ -1,8 +1,8 @@
 from celery import shared_task
 from django.utils.timezone import now
 from datetime import timedelta
-from db.intern import UserInternGuildLink, InternDailyTimesheet
-from utils.types import InternGuildStatus
+from db.intern import UserInternGuildLink, InternDailyTimesheet, InternTask
+from utils.types import InternGuildStatus, InternTaskStatus
 
 @shared_task
 def intern_daily_status_cron():
@@ -50,3 +50,21 @@ def intern_daily_status_cron():
         if intern.status != new_status:
             intern.status = new_status
             intern.save()
+
+@shared_task
+def intern_task_deadline_cron():
+    """
+    Cron job to evaluate intern tasks deadline.
+    Rules:
+    - If deadline < today and status != COMPLETED and not verified -> OVERDUE
+    """
+    today = now().date()
+    overdue_tasks = InternTask.objects.filter(
+        deadline__lt=today,
+        is_verified=False
+    ).exclude(status=InternTaskStatus.COMPLETED.value).exclude(status=InternTaskStatus.OVERDUE.value)
+    
+    for task in overdue_tasks:
+        task.status = InternTaskStatus.OVERDUE.value
+        task.save()
+
