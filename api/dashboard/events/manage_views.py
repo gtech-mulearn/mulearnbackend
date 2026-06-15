@@ -247,6 +247,17 @@ class ManageEventListCreateAPI(APIView):
         if merge_error:
             return CustomResponse(general_message=merge_error).get_failure_response()
 
+        # Enforce organiser_org for Company events
+        if payload.get('organiser_type') == Event.OrganiserType.COMPANY.value:
+            payload_organiser_org = payload.get('organiser_org')
+            if not payload_organiser_org:
+                return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
+            
+            if RoleType.ADMIN.value not in roles:
+                valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
+                if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
+                    return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
+
         serializer = EventWriteSerializer(
             data=payload,
             context={'user_id': user_id},
@@ -382,6 +393,17 @@ class ManageEventDetailAPI(APIView):
                     return CustomResponse(general_message='You are not authorized to manage events for this Interest Group.').get_failure_response()
             else:
                 return CustomResponse(general_message='This mentor tier is not authorized to manage events yet.').get_failure_response()
+
+        # Enforce organiser_org for Company events
+        if payload.get('organiser_type', event.organiser_type) == Event.OrganiserType.COMPANY.value:
+            payload_organiser_org = payload.get('organiser_org', event.organiser_org_id)
+            if not payload_organiser_org:
+                return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
+            
+            if RoleType.ADMIN.value not in roles:
+                valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
+                if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
+                    return CustomResponse(general_message='You are not authorized to manage events for this company.').get_failure_response()
 
         serializer = EventWriteSerializer(
             event, data=payload,
