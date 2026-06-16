@@ -40,6 +40,8 @@ class InternOverviewStatusAPI(APIView):
         
         d_streak_val = daily_streak.current_streak if daily_streak else 0
         w_streak_val = weekly_streak.current_streak if weekly_streak else 0
+        d_longest_streak = daily_streak.longest_streak if daily_streak else 0
+        w_longest_streak = weekly_streak.longest_streak if weekly_streak else 0
 
         # Score formula — identical to both leaderboard endpoints:
         # approved_daily_timesheets × 25 + approved_weekly_reviews × 50
@@ -70,7 +72,9 @@ class InternOverviewStatusAPI(APIView):
             "join_date": guild_link.created_at.date().isoformat() if guild_link.created_at else None,
             "total_intern_karma": total_intern_karma,
             "daily_streak": d_streak_val,
+            "longest_daily_streak": d_longest_streak,
             "weekly_streak": w_streak_val,
+            "longest_weekly_streak": w_longest_streak,
             "completed_tasks": completed_tasks,
             "complexity_score": complexity_score,
             "score": score,
