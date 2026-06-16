@@ -24,7 +24,8 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
         model = InternTask
         fields = [
             'id', 'title', 'description', 'category', 'complexity',
-            'assigned_to', 'status', 'team', 'guild', 'deadline', 'iso_week', 'created_at'
+            'assigned_to', 'status', 'team', 'guild', 'deadline', 'iso_week',
+            'karma_awarded', 'created_at'
         ]
         read_only_fields = ['created_at']
 
