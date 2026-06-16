@@ -195,35 +195,27 @@ class ManageInternTaskVerifyAPI(APIView):
             task.save()
 
             # Award karma to intern's wallet and log it.
-            # get_or_create ensures the TaskList anchor row always exists,
-            # so karma is never silently skipped due to a missing DB seed.
             if karma_awarded > 0:
-                task_list, _ = TaskList.objects.get_or_create(
-                    hashtag=InternHashtag.TASK_VERIFIED_HASHTAG.value,
-                    defaults={
-                        'title': 'Intern Task Verified',
-                        'karma': 0,          # dynamic karma passed at log time
-                        'active': True,
-                        'created_by_id': admin_id,
-                        'updated_by_id': admin_id,
-                    }
-                )
-                KarmaActivityLog.objects.create(
-                    id=str(uuid.uuid4()),
-                    user_id=intern_user_id,
-                    task=task_list,
-                    karma=karma_awarded,
-                    appraiser_approved=True,
-                    updated_by_id=admin_id,
-                    updated_at=now(),
-                    created_by_id=admin_id,
-                    created_at=now()
-                )
-                wallet, _ = Wallet.objects.get_or_create(
-                    user_id=intern_user_id,
-                    defaults={'created_by_id': admin_id, 'updated_by_id': admin_id}
-                )
-                Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_awarded)
+                task_list = TaskList.objects.filter(
+                    hashtag=InternHashtag.TASK_VERIFIED_HASHTAG.value
+                ).first()
+                if task_list:
+                    KarmaActivityLog.objects.create(
+                        id=str(uuid.uuid4()),
+                        user_id=intern_user_id,
+                        task=task_list,
+                        karma=karma_awarded,
+                        appraiser_approved=True,
+                        updated_by_id=admin_id,
+                        updated_at=now(),
+                        created_by_id=admin_id,
+                        created_at=now()
+                    )
+                    wallet, _ = Wallet.objects.get_or_create(
+                        user_id=intern_user_id,
+                        defaults={'created_by_id': admin_id, 'updated_by_id': admin_id}
+                    )
+                    Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_awarded)
 
             from db.mentor import SystemActionLog
             SystemActionLog.objects.create(
