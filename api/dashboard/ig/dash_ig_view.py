@@ -608,9 +608,6 @@ class InterestGroupRequestAPI(APIView):
                 except Exception:
                     pass
 
-        request_data["created_by"] = request_data["updated_by"] = user_id
-        request_data["status"] = "requested"
-
         serializer = InterestGroupRequestSerializer(data=request_data)
 
         if serializer.is_valid():
