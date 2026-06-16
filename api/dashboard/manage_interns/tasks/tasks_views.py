@@ -31,7 +31,7 @@ class ManageInternTaskAPI(APIView):
             serializer = ManageInternTaskSerializer(task)
             return CustomResponse(response=serializer.data).get_success_response()
             
-        tasks = InternTask.objects.all().order_by('-created_at')
+        tasks = InternTask.objects.select_related('assigned_to').all().order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks, request,
@@ -145,7 +145,7 @@ class ManageInternTasksByInternAPI(APIView):
         if not user:
             return CustomResponse(general_message=f"User with muid '{muid}' not found.").get_failure_response()
 
-        tasks = InternTask.objects.filter(assigned_to_id=user.id).order_by('-created_at')
+        tasks = InternTask.objects.select_related('assigned_to').filter(assigned_to_id=user.id).order_by('-created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             tasks, request,
