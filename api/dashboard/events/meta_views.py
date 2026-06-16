@@ -73,8 +73,8 @@ class OrganizerOptionsAPI(APIView):
             'can_create_as_admin': False,       # True if user is admin
         }
 
-        # Admin can create events as admin
-        if RoleType.ADMIN.value in roles:
+        # Admin, Enabler, and Lead Enabler can create events as muLearn (admin organiser)
+        if RoleType.ADMIN.value in roles or RoleType.ENABLER.value in roles or RoleType.LEAD_ENABLER.value in roles:
             options['can_create_as_admin'] = True
 
         # Global IG leads: roles like "WEBDEV IGLead"
@@ -132,17 +132,59 @@ class OrganizerOptionsAPI(APIView):
                     
         if RoleType.MENTOR.value in roles:
             from db.user import UserMentor
-            mentors = UserMentor.objects.filter(
-                user_id=user_id, 
-                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, 
-                status=UserMentor.Status.APPROVED
+            from db.task import UserIgLink
+
+            # Company Mentors → can create Company events for their org
+            company_mentors = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+                status=UserMentor.Status.APPROVED,
             ).select_related('org')
-            for mentor in mentors:
+            for mentor in company_mentors:
                 if mentor.org:
                     company_options[mentor.org.id] = {
                         'id': mentor.org.id,
                         'title': mentor.org.title,
                     }
+
+            # IG Mentors → can create Global IG events for their assigned IGs
+            ig_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                status=UserMentor.Status.APPROVED,
+            ).first()
+            if ig_mentor:
+                mentored_ig_ids = list(
+                    UserIgLink.objects.filter(
+                        user_id=user_id,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        is_active=True,
+                    ).values_list('ig_id', flat=True)
+                )
+                if mentored_ig_ids:
+                    mentored_igs = InterestGroup.objects.filter(
+                        id__in=mentored_ig_ids
+                    ).values('id', 'name', 'icon', 'code')
+                    # Merge with existing ig options (avoid duplicates)
+                    existing_ig_ids = {ig['id'] for ig in options['can_create_as_ig']}
+                    for ig in mentored_igs:
+                        if ig['id'] not in existing_ig_ids:
+                            options['can_create_as_ig'].append(ig)
+
+            # Campus Mentors → can create Campus IG events scoped to their campus
+            campus_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                status=UserMentor.Status.APPROVED,
+            ).select_related('org').first()
+            if campus_mentor and campus_mentor.org:
+                # Surface all IGs as campus_ig options — the scope is limited to their campus
+                # by the backend enforcement in manage_views.py
+                campus_igs = InterestGroup.objects.all().values('id', 'name', 'icon', 'code')
+                existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
+                for ig in campus_igs:
+                    if ig['id'] not in existing_ci_ids:
+                        options['can_create_as_campus_ig'].append(ig)
 
         options['can_create_as_company'] = list(company_options.values())
 
