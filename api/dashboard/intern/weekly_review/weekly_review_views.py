@@ -9,7 +9,7 @@ from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternSubmissionStatus, InternGuildStatus
 from utils.utils import CommonUtils
-from db.intern import InternWeeklyReview, UserInternGuildLink, InternTask, InternDailyTimesheet
+from db.intern import InternWeeklyReview, UserInternGuildLink
 
 from .serializers import InternWeeklyReviewSerializer, InternWeeklyReviewHistorySerializer
 
@@ -185,45 +185,11 @@ class InternWeeklyReviewHistoryAPI(APIView):
 
         paged_reviews = paginated_queryset.get("queryset")
 
-        # --- Batch fetch scoring data to avoid N+1 queries ---
-        complexity_map = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
-
-        # Group approved daily timesheets by (iso_year, iso_week)
-        all_timesheets = InternDailyTimesheet.objects.filter(
-            user_id=user_id, status='APPROVED'
-        ).values_list('entry_date', flat=True)
-
-        daily_count_by_week = {}
-        for entry_date in all_timesheets:
-            iso_year, iso_week, _ = entry_date.isocalendar()
-            key = (iso_year, iso_week)
-            daily_count_by_week[key] = daily_count_by_week.get(key, 0) + 1
-
-        # Group verified task scores by (iso_year, iso_week) via deadline
-        all_verified_tasks = InternTask.objects.filter(
-            assigned_to_id=user_id, is_verified=True
-        ).values('deadline', 'karma_awarded', 'complexity')
-
-        task_score_by_week = {}
-        for t in all_verified_tasks:
-            iso_year, iso_week, _ = t['deadline'].isocalendar()
-            key = (iso_year, iso_week)
-            task_score_by_week[key] = task_score_by_week.get(key, 0) + (
-                t['karma_awarded'] * complexity_map.get(t['complexity'], 1)
-            )
-
-        # Serialize and annotate each review with its weekly score
         serializer = InternWeeklyReviewHistorySerializer(paged_reviews, many=True)
         data = serializer.data
 
         for i, review in enumerate(paged_reviews):
-            week_key = (review.iso_year, review.iso_week)
-            weekly_score = (
-                daily_count_by_week.get(week_key, 0) * 25 +
-                (50 if review.status == 'APPROVED' else 0) +
-                task_score_by_week.get(week_key, 0)
-            )
-            data[i]['score'] = weekly_score
+            data[i]['score'] = 50 if review.status == 'APPROVED' else 0
 
         return CustomResponse(
             response={
