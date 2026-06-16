@@ -114,10 +114,17 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
 
 class InternTimesheetHistorySerializer(serializers.ModelSerializer):
+    # Points awarded to the leaderboard score for this timesheet entry.
+    # Only APPROVED timesheets count (25 pts each); all others earn 0.
+    score = serializers.SerializerMethodField()
+
     class Meta:
         model = InternDailyTimesheet
         fields = [
             'id', 'entry_date', 'task', 'description',
             'hours', 'blockers', 'end_of_day_note', 'edit_reason',
-            'status', 'review_note', 'created_at'
+            'status', 'review_note', 'created_at', 'score'
         ]
+
+    def get_score(self, obj):
+        return 25 if obj.status == 'APPROVED' else 0
