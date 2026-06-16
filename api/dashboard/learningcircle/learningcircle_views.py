@@ -14,6 +14,9 @@ from db.learning_circle import (
 )
 from db.task import KarmaActivityLog
 from db.user import UserDomains, User
+from django.conf import settings
+from api.notification.broadcast_utils import BroadcastUtils
+from api.notification.notifications_utils import NotificationUtils
 from utils.karma import add_karma, remove_karma
 from utils.utils import CommonUtils
 from utils.permission import CustomizePermission, JWTUtils
@@ -101,6 +104,20 @@ class LearningCircleView(APIView):
         add_karma(
             user_id, Lc.MEET_CREATE_HASHTAG.value, user_id, Lc.MEET_CREATE_KARMA.value
         )
+
+        # Broadcast new LC creation to all campus members (if the circle belongs to a campus)
+        creator = User.objects.filter(id=user_id).first()
+        if creator and result.org_id:
+            BroadcastUtils.create_broadcast(
+                title='New Learning Circle Created',
+                description=f'A new Learning Circle "{result.title}" has been formed in your campus!',
+                target_type='campus',
+                target_id=result.org_id,
+                created_by=creator,
+                expiry_key='lc_created',
+                url=f'/dashboard/learning-circle/',
+            )
+
         return CustomResponse(
             general_message="Learning Circle created successfully",
             response={"circle_id": result.id},
@@ -995,6 +1012,20 @@ class CircleJoinAPI(APIView):
             accepted=None,
             accepted_at=None,
         )
+
+        # Notify the circle lead about the new join request
+        lead_link = UserCircleLink.objects.filter(circle=circle, lead=True).select_related('user').first()
+        requester = User.objects.filter(id=user_id).first()
+        if lead_link and requester:
+            NotificationUtils.insert_notification(
+                user=lead_link.user,
+                title="Member Request",
+                description=f"{requester.full_name} has requested to join your learning circle '{circle.title}'",
+                button="View",
+                url=f"{settings.FR_DOMAIN_NAME}/dashboard/learningcircle/{circle_id}/",
+                created_by=requester,
+            )
+
         return CustomResponse(
             general_message="Join request sent. Waiting for lead approval."
         ).get_success_response()
@@ -1065,16 +1096,37 @@ class CircleJoinAPI(APIView):
                 general_message="Invalid action. Must be 'accept' or 'reject'"
             ).get_failure_response()
 
+        lead_user = User.objects.filter(id=user_id).first()
+        requester_user = link.user
+
         if action == "accept":
             link.accepted = True
             link.accepted_at = DateTimeUtils.get_current_utc_time()
             link.save()
+            # Notify the requester that they have been accepted
+            NotificationUtils.insert_notification(
+                user=requester_user,
+                title="Request Approved",
+                description=f"Your request to join the learning circle '{circle.title}' has been approved.",
+                button="View",
+                url=f"{settings.FR_DOMAIN_NAME}/dashboard/learningcircle/{circle_id}/",
+                created_by=lead_user,
+            )
             return CustomResponse(
                 general_message="Join request accepted. User is now a member."
             ).get_success_response()
 
         link.accepted = False
         link.save()
+        # Notify the requester that they have been rejected
+        NotificationUtils.insert_notification(
+            user=requester_user,
+            title="Request Rejected",
+            description=f"Your request to join the learning circle '{circle.title}' has been rejected.",
+            button=None,
+            url=None,
+            created_by=lead_user,
+        )
         return CustomResponse(
             general_message="Join request rejected."
         ).get_success_response()
