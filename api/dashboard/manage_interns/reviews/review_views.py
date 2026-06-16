@@ -295,7 +295,7 @@ class InternTimesheetListAPI(APIView):
             
         paginated_queryset = CommonUtils.get_paginated_queryset(
             timesheets, request,
-            ['user__full_name', 'status', 'category'],
+            ['user__full_name', 'status'],
             {'created_at': 'created_at', 'status': 'status'}
         )
         

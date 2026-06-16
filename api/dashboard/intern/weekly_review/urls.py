@@ -3,6 +3,7 @@ from . import weekly_review_views
 
 urlpatterns = [
     path("", weekly_review_views.InternWeeklyReviewAPI.as_view(), name="intern-weekly-review-list-create"),
+    path("prefill/", weekly_review_views.InternWeeklyReviewPrefillAPI.as_view(), name="intern-weekly-review-prefill"),
     path("current/", weekly_review_views.InternWeeklyReviewCurrentAPI.as_view(), name="intern-weekly-review-current"),
     path("history/", weekly_review_views.InternWeeklyReviewHistoryAPI.as_view(), name="intern-weekly-review-history"),
     path("<str:review_id>/", weekly_review_views.InternWeeklyReviewAPI.as_view(), name="intern-weekly-review-edit"),
