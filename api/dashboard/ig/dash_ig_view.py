@@ -698,6 +698,52 @@ class InterestGroupRequestAPI(APIView):
             general_message=f"Interest Group status updated to '{new_status}'"
         ).get_success_response()
 
+    @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description=(
+            "Cancel an IG creation request. "
+            "Company users can only cancel their own requests that are still in 'requested' status. "
+            "Admins can cancel any request regardless of status or owner."
+        ),
+        responses={200: InterestGroupSerializer},
+    )
+    def delete(self, request, pk):
+        """Cancel an IG creation request.
+
+        - Company users: can cancel only their own request, only when status='requested'.
+        - Admins: can cancel any request at any status.
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        try:
+            ig = InterestGroup.objects.get(id=pk)
+        except InterestGroup.DoesNotExist:
+            return CustomResponse(
+                general_message="Interest Group request not found."
+            ).get_failure_response()
+
+        # Ownership check for non-admins
+        if not is_admin and str(ig.created_by_id) != str(user_id):
+            return CustomResponse(
+                general_message="You can only cancel your own IG requests."
+            ).get_failure_response()
+
+        # Status check for non-admins — only 'requested' can be cancelled by the requester
+        if not is_admin and ig.status != 'requested':
+            return CustomResponse(
+                general_message=f"Cannot cancel a request that is already '{ig.status}'. Only 'requested' status can be cancelled."
+            ).get_failure_response()
+
+        ig.status = 'cancelled'
+        ig.updated_by_id = user_id
+        ig.save()
+
+        return CustomResponse(
+            general_message="Interest Group request cancelled successfully."
+        ).get_success_response()
 
 
 class InterestGroupListApi(APIView):

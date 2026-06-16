@@ -1,12 +1,12 @@
 from rest_framework.views import APIView
-from django.db.models import Sum
+from django.db.models import Sum, Count
 from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternLeaderboardWeights, InternGuildStatus
 from utils.utils import CommonUtils
-from db.intern import UserInternGuildLink, InternTask
+from db.intern import UserInternGuildLink, InternTask, InternDailyTimesheet, InternWeeklyReview
 from db.task import KarmaActivityLog
 from db.achievement import UserStreak
 
@@ -40,12 +40,27 @@ class InternOverviewStatusAPI(APIView):
         
         d_streak_val = daily_streak.current_streak if daily_streak else 0
         w_streak_val = weekly_streak.current_streak if weekly_streak else 0
-        
-        score = (total_intern_karma * InternLeaderboardWeights.KARMA_MULTIPLIER +
-                 d_streak_val * InternLeaderboardWeights.DAILY_STREAK_MULTIPLIER +
-                 w_streak_val * InternLeaderboardWeights.WEEKLY_STREAK_MULTIPLIER +
-                 completed_tasks * InternLeaderboardWeights.COMPLETED_TASKS_MULTIPLIER +
-                 complexity_score * InternLeaderboardWeights.COMPLEXITY_SCORE_MULTIPLIER)
+
+        # Score formula — identical to both leaderboard endpoints:
+        # approved_daily_timesheets × 25 + approved_weekly_reviews × 50
+        # + sum(karma_awarded × complexity_weight) for each verified intern task
+        approved_daily_count = InternDailyTimesheet.objects.filter(
+            user_id=user_id, status='APPROVED'
+        ).count()
+        approved_weekly_count = InternWeeklyReview.objects.filter(
+            user_id=user_id, status='APPROVED'
+        ).count()
+        verified_tasks = InternTask.objects.filter(assigned_to_id=user_id, is_verified=True)
+        verified_tasks_score = sum(
+            t.karma_awarded * complexity_map.get(t.complexity, 1)
+            for t in verified_tasks
+        )
+
+        score = (
+            approved_daily_count * 25 +
+            approved_weekly_count * 50 +
+            verified_tasks_score
+        )
         
         total_interns = UserInternGuildLink.objects.count()
         
