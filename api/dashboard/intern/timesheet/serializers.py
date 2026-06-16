@@ -8,13 +8,14 @@ from utils.types import InternSubmissionStatus
 class InternTimesheetSerializer(serializers.ModelSerializer):
     log_description = serializers.CharField(required=False, write_only=True)
     hours_worked = serializers.DecimalField(max_digits=4, decimal_places=2, required=False, write_only=True)
+    task_output_link = serializers.URLField(required=False, write_only=True)
 
     class Meta:
         model = InternDailyTimesheet
         fields = [
             'entry_date', 'task', 'category', 'description',
             'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason', 'log_description', 'hours_worked'
+            'end_of_day_note', 'edit_reason', 'log_description', 'hours_worked', 'task_output_link'
         ]
 
     def validate(self, data):
@@ -48,6 +49,18 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError({"task_status": "Task status is required when a task is selected."})
         if not task and task_status:
             raise serializers.ValidationError({"task_status": "Cannot provide task status without a task."})
+            
+        if task and task.is_verified:
+            if task_status and task_status != task.status:
+                raise serializers.ValidationError({"task_status": "Cannot change the status of a verified task."})
+            task_output_link = data.get('task_output_link')
+            if task_output_link and task_output_link != task.output_link:
+                raise serializers.ValidationError({"task_output_link": "Cannot change the output link of a verified task."})
+                
+        if task and task_status == 'COMPLETED':
+            task_output_link = data.get('task_output_link')
+            if not task_output_link and not task.output_link:
+                raise serializers.ValidationError({"task_output_link": "Task output link is required when completing a task."})
 
         if data.get('hours', 0) <= 0:
             raise serializers.ValidationError({"hours": "Hours must be greater than 0."})
@@ -63,8 +76,12 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
         
         task = validated_data.get('task')
         task_status = validated_data.get('task_status')
+        task_output_link = validated_data.pop('task_output_link', None)
+        
         if task and task_status:
             task.status = task_status
+            if task_output_link:
+                task.output_link = task_output_link
             task.save()
             
         return super().create(validated_data)
@@ -76,6 +93,6 @@ class InternTimesheetHistorySerializer(serializers.ModelSerializer):
         fields = [
             'id', 'entry_date', 'task_id', 'category', 'description',
             'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason', 'status', 'karma_awarded',
+            'end_of_day_note', 'edit_reason', 'status',
             'review_note', 'created_at'
         ]

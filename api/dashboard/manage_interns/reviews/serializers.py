@@ -11,7 +11,7 @@ class ManageInternWeeklyReviewSerializer(serializers.ModelSerializer):
             'id', 'user_id', 'user_name', 'muid', 'iso_year', 'iso_week', 'week_start_date', 'week_end_date',
             'team', 'is_on_leave', 'tasks_assigned', 'tasks_completed',
             'weekly_review', 'task_remarks', 'hours_committed', 'blockers',
-            'leave_days', 'suggestions', 'is_late', 'status', 'karma_awarded',
+            'leave_days', 'suggestions', 'is_late', 'status',
             'review_note', 'created_at'
         ]
 
@@ -24,6 +24,6 @@ class ManageInternTimesheetSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'user_id', 'user_name', 'muid', 'entry_date', 'task_id', 'category', 'description',
             'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason', 'status', 'karma_awarded',
+            'end_of_day_note', 'edit_reason', 'status',
             'review_note', 'created_at'
         ]

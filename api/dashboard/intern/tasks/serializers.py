@@ -10,5 +10,6 @@ class InternTaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'category', 'complexity',
             'assigned_to', 'assigned_to_name', 'status',
+            'karma_awarded', 'output_link', 'is_verified', 'verified_by',
             'created_by', 'created_by_name', 'created_at', 'updated_at'
         ]

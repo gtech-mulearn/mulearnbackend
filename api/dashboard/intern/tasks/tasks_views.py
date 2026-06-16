@@ -48,13 +48,28 @@ class InternTaskMineAPI(APIView):
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
             
+        if task.is_verified:
+            return CustomResponse(general_message="Task is already verified and cannot be edited.").get_failure_response()
+            
         status = request.data.get('status')
+        output_link = request.data.get('output_link')
+        
         if not status:
             return CustomResponse(general_message="Status is required.").get_failure_response()
             
+        if status == 'COMPLETED':
+            if not output_link and not task.output_link:
+                return CustomResponse(general_message="output_link is required when completing a task.").get_failure_response()
+                
+        update_data = {'status': status}
+        if output_link is not None:
+            update_data['output_link'] = output_link
+            
         old_data = {"status": task.status}
+        if output_link is not None:
+            old_data['output_link'] = task.output_link
         
-        serializer = InternTaskSerializer(task, data={'status': status}, partial=True)
+        serializer = InternTaskSerializer(task, data=update_data, partial=True)
         if serializer.is_valid():
             serializer.save()
             
@@ -66,7 +81,7 @@ class InternTaskMineAPI(APIView):
                 entity_name='intern_task',
                 entity_id=task.id,
                 old_data=old_data,
-                new_data={'status': status}
+                new_data=update_data
             )
             
             return CustomResponse(general_message="Task status updated successfully.").get_success_response()

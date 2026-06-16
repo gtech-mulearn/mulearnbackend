@@ -7,6 +7,7 @@ from django.db.models import Q
 from django.shortcuts import redirect
 from rest_framework.views import APIView
 from api.notification.notifications_utils import NotificationUtils
+from api.notification.broadcast_utils import BroadcastUtils
 from db.learning_circle import (
     CircleMeetAttendeeReport,
     CircleMeetAttendees,
@@ -217,6 +218,19 @@ class LearningCircleCreateApi(APIView):
         if serializer.is_valid():
             circle = serializer.save()
 
+            # Broadcast new LC creation to all campus members (if the circle belongs to a campus)
+            creator = User.objects.filter(id=user_id).first()
+            if creator and circle.org_id:
+                BroadcastUtils.create_broadcast(
+                    title='New Learning Circle Created',
+                    description=f'A new Learning Circle "{circle.title}" has been formed in your campus!',
+                    target_type='campus',
+                    target_id=circle.org_id,
+                    created_by=creator,
+                    expiry_key='lc_created',
+                    url=f'/dashboard/learning-circle/',
+                )
+
             return CustomResponse(
                 general_message="LearningCircle created successfully",
                 response={"circle_id": circle.id},
@@ -342,7 +356,7 @@ class LearningCircleJoinApi(APIView):
                     user=lead.user,
                     title="Member Request",
                     description=f"{full_name} has requested to join your learning circle",
-                    button="LC",
+                    button="View",
                     url=f"{settings.FR_DOMAIN_NAME}/api/v1/dashboard/lc/{circle_id}/{user_id}/",
                     created_by=user,
                 )
@@ -478,7 +492,7 @@ class LearningCircleDetailsApi(APIView):
                     user,
                     title="Request approved",
                     description="You request to join the learning circle has been approved",
-                    button="LC",
+                    button="View",
                     url=f"{settings.FR_DOMAIN_NAME}/api/v1/dashboard/lc/{circle_id}/",
                     created_by=User.objects.filter(id=user_id).first(),
                 )
@@ -487,8 +501,8 @@ class LearningCircleDetailsApi(APIView):
                     user,
                     title="Request rejected",
                     description="You request to join the learning circle has been rejected",
-                    button="LC",
-                    url=f"{settings.FR_DOMAIN_NAME}/api/v1/dashboard/lc/join",
+                    button=None,
+                    url=None,
                     created_by=User.objects.filter(id=user_id).first(),
                 )
 
@@ -792,7 +806,7 @@ class LearningCircleInvitationStatus(APIView):
             user_circle_link.accepted = True
             user_circle_link.accepted_at = DateTimeUtils.get_current_utc_time()
             user_circle_link.save()
-            # return CustomResponse(general_message='User added to circle').get_success_response()
+
             return redirect(f"{settings.FR_DOMAIN_NAME}/dashboard/learning-circle/")
 
         elif status == "rejected":

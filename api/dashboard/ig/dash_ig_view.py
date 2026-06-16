@@ -24,6 +24,7 @@ from db.notification import Notification
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from drf_spectacular.utils import extend_schema
+from api.notification.notifications_utils import NotificationUtils
 
 
 def _validate_muids(request_data, fields=("leads", "mentors")):
@@ -669,6 +670,29 @@ class InterestGroupRequestAPI(APIView):
         ig.status = new_status
         ig.updated_by_id = user_id
         ig.save()
+
+        # Notify the original requester
+        actor = User.objects.filter(id=user_id).first()
+        requester = ig.created_by
+        if actor and requester and str(requester.id) != user_id:
+            if new_status == 'active':
+                NotificationUtils.insert_notification(
+                    user=requester,
+                    title='Interest Group Approved',
+                    description=f'Your Interest Group request "{ig.name}" has been approved and is now active!',
+                    button='View',
+                    url=f'/interest-groups/{ig.id}/',
+                    created_by=actor,
+                )
+            elif new_status == 'rejected':
+                NotificationUtils.insert_notification(
+                    user=requester,
+                    title='Interest Group Rejected',
+                    description=f'Your Interest Group request "{ig.name}" has been rejected.',
+                    button=None,
+                    url=None,
+                    created_by=actor,
+                )
 
         response_serializer = InterestGroupSerializer(ig)
         

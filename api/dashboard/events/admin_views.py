@@ -5,10 +5,13 @@ All endpoints require the 'Admins' role.
 from rest_framework.views import APIView
 
 from db.events import Event, EventLog
+from db.user import User
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
 from utils.types import RoleType
+from api.notification.notifications_utils import NotificationUtils
+from api.notification.broadcast_utils import BroadcastUtils
 
 from .serializers import EventListItemSerializer, EventDetailSerializer, get_live_events
 from .event_logger import log_event_action
@@ -128,6 +131,73 @@ class AdminEventApproveAPI(APIView):
             changes={'Status': {'from': old_status, 'to': new_status}},
         )
 
+        # Notify the event creator
+        actor = User.objects.filter(id=user_id).first()
+        creator = event.created_by
+        if creator and actor:
+            if new_status == Event.Status.PUBLISHED:
+                NotificationUtils.insert_notification(
+                    user=creator,
+                    title='Event Published',
+                    description=f'Your event "{event.title}" is now live!',
+                    button='View',
+                    url=f'/events/{event.id}/',
+                    created_by=actor,
+                )
+            else:
+                NotificationUtils.insert_notification(
+                    user=creator,
+                    title='Event Approved',
+                    description=f'Your event "{event.title}" has been approved and is progressing through review.',
+                    button=None,
+                    url=None,
+                    created_by=actor,
+                )
+
+        # Fire audience broadcast when the event reaches PUBLISHED
+        if new_status == Event.Status.PUBLISHED and actor:
+            if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
+                BroadcastUtils.create_broadcast(
+                    title='New Event Published',
+                    description=f'A new Campus IG event "{event.title}" is now live!',
+                    target_type='campus_ig',
+                    target_id=event.organiser_ci_id or event.scope_ci_id,
+                    created_by=actor,
+                    expiry_key='event_published',
+                    url=f'/events/{event.id}/',
+                )
+            elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
+                BroadcastUtils.create_broadcast(
+                    title='New Event Published',
+                    description=f'A new Interest Group event "{event.title}" is now live!',
+                    target_type='interest_group',
+                    target_id=event.organiser_ig_id,
+                    created_by=actor,
+                    expiry_key='event_published',
+                    url=f'/events/{event.id}/',
+                )
+            elif event.organiser_type == Event.OrganiserType.CAMPUS:
+                BroadcastUtils.create_broadcast(
+                    title='New Event Published',
+                    description=f'A new Campus event "{event.title}" is now live!',
+                    target_type='campus',
+                    target_id=event.scope_org_id,
+                    created_by=actor,
+                    expiry_key='event_published',
+                    url=f'/events/{event.id}/',
+                )
+            else:
+                # ADMIN / COMPANY → global broadcast
+                BroadcastUtils.create_broadcast(
+                    title='New Event Published',
+                    description=f'A new event "{event.title}" is now available!',
+                    target_type='global',
+                    target_id=None,
+                    created_by=actor,
+                    expiry_key='event_published',
+                    url=f'/events/{event.id}/',
+                )
+
         return CustomResponse(
             general_message=f'Event approved: {old_status} → {new_status}.',
             response={'id': event.id, 'status': new_status},
@@ -183,6 +253,19 @@ class AdminEventRejectAPI(APIView):
             changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}},
             details={'reason': reason},
         )
+
+        # Notify the event creator
+        actor = User.objects.filter(id=user_id).first()
+        creator = event.created_by
+        if creator and actor:
+            NotificationUtils.insert_notification(
+                user=creator,
+                title='Event Rejected',
+                description=f'Your event "{event.title}" was rejected. Reason: {reason}',
+                button=None,
+                url=None,
+                created_by=actor,
+            )
 
         return CustomResponse(
             general_message=f'Event rejected (was: {old_status}).',

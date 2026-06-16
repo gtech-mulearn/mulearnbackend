@@ -92,7 +92,6 @@ class InternTimesheetReviewAPI(APIView):
                     multiplier = 1.2
                     
                 karma_to_award = int(base_karma * multiplier)
-                timesheet.karma_awarded = karma_to_award
                 
                 task_list = TaskList.objects.filter(hashtag=InternHashtag.DAILY_LOG_HASHTAG.value).first()
                 if task_list:
@@ -216,7 +215,6 @@ class InternWeeklyReviewReviewAPI(APIView):
                 streak.last_active = review.week_start_date
                 
                 karma_to_award = InternHashtag.WEEKLY_REVIEW_KARMA.value
-                review.karma_awarded = karma_to_award
                 
                 task_list = TaskList.objects.filter(hashtag=InternHashtag.WEEKLY_REVIEW_HASHTAG.value).first()
                 if task_list:

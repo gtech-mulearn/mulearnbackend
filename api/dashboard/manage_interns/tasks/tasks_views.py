@@ -72,6 +72,9 @@ class ManageInternTaskAPI(APIView):
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
             
+        if task.is_verified:
+            return CustomResponse(general_message="Task is already verified and cannot be edited.").get_failure_response()
+            
         request_data = request.data
             
         old_data = {
@@ -119,3 +122,47 @@ class ManageInternTaskAPI(APIView):
             
         task.delete()
         return CustomResponse(general_message="Task deleted successfully.").get_success_response()
+
+class ManageInternTaskVerifyAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Verify an intern task and award karma.",
+        responses={200: OpenApiResponse(description="Task verified successfully.")},
+    )
+    def post(self, request, task_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        
+        task = InternTask.objects.filter(id=task_id).first()
+        if not task:
+            return CustomResponse(general_message="Task not found.").get_failure_response()
+            
+        if task.is_verified:
+            return CustomResponse(general_message="Task is already verified.").get_failure_response()
+            
+        karma_awarded = request.data.get('karma_awarded', 0)
+        
+        try:
+            karma_awarded = int(karma_awarded)
+        except ValueError:
+            return CustomResponse(general_message="karma_awarded must be an integer.").get_failure_response()
+            
+        task.is_verified = True
+        task.verified_by_id = user_id
+        task.karma_awarded = karma_awarded
+        task.save()
+        
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.INTERN_TASK_UPDATE.value,
+            actor_user_id=user_id,
+            subject_user_id=task.assigned_to_id,
+            entity_name='intern_task',
+            entity_id=task.id,
+            old_data={"is_verified": False, "karma_awarded": 0},
+            new_data={"is_verified": True, "karma_awarded": karma_awarded, "verified_by": user_id}
+        )
+        
+        return CustomResponse(general_message="Task verified successfully.").get_success_response()

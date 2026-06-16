@@ -1,6 +1,6 @@
 from rest_framework import serializers
 
-from db.notification import Notification
+from db.notification import Notification, BroadcastNotification
 
 
 class NotificationSerializer(serializers.ModelSerializer):
@@ -8,3 +8,92 @@ class NotificationSerializer(serializers.ModelSerializer):
         model = Notification
         fields = '__all__'
 
+
+class BroadcastNotificationSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = BroadcastNotification
+        fields = [
+            'id', 'title', 'description', 'url',
+            'target_type', 'target_id',
+            'created_at', 'expires_at', 'created_by',
+        ]
+
+
+class BroadcastNotificationAdminSerializer(serializers.ModelSerializer):
+    """
+    Extended serializer for admin CRUD on BroadcastNotification.
+    Adds a `target_details` field that resolves the human-readable name of
+    the target entity from target_type + target_id.
+    """
+    target_details = serializers.SerializerMethodField()
+    created_by_name = serializers.CharField(source='created_by.full_name', read_only=True)
+
+    class Meta:
+        model = BroadcastNotification
+        fields = [
+            'id', 'title', 'description', 'url',
+            'target_type', 'target_id', 'target_details',
+            'created_by', 'created_by_name',
+            'created_at', 'expires_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'created_by', 'created_by_name', 'target_details']
+
+    def get_target_details(self, obj):
+        """
+        Resolve the human-readable name of the broadcast target.
+
+        Returns a dict with:
+          - type: the target_type string
+          - name: resolved entity name (org title, IG name, event title, or 'Global')
+        """
+        tt = obj.target_type
+        tid = obj.target_id
+
+        if tt == 'global':
+            return {'type': 'global', 'name': 'Global (All Users)'}
+
+        if not tid:
+            return {'type': tt, 'name': None}
+
+        try:
+            if tt == 'campus':
+                from db.organization import Organization
+                org = Organization.objects.filter(id=tid).first()
+                return {'type': 'campus', 'name': org.title if org else f'Unknown Campus ({tid})'}
+
+            if tt == 'interest_group':
+                from db.task import InterestGroup
+                ig = InterestGroup.objects.filter(id=tid).first()
+                return {'type': 'interest_group', 'name': ig.name if ig else f'Unknown IG ({tid})'}
+
+            if tt == 'campus_ig':
+                from db.campus import CampusIGChapter
+                chapter = CampusIGChapter.objects.select_related('org', 'ig').filter(id=tid).first()
+                if chapter:
+                    return {
+                        'type': 'campus_ig',
+                        'name': f'{chapter.org.title} — {chapter.ig.name}',
+                    }
+                return {'type': 'campus_ig', 'name': f'Unknown Chapter ({tid})'}
+
+            if tt in ('event_interest', 'event_coowners'):
+                from db.events import Event
+                event = Event.objects.filter(id=tid).first()
+                return {'type': tt, 'name': event.title if event else f'Unknown Event ({tid})'}
+
+        except Exception:
+            pass
+
+        return {'type': tt, 'name': tid}
+
+class BroadcastNotificationWriteSerializer(serializers.ModelSerializer):
+    """
+    Write-only serializer used for Create and Update of BroadcastNotification.
+    Only allows specifying title, description, url, and expires_at,
+    forcing target_type and target_id to be set by the view.
+    """
+    class Meta:
+        model = BroadcastNotification
+        fields = [
+            'title', 'description', 'url', 'expires_at',
+        ]
