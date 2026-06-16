@@ -233,19 +233,19 @@ class SocialPlatformType(Enum):
         return [member.value for member in cls]
 
 class InternHashtag(Enum):
-    DAILY_LOG_KARMA = 10
+    DAILY_LOG_KARMA = 0
     DAILY_LOG_HASHTAG = "#intern-daily-log"
-    WEEKLY_REVIEW_KARMA = 50
+    WEEKLY_REVIEW_KARMA = 0
     WEEKLY_REVIEW_HASHTAG = "#intern-weekly-review"
-    STREAK_7_KARMA = 20
+    STREAK_7_KARMA = 7
     STREAK_7_HASHTAG = "#intern-streak-7"
-    STREAK_14_KARMA = 50
+    STREAK_14_KARMA = 14
     STREAK_14_HASHTAG = "#intern-streak-14"
-    STREAK_30_KARMA = 100
+    STREAK_30_KARMA = 30
     STREAK_30_HASHTAG = "#intern-streak-30"
-    STREAK_60_KARMA = 200
+    STREAK_60_KARMA = 60
     STREAK_60_HASHTAG = "#intern-streak-60"
-    STREAK_90_KARMA = 500
+    STREAK_90_KARMA = 90
     STREAK_90_HASHTAG = "#intern-streak-90"
 
 class InternGuild(Enum):
