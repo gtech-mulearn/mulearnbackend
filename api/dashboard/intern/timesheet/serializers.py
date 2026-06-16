@@ -1,98 +1,123 @@
 from rest_framework import serializers
 from django.utils.timezone import now
+from django.db import transaction
 from datetime import timedelta
 
 from db.intern import InternDailyTimesheet, InternTask
-from utils.types import InternSubmissionStatus
+from utils.types import InternSubmissionStatus, InternTaskStatus
+
+
+class TaskUpdateEntrySerializer(serializers.Serializer):
+    """Validates a single task entry inside the `task` JSON array."""
+    task_id = serializers.CharField()
+    status = serializers.ChoiceField(
+        choices=[s.value for s in InternTaskStatus]
+    )
+    remark = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
 
 class InternTimesheetSerializer(serializers.ModelSerializer):
-    log_description = serializers.CharField(required=False, write_only=True)
-    hours_worked = serializers.DecimalField(max_digits=4, decimal_places=2, required=False, write_only=True)
-    task_output_link = serializers.URLField(required=False, write_only=True)
+    task = TaskUpdateEntrySerializer(many=True, required=False, allow_null=True)
 
     class Meta:
         model = InternDailyTimesheet
         fields = [
-            'entry_date', 'task', 'category', 'description',
-            'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason', 'log_description', 'hours_worked', 'task_output_link'
+            'entry_date', 'task', 'description',
+            'hours', 'blockers', 'end_of_day_note', 'edit_reason',
         ]
 
     def validate(self, data):
-        log_description = data.pop('log_description', None)
-        if log_description:
-            data['description'] = log_description
-            
-        hours_worked = data.pop('hours_worked', None)
-        if hours_worked is not None:
-            data['hours'] = hours_worked
-            
-        if not data.get('description'):
-            raise serializers.ValidationError({"description": "Description (or log_description) is required."})
-            
-        if not data.get('hours'):
-            raise serializers.ValidationError({"hours": "Hours (or hours_worked) is required."})
-
         entry_date = data.get('entry_date')
         today = now().date()
         yesterday = today - timedelta(days=1)
 
         if entry_date > today:
             raise serializers.ValidationError({"entry_date": "Future dates are not allowed."})
-        
+
         if entry_date < yesterday and not data.get('edit_reason'):
             raise serializers.ValidationError({"edit_reason": "Reason is required for late submissions."})
 
-        task = data.get('task')
-        task_status = data.get('task_status')
-        if task and not task_status:
-            raise serializers.ValidationError({"task_status": "Task status is required when a task is selected."})
-        if not task and task_status:
-            raise serializers.ValidationError({"task_status": "Cannot provide task status without a task."})
-            
-        if task and task.is_verified:
-            if task_status and task_status != task.status:
-                raise serializers.ValidationError({"task_status": "Cannot change the status of a verified task."})
-            task_output_link = data.get('task_output_link')
-            if task_output_link and task_output_link != task.output_link:
-                raise serializers.ValidationError({"task_output_link": "Cannot change the output link of a verified task."})
-                
-        if task and task_status == 'COMPLETED':
-            task_output_link = data.get('task_output_link')
-            if not task_output_link and not task.output_link:
-                raise serializers.ValidationError({"task_output_link": "Task output link is required when completing a task."})
+        if not data.get('description'):
+            raise serializers.ValidationError({"description": "Description is required."})
 
-        if data.get('hours', 0) <= 0:
+        if not data.get('hours') or data.get('hours', 0) <= 0:
             raise serializers.ValidationError({"hours": "Hours must be greater than 0."})
+
+        task_entries = data.get('task') or []
+        user_id = self.context.get('user_id')
+
+        seen_task_ids = set()
+        for entry in task_entries:
+            task_id = entry.get('task_id')
+            status = entry.get('status')
+
+            # Duplicate task_id in same submission
+            if task_id in seen_task_ids:
+                raise serializers.ValidationError(
+                    {"task": f"Duplicate task_id '{task_id}' in submission."}
+                )
+            seen_task_ids.add(task_id)
+
+            # Must belong to this intern
+            intern_task = InternTask.objects.filter(id=task_id, assigned_to_id=user_id).first()
+            if not intern_task:
+                raise serializers.ValidationError(
+                    {"task": f"Task '{task_id}' is not assigned to you or does not exist."}
+                )
+
+            # Cannot modify verified task
+            if intern_task.is_verified:
+                raise serializers.ValidationError(
+                    {"task": f"Task '{intern_task.title}' is already verified and cannot be modified."}
+                )
+
+            # COMPLETED requires output_link to already be set
+            if status == InternTaskStatus.COMPLETED.value and not intern_task.output_link:
+                raise serializers.ValidationError(
+                    {"task": f"Task '{intern_task.title}' requires an output_link before marking COMPLETED. Use the task submit endpoint first."}
+                )
+
+            # Enrich entry with title for the snapshot
+            entry['title'] = intern_task.title
 
         return data
 
     def create(self, validated_data):
         user_id = self.context.get('user_id')
-        validated_data['user_id'] = user_id
-        validated_data['created_by_id'] = user_id
-        validated_data['updated_by_id'] = user_id
-        validated_data['status'] = InternSubmissionStatus.PENDING.value
-        
-        task = validated_data.get('task')
-        task_status = validated_data.get('task_status')
-        task_output_link = validated_data.pop('task_output_link', None)
-        
-        if task and task_status:
-            task.status = task_status
-            if task_output_link:
-                task.output_link = task_output_link
-            task.save()
-            
-        return super().create(validated_data)
+        task_entries = validated_data.pop('task', None) or []
+
+        with transaction.atomic():
+            # Update InternTask.status for each entry
+            for entry in task_entries:
+                task_id = entry.get('task_id')
+                new_status = entry.get('status')
+                InternTask.objects.filter(id=task_id, assigned_to_id=user_id).update(status=new_status)
+
+            # Store clean snapshot (task_id, title, status, remark)
+            snapshot = [
+                {
+                    'task_id': e['task_id'],
+                    'title': e.get('title', ''),
+                    'status': e['status'],
+                    'remark': e.get('remark') or '',
+                }
+                for e in task_entries
+            ] or None
+
+            validated_data['task'] = snapshot
+            validated_data['user_id'] = user_id
+            validated_data['created_by_id'] = user_id
+            validated_data['updated_by_id'] = user_id
+            validated_data['status'] = InternSubmissionStatus.PENDING.value
+
+            return InternDailyTimesheet.objects.create(**validated_data)
 
 
 class InternTimesheetHistorySerializer(serializers.ModelSerializer):
     class Meta:
         model = InternDailyTimesheet
         fields = [
-            'id', 'entry_date', 'task_id', 'category', 'description',
-            'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason', 'status',
-            'review_note', 'created_at'
+            'id', 'entry_date', 'task', 'description',
+            'hours', 'blockers', 'end_of_day_note', 'edit_reason',
+            'status', 'review_note', 'created_at'
         ]

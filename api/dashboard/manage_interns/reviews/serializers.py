@@ -22,8 +22,7 @@ class ManageInternTimesheetSerializer(serializers.ModelSerializer):
     class Meta:
         model = InternDailyTimesheet
         fields = [
-            'id', 'user_id', 'user_name', 'muid', 'entry_date', 'task_id', 'category', 'description',
-            'hours', 'blockers', 'task_status', 'remark',
-            'end_of_day_note', 'edit_reason', 'status',
+            'id', 'user_id', 'user_name', 'muid', 'entry_date', 'task', 'description',
+            'hours', 'blockers', 'end_of_day_note', 'edit_reason', 'status',
             'review_note', 'created_at'
         ]
