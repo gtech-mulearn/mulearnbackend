@@ -268,7 +268,17 @@ class InternTaskStatus(Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     WAITING_FOR_REVIEW = "WAITING_FOR_REVIEW"
+    ON_HOLD = "ON_HOLD"
     OVERDUE = "OVERDUE"
+
+    @classmethod
+    def intern_editable(cls):
+        """Statuses an intern can set manually."""
+        return [cls.IN_PROGRESS.value, cls.COMPLETED.value, cls.ON_HOLD.value, cls.WAITING_FOR_REVIEW.value]
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
 
 class InternTaskComplexity(Enum):
     LOW = ("LOW", 1)

@@ -127,25 +127,23 @@ class InternLeaveBalanceAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve the intern's leave balance (sick, casual, WFH, emergency).",
-        responses={200: OpenApiResponse(description="Leave balance data by type.")},
+        description="Retrieve the intern's total approved leave days used per leave type.",
+        responses={200: OpenApiResponse(description="Approved leave days used by type.")},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        approved_leaves = InternLeaveRequest.objects.filter(
+        from django.db.models import Sum
+
+        approved = InternLeaveRequest.objects.filter(
             user_id=user_id,
-            status=InternLeaveStatus.APPROVED.value
+            status=InternLeaveStatus.APPROVED.value,
         )
-        
+
         data = {}
         for leave_type in ['SICK', 'CASUAL', 'WFH', 'EMERGENCY']:
-            used = approved_leaves.filter(
-                leave_type=leave_type
-            ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
-            
-            data[leave_type] = {
-                "used": used
-            }
-            
+            used = approved.filter(leave_type=leave_type).aggregate(
+                Sum('duration_days')
+            )['duration_days__sum'] or 0
+            data[leave_type] = {'used': used}
+
         return CustomResponse(response=data).get_success_response()

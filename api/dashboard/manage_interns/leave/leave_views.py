@@ -17,18 +17,25 @@ class ManageInternLeaveAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="List intern leave requests.",
-        responses={200: ManageInternLeaveSerializer(many=True)},
+        description="List all intern leave requests, or retrieve a single leave request by ID.",
+        responses={200: ManageInternLeaveSerializer},
     )
-    def get(self, request):
+    def get(self, request, leave_id=None):
+        if leave_id:
+            leave = InternLeaveRequest.objects.filter(id=leave_id).first()
+            if not leave:
+                return CustomResponse(general_message="Leave request not found.").get_failure_response()
+            serializer = ManageInternLeaveSerializer(leave)
+            return CustomResponse(response=serializer.data).get_success_response()
+
         leaves = InternLeaveRequest.objects.all().order_by('-created_at')
-        
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             leaves, request,
             ['user__full_name', 'leave_type', 'status'],
             {'created_at': 'created_at', 'status': 'status'}
         )
-        
+
         serializer = ManageInternLeaveSerializer(paginated_queryset.get("queryset"), many=True)
         return CustomResponse(
             response={
