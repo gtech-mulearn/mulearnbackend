@@ -28,7 +28,7 @@ class ManageInternLeaveAPI(APIView):
             serializer = ManageInternLeaveSerializer(leave)
             return CustomResponse(response=serializer.data).get_success_response()
 
-        leaves = InternLeaveRequest.objects.all().order_by('-created_at')
+        leaves = InternLeaveRequest.objects.select_related('user').all().order_by('-created_at')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             leaves, request,
