@@ -9,4 +9,5 @@ urlpatterns = [
     path("tasks/", include("api.dashboard.intern.tasks.urls")),
     path("leave/", include("api.dashboard.intern.leave.urls")),
     path("guilds/", overview_views.InternGuildsAPI.as_view(), name="intern-guilds"),
+    path("minutes/", include("api.dashboard.intern.minutes.urls")),
 ]

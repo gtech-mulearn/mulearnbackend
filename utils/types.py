@@ -34,6 +34,7 @@ class RoleType(Enum):
     DISTRICT_CAMPUS_LEAD = "District Campus Lead"
     MENTOR = "Mentor"
     INTERN = "Intern"
+    INTERN_LEAD = "Intern Lead"
     CAMPUS_LEAD = "Campus Lead"
     BOT_DEV = "Bot Dev"
     PRE_MEMBER = "Pre Member"

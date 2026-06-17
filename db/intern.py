@@ -125,3 +125,30 @@ class InternLeaveRequest(models.Model):
     class Meta:
         managed = False
         db_table = 'intern_leave_request'
+
+
+class InternGuildMinute(models.Model):
+    """
+    Stores daily guild minutes uploaded by an Intern Lead.
+    Each entry is scoped to a specific guild and date.
+    """
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    guild = models.CharField(max_length=75)
+    date = models.DateField()
+    title = models.CharField(max_length=200)
+    minutes = models.TextField()
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='intern_minutes_created', db_column='created_by'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='intern_minutes_updated', db_column='updated_by'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'intern_guild_minute'
+
