@@ -42,6 +42,7 @@ class UserSerializer(serializers.ModelSerializer):
     dynamic_type = serializers.SerializerMethodField()
     user_domains = serializers.SerializerMethodField()
     user_endgoals = serializers.SerializerMethodField()
+    company = serializers.SerializerMethodField()
 
     class Meta:
         model = User
@@ -61,6 +62,7 @@ class UserSerializer(serializers.ModelSerializer):
             "user_endgoals",
             "interested_in_work",
             "interested_in_gig_work",
+            "company",
         ]
 
     # def get_interest_selected(self, obj):
@@ -88,6 +90,16 @@ class UserSerializer(serializers.ModelSerializer):
         }.union(
             {dynamic_user.type for dynamic_user in DynamicUser.objects.filter(user=obj)}
         )
+
+    def get_company(self, obj):
+        roles = self.get_roles(obj)
+        if RoleType.COMPANY.value in roles:
+            company_link = obj.user_organization_link_user.filter(
+                org__org_type=OrganizationType.COMPANY.value
+            ).first()
+            if company_link:
+                return company_link.org.title
+        return None
 
 
 class CollegeSerializer(serializers.ModelSerializer):

@@ -214,3 +214,27 @@ class InterestGroupRequestSerializer(serializers.ModelSerializer):
             "category": {"required": True},
             "icon": {"required": True},
         }
+
+class InterestGroupRequestGetSerializer(InterestGroupSerializer):
+    requester_muid = serializers.CharField(source="created_by.muid", read_only=True)
+    requester_name = serializers.CharField(source="created_by.full_name", read_only=True)
+    company_name = serializers.SerializerMethodField()
+
+    class Meta(InterestGroupSerializer.Meta):
+        fields = InterestGroupSerializer.Meta.fields + [
+            "requester_muid",
+            "requester_name",
+            "company_name",
+        ]
+
+    def get_company_name(self, obj):
+        from utils.types import RoleType, OrganizationType
+        if obj.created_by:
+            roles = obj.created_by.user_role_link_user.all().values_list("role__title", flat=True)
+            if RoleType.COMPANY.value in roles:
+                company_link = obj.created_by.user_organization_link_user.filter(
+                    org__org_type=OrganizationType.COMPANY.value
+                ).first()
+                if company_link:
+                    return company_link.org.title
+        return None
