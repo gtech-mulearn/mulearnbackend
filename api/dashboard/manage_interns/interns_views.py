@@ -120,8 +120,11 @@ class ManageInternAPI(APIView):
             intern.updated_by_id = user_id
             intern.save()
             
-            # Remove "Intern" role
-            UserRoleLink.objects.filter(user=intern.user, role__title=RoleType.INTERN.value).delete()
+            # Remove "Intern" or "Intern Lead" role
+            UserRoleLink.objects.filter(
+                user=intern.user, 
+                role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
+            ).delete()
         
         return CustomResponse(general_message="Intern deactivated successfully.").get_success_response()
 
