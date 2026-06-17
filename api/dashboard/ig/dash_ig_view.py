@@ -12,6 +12,7 @@ from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
     InterestGroupRequestSerializer,
+    InterestGroupRequestGetSerializer,
 )
 import json
 import uuid
@@ -510,7 +511,7 @@ class InterestGroupRequestAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Interest Group Request.",
-        responses={200: InterestGroupSerializer},
+        responses={200: InterestGroupRequestGetSerializer},
     )
     def get(self, request):
         """Retrieve Interest Group requests created by a company user.
@@ -530,7 +531,9 @@ class InterestGroupRequestAPI(APIView):
         ig_queryset = InterestGroup.objects.select_related(
             "created_by", "updated_by"
         ).prefetch_related(
-            "user_ig_link_ig"
+            "user_ig_link_ig",
+            "created_by__user_role_link_user__role",
+            "created_by__user_organization_link_user__org"
         )
         
         if target_user_id:
@@ -566,7 +569,7 @@ class InterestGroupRequestAPI(APIView):
             },
         )
 
-        ig_serializer_data = InterestGroupSerializer(
+        ig_serializer_data = InterestGroupRequestGetSerializer(
             paginated_queryset.get("queryset"), many=True
         ).data
         
