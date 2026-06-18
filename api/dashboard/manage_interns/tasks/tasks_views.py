@@ -17,7 +17,7 @@ from .serializers import ManageInternTaskSerializer
 class ManageInternTaskAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve intern task(s) or task detail.",
@@ -47,7 +47,7 @@ class ManageInternTaskAPI(APIView):
             }
         ).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Create an intern task.",
@@ -63,7 +63,7 @@ class ManageInternTaskAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Update an intern task (partial update).",
@@ -113,7 +113,7 @@ class ManageInternTaskAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Delete an intern task.",
@@ -133,7 +133,7 @@ class ManageInternTaskAPI(APIView):
 class ManageInternTasksByInternAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve all tasks assigned to a specific intern identified by their muid.",
@@ -164,7 +164,7 @@ class ManageInternTasksByInternAPI(APIView):
 class ManageInternTaskVerifyAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Verify an intern task and award karma.",
