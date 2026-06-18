@@ -15,7 +15,7 @@ class ManageInternSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserInternGuildLink
-        fields = ['id', 'user', 'full_name', 'muid', 'mu_id', 'user_id', 'guild', 'status', 'role', 'roles', 'created_at']
+        fields = ['id', 'user', 'full_name', 'muid', 'mu_id', 'user_id', 'guild', 'status', 'role', 'created_at']
         read_only_fields = ['user']
 
     def to_representation(self, instance):
