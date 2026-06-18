@@ -22,12 +22,21 @@ class ManageInternSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         # Collect all intern-type roles the user currently holds
         intern_role_titles = [RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
-        active_roles = list(
-            UserRoleLink.objects.filter(
-                user=instance.user,
-                role__title__in=intern_role_titles
-            ).values_list('role__title', flat=True)
-        )
+        
+        # Check if we have prefetched data to avoid N+1 queries
+        if hasattr(instance.user, '_prefetched_objects_cache') and 'user_role_link_user' in instance.user._prefetched_objects_cache:
+            active_roles = [
+                link.role.title for link in instance.user.user_role_link_user.all()
+                if link.role.title in intern_role_titles
+            ]
+        else:
+            active_roles = list(
+                UserRoleLink.objects.filter(
+                    user=instance.user,
+                    role__title__in=intern_role_titles
+                ).values_list('role__title', flat=True)
+            )
+            
         data['roles'] = active_roles
         # Legacy 'role' field: prefer Intern Lead if held, else Intern
         data['role'] = (
