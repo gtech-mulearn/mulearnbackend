@@ -21,13 +21,15 @@ class ManageInternAPI(APIView):
     )
     def get(self, request, intern_id=None):
         if intern_id:
-            intern = UserInternGuildLink.objects.filter(id=intern_id).first()
+            intern = UserInternGuildLink.objects.select_related('user').filter(id=intern_id).first()
             if not intern:
                 return CustomResponse(general_message="Intern not found.").get_failure_response()
             serializer = ManageInternSerializer(intern)
             return CustomResponse(response=serializer.data).get_success_response()
             
-        interns = UserInternGuildLink.objects.all().order_by('-created_at')
+        interns = UserInternGuildLink.objects.select_related('user').prefetch_related(
+            'user__user_role_link_user__role'
+        ).order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             interns, request,
