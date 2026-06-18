@@ -14,7 +14,7 @@ from .serializers import ManageInternLeaveSerializer
 class ManageInternLeaveAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="List all intern leave requests, or retrieve a single leave request by ID.",
@@ -47,7 +47,7 @@ class ManageInternLeaveAPI(APIView):
 class ManageInternLeaveReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Review (approve/reject) an intern leave request.",

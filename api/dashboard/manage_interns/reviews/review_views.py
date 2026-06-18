@@ -19,7 +19,7 @@ from .serializers import ManageInternWeeklyReviewSerializer, ManageInternTimeshe
 class InternTimesheetReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve a timesheet for review.",
@@ -32,7 +32,7 @@ class InternTimesheetReviewAPI(APIView):
         serializer = ManageInternTimesheetSerializer(timesheet)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Approve or reject a timesheet.",
@@ -157,7 +157,7 @@ class InternTimesheetReviewAPI(APIView):
 class InternWeeklyReviewReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve a weekly review for detail.",
@@ -170,7 +170,7 @@ class InternWeeklyReviewReviewAPI(APIView):
         serializer = ManageInternWeeklyReviewSerializer(review)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Approve or reject a weekly review.",
@@ -249,7 +249,7 @@ class InternWeeklyReviewReviewAPI(APIView):
 class InternWeeklyReviewListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="List weekly reviews with filters.",
@@ -280,7 +280,7 @@ class InternWeeklyReviewListAPI(APIView):
 class InternTimesheetListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="List timesheets with filters.",

@@ -13,7 +13,7 @@ from .serializers import ManageInternSerializer
 class ManageInternAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve intern(s) or intern detail.",
@@ -43,7 +43,7 @@ class ManageInternAPI(APIView):
             }
         ).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Onboard a new intern.",
@@ -59,7 +59,7 @@ class ManageInternAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Update intern details (partial update).",
@@ -98,7 +98,7 @@ class ManageInternAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Deactivate (soft-delete) an intern.",
@@ -131,7 +131,7 @@ class ManageInternAPI(APIView):
 class ManageInternStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve intern status statistics.",
@@ -157,7 +157,7 @@ class ManageInternStatusAPI(APIView):
 class ManageInternExportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Export interns list as CSV.",

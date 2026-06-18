@@ -15,17 +15,25 @@ class ManageInternSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserInternGuildLink
-        fields = ['id', 'user', 'full_name', 'muid', 'mu_id', 'user_id', 'guild', 'status', 'role', 'created_at']
+        fields = ['id', 'user', 'full_name', 'muid', 'mu_id', 'user_id', 'guild', 'status', 'role', 'roles', 'created_at']
         read_only_fields = ['user']
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
-        # Determine current role from UserRoleLink and expose it in GET responses
-        has_lead = UserRoleLink.objects.filter(
-            user=instance.user,
-            role__title=RoleType.INTERN_LEAD.value
-        ).exists()
-        data['role'] = RoleType.INTERN_LEAD.value if has_lead else RoleType.INTERN.value
+        # Collect all intern-type roles the user currently holds
+        intern_role_titles = [RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
+        active_roles = list(
+            UserRoleLink.objects.filter(
+                user=instance.user,
+                role__title__in=intern_role_titles
+            ).values_list('role__title', flat=True)
+        )
+        data['roles'] = active_roles
+        # Legacy 'role' field: prefer Intern Lead if held, else Intern
+        data['role'] = (
+            RoleType.INTERN_LEAD.value if RoleType.INTERN_LEAD.value in active_roles
+            else RoleType.INTERN.value
+        )
         return data
 
     def validate_role(self, value):
@@ -72,15 +80,24 @@ class ManageInternSerializer(serializers.ModelSerializer):
         return role
 
     def _assign_role(self, user, role_title, actor_user_id):
-        """Remove all intern-type roles for the user and assign the given one."""
-        intern_role_titles = [RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
-        UserRoleLink.objects.filter(user=user, role__title__in=intern_role_titles).delete()
-        role = self._get_role_obj(role_title)
-        UserRoleLink.objects.get_or_create(
-            user=user,
-            role=role,
-            defaults={'verified': True, 'is_active': True, 'created_by_id': actor_user_id}
-        )
+        """Additively assign the given intern-type role.
+
+        A user can hold both 'Intern' and 'Intern Lead' simultaneously.
+        Assigning 'Intern Lead' also ensures 'Intern' is present.
+        Assigning 'Intern' alone does NOT strip 'Intern Lead' if already held.
+        """
+        roles_to_assign = [role_title]
+        # Intern Lead implies Intern — keep both
+        if role_title == RoleType.INTERN_LEAD.value:
+            roles_to_assign.append(RoleType.INTERN.value)
+
+        for title in roles_to_assign:
+            role = self._get_role_obj(title)
+            UserRoleLink.objects.get_or_create(
+                user=user,
+                role=role,
+                defaults={'verified': True, 'is_active': True, 'created_by_id': actor_user_id}
+            )
 
     def create(self, validated_data):
         actor_user_id = self.context.get('user_id')
