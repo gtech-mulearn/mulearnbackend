@@ -29,8 +29,12 @@ def is_approved_campus_mentor(user_id, org):
 
 def campus_staff_required(view_func):
     """
-    Decorator that allows access to Campus Leads, Lead Enablers,
+    Decorator that allows access to Campus Leads, Lead Enablers, Enablers,
     AND approved Campus Mentors (read-only campus dashboard endpoints).
+
+    Enablers get read-only access to their own campus: this decorator only
+    guards GET handlers; all mutating endpoints are gated separately by
+    @role_required([CAMPUS_LEAD, LEAD_ENABLER]).
 
     Usage:
         @campus_staff_required
@@ -39,7 +43,11 @@ def campus_staff_required(view_func):
     from utils.permission import JWTUtils
     from utils.response import CustomResponse
 
-    _STAFF_ROLES = {RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value}
+    _STAFF_ROLES = {
+        RoleType.CAMPUS_LEAD.value,
+        RoleType.LEAD_ENABLER.value,
+        RoleType.ENABLER.value,
+    }
 
     def wrapped(obj, request, *args, **kwargs):
         user_id = JWTUtils.fetch_user_id(request)
