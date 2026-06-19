@@ -4,12 +4,12 @@ from django.db.models import Count, Q
 from rest_framework import status
 from rest_framework.views import APIView
 
-from db.organization import Organization
-from db.task import Channel, InterestGroup, Level, TaskList, TaskType
+from db.organization import Organization, UserOrganizationLink
+from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import Events, RoleType
+from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
     TaskImportSerializer,
@@ -44,6 +44,53 @@ class TaskPublicListAPI(APIView):
         task_queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org"
         ).filter(active=True)
+
+        # --- Visibility filtering ---
+        # Determine which orgs/IGs the current user belongs to (if authenticated).
+        # Unauthenticated users can only see global tasks and company tasks.
+        campus_org_types = [OrganizationType.COLLEGE.value, OrganizationType.SCHOOL.value]
+
+        if JWTUtils.is_logged_in(request):
+            user_id = JWTUtils.fetch_user_id(request)
+
+            learner_org_ids = list(
+                UserOrganizationLink.objects.filter(
+                    user_id=user_id,
+                    verified=True,
+                    org__org_type__in=campus_org_types,
+                ).values_list("org_id", flat=True)
+            )
+
+            learner_ig_ids = list(
+                UserIgLink.objects.filter(
+                    user_id=user_id,
+                    is_active=True,
+                ).values_list("ig_id", flat=True)
+            )
+
+            # Org visibility rule:
+            #   - No org set (global task)                → visible to all
+            #   - Org is a Company                        → visible to all
+            #   - Org is a Campus (College/School)        → only learners of that campus
+            org_filter = (
+                Q(org__isnull=True)
+                | Q(org__org_type=OrganizationType.COMPANY.value)
+                | Q(org__org_type__in=campus_org_types, org_id__in=learner_org_ids)
+            )
+
+            # IG visibility rule:
+            #   - No IG set   → visible to all
+            #   - IG is set   → only learners in that IG
+            ig_filter = Q(ig__isnull=True) | Q(ig_id__in=learner_ig_ids)
+
+            task_queryset = task_queryset.filter(org_filter & ig_filter)
+        else:
+            # Unauthenticated: show only global tasks (no org, no IG)
+            # and company tasks (company org, no IG restriction).
+            task_queryset = task_queryset.filter(
+                Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value),
+                ig__isnull=True,
+            )
 
         ig_id = request.query_params.get("ig_id")
         if ig_id:
