@@ -9,7 +9,7 @@ from rest_framework.views import APIView
 from rest_framework.permissions import IsAuthenticated
 
 from db.events import Event, EventInterest
-from db.task import Wallet, UserIgLink
+from db.task import Wallet, UserIgLink, TaskList
 from db.organization import UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -26,6 +26,8 @@ from .serializers import (
 )
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
+from api.dashboard.task.dash_task_serializer import TaskListPublicSerializer
+
 
 
 def _get_viewer_id(request):
@@ -416,3 +418,96 @@ class EventCalendarAPI(APIView):
         serializer = EventCalendarItemSerializer(events, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
+
+class EventTaskPublicListAPI(APIView):
+    """
+    GET /events/tasks/
+
+    Scope-aware, authentication-optional API that returns tasks linked to
+    events the caller is allowed to see.
+
+    Visibility rules (mirror the event list scope rules):
+      - Unauthenticated users → tasks from GLOBAL-scoped events only.
+      - Authenticated users   → tasks from GLOBAL events + any campus/IG/
+                                campus_ig/company-scoped event the user
+                                belongs to (via UserOrganizationLink /
+                                UserIgLink).
+
+    Response format matches TaskListPublicSerializer (same as the existing
+    TaskPublicListAPI used in MuJourney).
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Events'],
+        description=(
+            "Scope-aware list of tasks for events the caller can access. "
+            "Unauthenticated callers receive only global-event tasks."
+        ),
+        responses={200: TaskListPublicSerializer(many=True)},
+    )
+    def get(self, request):
+        user_id = _get_viewer_id(request)
+
+        # ------------------------------------------------------------------
+        # 1. Determine which events the caller may see (scope-gate).
+        #    _build_scope_filter returns a Q object that encodes:
+        #      scope=GLOBAL                                   → always
+        #      scope=CAMPUS  & scope_org in user's orgs       → if logged in
+        #      scope=IG      & scope_ig  in user's IGs        → if logged in
+        #      scope=CAMPUS_IG & both org + IG match          → if logged in
+        #      scope=COMPANY & scope_org in user's orgs       → if logged in
+        # ------------------------------------------------------------------
+        scope_filter = _build_scope_filter(user_id)
+
+        accessible_event_ids = (
+            get_live_events()
+            .filter(
+                scope_filter,
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+            )
+            .values_list('id', flat=True)
+        )
+
+        # ------------------------------------------------------------------
+        # 2. Fetch tasks that are:
+        #    - linked to one of the accessible events (event_fk is set)
+        #    - active (approved and live)
+        # ------------------------------------------------------------------
+        tasks = TaskList.objects.select_related(
+            'channel', 'type', 'level', 'ig', 'org', 'event_fk',
+        ).filter(
+            active=True,
+            event_fk_id__in=accessible_event_ids,
+        )
+
+        paginated = CommonUtils.get_paginated_queryset(
+            tasks,
+            request,
+            search_fields=[
+                'hashtag',
+                'title',
+                'description',
+                'karma',
+                'channel__name',
+                'type__title',
+                'ig__name',
+                'event_fk__title',
+            ],
+            sort_fields={
+                'hashtag': 'hashtag',
+                'title': 'title',
+                'karma': 'karma',
+                'type': 'type__title',
+                'ig': 'ig__name',
+                'created_at': 'created_at',
+            },
+        )
+
+        serializer = TaskListPublicSerializer(
+            paginated['queryset'], many=True
+        )
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )

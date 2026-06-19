@@ -61,6 +61,7 @@ urlpatterns = [
     path('calendar/', public_views.EventCalendarAPI.as_view()),
     path('featured/', public_views.EventFeaturedAPI.as_view()),
     path('is-featured/', public_views.EventFeaturedAPI.as_view()),
+    path('tasks/', public_views.EventTaskPublicListAPI.as_view()),
     path('<str:event_id>/interest/', public_views.EventInterestAPI.as_view()),
     path('<str:event_id>/', public_views.EventDetailAPI.as_view()),
     path('', public_views.EventListAPI.as_view()),
