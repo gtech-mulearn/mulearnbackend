@@ -33,6 +33,34 @@ class SessionJoinAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 
+class MentorAddParticipantAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor Session Participant'],
+        description="Mentor view to manually add a participant to a specific session using muid.",
+        request=serializers.MentorAddParticipantSerializer,
+        responses={200: serializers.ParticipantListSerializer},
+    )
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request, session_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        
+        serializer = serializers.MentorAddParticipantSerializer(
+            data=request.data, context={"user_id": user_id, "session_id": session_id}
+        )
+        
+        if serializer.is_valid():
+            link = serializer.save()
+            return CustomResponse(
+                general_message="Successfully added participant to the session.",
+                response=serializers.ParticipantListSerializer(link).data
+            ).get_success_response()
+            
+        return CustomResponse(message=serializer.errors).get_failure_response()
+
+
+
 class UserSessionHistoryAPI(APIView):
     permission_classes = [CustomizePermission]
 
