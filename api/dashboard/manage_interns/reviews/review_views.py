@@ -16,6 +16,195 @@ from utils.utils import CommonUtils
 from .serializers import ManageInternWeeklyReviewSerializer, ManageInternTimesheetSerializer
 
 
+# ============================================================================
+# Streak Recalculation Helpers
+# ============================================================================
+
+def recalculate_intern_timesheet_streak(user_id: str) -> dict:
+    """
+    Recalculates the intern_timesheet streak from scratch by looking at the
+    entire history of approved timesheets, sorted chronologically.
+
+    This is order-independent: the result is identical regardless of the
+    order the admin approved individual timesheets.
+
+    Returns:
+        dict with keys:
+            - current_streak (int): The streak ending at the latest entry_date
+            - longest_streak (int): The overall longest continuous streak
+            - last_active (date | None): The most recent approved entry_date
+            - milestone_hits (dict): {milestone_days: count_of_times_reached}
+    """
+    approved_dates = list(
+        InternDailyTimesheet.objects.filter(
+            user_id=user_id,
+            status=InternSubmissionStatus.APPROVED.value,
+        )
+        .order_by('entry_date')
+        .values_list('entry_date', flat=True)
+        .distinct()  # Guard against duplicate approvals for the same date
+    )
+
+    if not approved_dates:
+        return {
+            'current_streak': 0,
+            'longest_streak': 0,
+            'last_active': None,
+            'milestone_hits': {},
+        }
+
+    milestones = [7, 14, 30, 60, 90]
+    milestone_hits = {m: 0 for m in milestones}
+
+    current = 1
+    longest = 1
+    for m in milestones:
+        if current >= m:
+            milestone_hits[m] += 1
+
+    for i in range(1, len(approved_dates)):
+        prev = approved_dates[i - 1]
+        curr = approved_dates[i]
+        diff = (curr - prev).days
+
+        # Consecutive: next calendar day, OR Friday→Monday (skipping weekend)
+        is_consecutive = (
+            diff == 1 or
+            (diff == 3 and curr.weekday() == 0 and prev.weekday() == 4)
+        )
+
+        if is_consecutive:
+            current += 1
+        elif diff > 0:
+            # Gap — streak resets
+            current = 1
+        # diff == 0 means duplicate date (already deduped, but just in case)
+
+        longest = max(longest, current)
+        for m in milestones:
+            if current == m:
+                milestone_hits[m] += 1
+
+    return {
+        'current_streak': current,
+        'longest_streak': longest,
+        'last_active': approved_dates[-1],
+        'milestone_hits': milestone_hits,
+    }
+
+
+def recalculate_intern_weekly_streak(user_id: str) -> dict:
+    """
+    Recalculates the intern_weekly_review streak from scratch by looking at
+    the entire history of approved weekly reviews, sorted chronologically.
+
+    A late review (is_late=True) resets the streak to 0.
+
+    Returns:
+        dict with keys:
+            - current_streak (int)
+            - longest_streak (int)
+            - last_active (date | None): The most recent approved week_start_date
+    """
+    approved_reviews = list(
+        InternWeeklyReview.objects.filter(
+            user_id=user_id,
+            status=InternSubmissionStatus.APPROVED.value,
+        )
+        .order_by('week_start_date')
+        .values('week_start_date', 'is_late')
+    )
+
+    if not approved_reviews:
+        return {'current_streak': 0, 'longest_streak': 0, 'last_active': None}
+
+    current = 0
+    longest = 0
+    last_week_start = None
+
+    for review in approved_reviews:
+        week_start = review['week_start_date']
+        is_late = review['is_late']
+
+        if is_late:
+            current = 0
+        elif last_week_start is None:
+            current = 1
+        elif (week_start - last_week_start).days == 7:
+            current += 1
+        elif week_start == last_week_start:
+            pass  # Duplicate, ignore
+        else:
+            current = 1  # Gap
+
+        longest = max(longest, current)
+        last_week_start = week_start
+
+    return {
+        'current_streak': current,
+        'longest_streak': longest,
+        'last_active': last_week_start,
+    }
+
+
+def _award_missing_milestone_karma(user_id: str, admin_id: str, milestone_hits: dict, milestone_map: dict):
+    """
+    Awards milestone karma for any gaps between expected and actual hits.
+
+    Uses "Expected vs Actual" logic:
+      - expected_hits: how many times the streak crossed a milestone (from recalculation)
+      - actual_hits:   how many times we already gave karma for that milestone
+
+    Only awards the *difference*, so this is idempotent and safe to call on
+    every approval regardless of order.
+
+    Args:
+        user_id:       The intern's user ID
+        admin_id:      The admin performing the approval (used as created_by)
+        milestone_hits: {milestone_days: expected_hit_count} from recalculate_*
+        milestone_map:  {milestone_days: (hashtag, bonus_karma)}
+    """
+    from django.db.models import F
+
+    for milestone_days, (hashtag, bonus_karma) in milestone_map.items():
+        expected = milestone_hits.get(milestone_days, 0)
+        if expected == 0:
+            continue
+
+        task_list = TaskList.objects.filter(hashtag=hashtag).first()
+        if not task_list:
+            continue
+
+        actual = KarmaActivityLog.objects.filter(
+            user_id=user_id,
+            task=task_list,
+            appraiser_approved=True,
+        ).count()
+
+        missing = expected - actual
+        if missing <= 0:
+            continue
+
+        wallet, _ = Wallet.objects.get_or_create(
+            user_id=user_id,
+            defaults={'created_by_id': admin_id, 'updated_by_id': admin_id}
+        )
+
+        for _ in range(missing):
+            KarmaActivityLog.objects.create(
+                id=str(uuid.uuid4()),
+                user_id=user_id,
+                task=task_list,
+                karma=bonus_karma,
+                appraiser_approved=True,
+                updated_by_id=admin_id,
+                updated_at=now(),
+                created_by_id=admin_id,
+                created_at=now(),
+            )
+        Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + (bonus_karma * missing))
+
+
 class InternTimesheetReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -55,33 +244,21 @@ class InternTimesheetReviewAPI(APIView):
                 timesheet.status = InternSubmissionStatus.APPROVED.value
                 timesheet.reviewed_by_id = admin_id
                 timesheet.reviewed_at = now()
-                
+                # Save the approved status first so the recalculation includes this timesheet
+                timesheet.save()
+
                 user_id = timesheet.user_id
+
+                # --- Ground-up streak recalculation (order-independent) ---
+                recalc = recalculate_intern_timesheet_streak(user_id)
+
                 streak, _ = UserStreak.objects.get_or_create(user_id=user_id, streak_type='intern_timesheet')
-                
-                # Use entry_date to determine consecutiveness logically (skip weekends)
-                if streak.last_active:
-                    days_diff = (timesheet.entry_date - streak.last_active).days
-                    is_consecutive = False
-                    
-                    if days_diff == 1:
-                        is_consecutive = True
-                    elif days_diff == 3 and timesheet.entry_date.weekday() == 0 and streak.last_active.weekday() == 4:
-                        # Friday to Monday
-                        is_consecutive = True
-                        
-                    if is_consecutive:
-                        streak.current_streak += 1
-                    elif days_diff == 0:
-                        pass # Same day, no increment
-                    else:
-                        streak.current_streak = 1
-                else:
-                    streak.current_streak = 1
-                    
-                streak.longest_streak = max(streak.current_streak, streak.longest_streak)
-                streak.last_active = timesheet.entry_date
-                
+                streak.current_streak = recalc['current_streak']
+                streak.longest_streak = recalc['longest_streak']
+                streak.last_active = recalc['last_active']
+                streak.save()
+
+                # --- Base karma with streak multiplier ---
                 base_karma = InternHashtag.DAILY_LOG_KARMA.value
                 multiplier = 1.0
                 if streak.current_streak >= 30:
@@ -90,9 +267,9 @@ class InternTimesheetReviewAPI(APIView):
                     multiplier = 1.5
                 elif streak.current_streak >= 7:
                     multiplier = 1.2
-                    
+
                 karma_to_award = int(base_karma * multiplier)
-                
+
                 task_list = TaskList.objects.filter(hashtag=InternHashtag.DAILY_LOG_HASHTAG.value).first()
                 if task_list:
                     KarmaActivityLog.objects.create(
@@ -104,55 +281,38 @@ class InternTimesheetReviewAPI(APIView):
                         updated_by_id=admin_id,
                         updated_at=now(),
                         created_by_id=admin_id,
-                        created_at=now()
+                        created_at=now(),
                     )
-                    
                     from django.db.models import F
                     wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
                     Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
 
-                milestones = {
-                    7: (InternHashtag.STREAK_7_HASHTAG.value, InternHashtag.STREAK_7_KARMA.value),
+                # --- Milestone karma (Expected vs Actual — idempotent) ---
+                milestone_map = {
+                    7:  (InternHashtag.STREAK_7_HASHTAG.value,  InternHashtag.STREAK_7_KARMA.value),
                     14: (InternHashtag.STREAK_14_HASHTAG.value, InternHashtag.STREAK_14_KARMA.value),
                     30: (InternHashtag.STREAK_30_HASHTAG.value, InternHashtag.STREAK_30_KARMA.value),
                     60: (InternHashtag.STREAK_60_HASHTAG.value, InternHashtag.STREAK_60_KARMA.value),
                     90: (InternHashtag.STREAK_90_HASHTAG.value, InternHashtag.STREAK_90_KARMA.value),
                 }
-                
-                if streak.current_streak in milestones:
-                    hashtag, bonus_karma = milestones[streak.current_streak]
-                    milestone_task = TaskList.objects.filter(hashtag=hashtag).first()
-                    if milestone_task:
-                        KarmaActivityLog.objects.create(
-                            id=str(uuid.uuid4()),
-                            user_id=user_id,
-                            task=milestone_task,
-                            karma=bonus_karma,
-                            appraiser_approved=True,
-                            updated_by_id=admin_id,
-                            updated_at=now(),
-                            created_by_id=admin_id,
-                            created_at=now()
-                        )
-                        from django.db.models import F
-                        wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
-                        Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + bonus_karma)
-                        
-                streak.save()
-                
+                _award_missing_milestone_karma(user_id, admin_id, recalc['milestone_hits'], milestone_map)
+
                 guild_link = UserInternGuildLink.objects.filter(user_id=user_id).first()
                 if guild_link and guild_link.status == InternGuildStatus.AT_RISK.value:
                     guild_link.status = InternGuildStatus.ACTIVE.value
                     guild_link.save()
+
+                # timesheet was already saved above; return early
+                return CustomResponse(general_message="Timesheet approved successfully.").get_success_response()
 
             elif action == "reject":
                 timesheet.status = InternSubmissionStatus.REJECTED.value
                 timesheet.reviewed_by_id = admin_id
                 timesheet.reviewed_at = now()
                 timesheet.review_note = review_note
-                
+
             timesheet.save()
-            return CustomResponse(general_message=f"Timesheet {action}ed successfully.").get_success_response()
+            return CustomResponse(general_message="Timesheet rejected successfully.").get_success_response()
 
 class InternWeeklyReviewReviewAPI(APIView):
     authentication_classes = [CustomizePermission]
@@ -193,29 +353,23 @@ class InternWeeklyReviewReviewAPI(APIView):
                 review.status = InternSubmissionStatus.APPROVED.value
                 review.reviewed_by_id = admin_id
                 review.reviewed_at = now()
-                
+                # Save first so the recalculation includes this review
+                review.save()
+
                 user_id = review.user_id
-                
+
+                # --- Ground-up streak recalculation (order-independent) ---
+                recalc = recalculate_intern_weekly_streak(user_id)
+
                 streak, _ = UserStreak.objects.get_or_create(user_id=user_id, streak_type='intern_weekly_review')
-                
-                if review.is_late:
-                    streak.current_streak = 0
-                else:
-                    if streak.last_active:
-                        if streak.last_active == review.week_start_date - timedelta(days=7):
-                            streak.current_streak += 1
-                        elif streak.last_active == review.week_start_date:
-                            pass
-                        else:
-                            streak.current_streak = 1
-                    else:
-                        streak.current_streak = 1
-                        
-                streak.longest_streak = max(streak.current_streak, streak.longest_streak)
-                streak.last_active = review.week_start_date
-                
+                streak.current_streak = recalc['current_streak']
+                streak.longest_streak = recalc['longest_streak']
+                streak.last_active = recalc['last_active']
+                streak.save()
+
+                # --- Base karma for weekly review ---
                 karma_to_award = InternHashtag.WEEKLY_REVIEW_KARMA.value
-                
+
                 task_list = TaskList.objects.filter(hashtag=InternHashtag.WEEKLY_REVIEW_HASHTAG.value).first()
                 if task_list:
                     KarmaActivityLog.objects.create(
@@ -227,21 +381,24 @@ class InternWeeklyReviewReviewAPI(APIView):
                         updated_by_id=admin_id,
                         updated_at=now(),
                         created_by_id=admin_id,
-                        created_at=now()
+                        created_at=now(),
                     )
-                    
                     from django.db.models import F
                     wallet, _ = Wallet.objects.get_or_create(user_id=user_id, defaults={'created_by_id': admin_id, 'updated_by_id': admin_id})
                     Wallet.objects.filter(id=wallet.id).update(karma=F('karma') + karma_to_award)
-                    
-                streak.save()
+
+                # weekly reviews currently have no milestone map, but the
+                # pattern is here if needed in the future.
+
+                # review was already saved above; skip the final save
+                return CustomResponse(general_message=f"Weekly review {action}ed successfully.").get_success_response()
 
             elif action == "reject":
                 review.status = InternSubmissionStatus.REJECTED.value
                 review.reviewed_by_id = admin_id
                 review.reviewed_at = now()
                 review.review_note = review_note
-                
+
             review.save()
             return CustomResponse(general_message=f"Weekly review {action}ed successfully.").get_success_response()
 
