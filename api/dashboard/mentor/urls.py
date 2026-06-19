@@ -24,6 +24,7 @@ urlpatterns = [
     path('availability/<str:slot_id>/', availability_views.MentorAvailabilitySlotAPI.as_view(), name='mentor-availability-update-delete'),
     path('session/participation/join/<str:session_id>/', participant_views.SessionJoinAPI.as_view(), name='session-join'),
     path('session/participant/history/', participant_views.UserSessionHistoryAPI.as_view(), name='user-session-history'),
+    path('session/participant/add/<str:session_id>/', participant_views.MentorAddParticipantAPI.as_view(), name='mentor-participant-add'),
     path('session/participant/list/<str:session_id>/', participant_views.MentorParticipantListAPI.as_view(), name='mentor-participant-list'),
     path('session/participant/update/<str:link_id>/', participant_views.MentorParticipantUpdateAPI.as_view(), name='mentor-participant-update'),
     path('session/participant/feedback/<str:session_id>/', participant_views.ParticipantFeedbackAPI.as_view(), name='participant-feedback'),

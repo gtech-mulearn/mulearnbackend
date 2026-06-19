@@ -518,6 +518,47 @@ class ParticipantJoinSerializer(serializers.Serializer):
         )
         return link
 
+class MentorAddParticipantSerializer(serializers.Serializer):
+    muid = serializers.CharField(required=True)
+
+    def create(self, validated_data):
+        mentor_id = self.context.get("user_id")
+        session_id = self.context.get("session_id")
+        muid = validated_data.get("muid")
+        
+        from db.user import User
+        user = User.objects.filter(muid=muid, suspended_at__isnull=True).first()
+        if not user:
+            raise serializers.ValidationError("User with this muid not found or is suspended.")
+            
+        session = MentorshipSession.objects.filter(id=session_id).first()
+        if not session:
+            raise serializers.ValidationError("Session not found.")
+            
+        # Verify the logged-in mentor created this session
+        if session.created_by_id != mentor_id:
+            raise serializers.ValidationError("You do not have permission to add participants to this session.")
+            
+        if session.status != MentorshipSession.Status.SCHEDULED:
+            raise serializers.ValidationError("Only scheduled sessions can accept participants.")
+            
+        if session.max_participants:
+            current_count = MentorshipSessionUserLink.objects.filter(session_id=session_id).count()
+            if current_count >= session.max_participants:
+                raise serializers.ValidationError("Session has reached its maximum participant limit.")
+                
+        if MentorshipSessionUserLink.objects.filter(session_id=session_id, user_id=user.id).exists():
+            raise serializers.ValidationError("This user is already a participant of this session.")
+            
+        link = MentorshipSessionUserLink.objects.create(
+            session_id=session_id,
+            user_id=user.id,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED
+        )
+        return link
+
+
 class ParticipantListSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     mu_id = serializers.CharField(source='user.mu_id', read_only=True)

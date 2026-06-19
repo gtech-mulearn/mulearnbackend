@@ -100,6 +100,7 @@ class MentorStatusAPI(APIView):
             
         return CustomResponse(
             response={
+                "status": mentor.status,
                 "organization": getattr(mentor.org, "title", None) if mentor.org else None,
                 "verified_by": getattr(mentor.verified_by, "full_name", None) if mentor.verified_by else None,
                 "verified_at": mentor.verified_at,
