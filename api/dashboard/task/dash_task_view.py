@@ -41,8 +41,14 @@ class TaskPublicListAPI(APIView):
         })},
     )
     def get(self, request):
+        # Local imports to avoid circular import issues
+        from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
+        from api.dashboard.events.serializers import get_live_events
+        from db.events import Event
+
+        # Change 2: include event_fk so we can access event data without extra queries
         task_queryset = TaskList.objects.select_related(
-            "channel", "type", "level", "ig", "org"
+            "channel", "type", "level", "ig", "org", "event_fk"
         ).filter(active=True)
 
         # --- Visibility filtering ---
@@ -83,14 +89,64 @@ class TaskPublicListAPI(APIView):
             #   - IG is set   → only learners in that IG
             ig_filter = Q(ig__isnull=True) | Q(ig_id__in=learner_ig_ids)
 
-            task_queryset = task_queryset.filter(org_filter & ig_filter)
-        else:
-            # Unauthenticated: show only global tasks (no org, no IG)
-            # and company tasks (company org, no IG restriction).
-            task_queryset = task_queryset.filter(
-                Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value),
-                ig__isnull=True,
+        # Change 3: build the set of event IDs the caller is permitted to access,
+        # using the same scope logic as EventTaskPublicListAPI.
+        # _get_viewer_id returns None for unauthenticated callers (safe to use).
+        # _build_scope_filter returns GLOBAL-only when user_id is None.
+        viewer_id = _get_viewer_id(request)
+        scope_filter = _build_scope_filter(viewer_id)
+        accessible_event_ids = list(
+            get_live_events()
+            .filter(
+                scope_filter,
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
             )
+            .values_list("id", flat=True)
+        )
+
+        # Change 4: new query param filters + updated visibility logic
+        event_id_param = request.query_params.get("event_id")
+        is_event_task_only = (
+            request.query_params.get("is_event_task", "").lower() == "true"
+            or request.query_params.get("event_tasks_only", "").lower() == "true"
+        )
+
+        if event_id_param:
+            # Filter to a single event — only if that event is accessible to the caller.
+            # Use .exists() on the DB to avoid lazy queryset / type-mismatch issues.
+            event_accessible = get_live_events().filter(
+                scope_filter,
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+                id=event_id_param,
+            ).exists()
+            if event_accessible:
+                task_queryset = task_queryset.filter(event_fk_id=event_id_param)
+            else:
+                task_queryset = task_queryset.none()
+
+        elif is_event_task_only:
+            # Return only event-linked tasks the caller can access
+            task_queryset = task_queryset.filter(
+                event_fk_id__in=accessible_event_ids
+            )
+
+        else:
+            # Default: show regular tasks (existing org/ig rules) PLUS
+            # event-linked tasks filtered by event scope visibility.
+            if JWTUtils.is_logged_in(request):
+                regular_tasks_filter = Q(event_fk__isnull=True) & org_filter & ig_filter
+            else:
+                # Unauthenticated: global + company tasks with no IG restriction
+                regular_tasks_filter = Q(
+                    event_fk__isnull=True,
+                    ig__isnull=True,
+                ) & (Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value))
+
+            event_tasks_filter = Q(
+                event_fk__isnull=False,
+                event_fk_id__in=accessible_event_ids,
+            )
+            task_queryset = task_queryset.filter(regular_tasks_filter | event_tasks_filter)
 
         ig_id = request.query_params.get("ig_id")
         if ig_id:
@@ -113,6 +169,7 @@ class TaskPublicListAPI(APIView):
                 "org__title",
                 "ig__name",
                 "event",
+                "event_fk__title",  # Change 5: search by linked event title
             ],
             sort_fields={
                 "hashtag": "hashtag",
@@ -128,6 +185,7 @@ class TaskPublicListAPI(APIView):
                 "org": "org__title",
                 "ig": "ig__name",
                 "event": "event",
+                "event_title": "event_fk__title",  # Change 6: sort by linked event title
                 "updated_at": "updated_at",
                 "created_at": "created_at",
             },
