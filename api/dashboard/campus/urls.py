@@ -124,6 +124,16 @@ urlpatterns = [
         name="campus-ig-chapter-detail",
     ),
     path(
+        "ig-chapters/<str:chapter_id>/join/",
+        ig_views.CampusIGChapterJoinAPI.as_view(),
+        name="campus-ig-chapter-join",
+    ),
+    path(
+        "ig-chapters/<str:chapter_id>/leave/",
+        ig_views.CampusIGChapterLeaveAPI.as_view(),
+        name="campus-ig-chapter-leave",
+    ),
+    path(
         "social-links/",
         campus_views.CampusSocialLinkAPI.as_view(),
         name="campus-social-links",
