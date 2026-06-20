@@ -821,6 +821,17 @@ class UserLevelFeedAPI(APIView):
             .order_by("-created_at")
             .first()
         )
+        if not user_level:
+            # User has not been assigned a level yet (no UserLvlLink row).
+            # Return neutral defaults instead of dereferencing None.
+            return CustomResponse(
+                response={
+                    "level_order": 0,
+                    "level_name": "",
+                    "level_karma": 0,
+                    "user_karma": 0,
+                }
+            ).get_success_response()
         user_karma = (
             KarmaActivityLog.objects.select_related("task")
             .filter(
