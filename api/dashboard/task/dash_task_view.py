@@ -760,10 +760,15 @@ class LevelDropdownAPI(APIView):
         responses={200: inline_serializer("TaskLevelDropdownResponse", fields={
             "id": s.CharField(),
             "name": s.CharField(),
+            "level_order": s.IntegerField(),
         })},
     )
     def get(self, request):
-        levels = Level.objects.values("id", "name")
+        # level_order is the numeric rank used by downstream consumers (e.g. job
+        # eligibility "Min/Max Level" rules, which compare against a user's
+        # level_order). Returning it lets clients store the order rather than an
+        # opaque id/name.
+        levels = Level.objects.values("id", "name", "level_order").order_by("level_order")
         return CustomResponse(response=levels).get_success_response()
 
 
