@@ -318,4 +318,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.intern_cron.intern_daily_status_cron',
         'schedule': crontab(hour=0, minute=5),
     },
+    'intern-task-deadline-cron': {
+        'task': 'mu_celery.intern_cron.intern_task_deadline_cron',
+        'schedule': crontab(hour=0, minute=10),
+    },
 }

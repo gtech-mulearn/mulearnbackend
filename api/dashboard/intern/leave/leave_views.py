@@ -127,43 +127,23 @@ class InternLeaveBalanceAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Retrieve the intern's leave balance (sick, casual, WFH, emergency).",
-        responses={200: OpenApiResponse(description="Leave balance data by type.")},
+        description="Retrieve the intern's total approved leave days used per leave type.",
+        responses={200: OpenApiResponse(description="Approved leave days used by type.")},
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        current_date = now().date()
-        month_start = current_date.replace(day=1)
-        
-        iso_year, iso_week, weekday = current_date.isocalendar()
-        week_start = current_date - timedelta(days=weekday - 1)
-        
-        approved_leaves = InternLeaveRequest.objects.filter(
+        from django.db.models import Sum
+
+        approved = InternLeaveRequest.objects.filter(
             user_id=user_id,
-            status=InternLeaveStatus.APPROVED.value
+            status=InternLeaveStatus.APPROVED.value,
         )
-        
-        sick_used = approved_leaves.filter(
-            leave_type='SICK',
-            start_date__gte=month_start
-        ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
-        
-        casual_used = approved_leaves.filter(
-            leave_type='CASUAL',
-            start_date__gte=month_start
-        ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
-        
-        wfh_used = approved_leaves.filter(
-            leave_type='WFH',
-            start_date__gte=week_start
-        ).aggregate(Sum('duration_days'))['duration_days__sum'] or 0
-        
-        data = {
-            "SICK": {"limit": 2, "used": sick_used, "remaining": max(0, 2 - sick_used), "period": "month"},
-            "CASUAL": {"limit": 1, "used": casual_used, "remaining": max(0, 1 - casual_used), "period": "month"},
-            "WFH": {"limit": 2, "used": wfh_used, "remaining": max(0, 2 - wfh_used), "period": "week"},
-            "EMERGENCY": {"limit": None, "used": approved_leaves.filter(leave_type='EMERGENCY').aggregate(Sum('duration_days'))['duration_days__sum'] or 0, "remaining": None, "period": "unlimited"}
-        }
-        
+
+        data = {}
+        for leave_type in ['SICK', 'CASUAL', 'WFH', 'EMERGENCY']:
+            used = approved.filter(leave_type=leave_type).aggregate(
+                Sum('duration_days')
+            )['duration_days__sum'] or 0
+            data[leave_type] = {'used': used}
+
         return CustomResponse(response=data).get_success_response()

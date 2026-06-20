@@ -61,6 +61,90 @@ def _get_manageable_events():
     return Event.objects.all()  # No deleted_at filter — managers see everything they own
 
 
+def _get_user_company_org_ids(user_id, roles):
+    """Returns a list of Organization IDs for companies where the user is a creator or mentor."""
+    company_org_ids = set()
+    
+    if RoleType.COMPANY.value in roles:
+        from db.company import Company
+        from db.organization import Organization
+        from utils.types import OrganizationType
+        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+        if company:
+            org = Organization.objects.filter(title=company.name, org_type=OrganizationType.COMPANY.value).first()
+            if org:
+                company_org_ids.add(org.id)
+                
+    if RoleType.MENTOR.value in roles:
+        from db.user import UserMentor
+        mentors = UserMentor.objects.filter(
+            user_id=user_id, 
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, 
+            status=UserMentor.Status.APPROVED
+        )
+        for mentor in mentors:
+            if mentor.org_id:
+                company_org_ids.add(mentor.org_id)
+                
+    return list(company_org_ids)
+
+
+def _validate_campus_event_ownership(user_id, roles, organiser_type, organiser_org_id):
+    """Tenancy guard for Campus (campus-wide) events.
+
+    Returns an error message if the caller is not a member of the campus the
+    event targets, else None. Admins bypass. Prevents a lead of one campus from
+    creating/publishing campus-wide events scoped to a different campus.
+
+    Note: Campus IG events are intentionally not covered here. The current
+    event schema stores only the IG (scope_ci_id / organiser_ci_id) for
+    campus_ig events and does not reliably record the owning campus
+    (scope_org is null from the create wizard), so campus-level ownership
+    cannot be enforced for them yet.
+    """
+    if RoleType.ADMIN.value in roles:
+        return None
+
+    if organiser_type != Event.OrganiserType.CAMPUS.value:
+        return None
+
+    if not organiser_org_id:
+        return 'A target campus is required for campus events.'
+
+    from db.organization import UserOrganizationLink
+    is_member = UserOrganizationLink.objects.filter(
+        user_id=user_id, org_id=organiser_org_id
+    ).exists()
+    if not is_member:
+        return 'You are not authorized to create events for this campus.'
+    return None
+
+
+def _resolve_creator_campus_id(user_id):
+    """Return the College org id (campus) the given user belongs to, or None.
+
+    Prefers an approved Campus Mentor's scoped org, otherwise falls back to the
+    user's College organisation link. Used to stamp the owning campus
+    (scope_org) onto Campus IG events, which the create wizard does not send.
+    """
+    from db.user import UserMentor
+    mentor = UserMentor.objects.filter(
+        user_id=user_id,
+        mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+        status=UserMentor.Status.APPROVED,
+    ).first()
+    if mentor and mentor.org_id:
+        return mentor.org_id
+
+    from db.organization import UserOrganizationLink
+    from utils.types import OrganizationType
+    link = UserOrganizationLink.objects.filter(
+        user_id=user_id,
+        org__org_type=OrganizationType.COLLEGE.value,
+    ).first()
+    return link.org_id if link else None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # MANAGE EVENT LIST + CREATE
 # ─────────────────────────────────────────────────────────────────────────────
@@ -96,10 +180,19 @@ class ManageEventListCreateAPI(APIView):
             )
 
             from django.db.models import Q
+            q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
+            
+            # Allow Company and Company Mentors to see all events for their company
+            if RoleType.COMPANY.value in roles or RoleType.MENTOR.value in roles:
+                company_org_ids = _get_user_company_org_ids(user_id, roles)
+                if company_org_ids:
+                    q_filter |= Q(
+                        organiser_type=Event.OrganiserType.COMPANY.value,
+                        organiser_org_id__in=company_org_ids
+                    )
+
             # Use _get_manageable_events() so cancelled events remain visible to their owner
-            events = _get_manageable_events().filter(
-                Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
-            )
+            events = _get_manageable_events().filter(q_filter)
 
         # Optional status filter & Queue Scoping
         if status := request.query_params.get('status'):
@@ -211,6 +304,43 @@ class ManageEventListCreateAPI(APIView):
         )
         if merge_error:
             return CustomResponse(general_message=merge_error).get_failure_response()
+
+        # Enforce organiser_org for Company events
+        if payload.get('organiser_type') == Event.OrganiserType.COMPANY.value:
+            payload_organiser_org = payload.get('organiser_org')
+            if not payload_organiser_org:
+                return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
+            
+            if RoleType.ADMIN.value not in roles:
+                valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
+                if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
+                    return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
+
+        # Enforce campus tenancy for Campus events
+        ownership_error = _validate_campus_event_ownership(
+            user_id, roles,
+            payload.get('organiser_type'),
+            payload.get('organiser_org'),
+        )
+        if ownership_error:
+            return CustomResponse(general_message=ownership_error).get_failure_response()
+
+        # Campus IG events: stamp the owning campus (scope_org) from the creator.
+        # The wizard only sends the IG (scope_ci_id); the campus is implicit and
+        # required downstream for mentor/campus approval routing and scoping.
+        # Non-admins are pinned to their own campus (blocks cross-campus
+        # targeting); admins may target a campus explicitly via scope_org.
+        if payload.get('organiser_type') == Event.OrganiserType.CAMPUS_IG.value:
+            if RoleType.ADMIN.value in roles:
+                if not payload.get('scope_org'):
+                    payload['scope_org'] = _resolve_creator_campus_id(user_id)
+            else:
+                campus_id = _resolve_creator_campus_id(user_id)
+                if not campus_id:
+                    return CustomResponse(
+                        general_message='You are not associated with a campus.'
+                    ).get_failure_response()
+                payload['scope_org'] = campus_id
 
         serializer = EventWriteSerializer(
             data=payload,
@@ -347,6 +477,35 @@ class ManageEventDetailAPI(APIView):
                     return CustomResponse(general_message='You are not authorized to manage events for this Interest Group.').get_failure_response()
             else:
                 return CustomResponse(general_message='This mentor tier is not authorized to manage events yet.').get_failure_response()
+
+        # Enforce organiser_org for Company events
+        if payload.get('organiser_type', event.organiser_type) == Event.OrganiserType.COMPANY.value:
+            payload_organiser_org = payload.get('organiser_org', event.organiser_org_id)
+            if not payload_organiser_org:
+                return CustomResponse(general_message='organiser_org is required for Company events.').get_failure_response()
+            
+            if RoleType.ADMIN.value not in roles:
+                valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
+                if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
+                    return CustomResponse(general_message='You are not authorized to manage events for this company.').get_failure_response()
+
+        # Enforce campus tenancy for Campus events
+        ownership_error = _validate_campus_event_ownership(
+            user_id, roles,
+            payload.get('organiser_type', event.organiser_type),
+            payload.get('organiser_org', event.organiser_org_id),
+        )
+        if ownership_error:
+            return CustomResponse(general_message=ownership_error).get_failure_response()
+
+        # Campus IG events: keep scope_org pinned to the owning campus (derived
+        # from the original creator). Prevents tampering and backfills legacy
+        # events that were created without a campus.
+        effective_organiser_type = payload.get('organiser_type', event.organiser_type)
+        if effective_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
+            campus_id = _resolve_creator_campus_id(event.created_by_id)
+            if campus_id:
+                payload['scope_org'] = campus_id
 
         serializer = EventWriteSerializer(
             event, data=payload,
@@ -789,12 +948,16 @@ def _get_entity_leads(entity_type, entity_id):
             EventConnection.EntityType.COLLAB_COMPANY,
         ):
             from db.organization import UserOrganizationLink
-            from utils.types import RoleType as RT
-            campus_lead_links = UserOrganizationLink.objects.filter(
+            # Only notify the org's leads (Campus Lead / Company), not every member.
+            lead_links = UserOrganizationLink.objects.filter(
                 org_id=entity_id,
                 verified=True,
-            ).select_related('user')
-            leads = [link.user for link in campus_lead_links]
+                user__user_role_link_user__role__title__in=[
+                    RoleType.CAMPUS_LEAD.value,
+                    RoleType.COMPANY.value,
+                ],
+            ).select_related('user').distinct()
+            leads = [link.user for link in lead_links]
     except Exception:
         pass
     return leads
@@ -813,18 +976,22 @@ def _caller_can_respond(conn, user_id, roles):
         ig = InterestGroup.objects.filter(id=conn.entity_id).first()
         if ig:
             return f'{ig.code} IGLead' in roles
-    elif conn.entity_type in (
-        EventConnection.EntityType.COLLAB_CAMPUS,
-        EventConnection.EntityType.COLLAB_COMPANY,
-    ):
+    elif conn.entity_type == EventConnection.EntityType.COLLAB_CAMPUS:
         in_org = UserOrganizationLink.objects.filter(
             user_id=user_id, org_id=conn.entity_id, verified=True
         ).exists()
-        return in_org and (
-            RoleType.CAMPUS_LEAD.value in roles or RoleType.COMPANY.value in roles
-        )
+        return in_org and RoleType.CAMPUS_LEAD.value in roles
+    elif conn.entity_type == EventConnection.EntityType.COLLAB_COMPANY:
+        in_org = UserOrganizationLink.objects.filter(
+            user_id=user_id, org_id=conn.entity_id, verified=True
+        ).exists()
+        return in_org and RoleType.COMPANY.value in roles
     elif conn.entity_type == EventConnection.EntityType.COLLAB_CAMPUS_IG:
-        return any(r.endswith(' CampusLead') for r in roles)
+        # entity_id is the InterestGroup id; require the matching IG campus-lead role
+        from db.task import InterestGroup
+        ig = InterestGroup.objects.filter(id=conn.entity_id).first()
+        if ig:
+            return f'{ig.code} CampusLead' in roles
     return False
 
 
@@ -1180,8 +1347,20 @@ class MyEventInvitesAPI(APIView):
             )
             
         if has_any_campus_lead_role:
-            query |= Q(entity_type=EventConnection.EntityType.COLLAB_CAMPUS_IG)
-            
+            # Scope campus-IG invites to the specific IGs the user is a campus
+            # lead for (entity_id on a campus_ig invite is the InterestGroup id).
+            campus_ig_codes = [
+                r.replace(' CampusLead', '') for r in roles if r.endswith(' CampusLead')
+            ]
+            if campus_ig_codes:
+                ci_ig_ids = InterestGroup.objects.filter(
+                    code__in=campus_ig_codes
+                ).values_list('id', flat=True)
+                query |= Q(
+                    entity_type=EventConnection.EntityType.COLLAB_CAMPUS_IG,
+                    entity_id__in=list(ci_ig_ids),
+                )
+
         if not query:
             return CustomResponse(
                 general_message='Pending invites retrieved.',

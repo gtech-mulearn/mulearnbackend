@@ -97,10 +97,21 @@ class CommonUtils:
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{csv_name}.csv"'
-        fieldnames = list(queryset[0].keys())
-        writer = csv.DictWriter(response, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(queryset)
+
+        if not queryset:
+            fieldnames = []
+        else:
+            # Collect all unique keys across all rows
+            fieldnames = []
+            for row in queryset:
+                for key in row.keys():
+                    if key not in fieldnames:
+                        fieldnames.append(key)
+
+        writer = csv.DictWriter(response, fieldnames=fieldnames, extrasaction='ignore')
+        if fieldnames:
+            writer.writeheader()
+            writer.writerows(queryset)
 
         compressed_response = HttpResponse(
             gzip.compress(response.content),
@@ -179,9 +190,10 @@ class DiscordWebhooks:
         content = f"{category}<|=|>{action}"
         for value in values:
             content = f"{content}<|=|>{value}"
-        url = config("DISCORD_WEBHOOK_LINK")
-        data = {"content": content}
-        requests.post(url, json=data)
+        url = config("DISCORD_WEBHOOK_LINK", default="")
+        if url:
+            data = {"content": content}
+            requests.post(url, json=data)
 
 
 class ImportCSV:

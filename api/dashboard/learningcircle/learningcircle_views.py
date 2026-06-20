@@ -264,7 +264,9 @@ class LearningCircleMeetingView(APIView):
     )
     def put(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         if circle_meeting.created_by_id != user_id:
             return CustomResponse(
                 general_message="You do not have permission to edit this Circle Meeting"
@@ -311,7 +313,9 @@ class LearningCircleRSVPAPI(APIView):
     )
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         if not _is_member_or_creator(circle_meeting.circle_id, user_id):
             return CustomResponse(
                 general_message="Only circle members can RSVP to this meeting"
@@ -353,7 +357,9 @@ class LearningCircleJoinAPI(APIView):
     )
     def post(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         if not _is_member_or_creator(circle_meeting.circle_id, user_id):
             return CustomResponse(
                 general_message="Only circle members can join this meeting"
@@ -399,9 +405,8 @@ class LearningCircleJoinAPI(APIView):
                 is_joined=is_joined,
                 joined_at=joined_at,
             )
-            return CustomResponse(
-                general_message="You have successfully joined the Circle Meeting"
-            ).get_success_response()
+        # Award join karma for both paths — RSVP-then-join and first-time direct
+        # join — so the reward does not depend on whether the user RSVP'd first.
         add_karma(
             user_id, Lc.MEET_JOIN_HASHTAG.value, user_id, Lc.MEET_JOIN_KARMA.value
         )
@@ -414,7 +419,9 @@ class LearningCircleJoinAPI(APIView):
     )
     def delete(self, request, meet_id: str):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         attendee = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, user_id_id=user_id
         ).first()
@@ -446,7 +453,9 @@ class LearningCircleAttendeeReportAPI(APIView):
     )
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         attendee = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, user_id_id=user_id
         ).first()
@@ -471,7 +480,9 @@ class LearningCircleAttendeeReportAPI(APIView):
     )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         attendee = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, user_id_id=user_id
         ).first()
@@ -508,7 +519,9 @@ class LearningCircleAttendeeReportAPI(APIView):
     )
     def delete(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         attendee = CircleMeetingAttendees.objects.filter(
             meet_id=circle_meeting, user_id_id=user_id
         ).first()
@@ -566,7 +579,9 @@ class LearningCircleReportAPI(APIView):
     )
     def get(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         circle = circle_meeting.circle_id
         if circle_meeting.created_by_id != user_id and not _is_lead_or_creator(
             circle, user_id
@@ -601,7 +616,9 @@ class LearningCircleReportAPI(APIView):
     )
     def post(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         if circle_meeting.created_by_id != user_id:
             return CustomResponse(
                 general_message="You do not have permission to submit the report"
@@ -661,7 +678,9 @@ class LearningCircleReportAPI(APIView):
     )
     def delete(self, request, meet_id):
         user_id = JWTUtils.fetch_user_id(request)
-        circle_meeting = CircleMeetingLog.objects.get(id=meet_id)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
         if circle_meeting.created_by_id != user_id:
             return CustomResponse(
                 general_message="You do not have permission to delete the report"
@@ -929,6 +948,24 @@ def _is_member_or_creator(circle, user_id):
     return UserCircleLink.objects.filter(
         circle=circle, user_id=user_id, accepted=True
     ).exists()
+
+
+def _get_meeting_or_response(meet_id):
+    """Fetch a CircleMeetingLog by id, or return (None, failure_response) when missing.
+
+    Prevents an unhandled DoesNotExist (HTTP 500) when a stale, deleted or
+    mistyped meeting link is opened. Usage:
+
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+    """
+    meeting = CircleMeetingLog.objects.filter(id=meet_id).first()
+    if meeting is None:
+        return None, CustomResponse(
+            general_message="Meeting not found"
+        ).get_failure_response()
+    return meeting, None
 
 
 class UserCircleListAPI(APIView):

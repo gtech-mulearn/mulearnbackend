@@ -8637,9 +8637,23 @@ paths:
       responses:
         '200':
           description: No response body
-  /api/v1/dashboard/intern/tasks/{task_id}/:
+  /api/v1/dashboard/intern/reviews/prefill/:
     get:
-      operationId: dashboard_intern_tasks_retrieve
+      operationId: dashboard_intern_reviews_prefill_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/tasks/{task_id}/:
+    patch:
+      operationId: dashboard_intern_tasks_partial_update
+      description: |-
+        Allows an intern to directly set task status and output_link
+        without going through a timesheet submission.
       parameters:
       - in: path
         name: task_id
@@ -8654,14 +8668,46 @@ paths:
       responses:
         '200':
           description: No response body
-    patch:
-      operationId: dashboard_intern_tasks_partial_update
+  /api/v1/dashboard/intern/tasks/{task_id}/detail/:
+    get:
+      operationId: dashboard_intern_tasks_detail_retrieve
       parameters:
       - in: path
         name: task_id
         schema:
           type: string
         required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/tasks/{task_id}/submit/:
+    patch:
+      operationId: dashboard_intern_tasks_submit_partial_update
+      description: |-
+        Allows an intern to directly set task status and output_link
+        without going through a timesheet submission.
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/tasks/categories/:
+    get:
+      operationId: dashboard_intern_tasks_categories_retrieve
       tags:
       - Intern
       security:
@@ -8673,16 +8719,6 @@ paths:
   /api/v1/dashboard/intern/tasks/mine/:
     get:
       operationId: dashboard_intern_tasks_mine_retrieve
-      tags:
-      - Intern
-      security:
-      - jwtAuth: []
-      - {}
-      responses:
-        '200':
-          description: No response body
-    patch:
-      operationId: dashboard_intern_tasks_mine_partial_update
       tags:
       - Intern
       security:
@@ -8774,6 +8810,17 @@ paths:
   /api/v1/dashboard/intern/timesheets/history/:
     get:
       operationId: dashboard_intern_timesheets_history_retrieve
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/intern/timesheets/prefill/:
+    get:
+      operationId: dashboard_intern_timesheets_prefill_retrieve
       tags:
       - Intern
       security:
@@ -12031,6 +12078,23 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/dashboard/manage-interns/leave/{leave_id}/:
+    get:
+      operationId: dashboard_manage_interns_leave_retrieve_2
+      parameters:
+      - in: path
+        name: leave_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/manage-interns/leave/{leave_id}/review/:
     patch:
       operationId: dashboard_manage_interns_leave_review_partial_update
@@ -12253,6 +12317,40 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/dashboard/manage-interns/tasks/{task_id}/verify/:
+    post:
+      operationId: dashboard_manage_interns_tasks_verify_create
+      parameters:
+      - in: path
+        name: task_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/tasks/by-intern/{muid}/:
+    get:
+      operationId: dashboard_manage_interns_tasks_by_intern_retrieve
+      parameters:
+      - in: path
+        name: muid
+        schema:
+          type: string
+        required: true
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/mentor/activity/:
     get:
       operationId: dashboard_mentor_activity_list
@@ -12296,6 +12394,104 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/mentor/admin/assign/:
+    post:
+      operationId: dashboard_mentor_admin_assign_create
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_mentor_admin_assign_destroy
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/mentor/admin/assign/{user_muid}/:
+    post:
+      operationId: dashboard_mentor_admin_assign_create_2
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      parameters:
+      - in: path
+        name: user_muid
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_mentor_admin_assign_destroy_2
+      description: |-
+        Admin-only endpoint for bulk assigning / revoking mentor status.
+
+        POST  /api/v1/mentor/admin/assign/
+            Body: { user_muids, mentor_tier, [org_id], [ig_ids], [about], [expertise], [hours] }
+            Assigns all listed users as mentors atomically.
+
+        DELETE /api/v1/mentor/admin/assign/<user_muid>/
+            Revokes mentor assignment for the given user.
+            Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
+      parameters:
+      - in: path
+        name: user_muid
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
   /api/v1/dashboard/mentor/availability/:
     get:
       operationId: dashboard_mentor_availability_list

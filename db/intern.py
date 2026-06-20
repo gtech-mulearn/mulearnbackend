@@ -33,6 +33,10 @@ class InternTask(models.Model):
     deadline = models.DateField()
     iso_week = models.IntegerField()
     is_archived = models.BooleanField(default=False)
+    karma_awarded = models.IntegerField(default=0)
+    output_link = models.URLField(max_length=500, null=True, blank=True)
+    is_verified = models.BooleanField(default=False)
+    verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_task_verified', db_column='verified_by_id')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_created', db_column='created_by')
     created_at = models.DateTimeField(auto_now_add=True)
     updated_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_updated', db_column='updated_by')
@@ -47,17 +51,14 @@ class InternDailyTimesheet(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_daily_timesheets', db_column='user_id')
     entry_date = models.DateField()
-    task = models.ForeignKey(InternTask, on_delete=models.SET_NULL, null=True, blank=True, related_name='timesheets')
-    category = models.CharField(max_length=50)
+    # task: JSON array of {task_id, title, status, remark} — updated per submission
+    task = models.JSONField(null=True, blank=True)
     description = models.TextField()
     hours = models.DecimalField(max_digits=4, decimal_places=2)
     blockers = models.TextField(null=True, blank=True)
-    task_status = models.CharField(max_length=20, null=True, blank=True)
-    remark = models.TextField(null=True, blank=True)
     end_of_day_note = models.TextField(null=True, blank=True)
     edit_reason = models.CharField(max_length=300, null=True, blank=True)
     status = models.CharField(max_length=15, default='PENDING')
-    karma_awarded = models.IntegerField(default=0)
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_timesheet_reviews', db_column='reviewed_by')
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.CharField(max_length=300, null=True, blank=True)
@@ -80,8 +81,9 @@ class InternWeeklyReview(models.Model):
     week_end_date = models.DateField()
     team = models.CharField(max_length=75)
     is_on_leave = models.BooleanField(default=False)
-    tasks_assigned = models.TextField()
-    tasks_completed = models.TextField()
+    tasks_assigned = models.JSONField(default=dict)
+    # tasks_completed: JSON array of {task_id, title, category, complexity, deadline, final_status, output_link}
+    tasks_completed = models.JSONField(null=True, blank=True)
     weekly_review = models.TextField()
     task_remarks = models.JSONField(null=True, blank=True)
     hours_committed = models.DecimalField(max_digits=5, decimal_places=2)
@@ -90,7 +92,6 @@ class InternWeeklyReview(models.Model):
     suggestions = models.TextField(null=True, blank=True)
     is_late = models.BooleanField(default=False)
     status = models.CharField(max_length=15, default='PENDING')
-    karma_awarded = models.IntegerField(default=0)
     reviewed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_weekly_reviews_reviewed', db_column='reviewed_by')
     reviewed_at = models.DateTimeField(null=True, blank=True)
     review_note = models.CharField(max_length=300, null=True, blank=True)
@@ -124,3 +125,30 @@ class InternLeaveRequest(models.Model):
     class Meta:
         managed = False
         db_table = 'intern_leave_request'
+
+
+class InternGuildMinute(models.Model):
+    """
+    Stores daily guild minutes uploaded by an Intern Lead.
+    Each entry is scoped to a specific guild and date.
+    """
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    guild = models.CharField(max_length=75)
+    date = models.DateField()
+    title = models.CharField(max_length=200)
+    minutes = models.TextField()
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='intern_minutes_created', db_column='created_by'
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        related_name='intern_minutes_updated', db_column='updated_by'
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        managed = False
+        db_table = 'intern_guild_minute'
+

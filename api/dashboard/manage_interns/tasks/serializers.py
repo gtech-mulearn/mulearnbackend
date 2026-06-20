@@ -2,6 +2,8 @@ from rest_framework import serializers
 from db.intern import InternTask
 from db.user import User
 
+COMPLEXITY_WEIGHT_MAP = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
+
 class UserPrimaryKeyRelatedField(serializers.PrimaryKeyRelatedField):
     def to_internal_value(self, data):
         # Try to retrieve user by muid first, then fallback to uuid (pk)
@@ -19,14 +21,28 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
     guild = serializers.CharField(source='team', write_only=True, required=False)
     assigned_to = UserPrimaryKeyRelatedField(queryset=User.objects.all())
     iso_week = serializers.IntegerField(required=False)
-    
+    complexity_score = serializers.SerializerMethodField()
+    assigned_to_name = serializers.SerializerMethodField()
+    assigned_to_muid = serializers.SerializerMethodField()
+
     class Meta:
         model = InternTask
         fields = [
             'id', 'title', 'description', 'category', 'complexity',
-            'assigned_to', 'status', 'team', 'guild', 'deadline', 'iso_week', 'created_at'
+            'complexity_score', 'assigned_to', 'assigned_to_name', 'assigned_to_muid',
+            'status', 'team', 'guild', 'deadline', 'iso_week', 'output_link',
+            'karma_awarded', 'is_verified', 'verified_by_id', 'created_at'
         ]
-        read_only_fields = ['created_at']
+        read_only_fields = ['created_at', 'is_verified', 'verified_by_id']
+
+    def get_complexity_score(self, obj):
+        return COMPLEXITY_WEIGHT_MAP.get(obj.complexity, 1)
+
+    def get_assigned_to_name(self, obj):
+        return obj.assigned_to.full_name if obj.assigned_to else None
+
+    def get_assigned_to_muid(self, obj):
+        return obj.assigned_to.muid if obj.assigned_to else None
 
     def validate(self, attrs):
         # Auto-calculate iso_week from deadline if not provided

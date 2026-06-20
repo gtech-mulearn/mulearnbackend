@@ -13,7 +13,7 @@ from .serializers import ManageInternSerializer
 class ManageInternAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve intern(s) or intern detail.",
@@ -21,13 +21,15 @@ class ManageInternAPI(APIView):
     )
     def get(self, request, intern_id=None):
         if intern_id:
-            intern = UserInternGuildLink.objects.filter(id=intern_id).first()
+            intern = UserInternGuildLink.objects.select_related('user').filter(id=intern_id).first()
             if not intern:
                 return CustomResponse(general_message="Intern not found.").get_failure_response()
             serializer = ManageInternSerializer(intern)
             return CustomResponse(response=serializer.data).get_success_response()
             
-        interns = UserInternGuildLink.objects.all().order_by('-created_at')
+        interns = UserInternGuildLink.objects.select_related('user').prefetch_related(
+            'user__user_role_link_user__role'
+        ).order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             interns, request,
@@ -43,7 +45,7 @@ class ManageInternAPI(APIView):
             }
         ).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Onboard a new intern.",
@@ -59,7 +61,7 @@ class ManageInternAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Update intern details (partial update).",
@@ -98,7 +100,7 @@ class ManageInternAPI(APIView):
             
         return CustomResponse(response=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Deactivate (soft-delete) an intern.",
@@ -120,15 +122,18 @@ class ManageInternAPI(APIView):
             intern.updated_by_id = user_id
             intern.save()
             
-            # Remove "Intern" role
-            UserRoleLink.objects.filter(user=intern.user, role__title=RoleType.INTERN.value).delete()
+            # Remove "Intern" or "Intern Lead" role
+            UserRoleLink.objects.filter(
+                user=intern.user, 
+                role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value]
+            ).delete()
         
         return CustomResponse(general_message="Intern deactivated successfully.").get_success_response()
 
 class ManageInternStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve intern status statistics.",
@@ -147,12 +152,14 @@ class ManageInternStatusAPI(APIView):
         for stat in stats:
             data[stat['status']] = stat['count']
             
+        data['total_interns'] = UserInternGuildLink.objects.count()
+            
         return CustomResponse(response=data).get_success_response()
 
 class ManageInternExportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.INTERN.value, RoleType.INTERN_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Export interns list as CSV.",

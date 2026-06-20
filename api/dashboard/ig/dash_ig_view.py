@@ -12,6 +12,7 @@ from .dash_ig_serializer import (
     InterestGroupSerializer,
     InterestGroupCreateUpdateSerializer,
     InterestGroupRequestSerializer,
+    InterestGroupRequestGetSerializer,
 )
 import json
 import uuid
@@ -511,7 +512,7 @@ class InterestGroupRequestAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Interest Group Request.",
-        responses={200: InterestGroupSerializer},
+        responses={200: InterestGroupRequestGetSerializer},
     )
     def get(self, request):
         """Retrieve Interest Group requests created by a company user.
@@ -531,7 +532,9 @@ class InterestGroupRequestAPI(APIView):
         ig_queryset = InterestGroup.objects.select_related(
             "created_by", "updated_by"
         ).prefetch_related(
-            "user_ig_link_ig"
+            "user_ig_link_ig",
+            "created_by__user_role_link_user__role",
+            "created_by__user_organization_link_user__org"
         )
         
         if target_user_id:
@@ -567,7 +570,7 @@ class InterestGroupRequestAPI(APIView):
             },
         )
 
-        ig_serializer_data = InterestGroupSerializer(
+        ig_serializer_data = InterestGroupRequestGetSerializer(
             paginated_queryset.get("queryset"), many=True
         ).data
         
@@ -607,9 +610,6 @@ class InterestGroupRequestAPI(APIView):
                     request_data[fld] = json.dumps(request_data.get(fld))
                 except Exception:
                     pass
-
-        request_data["created_by"] = request_data["updated_by"] = user_id
-        request_data["status"] = "requested"
 
         serializer = InterestGroupRequestSerializer(data=request_data)
 
@@ -701,6 +701,52 @@ class InterestGroupRequestAPI(APIView):
             general_message=f"Interest Group status updated to '{new_status}'"
         ).get_success_response()
 
+    @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description=(
+            "Cancel an IG creation request. "
+            "Company users can only cancel their own requests that are still in 'requested' status. "
+            "Admins can cancel any request regardless of status or owner."
+        ),
+        responses={200: InterestGroupSerializer},
+    )
+    def delete(self, request, pk):
+        """Cancel an IG creation request.
+
+        - Company users: can cancel only their own request, only when status='requested'.
+        - Admins: can cancel any request at any status.
+        """
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+
+        try:
+            ig = InterestGroup.objects.get(id=pk)
+        except InterestGroup.DoesNotExist:
+            return CustomResponse(
+                general_message="Interest Group request not found."
+            ).get_failure_response()
+
+        # Ownership check for non-admins
+        if not is_admin and str(ig.created_by_id) != str(user_id):
+            return CustomResponse(
+                general_message="You can only cancel your own IG requests."
+            ).get_failure_response()
+
+        # Status check for non-admins — only 'requested' can be cancelled by the requester
+        if not is_admin and ig.status != 'requested':
+            return CustomResponse(
+                general_message=f"Cannot cancel a request that is already '{ig.status}'. Only 'requested' status can be cancelled."
+            ).get_failure_response()
+
+        ig.status = 'cancelled'
+        ig.updated_by_id = user_id
+        ig.save()
+
+        return CustomResponse(
+            general_message="Interest Group request cancelled successfully."
+        ).get_success_response()
 
 
 class InterestGroupListApi(APIView):

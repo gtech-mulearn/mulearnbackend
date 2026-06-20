@@ -34,6 +34,7 @@ class RoleType(Enum):
     DISTRICT_CAMPUS_LEAD = "District Campus Lead"
     MENTOR = "Mentor"
     INTERN = "Intern"
+    INTERN_LEAD = "Intern Lead"
     CAMPUS_LEAD = "Campus Lead"
     BOT_DEV = "Bot Dev"
     PRE_MEMBER = "Pre Member"
@@ -233,19 +234,20 @@ class SocialPlatformType(Enum):
         return [member.value for member in cls]
 
 class InternHashtag(Enum):
-    DAILY_LOG_KARMA = 10
+    DAILY_LOG_KARMA = 0
     DAILY_LOG_HASHTAG = "#intern-daily-log"
-    WEEKLY_REVIEW_KARMA = 50
+    WEEKLY_REVIEW_KARMA = 0
     WEEKLY_REVIEW_HASHTAG = "#intern-weekly-review"
-    STREAK_7_KARMA = 20
+    TASK_VERIFIED_HASHTAG = "#intern-task-verified"
+    STREAK_7_KARMA = 7
     STREAK_7_HASHTAG = "#intern-streak-7"
-    STREAK_14_KARMA = 50
+    STREAK_14_KARMA = 14
     STREAK_14_HASHTAG = "#intern-streak-14"
-    STREAK_30_KARMA = 100
+    STREAK_30_KARMA = 30
     STREAK_30_HASHTAG = "#intern-streak-30"
-    STREAK_60_KARMA = 200
+    STREAK_60_KARMA = 60
     STREAK_60_HASHTAG = "#intern-streak-60"
-    STREAK_90_KARMA = 500
+    STREAK_90_KARMA = 90
     STREAK_90_HASHTAG = "#intern-streak-90"
 
 class InternGuild(Enum):
@@ -268,6 +270,17 @@ class InternTaskStatus(Enum):
     IN_PROGRESS = "IN_PROGRESS"
     COMPLETED = "COMPLETED"
     WAITING_FOR_REVIEW = "WAITING_FOR_REVIEW"
+    ON_HOLD = "ON_HOLD"
+    OVERDUE = "OVERDUE"
+
+    @classmethod
+    def intern_editable(cls):
+        """Statuses an intern can set manually."""
+        return [cls.IN_PROGRESS.value, cls.COMPLETED.value, cls.ON_HOLD.value, cls.WAITING_FOR_REVIEW.value]
+
+    @classmethod
+    def get_all_values(cls):
+        return [member.value for member in cls]
 
 class InternTaskComplexity(Enum):
     LOW = ("LOW", 1)
@@ -281,10 +294,10 @@ class InternSubmissionStatus(Enum):
     REJECTED = "REJECTED"
 
 class InternLeaveType(Enum):
-    SICK = ("SICK", 2)        # 2/month
-    CASUAL = ("CASUAL", 1)    # 1/month
-    EMERGENCY = ("EMERGENCY", 0)  # no cap
-    WFH = ("WFH", 2)         # 2/week
+    SICK = "SICK"
+    CASUAL = "CASUAL"
+    EMERGENCY = "EMERGENCY"
+    WFH = "WFH"
 
 class InternLeaveStatus(Enum):
     PENDING = "PENDING"

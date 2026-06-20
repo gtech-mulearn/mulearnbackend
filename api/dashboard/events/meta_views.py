@@ -58,6 +58,7 @@ class OrganizerOptionsAPI(APIView):
                 'can_create_as_campus': s.ListField(child=s.DictField()),
                 'can_create_as_company': s.ListField(child=s.DictField()),
                 'can_create_as_admin': s.BooleanField(),
+                'campus_context': s.DictField(allow_null=True),
             },
         )},
     )
@@ -73,8 +74,8 @@ class OrganizerOptionsAPI(APIView):
             'can_create_as_admin': False,       # True if user is admin
         }
 
-        # Admin can create events as admin
-        if RoleType.ADMIN.value in roles:
+        # Admin, Enabler, and Lead Enabler can create events as muLearn (admin organiser)
+        if RoleType.ADMIN.value in roles or RoleType.ENABLER.value in roles or RoleType.LEAD_ENABLER.value in roles:
             options['can_create_as_admin'] = True
 
         # Global IG leads: roles like "WEBDEV IGLead"
@@ -117,17 +118,88 @@ class OrganizerOptionsAPI(APIView):
                         'org_type': link.org.org_type,
                     })
 
-        # Company: user with Company role in a company org
+        # Company: user with Company role in a company org or UserMentor with COMPANY_MENTOR
+        company_options = {}
         if RoleType.COMPANY.value in roles:
             user_orgs = UserOrganizationLink.objects.filter(
                 user_id=user_id, verified=True
             ).select_related('org')
             for link in user_orgs:
                 if link.org.org_type == 'Company':
-                    options['can_create_as_company'].append({
+                    company_options[link.org.id] = {
                         'id': link.org.id,
                         'title': link.org.title,
-                    })
+                    }
+                    
+        if RoleType.MENTOR.value in roles:
+            from db.user import UserMentor
+            from db.task import UserIgLink
+
+            # Company Mentors → can create Company events for their org
+            company_mentors = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+                status=UserMentor.Status.APPROVED,
+            ).select_related('org')
+            for mentor in company_mentors:
+                if mentor.org:
+                    company_options[mentor.org.id] = {
+                        'id': mentor.org.id,
+                        'title': mentor.org.title,
+                    }
+
+            # IG Mentors → can create Global IG events for their assigned IGs
+            ig_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                status=UserMentor.Status.APPROVED,
+            ).first()
+            if ig_mentor:
+                mentored_ig_ids = list(
+                    UserIgLink.objects.filter(
+                        user_id=user_id,
+                        assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        is_active=True,
+                    ).values_list('ig_id', flat=True)
+                )
+                if mentored_ig_ids:
+                    mentored_igs = InterestGroup.objects.filter(
+                        id__in=mentored_ig_ids
+                    ).values('id', 'name', 'icon', 'code')
+                    # Merge with existing ig options (avoid duplicates)
+                    existing_ig_ids = {ig['id'] for ig in options['can_create_as_ig']}
+                    for ig in mentored_igs:
+                        if ig['id'] not in existing_ig_ids:
+                            options['can_create_as_ig'].append(ig)
+
+            # Campus Mentors → can create Campus IG events scoped to their campus
+            campus_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                status=UserMentor.Status.APPROVED,
+            ).select_related('org').first()
+            if campus_mentor and campus_mentor.org:
+                # Surface all IGs as campus_ig options — the scope is limited to their campus
+                # by the backend enforcement in manage_views.py
+                campus_igs = InterestGroup.objects.all().values('id', 'name', 'icon', 'code')
+                existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
+                for ig in campus_igs:
+                    if ig['id'] not in existing_ci_ids:
+                        options['can_create_as_campus_ig'].append(ig)
+
+        options['can_create_as_company'] = list(company_options.values())
+
+        # Resolve the creator's owning campus (for Campus-IG labelling on the FE).
+        # Function-local import avoids a circular import with manage_views.
+        from api.dashboard.events.manage_views import _resolve_creator_campus_id
+        campus_id = _resolve_creator_campus_id(user_id)
+        campus_context = None
+        if campus_id:
+            from db.organization import Organization
+            campus_org = Organization.objects.filter(id=campus_id).first()
+            if campus_org:
+                campus_context = {'id': campus_org.id, 'title': campus_org.title}
+        options['campus_context'] = campus_context
 
         return CustomResponse(
             general_message='Organiser options retrieved.',

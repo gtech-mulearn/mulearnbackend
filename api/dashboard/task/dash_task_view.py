@@ -1,13 +1,15 @@
 import uuid
+from django.db.models import Count, Q
 
+from rest_framework import status
 from rest_framework.views import APIView
 
-from db.organization import Organization
-from db.task import Channel, InterestGroup, Level, TaskList, TaskType
+from db.organization import Organization, UserOrganizationLink
+from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import Events, RoleType
+from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
     TaskImportSerializer,
@@ -42,6 +44,53 @@ class TaskPublicListAPI(APIView):
         task_queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org"
         ).filter(active=True)
+
+        # --- Visibility filtering ---
+        # Determine which orgs/IGs the current user belongs to (if authenticated).
+        # Unauthenticated users can only see global tasks and company tasks.
+        campus_org_types = [OrganizationType.COLLEGE.value, OrganizationType.SCHOOL.value]
+
+        if JWTUtils.is_logged_in(request):
+            user_id = JWTUtils.fetch_user_id(request)
+
+            learner_org_ids = list(
+                UserOrganizationLink.objects.filter(
+                    user_id=user_id,
+                    verified=True,
+                    org__org_type__in=campus_org_types,
+                ).values_list("org_id", flat=True)
+            )
+
+            learner_ig_ids = list(
+                UserIgLink.objects.filter(
+                    user_id=user_id,
+                    is_active=True,
+                ).values_list("ig_id", flat=True)
+            )
+
+            # Org visibility rule:
+            #   - No org set (global task)                → visible to all
+            #   - Org is a Company                        → visible to all
+            #   - Org is a Campus (College/School)        → only learners of that campus
+            org_filter = (
+                Q(org__isnull=True)
+                | Q(org__org_type=OrganizationType.COMPANY.value)
+                | Q(org__org_type__in=campus_org_types, org_id__in=learner_org_ids)
+            )
+
+            # IG visibility rule:
+            #   - No IG set   → visible to all
+            #   - IG is set   → only learners in that IG
+            ig_filter = Q(ig__isnull=True) | Q(ig_id__in=learner_ig_ids)
+
+            task_queryset = task_queryset.filter(org_filter & ig_filter)
+        else:
+            # Unauthenticated: show only global tasks (no org, no IG)
+            # and company tasks (company org, no IG restriction).
+            task_queryset = task_queryset.filter(
+                Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value),
+                ig__isnull=True,
+            )
 
         ig_id = request.query_params.get("ig_id")
         if ig_id:
@@ -115,6 +164,10 @@ class TaskListAPI(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+        ).prefetch_related(
+            "skill_links__skill"
+        ).annotate(
+            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
         ).filter(active=True)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
@@ -245,7 +298,13 @@ class TaskAPI(APIView):
         responses={200: TaskModifySerializer},
     )
     def get(self, request, task_id):
-        task_queryset = TaskList.objects.get(pk=task_id)
+        try:
+            task_queryset = TaskList.objects.get(pk=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         task_serializer = TaskModifySerializer(task_queryset, many=False)
         return CustomResponse(response=task_serializer.data).get_success_response()
 
@@ -274,7 +333,12 @@ class TaskAPI(APIView):
             except:
                 skill_ids = None
 
-        task = TaskList.objects.get(pk=task_id)
+        try:
+            task = TaskList.objects.get(pk=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
         serializer = TaskModifySerializer(task, data=mutable_data, partial=True)
 
@@ -315,7 +379,13 @@ class TaskAPI(APIView):
         responses={200: TaskModifySerializer},
     )
     def delete(self, request, task_id):  # delete
-        task = TaskList.objects.get(id=task_id)
+        try:
+            task = TaskList.objects.get(id=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         task.delete()
 
         return CustomResponse(
@@ -341,7 +411,55 @@ class TaskListCSV(APIView):
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+        ).prefetch_related(
+            "skill_links__skill"
+        ).annotate(
+            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
         ).filter(active=True)
+
+        task_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset,
+            request,
+            search_fields=[
+                "hashtag",
+                "title",
+                "description",
+                "karma",
+                "channel__name",
+                "type__title",
+                "active",
+                "variable_karma",
+                "usage_count",
+                "level__name",
+                "org__title",
+                "ig__name",
+                "event",
+                "updated_at",
+                "updated_by__full_name",
+                "created_by__full_name",
+                "created_at",
+            ],
+            sort_fields={
+                "hashtag": "hashtag",
+                "title": "title",
+                "description": "description",
+                "karma": "karma",
+                "channels": "channel__name",
+                "type": "type__title",
+                "active": "active",
+                "variable_karma": "variable_karma",
+                "usage_count": "usage_count",
+                "level": "level__name",
+                "org": "org__title",
+                "ig": "ig__name",
+                "event": "event",
+                "updated_at": "updated_at",
+                "updated_by": "updated_by__full_name",
+                "created_by": "created_by__full_name",
+                "created_at": "created_at",
+            },
+            is_pagination=False,
+        )
 
         task_serializer_data = TaskListSerializer(task_queryset, many=True).data
 
@@ -365,9 +483,8 @@ class ImportTaskListCSV(APIView):
         responses={200: TaskImportSerializer},
     )
     def post(self, request):
-        try:
-            file_obj = request.FILES["task_list"]
-        except KeyError:
+        file_obj = request.FILES.get("task_list", request.FILES.get("file"))
+        if not file_obj:
             return CustomResponse(
                 general_message="File not found."
             ).get_failure_response()
@@ -404,6 +521,7 @@ class ImportTaskListCSV(APIView):
         excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
+        rows_to_validate = []
 
         hashtags_excel = set()
         hashtags_db = TaskList.objects.values_list("hashtag", flat=True)
@@ -418,17 +536,14 @@ class ImportTaskListCSV(APIView):
             if not hashtag:
                 row["error"] = "Missing hashtag."
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             elif hashtag in hashtags_excel:
                 row["error"] = f"Duplicate hashtag in excel: {hashtag}"
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             elif hashtag in hashtags_db:
                 row["error"] = f"Duplicate hashtag in database: {hashtag}"
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             else:
                 hashtags_excel.add(hashtag)
@@ -437,7 +552,6 @@ class ImportTaskListCSV(APIView):
             if not title:
                 row["error"] = "Missing title."
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
 
             level = row.get("level")
@@ -451,6 +565,7 @@ class ImportTaskListCSV(APIView):
             levels_to_fetch.add(level)
             igs_to_fetch.add(ig)
             orgs_to_fetch.add(org)
+            rows_to_validate.append(row)
 
         channels = Channel.objects.filter(name__in=channels_to_fetch).values(
             "id", "name"
@@ -475,7 +590,7 @@ class ImportTaskListCSV(APIView):
         orgs_dict = {org["code"]: org["id"] for org in orgs}
         events = Events.get_all_values()
 
-        for row in excel_data[1:]:
+        for row in rows_to_validate:
             level = row.pop("level")
             channel = row.pop("channel")
             task_type = row.pop("type")
@@ -520,7 +635,15 @@ class ImportTaskListCSV(APIView):
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
                 row["org_id"] = org_id or None
-                valid_rows.append(row)
+                
+                valid_fields = [
+                    "id", "hashtag", "discord_link", "title", "description", 
+                    "karma", "channel_id", "type_id", "org_id", "event", "level_id", "ig_id", 
+                    "active", "variable_karma", "usage_count", "created_by_id", 
+                    "updated_by_id", "created_at", "updated_at"
+                ]
+                clean_row = {k: v for k, v in row.items() if k in valid_fields}
+                valid_rows.append(clean_row)
 
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
         success_data = []
@@ -637,10 +760,15 @@ class LevelDropdownAPI(APIView):
         responses={200: inline_serializer("TaskLevelDropdownResponse", fields={
             "id": s.CharField(),
             "name": s.CharField(),
+            "level_order": s.IntegerField(),
         })},
     )
     def get(self, request):
-        levels = Level.objects.values("id", "name")
+        # level_order is the numeric rank used by downstream consumers (e.g. job
+        # eligibility "Min/Max Level" rules, which compare against a user's
+        # level_order). Returning it lets clients store the order rather than an
+        # opaque id/name.
+        levels = Level.objects.values("id", "name", "level_order").order_by("level_order")
         return CustomResponse(response=levels).get_success_response()
 
 
