@@ -94,14 +94,12 @@ class CompanyStatusAPI(APIView):
                 general_message="No company request found for your account."
             ).get_failure_response(status_code=404)
             
+        serializer = serializers.CompanyDetailSerializer(company)
+        response_data = serializer.data
+        response_data["company_id"] = company.id
+        
         return CustomResponse(
-            response={
-                "status": company.status,
-                "rejection_reason": company.rejection_reason,
-                "company_id": company.id,
-                "name": company.name,
-                "slug": company.slug
-            }
+            response=response_data
         ).get_success_response()
 
 class CompanyProfileAPI(APIView):
