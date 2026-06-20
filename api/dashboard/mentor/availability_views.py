@@ -66,10 +66,13 @@ class MentorAvailabilitySlotAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         ig_id = request.data.get("ig")
-        
-        if not UserIgLink.objects.filter(
-            user_id=user_id, 
-            ig_id=ig_id, 
+
+        # Availability is a mentor-level setting. An IG is optional: when one is
+        # supplied we verify the mentor is actually assigned to it, but a slot
+        # with no IG (ig=NULL) is valid and applies across all the mentor's IGs.
+        if ig_id and not UserIgLink.objects.filter(
+            user_id=user_id,
+            ig_id=ig_id,
             assignment_type=UserIgLink.AssignmentType.MENTOR,
             is_active=True
         ).exists():
