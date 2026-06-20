@@ -6,6 +6,7 @@ from rest_framework.views import APIView
 
 from db.organization import Organization, UserOrganizationLink
 from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
+from db.user import UserMentor
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -24,7 +25,8 @@ from openpyxl import load_workbook
 from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse, OpenApiParameter
+from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers as s
 from utils.schema_utils import CustomResponseSerializer
 
@@ -35,6 +37,23 @@ class TaskPublicListAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Task'],
         description="Retrieve Task Public List.",
+        parameters=[
+            OpenApiParameter(
+                "task_source",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                enum=["company", "ig_mentor", "campus_mentor", "platform"],
+                description=(
+                    "Filter tasks by creator type: "
+                    "'company' = tasks submitted by a verified company user, "
+                    "'ig_mentor' = tasks submitted by an approved IG mentor, "
+                    "'campus_mentor' = tasks submitted by an approved campus mentor, "
+                    "'platform' = tasks created by platform admins. "
+                    "Eligibility (IG/campus membership) is enforced by the existing visibility rules."
+                ),
+            ),
+        ],
         responses={200: inline_serializer("TaskPublicListResponse", fields={
             "data": s.ListField(child=s.DictField()),
             "pagination": s.DictField(),
@@ -48,7 +67,7 @@ class TaskPublicListAPI(APIView):
 
         # Change 2: include event_fk so we can access event data without extra queries
         task_queryset = TaskList.objects.select_related(
-            "channel", "type", "level", "ig", "org", "event_fk"
+            "channel", "type", "level", "ig", "org", "event_fk", "requested_by"
         ).filter(active=True)
 
         # --- Visibility filtering ---
@@ -152,6 +171,27 @@ class TaskPublicListAPI(APIView):
         if ig_id:
             task_queryset = task_queryset.filter(ig_id=ig_id)
 
+        task_source = request.query_params.get("task_source")
+        if task_source == "company":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__company_profile__isnull=False,
+            )
+        elif task_source == "ig_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "campus_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "platform":
+            task_queryset = task_queryset.filter(requested_by__isnull=True)
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
             request,
@@ -214,6 +254,22 @@ class TaskListAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Task'],
         description="Retrieve Task List.",
+        parameters=[
+            OpenApiParameter(
+                "task_source",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                enum=["company", "ig_mentor", "campus_mentor", "platform"],
+                description=(
+                    "Filter tasks by creator type: "
+                    "'company' = tasks submitted by a verified company user, "
+                    "'ig_mentor' = tasks submitted by an approved IG mentor, "
+                    "'campus_mentor' = tasks submitted by an approved campus mentor, "
+                    "'platform' = tasks created by platform admins."
+                ),
+            ),
+        ],
         responses={200: inline_serializer("TaskListResponse", fields={
             "data": s.ListField(child=s.DictField()),
             "pagination": s.DictField(),
@@ -221,12 +277,33 @@ class TaskListAPI(APIView):
     )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
+            "created_by", "updated_by", "channel", "type", "level", "ig", "org", "requested_by"
         ).prefetch_related(
             "skill_links__skill"
         ).annotate(
             total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
         ).filter(active=True)
+
+        task_source = request.query_params.get("task_source")
+        if task_source == "company":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__company_profile__isnull=False,
+            )
+        elif task_source == "ig_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "campus_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "platform":
+            task_queryset = task_queryset.filter(requested_by__isnull=True)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
