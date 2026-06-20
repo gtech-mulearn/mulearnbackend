@@ -240,7 +240,31 @@ class SessionCreateSerializer(serializers.ModelSerializer):
 
         if data.get('starts_at') >= data.get('ends_at'):
             raise serializers.ValidationError("Session start time must be before end time.")
-            
+
+        # ── Mode / venue constraints ────────────────────────────────────────
+        mode = data.get('mode')
+        venue = data.get('venue') or ""
+        meeting_link = data.get('meeting_link') or ""
+
+        if mode == MentorshipSession.Mode.ONLINE:
+            if venue.strip():
+                raise serializers.ValidationError(
+                    {"venue": "Venue must not be provided for an online session."}
+                )
+        elif mode == MentorshipSession.Mode.OFFLINE:
+            if meeting_link.strip():
+                raise serializers.ValidationError(
+                    {"meeting_link": "Meeting link must not be provided for an offline session."}
+                )
+        elif mode == MentorshipSession.Mode.HYBRID:
+            errors = {}
+            if not venue.strip():
+                errors["venue"] = "Venue is required for a hybrid session."
+            if not meeting_link.strip():
+                errors["meeting_link"] = "Meeting link is required for a hybrid session."
+            if errors:
+                raise serializers.ValidationError(errors)
+
         is_recurring = data.get('is_recurring', False)
         if is_recurring:
             errors = {}
@@ -252,14 +276,14 @@ class SessionCreateSerializer(serializers.ModelSerializer):
                 errors['recurrence_end_date'] = "recurrence_end_date is required when is_recurring is true."
             elif data.get('starts_at') and data.get('recurrence_end_date') <= data.get('starts_at').date():
                 errors['recurrence_end_date'] = "recurrence_end_date must be after the session starts_at date."
-            
+
             if errors:
                 raise serializers.ValidationError(errors)
         else:
             data['recurrence_type'] = None
             data['recurrence_interval'] = None
             data['recurrence_end_date'] = None
-            
+
         return data
 
     def create(self, validated_data):
@@ -298,9 +322,34 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
         # Allow partial updates by fetching from instance if not in data
         starts_at = data.get('starts_at', self.instance.starts_at) if self.instance else data.get('starts_at')
         ends_at = data.get('ends_at', self.instance.ends_at) if self.instance else data.get('ends_at')
-        
+
         if starts_at and ends_at and starts_at >= ends_at:
             raise serializers.ValidationError("Session start time must be before end time.")
+
+        # ── Mode / venue constraints (resolve from instance for partial PATCH) ──
+        mode = data.get('mode', self.instance.mode if self.instance else None)
+        venue = (data.get('venue') if 'venue' in data else (self.instance.venue if self.instance else None)) or ""
+        meeting_link = (data.get('meeting_link') if 'meeting_link' in data else (self.instance.meeting_link if self.instance else None)) or ""
+
+        if mode == MentorshipSession.Mode.ONLINE:
+            if venue.strip():
+                raise serializers.ValidationError(
+                    {"venue": "Venue must not be provided for an online session."}
+                )
+        elif mode == MentorshipSession.Mode.OFFLINE:
+            if meeting_link.strip():
+                raise serializers.ValidationError(
+                    {"meeting_link": "Meeting link must not be provided for an offline session."}
+                )
+        elif mode == MentorshipSession.Mode.HYBRID:
+            errors = {}
+            if not venue.strip():
+                errors["venue"] = "Venue is required for a hybrid session."
+            if not meeting_link.strip():
+                errors["meeting_link"] = "Meeting link is required for a hybrid session."
+            if errors:
+                raise serializers.ValidationError(errors)
+
         return data
 
     def update(self, instance, validated_data):
