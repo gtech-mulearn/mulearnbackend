@@ -12,7 +12,7 @@ from .serializers import InternTaskSerializer
 class InternTaskCategoryAPI(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.INTERN.value])
+    @role_required([RoleType.INTERN.value,RoleType.ADMIN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
         description="Retrieve all intern task categories and their sub-categories.",
