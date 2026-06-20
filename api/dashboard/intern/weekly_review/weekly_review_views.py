@@ -1,3 +1,4 @@
+from db.intern import InternTask
 from django.db import IntegrityError
 from django.utils.timezone import now
 from datetime import timedelta
