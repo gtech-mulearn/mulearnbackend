@@ -46,6 +46,24 @@ class Event(models.Model):
         MANAGER = 'manager', 'Manager'
         CREATIVE = 'creative', 'Creative'
 
+    class EventType(models.TextChoices):
+        HACKATHON       = 'hackathon',       'Hackathon'
+        WORKSHOP        = 'workshop',        'Workshop'
+        WEBINAR         = 'webinar',         'Webinar'
+        SEMINAR         = 'seminar',         'Seminar'
+        BOOTCAMP        = 'bootcamp',        'Bootcamp'
+        MEETUP          = 'meetup',          'Meetup'
+        CONFERENCE      = 'conference',      'Conference'
+        COMPETITION     = 'competition',     'Competition'
+        IDEATHON        = 'ideathon',        'Ideathon'
+        CULTURAL_EVENT  = 'cultural_event',  'Cultural Event'
+        SPORTS_EVENT    = 'sports_event',    'Sports Event'
+        COMMUNITY_EVENT = 'community_event', 'Community Event'
+        EXPO            = 'expo',            'Expo'
+        NETWORKING_EVENT= 'networking_event','Networking Event'
+        TECH_TALK       = 'tech_talk',       'Tech Talk'
+        OTHERS          = 'others',          'Others'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=200)
     slug = models.CharField(max_length=220, unique=True, db_index=True)
@@ -103,6 +121,11 @@ class Event(models.Model):
     # Event scope (audience type)
     event_scope = models.CharField(
         max_length=20, choices=EventScope.choices
+    )
+
+    # Event type
+    event_type = models.CharField(
+        max_length=20, choices=EventType.choices, default=EventType.OTHERS
     )
 
     # Flags & counters
