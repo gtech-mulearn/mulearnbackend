@@ -124,7 +124,7 @@ class InternGuildMinuteAPI(APIView):
         if not minute:
             return CustomResponse(general_message="Guild minute not found.").get_failure_response()
 
-        serializer = InternGuildMinuteCreateUpdateSerializer(data=request.data)
+        serializer = InternGuildMinuteCreateUpdateSerializer(data=request.data, context={'instance_id': minute.id})
         if not serializer.is_valid():
             return CustomResponse(response=serializer.errors).get_failure_response()
 
