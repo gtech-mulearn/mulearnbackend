@@ -1,6 +1,8 @@
 from rest_framework import serializers
-from db.intern import InternTask
+from django.utils.timezone import now
+from db.intern import InternTask, UserInternGuildLink
 from db.user import User
+from utils.types import InternGuildStatus
 
 COMPLEXITY_WEIGHT_MAP = {'LOW': 1, 'MEDIUM': 2, 'HIGH': 3, 'CRITICAL': 5}
 
@@ -21,6 +23,10 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
     guild = serializers.CharField(source='team', write_only=True, required=False)
     assigned_to = UserPrimaryKeyRelatedField(queryset=User.objects.all())
     iso_week = serializers.IntegerField(required=False)
+    complexity = serializers.ChoiceField(
+        choices=['LOW', 'MEDIUM', 'HIGH', 'CRITICAL'],
+        default='LOW'
+    )
     complexity_score = serializers.SerializerMethodField()
     assigned_to_name = serializers.SerializerMethodField()
     assigned_to_muid = serializers.SerializerMethodField()
@@ -45,10 +51,26 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
         return obj.assigned_to.muid if obj.assigned_to else None
 
     def validate(self, attrs):
+        # Verify the assigned user is an active intern
+        assigned_to = attrs.get('assigned_to')
+        if assigned_to:
+            guild_link = UserInternGuildLink.objects.filter(user_id=assigned_to.id).first()
+            if not guild_link or guild_link.status == InternGuildStatus.INACTIVE.value:
+                raise serializers.ValidationError(
+                    {"assigned_to": f"User '{assigned_to.muid}' is not an active intern."}
+                )
+
+        # Prevent creating tasks with a past deadline (only on create, not update)
+        if not self.instance and 'deadline' in attrs:
+            if attrs['deadline'] < now().date():
+                raise serializers.ValidationError(
+                    {"deadline": "Task deadline cannot be in the past."}
+                )
+
         # Auto-calculate iso_week from deadline if not provided
         if 'deadline' in attrs and 'iso_week' not in attrs:
             attrs['iso_week'] = attrs['deadline'].isocalendar()[1]
-        
+
         return attrs
 
     def create(self, validated_data):

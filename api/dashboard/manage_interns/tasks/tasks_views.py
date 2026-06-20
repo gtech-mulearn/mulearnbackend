@@ -186,6 +186,9 @@ class ManageInternTaskVerifyAPI(APIView):
         except (ValueError, TypeError):
             return CustomResponse(general_message="karma_awarded must be an integer.").get_failure_response()
 
+        if karma_awarded < 0:
+            return CustomResponse(general_message="karma_awarded cannot be negative.").get_failure_response()
+
         intern_user_id = task.assigned_to_id
 
         with transaction.atomic():
