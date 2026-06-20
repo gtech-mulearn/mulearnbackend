@@ -436,6 +436,14 @@ class AvailabilitySlotSerializer(serializers.ModelSerializer):
         ]
 
 class AvailabilitySlotCreateUpdateSerializer(serializers.ModelSerializer):
+    # Availability is mentor-level; an IG is optional. Allow omitting it or
+    # passing null so a slot can apply across all of the mentor's IGs.
+    ig = serializers.PrimaryKeyRelatedField(
+        queryset=InterestGroup.objects.all(),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = MentorAvailabilitySlot
         fields = [

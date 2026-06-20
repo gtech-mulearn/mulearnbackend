@@ -58,6 +58,7 @@ class OrganizerOptionsAPI(APIView):
                 'can_create_as_campus': s.ListField(child=s.DictField()),
                 'can_create_as_company': s.ListField(child=s.DictField()),
                 'can_create_as_admin': s.BooleanField(),
+                'campus_context': s.DictField(allow_null=True),
             },
         )},
     )
@@ -187,6 +188,18 @@ class OrganizerOptionsAPI(APIView):
                         options['can_create_as_campus_ig'].append(ig)
 
         options['can_create_as_company'] = list(company_options.values())
+
+        # Resolve the creator's owning campus (for Campus-IG labelling on the FE).
+        # Function-local import avoids a circular import with manage_views.
+        from api.dashboard.events.manage_views import _resolve_creator_campus_id
+        campus_id = _resolve_creator_campus_id(user_id)
+        campus_context = None
+        if campus_id:
+            from db.organization import Organization
+            campus_org = Organization.objects.filter(id=campus_id).first()
+            if campus_org:
+                campus_context = {'id': campus_org.id, 'title': campus_org.title}
+        options['campus_context'] = campus_context
 
         return CustomResponse(
             general_message='Organiser options retrieved.',

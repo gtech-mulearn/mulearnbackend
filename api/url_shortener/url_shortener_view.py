@@ -178,11 +178,34 @@ class UrlAnalyticsAPI(APIView):
         # long and short url
         url_shortener = UrlShortener.objects.filter(id=url_id).first()
 
-        if not queryset.exists():
-            # Return an appropriate response for the case where no records are found
+        if not url_shortener:
+            # The short URL itself does not exist — this is a genuine 404.
             return CustomResponse(
-                general_message="No records found"
-            ).get_failure_response()
+                general_message="Short URL not found"
+            ).get_failure_response(status_code=404)
+
+        if not queryset.exists():
+            # The URL exists but has not been clicked yet. This is a valid empty
+            # state, not an error, so return a 200 with zero-value analytics.
+            # The client renders zeros instead of a failure screen.
+            empty_result = {
+                'total_clicks': 0,
+                'created_on': url_shortener.created_at.strftime('%Y-%m-%d')
+                if getattr(url_shortener, 'created_at', None) else None,
+                'browsers': {},
+                'platforms': {},
+                'devices': {},
+                'sources': {},
+                'ip_address': {},
+                'city': {},
+                'region': {},
+                'countries': {},
+                'time_based_data': {'all_time': []},
+                'long_url': url_shortener.long_url,
+                'short_url': url_shortener.short_url,
+                'title': url_shortener.title,
+            }
+            return CustomResponse(response=empty_result).get_success_response()
 
         browsers = {}
         platforms = {}
