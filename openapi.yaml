@@ -2280,6 +2280,44 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/dashboard/campus/ig-chapters/{chapter_id}/join/:
+    post:
+      operationId: dashboard_campus_ig_chapters_join_create
+      description: Join a Campus IG Chapter. The authenticated user must be a verified
+        member of the same campus organization that hosts this chapter.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Campus
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/campus/ig-chapters/{chapter_id}/leave/:
+    delete:
+      operationId: dashboard_campus_ig_chapters_leave_destroy
+      description: Leave a Campus IG Chapter. The authenticated user's active learner
+        link to the Interest Group is deactivated. History is preserved.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Campus
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/campus/igs/:
     get:
       operationId: dashboard_campus_igs_retrieve
@@ -7727,6 +7765,48 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/events/tasks/:
+    get:
+      operationId: dashboard_events_tasks_list
+      description: Scope-aware list of tasks for events the caller can access. Unauthenticated
+        callers receive only global-event tasks.
+      tags:
+      - Events
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/TaskListPublic'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/home/learner/streak/:
     get:
       operationId: dashboard_home_learner_streak_retrieve
@@ -8266,6 +8346,17 @@ paths:
       responses:
         '200':
           description: No response body
+    delete:
+      operationId: dashboard_ig_request_destroy
+      description: API endpoint for users to submit and retrieve IG creation requests.
+      tags:
+      - Ig
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
   /api/v1/dashboard/ig/request/{id}/:
     get:
       operationId: dashboard_ig_request_retrieve_2
@@ -8317,6 +8408,23 @@ paths:
       - {}
       responses:
         '200':
+          description: No response body
+    delete:
+      operationId: dashboard_ig_request_destroy_2
+      description: API endpoint for users to submit and retrieve IG creation requests.
+      parameters:
+      - in: path
+        name: id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Ig
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
           description: No response body
   /api/v1/dashboard/intern/guilds/:
     get:
@@ -8501,6 +8609,168 @@ paths:
       - {}
       responses:
         '200':
+          description: No response body
+  /api/v1/dashboard/intern/minutes/:
+    get:
+      operationId: dashboard_intern_minutes_retrieve
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_minutes_create
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: dashboard_intern_minutes_update
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_intern_minutes_destroy
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/intern/minutes/{minute_id}/:
+    get:
+      operationId: dashboard_intern_minutes_retrieve_2
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      parameters:
+      - in: path
+        name: minute_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_intern_minutes_create_2
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      parameters:
+      - in: path
+        name: minute_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: dashboard_intern_minutes_update_2
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      parameters:
+      - in: path
+        name: minute_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_intern_minutes_destroy_2
+      description: |-
+        Intern Lead's guild minutes endpoint.
+
+        GET    /api/v1/intern/minutes/                    — List minutes (filterable by guild/date)
+        POST   /api/v1/intern/minutes/                    — Upload new guild minutes (Intern Lead only)
+        PUT    /api/v1/intern/minutes/<minute_id>/        — Edit existing minutes (Intern Lead only)
+        DELETE /api/v1/intern/minutes/<minute_id>/        — Delete minutes (Intern Lead only)
+      parameters:
+      - in: path
+        name: minute_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Intern
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
           description: No response body
   /api/v1/dashboard/intern/overview/activity/:
     get:
@@ -13541,6 +13811,65 @@ paths:
                     type: array
                     items:
                       $ref: '#/components/schemas/SessionList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/participant/add/{session_id}/:
+    post:
+      operationId: dashboard_mentor_session_participant_add_create
+      description: Mentor view to manually add a participant to a specific session
+        using muid.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MentorAddParticipant'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/MentorAddParticipant'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/MentorAddParticipant'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ParticipantList'
                 required:
                 - hasError
                 - statusCode
@@ -29085,6 +29414,43 @@ components:
             * `manager` - Manager
             * `creative` - Creative
           x-spec-enum-id: 5c207dceb722502f
+        event_type:
+          enum:
+          - hackathon
+          - workshop
+          - webinar
+          - seminar
+          - bootcamp
+          - meetup
+          - conference
+          - competition
+          - ideathon
+          - cultural_event
+          - sports_event
+          - community_event
+          - expo
+          - networking_event
+          - tech_talk
+          - others
+          type: string
+          description: |-
+            * `hackathon` - Hackathon
+            * `workshop` - Workshop
+            * `webinar` - Webinar
+            * `seminar` - Seminar
+            * `bootcamp` - Bootcamp
+            * `meetup` - Meetup
+            * `conference` - Conference
+            * `competition` - Competition
+            * `ideathon` - Ideathon
+            * `cultural_event` - Cultural Event
+            * `sports_event` - Sports Event
+            * `community_event` - Community Event
+            * `expo` - Expo
+            * `networking_event` - Networking Event
+            * `tech_talk` - Tech Talk
+            * `others` - Others
+          x-spec-enum-id: 15edd4bbad4cc1b1
         scope_org:
           allOf:
           - $ref: '#/components/schemas/MinimalCampus'
@@ -29276,6 +29642,43 @@ components:
             * `manager` - Manager
             * `creative` - Creative
           x-spec-enum-id: 5c207dceb722502f
+        event_type:
+          enum:
+          - hackathon
+          - workshop
+          - webinar
+          - seminar
+          - bootcamp
+          - meetup
+          - conference
+          - competition
+          - ideathon
+          - cultural_event
+          - sports_event
+          - community_event
+          - expo
+          - networking_event
+          - tech_talk
+          - others
+          type: string
+          description: |-
+            * `hackathon` - Hackathon
+            * `workshop` - Workshop
+            * `webinar` - Webinar
+            * `seminar` - Seminar
+            * `bootcamp` - Bootcamp
+            * `meetup` - Meetup
+            * `conference` - Conference
+            * `competition` - Competition
+            * `ideathon` - Ideathon
+            * `cultural_event` - Cultural Event
+            * `sports_event` - Sports Event
+            * `community_event` - Community Event
+            * `expo` - Expo
+            * `networking_event` - Networking Event
+            * `tech_talk` - Tech Talk
+            * `others` - Others
+          x-spec-enum-id: 15edd4bbad4cc1b1
         start_datetime:
           type: string
           format: date-time
@@ -29356,7 +29759,12 @@ components:
             additionalProperties: {}
         can_create_as_admin:
           type: boolean
+        campus_context:
+          type: object
+          additionalProperties: {}
+          nullable: true
       required:
+      - campus_context
       - can_create_as_admin
       - can_create_as_campus
       - can_create_as_campus_ig
@@ -29703,6 +30111,43 @@ components:
             * `manager` - Manager
             * `creative` - Creative
           x-spec-enum-id: 5c207dceb722502f
+        event_type:
+          enum:
+          - hackathon
+          - workshop
+          - webinar
+          - seminar
+          - bootcamp
+          - meetup
+          - conference
+          - competition
+          - ideathon
+          - cultural_event
+          - sports_event
+          - community_event
+          - expo
+          - networking_event
+          - tech_talk
+          - others
+          type: string
+          description: |-
+            * `hackathon` - Hackathon
+            * `workshop` - Workshop
+            * `webinar` - Webinar
+            * `seminar` - Seminar
+            * `bootcamp` - Bootcamp
+            * `meetup` - Meetup
+            * `conference` - Conference
+            * `competition` - Competition
+            * `ideathon` - Ideathon
+            * `cultural_event` - Cultural Event
+            * `sports_event` - Sports Event
+            * `community_event` - Community Event
+            * `expo` - Expo
+            * `networking_event` - Networking Event
+            * `tech_talk` - Tech Talk
+            * `others` - Others
+          x-spec-enum-id: 15edd4bbad4cc1b1
       required:
       - end_datetime
       - start_datetime
@@ -31509,6 +31954,13 @@ components:
       - date
       - id
       - title
+    MentorAddParticipant:
+      type: object
+      properties:
+        muid:
+          type: string
+      required:
+      - muid
     MentorDetail:
       type: object
       properties:
@@ -33873,6 +34325,49 @@ components:
       - profile_pic
       - rank
       - state
+    TaskListPublic:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        hashtag:
+          type: string
+          maxLength: 75
+        title:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        karma:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        channel:
+          type: string
+        discord_id:
+          type: string
+        type:
+          type: string
+        variable_karma:
+          type: boolean
+        level:
+          type: string
+        ig:
+          type: string
+        event:
+          type: string
+          nullable: true
+          maxLength: 50
+        event_id:
+          type: string
+          nullable: true
+      required:
+      - hashtag
+      - title
+      - type
     TaskPublicListResponse:
       type: object
       properties:
@@ -34031,7 +34526,11 @@ components:
           type: boolean
         interested_in_gig_work:
           type: boolean
+        company:
+          type: string
+          readOnly: true
       required:
+      - company
       - dynamic_type
       - email
       - full_name
