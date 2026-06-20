@@ -1,6 +1,8 @@
+from django.core.files.storage import FileSystemStorage
 from django.db.models import Sum, F, Value, Count, Q, Prefetch, Subquery, OuterRef, IntegerField
 from django.db.models.functions import Concat, Coalesce
 from rest_framework.views import APIView
+from decouple import config as decouple_config
 from . import serializers
 from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
@@ -56,6 +58,7 @@ class StudentsMonthlyLeaderboard(APIView):
                 'full_name': s.CharField(),
                 'total_karma': s.IntegerField(),
                 'institution': s.CharField(allow_null=True),
+                'profile_pic': s.CharField(allow_null=True),
             },
             many=True,
         )},
@@ -90,6 +93,7 @@ class StudentsMonthlyLeaderboard(APIView):
                 ),
             )
             .values(
+                "id",
                 "full_name",
                 "total_karma",
                 "institution",
@@ -97,8 +101,20 @@ class StudentsMonthlyLeaderboard(APIView):
             .order_by("-total_karma")[:20]
         )
 
+        fs = FileSystemStorage()
+        result = []
+        for student in student_monthly_leaderboard:
+            user_id = student.pop("id")
+            path = f"user/profile/{user_id}.png"
+            student["profile_pic"] = (
+                f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+                if fs.exists(path)
+                else None
+            )
+            result.append(student)
+
         return CustomResponse(
-            response=student_monthly_leaderboard
+            response=result
         ).get_success_response()
 
 
