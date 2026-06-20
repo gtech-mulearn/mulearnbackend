@@ -1,12 +1,20 @@
+import uuid
+from io import BytesIO
+
+import openpyxl
+from django.db import transaction
 from django.db.models import Count
+from django.http import FileResponse
+from rest_framework.parsers import MultiPartParser, FormParser
 from rest_framework.views import APIView
 from drf_spectacular.utils import OpenApiResponse, extend_schema
 
+from db.intern import UserInternGuildLink
+from db.user import User, UserRoleLink, Role
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, InternGuildStatus
 from utils.utils import CommonUtils
-from db.intern import UserInternGuildLink
 
 from .serializers import ManageInternSerializer
 
@@ -190,3 +198,188 @@ class ManageInternExportAPI(APIView):
             ])
             
         return response
+
+
+class ManageInternBulkImportTemplateAPIView(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description="Download the Excel template for bulk intern import. Columns: muid, guild.",
+        responses={200: OpenApiResponse(description="Excel file download.")},
+    )
+    def get(self, request):
+        wb = openpyxl.Workbook()
+        ws = wb.active
+        ws.title = "Interns"
+        ws.append(['muid', 'guild'])
+
+        output = BytesIO()
+        wb.save(output)
+        output.seek(0)
+
+        response = FileResponse(
+            output,
+            content_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        )
+        response['Content-Disposition'] = 'attachment; filename="intern_bulk_import_template.xlsx"'
+        return response
+
+
+class ManageInternBulkImportAPI(APIView):
+    authentication_classes = [CustomizePermission]
+    parser_classes = [MultiPartParser, FormParser]
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Intern'],
+        description=(
+            "Bulk assign users as interns by uploading an Excel (.xlsx) file. "
+            "Required columns: 'muid', 'guild'. Role defaults to 'Intern'. "
+            "Rows where the user is already an intern are skipped."
+        ),
+        responses={200: OpenApiResponse(description="Bulk import result.")},
+    )
+    def post(self, request):
+        actor_user_id = JWTUtils.fetch_user_id(request)
+
+        excel_file = request.FILES.get('excel_file')
+        if not excel_file:
+            return CustomResponse(
+                general_message="No file uploaded. Please attach an Excel file with key 'excel_file'."
+            ).get_failure_response()
+
+        # Validate file extension
+        if not excel_file.name.endswith('.xlsx'):
+            return CustomResponse(
+                general_message="Invalid file type. Only .xlsx files are supported."
+            ).get_failure_response()
+
+        try:
+            wb = openpyxl.load_workbook(excel_file)
+        except Exception:
+            return CustomResponse(
+                general_message="Could not read the uploaded file. Please ensure it is a valid .xlsx file."
+            ).get_failure_response()
+
+        ws = wb.active
+        headers = [cell.value for cell in ws[1]] if ws.max_row > 0 else []
+
+        # Validate required headers
+        required_headers = ['muid', 'guild']
+        missing_headers = [h for h in required_headers if h not in headers]
+        if missing_headers:
+            return CustomResponse(
+                general_message=f"Missing required column(s): {', '.join(missing_headers)}. "
+                                f"Expected headers: {required_headers}."
+            ).get_failure_response()
+
+        muid_idx = headers.index('muid')
+        guild_idx = headers.index('guild')
+
+        success_count = 0
+        failed_rows = []
+
+        # Fetch the Intern role once
+        intern_role = Role.objects.filter(title=RoleType.INTERN.value).first()
+        if not intern_role:
+            return CustomResponse(
+                general_message=f"Role '{RoleType.INTERN.value}' does not exist in the system. "
+                                f"Please contact a system administrator."
+            ).get_failure_response()
+
+        # Track muids processed in this file to handle in-file duplicates
+        seen_muids = set()
+
+        for row_num, row in enumerate(ws.iter_rows(min_row=2, values_only=True), start=2):
+            muid = row[muid_idx]
+            guild = row[guild_idx]
+
+            # Skip entirely empty rows
+            if muid is None and guild is None:
+                continue
+
+            # Coerce to string and strip whitespace if present
+            muid = str(muid).strip() if muid is not None else None
+            guild = str(guild).strip() if guild is not None else None
+
+            # --- Edge case: missing muid or guild value ---
+            if not muid or not guild:
+                failed_rows.append({
+                    "row": row_num,
+                    "muid": muid or "(empty)",
+                    "reason": "Both 'muid' and 'guild' values are required."
+                })
+                continue
+
+            # --- Edge case: duplicate muid within the same file ---
+            if muid in seen_muids:
+                failed_rows.append({
+                    "row": row_num,
+                    "muid": muid,
+                    "reason": "Duplicate muid in file — already processed earlier in this upload."
+                })
+                continue
+
+            seen_muids.add(muid)
+
+            try:
+                with transaction.atomic():
+                    # --- Edge case: user not found ---
+                    user = User.objects.filter(muid=muid).first()
+                    if not user:
+                        failed_rows.append({
+                            "row": row_num,
+                            "muid": muid,
+                            "reason": "No user found with this muid."
+                        })
+                        continue
+
+                    # --- Edge case: user is already an intern ---
+                    if UserInternGuildLink.objects.filter(user=user).exists():
+                        failed_rows.append({
+                            "row": row_num,
+                            "muid": muid,
+                            "reason": "User is already onboarded as an intern."
+                        })
+                        continue
+
+                    # Create the intern guild link
+                    UserInternGuildLink.objects.create(
+                        id=str(uuid.uuid4()),
+                        user=user,
+                        guild=guild,
+                        status=InternGuildStatus.ACTIVE.value,
+                        created_by_id=actor_user_id,
+                        updated_by_id=actor_user_id,
+                    )
+
+                    # Assign 'Intern' role (idempotent via get_or_create)
+                    UserRoleLink.objects.get_or_create(
+                        user=user,
+                        role=intern_role,
+                        defaults={
+                            'verified': True,
+                            'is_active': True,
+                            'created_by_id': actor_user_id
+                        }
+                    )
+
+                    success_count += 1
+
+            except Exception as e:
+                failed_rows.append({
+                    "row": row_num,
+                    "muid": muid,
+                    "reason": f"Unexpected error: {str(e)}"
+                })
+
+        return CustomResponse(
+            general_message="Bulk intern import completed.",
+            response={
+                "success_count": success_count,
+                "failed_count": len(failed_rows),
+                "failed_rows": failed_rows,
+            }
+        ).get_success_response()
