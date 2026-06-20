@@ -18,6 +18,10 @@ class TaskUpdateEntrySerializer(serializers.Serializer):
 
 class InternTimesheetSerializer(serializers.ModelSerializer):
     task = TaskUpdateEntrySerializer(many=True, required=False, allow_null=True)
+    description = serializers.CharField(max_length=2000)
+    blockers = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
+    end_of_day_note = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
+    edit_reason = serializers.CharField(max_length=300, required=False, allow_blank=True, allow_null=True)
 
     class Meta:
         model = InternDailyTimesheet
@@ -30,6 +34,7 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
         entry_date = data.get('entry_date')
         today = now().date()
         yesterday = today - timedelta(days=1)
+        user_id = self.context.get('user_id')
 
         if entry_date > today:
             raise serializers.ValidationError({"entry_date": "Future dates are not allowed."})
@@ -40,8 +45,15 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
         if not data.get('description'):
             raise serializers.ValidationError({"description": "Description is required."})
 
-        if not data.get('hours') or data.get('hours', 0) <= 0:
+        hours = data.get('hours', 0)
+        if not hours or hours <= 0:
             raise serializers.ValidationError({"hours": "Hours must be greater than 0."})
+        if hours > 24:
+            raise serializers.ValidationError({"hours": "Hours cannot exceed 24 in a single day."})
+
+        # Prevent duplicate timesheet for the same date
+        if InternDailyTimesheet.objects.filter(user_id=user_id, entry_date=entry_date).exists():
+            raise serializers.ValidationError({"entry_date": "A timesheet for this date has already been submitted."})
 
         task_entries = data.get('task') or []
         user_id = self.context.get('user_id')

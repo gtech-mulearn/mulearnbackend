@@ -8,10 +8,10 @@ from utils.types import InternSubmissionStatus
 
 class InternWeeklyReviewSerializer(serializers.ModelSerializer):
     week_start_date = serializers.DateField(required=False, write_only=True)
-    rating = serializers.IntegerField(required=False, write_only=True)
-    next_week_plan = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True)
-    challenges_faced = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True)
-    learnings = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True)
+    rating = serializers.IntegerField(required=False, write_only=True, min_value=1, max_value=5)
+    next_week_plan = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True, max_length=2000)
+    challenges_faced = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True, max_length=2000)
+    learnings = serializers.CharField(required=False, write_only=True, allow_blank=True, allow_null=True, max_length=2000)
 
     class Meta:
         model = InternWeeklyReview
@@ -35,11 +35,23 @@ class InternWeeklyReviewSerializer(serializers.ModelSerializer):
         if is_on_leave is None:
             is_on_leave = False
 
+        # Duplicate weekly review check (only on create)
+        if not self.instance:
+            user_id = self.context.get('user_id')
+            target_date = data.get('week_start_date') or now().date()
+            iso_year, iso_week, _ = target_date.isocalendar()
+            if InternWeeklyReview.objects.filter(user_id=user_id, iso_year=iso_year, iso_week=iso_week).exists():
+                raise serializers.ValidationError(
+                    {"week": f"A weekly review for week {iso_week} of {iso_year} has already been submitted."}
+                )
+
         if not is_on_leave:
             if 'hours_committed' in data:
                 val = data['hours_committed']
                 if val is None or val <= 0:
                     raise serializers.ValidationError({"hours_committed": "Hours must be greater than 0."})
+                if val > 168:
+                    raise serializers.ValidationError({"hours_committed": "Hours committed cannot exceed 168 hours per week."})
             elif not self.instance:
                 raise serializers.ValidationError({"hours_committed": "Hours committed is required when not on leave."})
         else:
