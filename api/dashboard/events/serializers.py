@@ -261,7 +261,7 @@ class EventListItemSerializer(serializers.ModelSerializer):
         model = Event
         fields = [
             'id', 'title', 'slug', 'cover_image',
-            'status', 'scope', 'event_scope', 'start_datetime', 'end_datetime',
+            'status', 'scope', 'event_scope', 'event_type', 'start_datetime', 'end_datetime',
             'venue', 'organizer', 'is_featured', 'is_collaboration',
             'interest_count', 'min_karma', 'tags', 'user_limit',
             'category_id', 'category_name', 'viewer_interest_status',
@@ -330,7 +330,7 @@ class EventDetailSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'slug', 'description',
             'cover_image', 'banner_image', 'category_id', 'category_name',
-            'status', 'scope', 'event_scope', 'scope_org', 'scope_ig', 'scope_ci_id',
+            'status', 'scope', 'event_scope', 'event_type', 'scope_org', 'scope_ig', 'scope_ci_id',
             'organizer', 'venue',
             'start_datetime', 'end_datetime',
             'registration_url', 'registration_deadline', 'min_karma',
@@ -453,7 +453,7 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'scope', 'scope_org', 'scope_ig', 'scope_ci_id',
             'organiser_type', 'organiser_ig', 'organiser_org', 'organiser_ci_id',
             'is_collaboration', 'is_featured', 'tags', 'user_limit',
-            'event_scope',
+            'event_scope', 'event_type',
         ]
         extra_kwargs = {
             'description': {'required': False, 'allow_null': True},
@@ -480,6 +480,8 @@ class EventWriteSerializer(serializers.ModelSerializer):
             'user_limit': {'required': False},
             # event_scope is required on create; on PATCH it is optional
             'event_scope': {'required': False},
+            # event_type is optional (defaults to 'others')
+            'event_type': {'required': False},
         }
 
     def validate_category(self, value):
