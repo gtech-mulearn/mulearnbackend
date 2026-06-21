@@ -18,9 +18,9 @@ class JobCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyJob
         fields = [
-            'id', 'title', 'experience', 'job_description', 'location', 
-            'salary_range', 'job_type', 'status', 'duration_value', 
-            'duration_unit', 'hourly_rate', 'deliverables', 'stipend', 
+            'id', 'title', 'experience', 'job_description', 'location',
+            'salary_range', 'job_type', 'duration_value',
+            'duration_unit', 'hourly_rate', 'deliverables', 'stipend',
             'certificate_provided', 'rules'
         ]
         read_only_fields = ['id']
@@ -42,16 +42,19 @@ class JobCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         rules_data = validated_data.pop('rules', [])
         user_id = self.context.get('user_id')
-        
+
         company = self.context.get('company')
         if not company:
             raise serializers.ValidationError("You do not have a verified company profile or lack permissions.")
 
+        # Jobs are always created as Draft; status can only be changed via PATCH.
+        validated_data['status'] = 'Draft'
+
         job = CompanyJob.objects.create(company=company, **validated_data)
-        
+
         for rule_data in rules_data:
             CompanyJobRule.objects.create(job=job, **rule_data)
-            
+
         return job
 
 class JobUpdateSerializer(serializers.ModelSerializer):
