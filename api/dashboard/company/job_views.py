@@ -16,7 +16,11 @@ class CompanyJobAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
-        description="Post a new job/gig.",
+        description=(
+            "Post a new job/gig. "
+            "Jobs are always created with status='Draft' regardless of any status value sent in the request body. "
+            "Use PATCH /jobs/{job_id}/ to change the status to 'Active' (or any other value) after creation."
+        ),
         request=job_serializers.JobCreateSerializer,
         responses={200: job_serializers.JobCreateSerializer},
     )
