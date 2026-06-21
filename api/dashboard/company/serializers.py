@@ -9,7 +9,11 @@ from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 
 def generate_unique_code():
-    return uuid.uuid4().hex[:12]
+    """Generate a 12-char hex code guaranteed to be unique in Organization.code."""
+    while True:
+        code = uuid.uuid4().hex[:12]
+        if not Organization.objects.filter(code=code).exists():
+            return code
 
 class CompanyRegisterSerializer(serializers.ModelSerializer):
     district_id = serializers.PrimaryKeyRelatedField(queryset=District.objects.all(), required=False, allow_null=True, source="district")
@@ -44,12 +48,50 @@ class CompanyRegisterSerializer(serializers.ModelSerializer):
             "gallery"
         ]
 
+    def validate_description(self, value):
+        if value and len(value) > 5000:
+            raise serializers.ValidationError("Description must not exceed 5000 characters.")
+        return value
+
+    def validate_culture_text(self, value):
+        if value and len(value) > 3000:
+            raise serializers.ValidationError("Culture text must not exceed 3000 characters.")
+        return value
+
+    def validate_perks(self, value):
+        if value and len(value) > 2000:
+            raise serializers.ValidationError("Perks must not exceed 2000 characters.")
+        return value
+
+    def validate_testimonials(self, value):
+        if value and len(value) > 3000:
+            raise serializers.ValidationError("Testimonials must not exceed 3000 characters.")
+        return value
+
     def validate_short_pitch(self, value):
         if value:
             word_count = len(value.split())
             if word_count > 150:
                 raise serializers.ValidationError("Short pitch must not exceed 150 words.")
         return value
+
+    def validate(self, data):
+        """Enforce address hierarchy: district must belong to the supplied state/country."""
+        district = data.get("district")
+        state = data.get("state")
+        country = data.get("country")
+
+        if district and state:
+            if not hasattr(district, 'zone') or district.zone.state_id != state.id:
+                raise serializers.ValidationError(
+                    {"district_id": "The selected district does not belong to the selected state."}
+                )
+        if district and country:
+            if not hasattr(district, 'zone') or district.zone.state.country_id != country.id:
+                raise serializers.ValidationError(
+                    {"district_id": "The selected district does not belong to the selected country."}
+                )
+        return data
 
     def create(self, validated_data):
         user_id = self.context["user_id"]
@@ -107,12 +149,50 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
             "gallery"
         ]
 
+    def validate_description(self, value):
+        if value and len(value) > 5000:
+            raise serializers.ValidationError("Description must not exceed 5000 characters.")
+        return value
+
+    def validate_culture_text(self, value):
+        if value and len(value) > 3000:
+            raise serializers.ValidationError("Culture text must not exceed 3000 characters.")
+        return value
+
+    def validate_perks(self, value):
+        if value and len(value) > 2000:
+            raise serializers.ValidationError("Perks must not exceed 2000 characters.")
+        return value
+
+    def validate_testimonials(self, value):
+        if value and len(value) > 3000:
+            raise serializers.ValidationError("Testimonials must not exceed 3000 characters.")
+        return value
+
     def validate_short_pitch(self, value):
         if value:
             word_count = len(value.split())
             if word_count > 150:
                 raise serializers.ValidationError("Short pitch must not exceed 150 words.")
         return value
+
+    def validate(self, data):
+        """Enforce address hierarchy: district must belong to the supplied state/country."""
+        district = data.get("district")
+        state = data.get("state")
+        country = data.get("country")
+
+        if district and state:
+            if not hasattr(district, 'zone') or district.zone.state_id != state.id:
+                raise serializers.ValidationError(
+                    {"district_id": "The selected district does not belong to the selected state."}
+                )
+        if district and country:
+            if not hasattr(district, 'zone') or district.zone.state.country_id != country.id:
+                raise serializers.ValidationError(
+                    {"district_id": "The selected district does not belong to the selected country."}
+                )
+        return data
 
     def update(self, instance, validated_data):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
@@ -178,6 +258,8 @@ class CompanyVerifySerializer(serializers.Serializer):
         if status == "verified":
             instance.verified_by = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
+            # Clear any stale rejection data from a previous rejection
+            instance.rejection_reason = None
 
             # ── Ensure the company's Organization row exists ─────────────────
             org = Organization.objects.filter(
@@ -222,10 +304,9 @@ class CompanyVerifySerializer(serializers.Serializer):
                     },
                 )
 
-                
         elif status == "rejected":
             instance.rejection_reason = validated_data.get("rejection_reason")
-            
+
         instance.save()
         return instance
 
