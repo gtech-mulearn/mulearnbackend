@@ -1,6 +1,7 @@
 import json
 import uuid
 
+from django.db import transaction
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, OpenApiResponse, inline_serializer
 from rest_framework import serializers as s
@@ -95,6 +96,10 @@ class CompanyTaskListCreateAPI(APIView):
         approval_status = request.query_params.get("approval_status")
         if approval_status:
             queryset = queryset.filter(approval_status=approval_status)
+        else:
+            # Exclude soft-deleted tasks (active=False after being previously approved)
+            # Only exclude tasks that are inactive AND already approved/rejected (not pending)
+            queryset = queryset.exclude(active=False, approval_status="approved")
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
@@ -166,16 +171,17 @@ class CompanyTaskListCreateAPI(APIView):
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
 
-        task = serializer.save(
-            id=str(uuid.uuid4()),
-            approval_status="pending",
-            active=False,
-            requested_by_id=user_id,
-            requested_at=DateTimeUtils.get_current_utc_time(),
-        )
+        with transaction.atomic():
+            task = serializer.save(
+                id=str(uuid.uuid4()),
+                approval_status="pending",
+                active=False,
+                requested_by_id=user_id,
+                requested_at=DateTimeUtils.get_current_utc_time(),
+            )
 
-        if skill_ids:
-            _save_task_skills(task.id, skill_ids, user_id)
+            if skill_ids:
+                _save_task_skills(task.id, skill_ids, user_id)
 
         return CustomResponse(
             general_message="Task submitted for approval."
@@ -309,6 +315,7 @@ class CompanyTaskDetailAPI(APIView):
             ).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
 
         data = serializer.validated_data
+        skill_ids = data.pop("skill_ids", None)
 
         from db.task import InterestGroup, TaskType, Level
         from db.channels import Channel
@@ -336,6 +343,9 @@ class CompanyTaskDetailAPI(APIView):
         task.updated_by = user
 
         task.save()
+
+        if skill_ids is not None:
+            _save_task_skills(task.id, skill_ids, user_id)
 
         return CustomResponse(
             general_message="Task updated successfully and submitted for admin review.",
