@@ -89,7 +89,7 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
                 new_is_verified is False or
                 (new_status is not None and new_status != instance.status)
             )
-        )
+        ) 
 
         if should_revert:
             with transaction.atomic():
