@@ -261,9 +261,9 @@ class InternGuild(Enum):
         return [member.value for member in cls]
 
 class InternTaskCategory(Enum):
-    BACKEND = ["Backend API", "Auth API", "Bot", "Database", "DevOps", "Documentation"]
-    FRONTEND = ["UI Components", "API Integration", "Bug Fix", "Performance", "Accessibility", "Documentation"]
-    DESIGN = ["Wireframes", "Prototyping", "Branding", "Research"]
+    BACKEND_GUILD = ["Backend API", "Auth API", "Bot", "Database", "DevOps", "Documentation"]
+    FRONTEND_GUILD = ["UI Components", "API Integration", "Bug Fix", "Performance", "Accessibility", "Documentation"]
+    DESIGN_GUILD = ["Wireframes", "Prototyping", "Branding", "Research"]
 
 class InternTaskStatus(Enum):
     NOT_STARTED = "NOT_STARTED"
