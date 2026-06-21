@@ -2,7 +2,7 @@ import uuid
 
 from decouple import config as decouple_config
 from django.db import transaction
-from django.db.models import F, Sum, Q
+from django.db.models import F, Sum, Q, Case, When, Value, CharField, Exists, OuterRef
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 from db.task import UserIgLvlLink
@@ -17,7 +17,7 @@ from db.task import (
     UserLvlLink,
     UserIgLvlLink,
 )
-from db.user import User, UserSettings, Socials
+from db.user import User, UserSettings, Socials, UserRoleLink
 from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import (
@@ -197,11 +197,57 @@ class UserProfileSerializer(serializers.ModelSerializer):
         return ranks.index(obj.id) + 1
 
     def get_karma_distribution(self, obj):
+        # Exists subqueries to safely check creator's roles WITHOUT joining,
+        # which would cause duplicate rows and multiply karma sums incorrectly.
+        is_mentor = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("task__created_by"),
+                role__title=RoleType.MENTOR.value
+            )
+        )
+        is_intern = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("task__created_by"),
+                role__title=RoleType.INTERN.value
+            )
+        )
+        is_ig_lead = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("task__created_by"),
+                role__title=RoleType.IG_LEAD.value
+            )
+        )
+
         return (
             KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
-            .values(task_type=F("task__type__title"))
+            # Annotate role flags first (Exists = no join, no duplication)
+            .annotate(
+                is_mentor=is_mentor,
+                is_intern=is_intern,
+                is_ig_lead=is_ig_lead,
+            )
+            # Then bucket using priority order:
+            # 1. Events Task  (task linked to an event)
+            # 2. IG Task      (task linked to an IG, or creator is IG Lead)
+            # 3. Mentor Task  (task created by a Mentor)
+            # 4. Intern Task  (task created by an Intern)
+            # 5. Other Task   (everything else)
+            .annotate(
+                bucket=Case(
+                    When(task__event_fk__isnull=False, then=Value("Events Task")),
+                    When(
+                        Q(task__ig__isnull=False) | Q(is_ig_lead=True),
+                        then=Value("IG Task")
+                    ),
+                    When(is_mentor=True, then=Value("Mentor Task")),
+                    When(is_intern=True, then=Value("Intern Task")),
+                    default=Value("Other Task"),
+                    output_field=CharField()
+                )
+            )
+            .values(task_type=F("bucket"))
             .annotate(karma=Sum("karma"))
-            .order_by()
+            .order_by("-karma")
         )
 
     def get_interest_groups(self, obj):
