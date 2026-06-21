@@ -76,9 +76,6 @@ class ManageInternTaskAPI(APIView):
         if not task:
             return CustomResponse(general_message="Task not found.").get_failure_response()
             
-        if task.is_verified:
-            return CustomResponse(general_message="Task is already verified and cannot be edited.").get_failure_response()
-            
         request_data = request.data
             
         old_data = {
@@ -206,6 +203,7 @@ class ManageInternTaskVerifyAPI(APIView):
                         task=task_list,
                         karma=karma_awarded,
                         appraiser_approved=True,
+                        task_message_id=task.id,  # Store intern task ID for karma revert tracking
                         updated_by_id=admin_id,
                         updated_at=now(),
                         created_by_id=admin_id,
