@@ -1,5 +1,6 @@
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, Value, IntegerField
+from django.db.models.functions import Coalesce
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -35,7 +36,19 @@ class CompanyMulearnerDirectoryAPI(APIView):
             return CustomResponse(
                 general_message="Access denied. Verified company profile required."
             ).get_failure_response(status_code=403)
-        users = User.objects.filter(user_settings_user__is_public=True)
+        users = User.objects.filter(
+            user_settings_user__is_public=True
+        ).select_related(
+            "wallet_user",
+            "user_lvl_link_user__level",
+        ).prefetch_related(
+            "user_organization_link_user__org",
+            "user_organization_link_user__department",
+        ).annotate(
+            annotated_karma=Coalesce(
+                "wallet_user__karma", Value(0), output_field=IntegerField()
+            )
+        )
         min_karma = request.query_params.get('min_karma')
         max_karma = request.query_params.get('max_karma')
         level = request.query_params.get('level')
@@ -48,9 +61,9 @@ class CompanyMulearnerDirectoryAPI(APIView):
         task = request.query_params.get('task')
 
         if min_karma:
-            users = users.filter(wallet_user__karma__gte=min_karma)
+            users = users.filter(annotated_karma__gte=int(min_karma))
         if max_karma:
-            users = users.filter(wallet_user__karma__lte=max_karma)
+            users = users.filter(annotated_karma__lte=int(max_karma))
         if level:
             users = users.filter(user_lvl_link_user__level__level_order=level)
         if college:

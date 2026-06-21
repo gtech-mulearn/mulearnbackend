@@ -16,34 +16,49 @@ class MulearnerDirectorySerializer(serializers.ModelSerializer):
         ]
 
     def get_karma(self, obj):
+        # Uses annotated_karma from the queryset (Coalesce, no extra DB hit)
+        annotated = getattr(obj, 'annotated_karma', None)
+        if annotated is not None:
+            return annotated
         try:
             return obj.wallet_user.karma
         except Exception:
             return 0
 
     def get_level(self, obj):
+        # Uses select_related cache — no extra DB hit
         try:
-            return obj.user_lvl_link_user.level.level_order
+            lvl_link = obj.user_lvl_link_user
+            return lvl_link.level.level_order if lvl_link and lvl_link.level else 0
         except Exception:
             return 0
 
     def get_college(self, obj):
+        # Uses prefetch_related cache — no extra DB hit
         try:
-            org_link = obj.user_organization_link_user.filter(org__org_type='College').first()
-            return org_link.org.title if org_link else None
+            for org_link in obj.user_organization_link_user.all():
+                if org_link.org and org_link.org.org_type == 'College':
+                    return org_link.org.title
+            return None
         except Exception:
             return None
 
     def get_department(self, obj):
+        # Uses prefetch_related cache — no extra DB hit
         try:
-            org_link = obj.user_organization_link_user.filter(org__org_type='College').first()
-            return org_link.department.title if org_link and org_link.department else None
+            for org_link in obj.user_organization_link_user.all():
+                if org_link.org and org_link.org.org_type == 'College':
+                    return org_link.department.title if org_link.department else None
+            return None
         except Exception:
             return None
 
     def get_graduation_year(self, obj):
+        # Uses prefetch_related cache — no extra DB hit
         try:
-            org_link = obj.user_organization_link_user.filter(org__org_type='College').first()
-            return org_link.graduation_year if org_link else None
+            for org_link in obj.user_organization_link_user.all():
+                if org_link.org and org_link.org.org_type == 'College':
+                    return org_link.graduation_year
+            return None
         except Exception:
             return None
