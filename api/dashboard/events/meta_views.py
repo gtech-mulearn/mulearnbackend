@@ -4,6 +4,7 @@ Meta API views — helpers to populate form dropdowns.
 from rest_framework.views import APIView
 
 from db.task import InterestGroup, Category
+from db.events import Event
 from db.organization import Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
@@ -287,9 +288,11 @@ class EventTypesScopesAPI(APIView):
         )},
     )
     def get(self, request):
-        from api.dashboard.events.event_utils import get_event_types_scopes
         return CustomResponse(
             general_message='Event types and scopes retrieved.',
-            response=get_event_types_scopes(),
+            response={
+                "event_type": list(Event.EventType.labels),
+                "event_scope": list(Event.EventScope.labels),
+            },
         ).get_success_response()
 
