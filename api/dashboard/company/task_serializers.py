@@ -142,6 +142,12 @@ class CompanyTaskPatchSerializer(serializers.Serializer):
     type_id     = serializers.CharField(max_length=36, required=False)
     channel_id  = serializers.CharField(max_length=36, required=False, allow_null=True)
     level_id    = serializers.CharField(max_length=36, required=False, allow_null=True)
+    skill_ids   = serializers.ListField(
+        child=serializers.CharField(max_length=36),
+        required=False,
+        allow_empty=True,
+        help_text="List of active Skill UUIDs to link to this task.",
+    )
 
     def validate_hashtag(self, value):
         value = value.strip()
@@ -156,6 +162,19 @@ class CompanyTaskPatchSerializer(serializers.Serializer):
             qs = qs.exclude(id=task_id)
         if qs.exists():
             raise serializers.ValidationError(f"A task with hashtag '{value}' already exists.")
+        return value
+
+    def validate_skill_ids(self, value):
+        """Validate that all provided skill IDs exist and are active."""
+        from db.skill import Skill
+        invalid_ids = []
+        for skill_id in value:
+            if not Skill.objects.filter(id=skill_id, is_active=True).exists():
+                invalid_ids.append(skill_id)
+        if invalid_ids:
+            raise serializers.ValidationError(
+                f"The following skill IDs are invalid or inactive: {', '.join(invalid_ids)}"
+            )
         return value
 
     def validate_ig_id(self, value):

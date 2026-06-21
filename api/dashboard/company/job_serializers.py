@@ -25,6 +25,20 @@ class JobCreateSerializer(serializers.ModelSerializer):
         ]
         read_only_fields = ['id']
 
+    def validate(self, data):
+        """Enforce that duration_value and duration_unit are always provided together."""
+        duration_value = data.get('duration_value')
+        duration_unit = data.get('duration_unit')
+        if duration_value is not None and not duration_unit:
+            raise serializers.ValidationError(
+                {"duration_unit": "duration_unit is required when duration_value is provided."}
+            )
+        if duration_unit and duration_value is None:
+            raise serializers.ValidationError(
+                {"duration_value": "duration_value is required when duration_unit is provided."}
+            )
+        return data
+
     def create(self, validated_data):
         rules_data = validated_data.pop('rules', [])
         user_id = self.context.get('user_id')
@@ -55,6 +69,20 @@ class JobUpdateSerializer(serializers.ModelSerializer):
             'certificate_provided', 'rules'
         ]
 
+    def validate(self, data):
+        """Enforce that duration_value and duration_unit are always provided together."""
+        duration_value = data.get('duration_value')
+        duration_unit = data.get('duration_unit')
+        if duration_value is not None and not duration_unit:
+            raise serializers.ValidationError(
+                {"duration_unit": "duration_unit is required when duration_value is provided."}
+            )
+        if duration_unit and duration_value is None:
+            raise serializers.ValidationError(
+                {"duration_value": "duration_value is required when duration_unit is provided."}
+            )
+        return data
+
     def update(self, instance, validated_data):
         rules_data = validated_data.pop('rules', None)
         
@@ -66,9 +94,20 @@ class JobUpdateSerializer(serializers.ModelSerializer):
         instance.save()
         
         if rules_data is not None:
-            CompanyJobRule.objects.filter(job=instance).delete()
+            # Non-destructive update: match by rule_type, update value; delete stale; create new
+            existing_rules = {r.rule_type: r for r in CompanyJobRule.objects.filter(job=instance)}
+            incoming_types = set()
             for rule_data in rules_data:
-                CompanyJobRule.objects.create(job=instance, **rule_data)
+                rule_type = rule_data['rule_type']
+                incoming_types.add(rule_type)
+                if rule_type in existing_rules:
+                    existing_rules[rule_type].rule_value = rule_data['rule_value']
+                    existing_rules[rule_type].save(update_fields=['rule_value'])
+                else:
+                    CompanyJobRule.objects.create(job=instance, **rule_data)
+            # Delete rules that were removed
+            stale_types = set(existing_rules.keys()) - incoming_types
+            CompanyJobRule.objects.filter(job=instance, rule_type__in=stale_types).delete()
                 
         return instance
 
@@ -92,6 +131,9 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         model = UserJobApplication
         fields = ['id', 'job', 'resume_link', 'cover_letter', 'status']
         read_only_fields = ['id', 'status']
+        extra_kwargs = {
+            'resume_link': {'allow_blank': False},
+        }
 
     def validate(self, data):
         user_id = self.context.get('user_id')
@@ -140,6 +182,16 @@ class ApplicationTrackingSerializer(serializers.ModelSerializer):
             'applied_at'
         ]
         read_only_fields = ['id', 'job', 'applicant_name', 'applicant_email', 'resume_link', 'cover_letter', 'applied_at']
+
+    def validate(self, data):
+        """Require rejection_reason when setting status to Rejected."""
+        status = data.get('status')
+        rejection_reason = data.get('rejection_reason', '').strip() if data.get('rejection_reason') else ''
+        if status == 'Rejected' and not rejection_reason:
+            raise serializers.ValidationError(
+                {"rejection_reason": "A rejection reason is required when rejecting an application."}
+            )
+        return data
 
     def update(self, instance, validated_data):
         instance.status = validated_data.get('status', instance.status)

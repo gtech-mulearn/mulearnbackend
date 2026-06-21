@@ -94,14 +94,12 @@ class CompanyStatusAPI(APIView):
                 general_message="No company request found for your account."
             ).get_failure_response(status_code=404)
             
+        serializer = serializers.CompanyDetailSerializer(company)
+        response_data = serializer.data
+        response_data["company_id"] = company.id
+        
         return CustomResponse(
-            response={
-                "status": company.status,
-                "rejection_reason": company.rejection_reason,
-                "company_id": company.id,
-                "name": company.name,
-                "slug": company.slug
-            }
+            response=response_data
         ).get_success_response()
 
 class CompanyProfileAPI(APIView):
@@ -162,9 +160,9 @@ class CompanyListAPI(APIView):
             OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("industry_sector", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("company_size", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-            OpenApiParameter("district", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-            OpenApiParameter("state", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-            OpenApiParameter("country", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("district_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=False, description="Filter by district UUID"),
+            OpenApiParameter("state_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=False, description="Filter by state UUID"),
+            OpenApiParameter("country_id", OpenApiTypes.UUID, OpenApiParameter.QUERY, required=False, description="Filter by country UUID"),
         ],
         responses={200: serializers.CompanyListSerializer(many=True)},
     )
@@ -175,9 +173,9 @@ class CompanyListAPI(APIView):
         status = request.query_params.get("status")
         industry_sector = request.query_params.get("industry_sector")
         company_size = request.query_params.get("company_size")
-        district = request.query_params.get("district")
-        state = request.query_params.get("state")
-        country = request.query_params.get("country")
+        district_id = request.query_params.get("district_id")
+        state_id = request.query_params.get("state_id")
+        country_id = request.query_params.get("country_id")
 
         if status:
             companies = companies.filter(status=status)
@@ -185,12 +183,12 @@ class CompanyListAPI(APIView):
             companies = companies.filter(industry_sector=industry_sector)
         if company_size:
             companies = companies.filter(company_size=company_size)
-        if district:
-            companies = companies.filter(district__name=district)
-        if state:
-            companies = companies.filter(district__zone__state__name=state)
-        if country:
-            companies = companies.filter(district__zone__state__country__name=country)
+        if district_id:
+            companies = companies.filter(district_id=district_id)
+        if state_id:
+            companies = companies.filter(district__zone__state_id=state_id)
+        if country_id:
+            companies = companies.filter(district__zone__state__country_id=country_id)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             companies, request, 

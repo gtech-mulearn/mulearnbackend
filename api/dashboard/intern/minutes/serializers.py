@@ -30,3 +30,18 @@ class InternGuildMinuteCreateUpdateSerializer(serializers.Serializer):
         if not value.strip():
             raise serializers.ValidationError("Minutes content cannot be blank.")
         return value
+
+    def validate(self, data):
+        guild = data.get('guild')
+        date = data.get('date')
+        # On create (no instance), check for existing record for same guild+date
+        instance_id = self.context.get('instance_id')
+        if guild and date:
+            qs = InternGuildMinute.objects.filter(guild=guild, date=date)
+            if instance_id:
+                qs = qs.exclude(id=instance_id)
+            if qs.exists():
+                raise serializers.ValidationError(
+                    {"date": f"Guild minutes for '{guild}' on {date} already exist."}
+                )
+        return data
