@@ -268,3 +268,28 @@ class CollaborationTargetsAPI(APIView):
             general_message='Collaboration targets retrieved.',
             response=results,
         ).get_success_response()
+
+
+class EventTypesScopesAPI(APIView):
+    """
+    GET /events/meta/event-type-scope/
+    Lists all valid event types and event scopes.
+    No authentication required.
+    """
+
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Event Types and Scopes.",
+        responses={200: inline_serializer(
+            name='EventTypesScopesResponse',
+            fields={
+                'event_type': s.ListField(child=s.CharField()),
+                'event_scope': s.ListField(child=s.CharField()),
+            }
+        )},
+    )
+    def get(self, request):
+        from api.dashboard.events.event_utils import get_event_types_scopes
+        return CustomResponse(
+            general_message='Event types and scopes retrieved.',
+            response=get_event_types_scopes(),
+        ).get_success_response()
+
