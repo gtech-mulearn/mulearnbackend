@@ -14,9 +14,10 @@ class InternTaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'category', 'complexity',
             'complexity_score', 'assigned_to', 'assigned_to_name', 'status',
-            'karma_awarded', 'output_link', 'is_verified', 'verified_by',
+            'remark', 'karma_awarded', 'output_link', 'is_verified', 'verified_by',
             'created_by', 'created_by_name', 'created_at', 'updated_at'
         ]
+        read_only_fields = ['remark']
 
     def get_complexity_score(self, obj):
         return COMPLEXITY_WEIGHT_MAP.get(obj.complexity, 1)
