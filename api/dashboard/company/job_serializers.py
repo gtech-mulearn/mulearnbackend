@@ -18,9 +18,9 @@ class JobCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyJob
         fields = [
-            'id', 'title', 'experience', 'job_description', 'location', 
-            'salary_range', 'job_type', 'status', 'duration_value', 
-            'duration_unit', 'hourly_rate', 'deliverables', 'stipend', 
+            'id', 'title', 'experience', 'job_description', 'location',
+            'salary_range', 'job_type', 'duration_value',
+            'duration_unit', 'hourly_rate', 'deliverables', 'stipend',
             'certificate_provided', 'rules'
         ]
         read_only_fields = ['id']
@@ -42,16 +42,19 @@ class JobCreateSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         rules_data = validated_data.pop('rules', [])
         user_id = self.context.get('user_id')
-        
+
         company = self.context.get('company')
         if not company:
             raise serializers.ValidationError("You do not have a verified company profile or lack permissions.")
 
+        # Jobs are always created as Draft; status can only be changed via PATCH.
+        validated_data['status'] = 'Draft'
+
         job = CompanyJob.objects.create(company=company, **validated_data)
-        
+
         for rule_data in rules_data:
             CompanyJobRule.objects.create(job=job, **rule_data)
-            
+
         return job
 
 class JobUpdateSerializer(serializers.ModelSerializer):
@@ -181,7 +184,14 @@ class ApplicationTrackingSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'job', 'applicant_name', 'applicant_email', 'resume_link', 'cover_letter', 'applied_at']
 
     def validate(self, data):
-        """Require rejection_reason when setting status to Rejected."""
+        """Require rejection_reason when setting status to Rejected.
+        Prevent any status change once the application is Selected."""
+        # Once selected, status cannot be changed
+        if self.instance and self.instance.status == 'Selected' and 'status' in data:
+            raise serializers.ValidationError(
+                {"status": "Cannot change the status of a selected application."}
+            )
+
         status = data.get('status')
         rejection_reason = data.get('rejection_reason', '').strip() if data.get('rejection_reason') else ''
         if status == 'Rejected' and not rejection_reason:
