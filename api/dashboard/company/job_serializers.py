@@ -187,7 +187,7 @@ class ApplicationTrackingSerializer(serializers.ModelSerializer):
         """Require rejection_reason when setting status to Rejected.
         Prevent any status change once the application is Selected."""
         # Once selected, status cannot be changed
-        if self.instance and self.instance.status == 'Selected':
+        if self.instance and self.instance.status == 'Selected' and 'status' in data:
             raise serializers.ValidationError(
                 {"status": "Cannot change the status of a selected application."}
             )
