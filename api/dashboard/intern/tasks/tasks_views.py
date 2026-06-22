@@ -20,7 +20,7 @@ class InternTaskCategoryAPI(APIView):
     )
     def get(self, request):
         categories = {
-            member.name: member.value
+            member.name.replace("_", " ").title(): member.value
             for member in InternTaskCategory
         }
         return CustomResponse(response=categories).get_success_response()

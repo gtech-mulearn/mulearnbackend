@@ -184,7 +184,14 @@ class ApplicationTrackingSerializer(serializers.ModelSerializer):
         read_only_fields = ['id', 'job', 'applicant_name', 'applicant_email', 'resume_link', 'cover_letter', 'applied_at']
 
     def validate(self, data):
-        """Require rejection_reason when setting status to Rejected."""
+        """Require rejection_reason when setting status to Rejected.
+        Prevent any status change once the application is Selected."""
+        # Once selected, status cannot be changed
+        if self.instance and self.instance.status == 'Selected' and 'status' in data:
+            raise serializers.ValidationError(
+                {"status": "Cannot change the status of a selected application."}
+            )
+
         status = data.get('status')
         rejection_reason = data.get('rejection_reason', '').strip() if data.get('rejection_reason') else ''
         if status == 'Rejected' and not rejection_reason:

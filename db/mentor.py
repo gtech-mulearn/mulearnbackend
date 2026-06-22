@@ -11,6 +11,7 @@ class MentorshipSession(models.Model):
         HYBRID = 'HYBRID', 'Hybrid'
 
     class Status(models.TextChoices):
+        REQUESTED = 'REQUESTED', 'Requested'
         SCHEDULED = 'SCHEDULED', 'Scheduled'
         PENDING_APPROVAL = 'PENDING_APPROVAL', 'Pending Approval'
         COMPLETED = 'COMPLETED', 'Completed'
@@ -54,6 +55,9 @@ class MentorshipSession(models.Model):
     
     approved_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column="approved_by", related_name="mentorship_session_approved_by")
     approved_at = models.DateTimeField(blank=True, null=True)
+
+    # Populated when a student creates the session request. NULL for mentor-created sessions.
+    requested_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, db_column="requested_by", related_name="mentorship_session_requested_by")
 
     class Meta:
         managed = False
