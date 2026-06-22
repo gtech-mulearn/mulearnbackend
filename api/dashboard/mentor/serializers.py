@@ -870,3 +870,298 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         org_link.save(update_fields=["verified"])
 
         return list(resolved_users.keys())
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Student session-request serializers
+# ─────────────────────────────────────────────────────────────────────────────
+
+class StudentSessionRequestSerializer(serializers.ModelSerializer):
+    """
+    Used by students to create a session request.
+
+    Validates:
+      - The student is actually linked to the target entity (campus / company org
+        or IG) determined by session_type + entity_id.
+      - Time constraints (starts_at < ends_at, starts_at in future).
+      - Mode / venue / meeting-link consistency (same rules as SessionCreateSerializer).
+      - No duplicate pending request (same student + entity + title + starts_at).
+    """
+
+    class Meta:
+        model = MentorshipSession
+        fields = [
+            "id",
+            "session_type",
+            "entity_id",
+            "title",
+            "description",
+            "mode",
+            "starts_at",
+            "ends_at",
+            "meeting_link",
+            "venue",
+            "max_participants",
+        ]
+
+    def validate(self, data):
+        from db.organization import UserOrganizationLink
+        from db.task import UserIgLink
+        from django.utils import timezone
+
+        user_id     = self.context["user_id"]
+        session_type = data.get("session_type")
+        entity_id    = data.get("entity_id")
+        starts_at    = data.get("starts_at")
+        ends_at      = data.get("ends_at")
+
+        # ── Time guards ──────────────────────────────────────────────────────
+        if starts_at and starts_at <= timezone.now():
+            raise serializers.ValidationError(
+                {"starts_at": "Session start time must be in the future."}
+            )
+
+        if starts_at and ends_at and starts_at >= ends_at:
+            raise serializers.ValidationError(
+                "Session start time must be before end time."
+            )
+
+        # ── Entity-membership validation ─────────────────────────────────────
+        if session_type == MentorshipSession.SessionType.CAMPUS_SESSION:
+            if not UserOrganizationLink.objects.filter(
+                user_id=user_id,
+                org_id=entity_id,
+                org__org_type="College",
+                verified=True,
+            ).exists():
+                raise serializers.ValidationError(
+                    {"entity_id": "You are not a verified member of this campus."}
+                )
+
+        elif session_type == MentorshipSession.SessionType.COMPANY_SESSION:
+            if not UserOrganizationLink.objects.filter(
+                user_id=user_id,
+                org_id=entity_id,
+                org__org_type="Company",
+                verified=True,
+            ).exists():
+                raise serializers.ValidationError(
+                    {"entity_id": "You are not a verified member of this company."}
+                )
+
+        elif session_type == MentorshipSession.SessionType.IG_SESSION:
+            if not UserIgLink.objects.filter(
+                user_id=user_id,
+                ig_id=entity_id,
+                is_active=True,
+            ).exists():
+                raise serializers.ValidationError(
+                    {"entity_id": "You are not a member of this Interest Group."}
+                )
+
+        else:
+            raise serializers.ValidationError(
+                {"session_type": f"Unsupported session type: {session_type}"}
+            )
+
+        # ── Mode / venue / meeting-link constraints ──────────────────────────
+        mode         = data.get("mode")
+        venue        = (data.get("venue") or "").strip()
+        meeting_link = (data.get("meeting_link") or "").strip()
+
+        if mode == MentorshipSession.Mode.ONLINE and venue:
+            raise serializers.ValidationError(
+                {"venue": "Venue must not be provided for an online session."}
+            )
+        elif mode == MentorshipSession.Mode.OFFLINE and meeting_link:
+            raise serializers.ValidationError(
+                {"meeting_link": "Meeting link must not be provided for an offline session."}
+            )
+        elif mode == MentorshipSession.Mode.HYBRID:
+            errors = {}
+            if not venue:
+                errors["venue"] = "Venue is required for a hybrid session."
+            if not meeting_link:
+                errors["meeting_link"] = "Meeting link is required for a hybrid session."
+            if errors:
+                raise serializers.ValidationError(errors)
+
+        # ── Duplicate request guard ──────────────────────────────────────────
+        if MentorshipSession.objects.filter(
+            requested_by_id=user_id,
+            entity_id=entity_id,
+            title=data.get("title"),
+            starts_at=starts_at,
+            status=MentorshipSession.Status.REQUESTED,
+            is_deleted=False,
+        ).exists():
+            raise serializers.ValidationError(
+                "You already have a pending request for a session with the same "
+                "title and start time for this entity."
+            )
+
+        return data
+
+    def create(self, validated_data):
+        user_id = self.context["user_id"]
+
+        session = MentorshipSession.objects.create(
+            status=MentorshipSession.Status.REQUESTED,
+            requested_by_id=user_id,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+            **validated_data,
+        )
+
+        # Register the requesting student as an invited MENTEE immediately
+        from db.mentor import MentorshipSessionUserLink
+        MentorshipSessionUserLink.objects.create(
+            session=session,
+            user_id=user_id,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTEE,
+            attendance_status=MentorshipSessionUserLink.AttendanceStatus.INVITED,
+        )
+
+        return session
+
+
+class StudentSessionRequestListSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer used by mentors to see incoming student session requests.
+    Includes the requesting student's name for quick identification.
+    """
+    requested_by_name  = serializers.CharField(source="requested_by.full_name", read_only=True)
+    requested_by_muid  = serializers.CharField(source="requested_by.muid",      read_only=True)
+    entity_name        = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MentorshipSession
+        fields = [
+            "id",
+            "session_type",
+            "entity_id",
+            "entity_name",
+            "title",
+            "description",
+            "mode",
+            "starts_at",
+            "ends_at",
+            "meeting_link",
+            "venue",
+            "max_participants",
+            "status",
+            "requested_by_id",
+            "requested_by_name",
+            "requested_by_muid",
+            "created_at",
+        ]
+
+    def get_entity_name(self, obj):
+        if obj.session_type == MentorshipSession.SessionType.IG_SESSION:
+            ig = InterestGroup.objects.filter(id=obj.entity_id).first()
+            return ig.name if ig else None
+        elif obj.session_type in (
+            MentorshipSession.SessionType.CAMPUS_SESSION,
+            MentorshipSession.SessionType.COMPANY_SESSION,
+        ):
+            org = Organization.objects.filter(id=obj.entity_id).first()
+            return org.title if org else None
+        return None
+
+
+class MentorStudentRequestVerifySerializer(serializers.Serializer):
+    """
+    Allows a mentor to approve or reject a student's session request.
+
+    On APPROVE:
+      - Optional overrides (starts_at, ends_at, mode, meeting_link, venue) are
+        applied so the mentor can adjust the proposed time / logistics.
+      - The session transitions from REQUESTED → PENDING_APPROVAL.
+      - created_by is updated to the approving mentor so the session appears in
+        their dashboard and they can edit/cancel it using existing APIs.
+      - requested_by is left untouched — permanent audit trail.
+
+    On REJECT:
+      - The session transitions from REQUESTED → REJECTED.
+      - requested_by remains set; the student can view their rejected requests.
+    """
+
+    status       = serializers.ChoiceField(choices=["APPROVED", "REJECTED"])
+    # Optional mentor-provided overrides — applied only when status == APPROVED
+    starts_at    = serializers.DateTimeField(required=False, allow_null=True)
+    ends_at      = serializers.DateTimeField(required=False, allow_null=True)
+    mode         = serializers.ChoiceField(
+        choices=MentorshipSession.Mode.choices, required=False, allow_null=True
+    )
+    meeting_link = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    venue        = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+
+    def validate(self, data):
+        from django.utils import timezone
+
+        action   = data.get("status")
+        starts_at = data.get("starts_at")
+        ends_at   = data.get("ends_at")
+
+        if action == "APPROVED":
+            # Resolve effective times (override or fall back to existing session values)
+            effective_starts = starts_at or self.instance.starts_at
+            effective_ends   = ends_at   or self.instance.ends_at
+
+            if effective_starts <= timezone.now():
+                raise serializers.ValidationError(
+                    {"starts_at": "Session start time must be in the future."}
+                )
+
+            if effective_starts >= effective_ends:
+                raise serializers.ValidationError(
+                    "Session start time must be before end time."
+                )
+
+            # Resolve effective mode/venue/link for consistency check
+            effective_mode  = data.get("mode")         or self.instance.mode
+            effective_venue = (data.get("venue") or self.instance.venue or "").strip()
+            effective_link  = (data.get("meeting_link") or self.instance.meeting_link or "").strip()
+
+            if effective_mode == MentorshipSession.Mode.ONLINE and effective_venue:
+                raise serializers.ValidationError(
+                    {"venue": "Venue must not be provided for an online session."}
+                )
+            elif effective_mode == MentorshipSession.Mode.OFFLINE and effective_link:
+                raise serializers.ValidationError(
+                    {"meeting_link": "Meeting link must not be provided for an offline session."}
+                )
+            elif effective_mode == MentorshipSession.Mode.HYBRID:
+                errors = {}
+                if not effective_venue:
+                    errors["venue"] = "Venue is required for a hybrid session."
+                if not effective_link:
+                    errors["meeting_link"] = "Meeting link is required for a hybrid session."
+                if errors:
+                    raise serializers.ValidationError(errors)
+
+        return data
+
+    def update(self, instance, validated_data):
+        mentor_id = self.context["user_id"]
+        action    = validated_data["status"]
+
+        if action == "APPROVED":
+            # Apply optional mentor overrides
+            override_fields = ["starts_at", "ends_at", "mode", "meeting_link", "venue"]
+            for field in override_fields:
+                value = validated_data.get(field)
+                if value is not None:
+                    setattr(instance, field, value)
+
+            instance.status        = MentorshipSession.Status.PENDING_APPROVAL
+            instance.created_by_id = mentor_id   # mentor takes ownership
+            instance.updated_by_id = mentor_id
+            instance.save()
+
+        else:  # REJECTED
+            instance.status        = MentorshipSession.Status.REJECTED
+            instance.updated_by_id = mentor_id
+            instance.save(update_fields=["status", "updated_by_id"])
+
+        return instance
