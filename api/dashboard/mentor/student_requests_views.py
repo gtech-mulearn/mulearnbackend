@@ -145,7 +145,12 @@ class MentorStudentRequestListAPI(APIView):
             status=UserMentor.Status.APPROVED,
         ).select_related("org")
 
+        # found_any_scope tracks whether at least one approved mentor record
+        # contributed a meaningful filter clause.  If the loop never sets it,
+        # the user has the MENTOR role but zero APPROVED records, so we must
+        # return an empty queryset instead of leaking every REQUESTED session.
         scope_filter = Q()
+        found_any_scope = False
 
         for record in mentor_records:
             tier = record.mentor_tier
@@ -163,29 +168,37 @@ class MentorStudentRequestListAPI(APIView):
                         session_type=MentorshipSession.SessionType.IG_SESSION,
                         entity_id__in=ig_ids,
                     )
+                    found_any_scope = True
 
             elif tier == UserMentor.MentorTier.CAMPUS_MENTOR and record.org:
                 scope_filter |= Q(
                     session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
                     entity_id=str(record.org.id),
                 )
+                found_any_scope = True
 
             elif tier == UserMentor.MentorTier.COMPANY_MENTOR and record.org:
                 scope_filter |= Q(
                     session_type=MentorshipSession.SessionType.COMPANY_SESSION,
                     entity_id=str(record.org.id),
                 )
+                found_any_scope = True
 
             elif tier == UserMentor.MentorTier.MENTOR:
-                # Global mentor: sees all requests
+                # Global mentor: sees all requests — short-circuit immediately.
+                found_any_scope = True
                 scope_filter = Q()
                 break
 
-        sessions = MentorshipSession.objects.filter(
-            scope_filter,
-            status=MentorshipSession.Status.REQUESTED,
-            is_deleted=False,
-        )
+        # Guard: no approved record ever produced a scope → deny access entirely.
+        if not found_any_scope:
+            sessions = MentorshipSession.objects.none()
+        else:
+            sessions = MentorshipSession.objects.filter(
+                scope_filter,
+                status=MentorshipSession.Status.REQUESTED,
+                is_deleted=False,
+            )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request,
