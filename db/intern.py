@@ -35,6 +35,7 @@ class InternTask(models.Model):
     is_archived = models.BooleanField(default=False)
     karma_awarded = models.IntegerField(default=0)
     output_link = models.URLField(max_length=500, null=True, blank=True)
+    remark = models.TextField(null=True, blank=True)
     is_verified = models.BooleanField(default=False)
     verified_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='intern_task_verified', db_column='verified_by_id')
     created_by = models.ForeignKey(User, on_delete=models.CASCADE, related_name='intern_task_created', db_column='created_by')

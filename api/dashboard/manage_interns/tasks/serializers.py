@@ -37,7 +37,7 @@ class ManageInternTaskSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'title', 'description', 'category', 'complexity',
             'complexity_score', 'assigned_to', 'assigned_to_name', 'assigned_to_muid',
-            'status', 'team', 'guild', 'deadline', 'iso_week', 'output_link',
+            'status', 'remark', 'team', 'guild', 'deadline', 'iso_week', 'output_link',
             'karma_awarded', 'is_verified', 'verified_by_id', 'created_at'
         ]
         read_only_fields = ['created_at', 'verified_by_id']

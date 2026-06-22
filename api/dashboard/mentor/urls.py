@@ -1,5 +1,5 @@
 from django.urls import path
-from . import mentor_views, session_views, availability_views, participant_views, task_views
+from . import mentor_views, session_views, availability_views, participant_views, task_views, student_requests_views
 
 
 urlpatterns = [
@@ -33,4 +33,10 @@ urlpatterns = [
     path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
     path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
     path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
+
+    # ── Student session requests ─────────────────────────────────────────────
+    path('session/student/request/',                                 student_requests_views.StudentSessionRequestAPI.as_view(),    name='student-session-request'),
+    path('session/student/my-requests/',                             student_requests_views.StudentSessionRequestListAPI.as_view(), name='student-session-request-list'),
+    path('session/student-requests/',                                student_requests_views.MentorStudentRequestListAPI.as_view(),  name='mentor-student-request-list'),
+    path('session/student-requests/<str:session_id>/verify/',        student_requests_views.MentorStudentRequestVerifyAPI.as_view(), name='mentor-student-request-verify'),
 ]
