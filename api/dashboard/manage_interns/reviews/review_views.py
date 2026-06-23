@@ -77,7 +77,7 @@ def recalculate_intern_timesheet_streak(user_id: str) -> dict:
             current += 1
         elif diff > 0:
             # Gap — streak resets
-            current = 0
+            current = 1
         # diff == 0 means duplicate date (already deduped, but just in case)
 
         longest = max(longest, current)
@@ -135,7 +135,7 @@ def recalculate_intern_weekly_streak(user_id: str) -> dict:
         elif week_start == last_week_start:
             pass  # Duplicate, ignore
         else:
-            current = 0  # Gap
+            current = 1  # Gap
 
         longest = max(longest, current)
         last_week_start = week_start
