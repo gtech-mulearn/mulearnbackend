@@ -86,7 +86,9 @@ class InternLeaderboardAPI(APIView):
                 "user_id": user_id,
                 "full_name": intern.user.full_name,
                 "guild": intern.guild,
-                "score": score
+                "score": score,
+                "daily_streak": d_streak_val,
+                "weekly_streak": w_streak_val
             })
             
         leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
@@ -190,20 +192,26 @@ class InternLeaderboardMeAPI(APIView):
             
             leaderboard_data.append({
                 "user_id": uid,
-                "score": score
+                "score": score,
+                "daily_streak": d_streak_val,
+                "weekly_streak": w_streak_val
             })
             
         leaderboard_data.sort(key=lambda x: x['score'], reverse=True)
         
         rank = -1
         score = 0
+        daily_streak = 0
+        weekly_streak = 0
         for i, entry in enumerate(leaderboard_data):
             if entry['user_id'] == user_id:
                 rank = i + 1
                 score = entry['score']
+                daily_streak = entry['daily_streak']
+                weekly_streak = entry['weekly_streak']
                 break
                 
         if rank == -1:
             return CustomResponse(general_message="Not found in leaderboard.").get_failure_response()
             
-        return CustomResponse(response={"rank": rank, "score": score}).get_success_response()
+        return CustomResponse(response={"rank": rank, "score": score, "daily_streak": daily_streak, "weekly_streak": weekly_streak}).get_success_response()
