@@ -143,14 +143,12 @@ class ExternalTaskVerificationAPI(APIView):
         email = request.query_params.get("email")
         hashtag = request.query_params.get("hashtag")
         
-        # Validate required parameters
         if not muid or not email or not hashtag:
             return CustomResponse(
                 general_message="'muid', 'email', and 'hashtag' query parameters are required"
             ).get_failure_response(http_status_code=400)
         
         try:
-            # Find user by muid and email
             user = User.objects.get(muid=muid, email=email)
         except User.DoesNotExist:
             return CustomResponse(
