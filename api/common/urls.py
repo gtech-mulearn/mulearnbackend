@@ -1,7 +1,7 @@
 from django.urls import path
 
 from .common_views import *
-from .external_api_views import ExternalUserDetailsAPI
+from .external_api_views import ExternalUserDetailsAPI, ExternalTaskVerificationAPI
 from . import common_views
 from .college_details_views import CollegeDetailsAPI
 from api.dashboard.company import job_views
@@ -34,6 +34,7 @@ urlpatterns = [
     path("list/state/", common_views.LcStateAPI.as_view()),
     path("list/country/", common_views.LcCountryAPI.as_view()),
     path("external/user/", ExternalUserDetailsAPI.as_view()),
+    path("external/verify-task/", ExternalTaskVerificationAPI.as_view()),
     path('jobs/', job_views.PublicJobAPI.as_view(), name='public-jobs-list'),
     path('ig/<str:pk>/', common_views.IGDetailAPI.as_view()),
 ]
