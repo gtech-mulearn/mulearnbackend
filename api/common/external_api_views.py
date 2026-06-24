@@ -1,8 +1,9 @@
 from functools import wraps
 from django.core.cache import cache
+from django.core.exceptions import MultipleObjectsReturned
 from rest_framework.views import APIView
 
-from db.launchpad import LaunchpadJobTasks
+from db.launchpad import LaunchpadJobTasks, LaunchpadJobApplications
 from db.user import User
 from utils.response import CustomResponse
 from .external_api_serializer import ExternalUserDetailsSerializer
@@ -18,7 +19,7 @@ def rate_limit(max_requests=100, time_window=60):
         time_window: Time window in seconds (default: 60 seconds)
     
     Returns 429 if rate limit is exceeded.
-    Uses Redis cache to track request counts per IP address.
+    Uses Redis cache to track request counts per IP address, with unique keys per endpoint.
     """
     def decorator(view_func):
         @wraps(view_func)
@@ -29,7 +30,8 @@ def rate_limit(max_requests=100, time_window=60):
             else:
                 ip_address = request.META.get('REMOTE_ADDR')
             
-            cache_key = f"rate_limit_external_api_{ip_address}"
+            # Use class name to create endpoint-specific cache keys
+            cache_key = f"rate_limit_{self.__class__.__name__}_{ip_address}"
             request_count = cache.get(cache_key, 0)
         
             if request_count >= max_requests:
@@ -124,8 +126,8 @@ class ExternalTaskVerificationAPI(APIView):
     
     Returns:
         200: Task verified/found
-        400: Missing required parameters
-        404: Task/User not found
+        400: Missing required parameters or multiple applications found
+        404: User, task, or task application not found
         429: Rate limit exceeded
     """
 
@@ -133,11 +135,14 @@ class ExternalTaskVerificationAPI(APIView):
     @extend_schema(
         tags=['Common'],
         description="Verify External Task Submission (Public - No Auth Required)",
-        responses={200: ExternalUserDetailsSerializer},
+        responses={200: None},
     )
     def get(self, request):
         """
-        Verify if a user has submitted a valid task with the given hashtag.
+        Verify if a specific user has submitted and completed a task with the given hashtag.
+        
+        This endpoint checks the user's task application record to determine verification status,
+        not the global task verification state.
         """
         muid = request.query_params.get("muid")
         email = request.query_params.get("email")
@@ -156,7 +161,18 @@ class ExternalTaskVerificationAPI(APIView):
             ).get_failure_response(http_status_code=404)
         
         try:
-            task = LaunchpadJobTasks.objects.get(hashtags=hashtag)
+            # Find the user's task application for this specific hashtag
+            # Traverse: LaunchpadJobApplications → LaunchpadJobs → LaunchpadJobTasks
+            task_application = (
+                LaunchpadJobApplications.objects
+                .select_related('job__task')
+                .get(
+                    student=user,
+                    job__task__hashtags=hashtag
+                )
+            )
+            
+            task = task_application.job.task
             
             if not task.is_verified:
                 return CustomResponse(
@@ -177,16 +193,16 @@ class ExternalTaskVerificationAPI(APIView):
                 }
             ).get_success_response()
             
-        except LaunchpadJobTasks.DoesNotExist:
+        except LaunchpadJobApplications.DoesNotExist:
             return CustomResponse(
-                general_message="Task not found",
+                general_message="Task application not found for this user and hashtag",
                 response={
                     "verified": False,
                     "verified_at": None
                 }
             ).get_failure_response(http_status_code=404)
-            
-        except Exception as e:
+        
+        except LaunchpadJobApplications.MultipleObjectsReturned:
             return CustomResponse(
-                general_message=f"Error verifying task: {str(e)}"
+                general_message="Multiple task applications found for this user and hashtag"
             ).get_failure_response(http_status_code=400)
