@@ -6,10 +6,11 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternGuildStatus
+from utils.types import RoleType, InternGuildStatus, InternTaskStatus
 from utils.utils import CommonUtils
 from db.intern import InternDailyTimesheet, UserInternGuildLink, InternTask
 from db.achievement import UserStreak
+from db.mentor import SystemActionLog
 
 from .serializers import InternTimesheetSerializer, InternTimesheetHistorySerializer, InternTimesheetEditSerializer
 
@@ -196,7 +197,7 @@ class InternTimesheetAPI(APIView):
                 new_task_ids = {t['task_id'] for t in new_data['task']}
                 removed_task_ids = old_task_ids - new_task_ids
                 if removed_task_ids:
-                    InternTask.objects.filter(id__in=removed_task_ids, assigned_to_id=user_id).update(status='NOT_STARTED')
+                    InternTask.objects.filter(id__in=removed_task_ids, assigned_to_id=user_id, is_verified=False).update(status=InternTaskStatus.NOT_STARTED.value)
 
                 for entry in new_data['task']:
                     task_id = entry.get('task_id')
@@ -209,7 +210,6 @@ class InternTimesheetAPI(APIView):
             timesheet.edit_reason = edit_reason
             timesheet.save()
 
-            from db.mentor import SystemActionLog
             SystemActionLog.objects.create(
                 action_type=SystemActionLog.ActionType.INTERN_TIMESHEET_EDIT.value,
                 actor_user_id=user_id,

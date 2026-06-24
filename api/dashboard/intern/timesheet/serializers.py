@@ -57,6 +57,12 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
         task_entries = data.get('task') or []
         user_id = self.context.get('user_id')
+        task_ids = [entry.get('task_id') for entry in task_entries if entry.get('task_id')]
+
+        # Bulk fetch tasks
+        intern_tasks = {
+            str(t.id): t for t in InternTask.objects.filter(id__in=task_ids, assigned_to_id=user_id)
+        }
 
         seen_task_ids = set()
         for entry in task_entries:
@@ -71,7 +77,7 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
             seen_task_ids.add(task_id)
 
             # Must belong to this intern
-            intern_task = InternTask.objects.filter(id=task_id, assigned_to_id=user_id).first()
+            intern_task = intern_tasks.get(str(task_id))
             if not intern_task:
                 raise serializers.ValidationError(
                     {"task": f"Task '{task_id}' is not assigned to you or does not exist."}
@@ -192,6 +198,13 @@ class InternTimesheetEditSerializer(serializers.ModelSerializer):
         # 4. Validate task entries if provided
         if 'task' in data:
             task_entries = data.get('task') or []
+            task_ids = [entry.get('task_id') for entry in task_entries if entry.get('task_id')]
+            
+            # Bulk fetch tasks
+            intern_tasks = {
+                str(t.id): t for t in InternTask.objects.filter(id__in=task_ids, assigned_to_id=user_id)
+            }
+            
             seen_task_ids = set()
             for entry in task_entries:
                 task_id = entry.get('task_id')
@@ -203,7 +216,7 @@ class InternTimesheetEditSerializer(serializers.ModelSerializer):
                     )
                 seen_task_ids.add(task_id)
 
-                intern_task = InternTask.objects.filter(id=task_id, assigned_to_id=user_id).first()
+                intern_task = intern_tasks.get(str(task_id))
                 if not intern_task:
                     raise serializers.ValidationError(
                         {"task": f"Task '{task_id}' is not assigned to you or does not exist."}
