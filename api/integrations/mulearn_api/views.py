@@ -15,7 +15,7 @@ class ExternalTaskVerificationAPI(APIView):
             return CustomResponse(general_message=["The 'muid', 'email', and 'hashtag' query parameters are required."]).get_failure_response(status_code=400, http_status_code=status.HTTP_400_BAD_REQUEST)
 
         try:
-            user = User.objects.get(muid=muid, email=email)
+            user = User.every.get(muid=muid, email=email)
         except User.DoesNotExist:
             return CustomResponse(general_message=["The user with the specified muid and email does not exist."]).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
