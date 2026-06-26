@@ -1,4 +1,4 @@
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from django.utils.timezone import now
 
 from rest_framework.views import APIView
@@ -6,12 +6,13 @@ from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType, InternGuildStatus
+from utils.types import RoleType, InternGuildStatus, InternTaskStatus
 from utils.utils import CommonUtils
 from db.intern import InternDailyTimesheet, UserInternGuildLink, InternTask
 from db.achievement import UserStreak
+from db.mentor import SystemActionLog
 
-from .serializers import InternTimesheetSerializer, InternTimesheetHistorySerializer
+from .serializers import InternTimesheetSerializer, InternTimesheetHistorySerializer, InternTimesheetEditSerializer
 
 
 class InternTimesheetPrefillAPI(APIView):
@@ -127,7 +128,8 @@ class InternTimesheetAPI(APIView):
     @role_required([RoleType.INTERN.value])
     @extend_schema(
         tags=['Dashboard - Intern'],
-        description="Edit end-of-day note on a timesheet entry.",
+        description="Edit fields on a pending timesheet entry.",
+        request=InternTimesheetEditSerializer,
         responses={200: OpenApiResponse(description="Timesheet updated successfully.")},
     )
     def patch(self, request, timesheet_id):
@@ -137,43 +139,87 @@ class InternTimesheetAPI(APIView):
         if not timesheet:
             return CustomResponse(general_message="Timesheet not found.").get_failure_response()
 
-        if timesheet.status == 'APPROVED':
-            return CustomResponse(general_message="Cannot edit an approved timesheet.").get_failure_response()
+        if timesheet.status != 'PENDING':
+            return CustomResponse(general_message="Only works on timesheets with status = PENDING.").get_failure_response()
 
-        edit_reason = request.data.get("edit_reason")
-        if not edit_reason:
-            return CustomResponse(general_message="edit_reason is mandatory for modifications.").get_failure_response()
+        serializer = InternTimesheetEditSerializer(
+            instance=timesheet,
+            data=request.data,
+            partial=True,
+            context={'user_id': user_id}
+        )
+        if not serializer.is_valid():
+            return CustomResponse(response=serializer.errors).get_failure_response()
 
-        allowed_fields = ["end_of_day_note"]
+        edit_reason = serializer.validated_data.get("edit_reason")
+
         old_data = {}
         new_data = {}
 
-        for field in allowed_fields:
-            if field in request.data:
-                old_val = getattr(timesheet, field)
-                new_val = request.data[field]
-                if old_val != new_val:
+        for field, new_val in serializer.validated_data.items():
+            if field == 'edit_reason':
+                continue
+
+            if field == 'task':
+                new_snapshot = [
+                    {
+                        'task_id': e['task_id'],
+                        'title': e.get('title', ''),
+                        'status': e['status'],
+                        'remark': e.get('remark') or '',
+                    }
+                    for e in new_val
+                ] if new_val is not None else None
+
+                old_val = timesheet.task
+                if old_val != new_snapshot:
                     old_data[field] = old_val
-                    new_data[field] = new_val
-                    setattr(timesheet, field, new_val)
+                    new_data[field] = new_snapshot
+            else:
+                old_val = getattr(timesheet, field)
+                if old_val != new_val:
+                    if field == 'entry_date':
+                        old_data[field] = str(old_val) if old_val else None
+                        new_data[field] = str(new_val) if new_val else None
+                    elif field == 'hours':
+                        old_data[field] = str(old_val) if old_val else None
+                        new_data[field] = str(new_val) if new_val else None
+                    else:
+                        old_data[field] = old_val
+                        new_data[field] = new_val
 
         if not new_data:
             return CustomResponse(general_message="No editable fields provided or no changes detected.").get_failure_response()
 
-        timesheet.edit_reason = edit_reason
-        timesheet.save()
+        with transaction.atomic():
+            if 'task' in new_data:
+                old_task_ids = {t['task_id'] for t in (timesheet.task or [])}
+                new_task_ids = {t['task_id'] for t in new_data['task']}
+                removed_task_ids = old_task_ids - new_task_ids
+                if removed_task_ids:
+                    InternTask.objects.filter(id__in=removed_task_ids, assigned_to_id=user_id, is_verified=False).update(status=InternTaskStatus.NOT_STARTED.value)
 
-        from db.mentor import SystemActionLog
-        SystemActionLog.objects.create(
-            action_type=SystemActionLog.ActionType.INTERN_TIMESHEET_EDIT.value,
-            actor_user_id=user_id,
-            subject_user_id=user_id,
-            entity_name='intern_daily_timesheet',
-            entity_id=timesheet.id,
-            old_data=old_data,
-            new_data=new_data,
-            remarks=edit_reason
-        )
+                for entry in new_data['task']:
+                    task_id = entry.get('task_id')
+                    new_status = entry.get('status')
+                    InternTask.objects.filter(id=task_id, assigned_to_id=user_id).update(status=new_status)
+
+            for field, new_val in new_data.items():
+                setattr(timesheet, field, new_val)
+
+            timesheet.edit_reason = edit_reason
+            timesheet.save()
+
+            SystemActionLog.objects.create(
+                action_type=SystemActionLog.ActionType.INTERN_TIMESHEET_EDIT.value,
+                actor_user_id=user_id,
+                subject_user_id=user_id,
+                entity_name='intern_daily_timesheet',
+                entity_id=timesheet.id,
+                old_data=old_data,
+                new_data=new_data,
+                remarks=edit_reason
+            )
 
         return CustomResponse(general_message="Timesheet updated successfully.").get_success_response()
 

@@ -57,6 +57,12 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
 
         task_entries = data.get('task') or []
         user_id = self.context.get('user_id')
+        task_ids = [entry.get('task_id') for entry in task_entries if entry.get('task_id')]
+
+        # Bulk fetch tasks
+        intern_tasks = {
+            str(t.id): t for t in InternTask.objects.filter(id__in=task_ids, assigned_to_id=user_id)
+        }
 
         seen_task_ids = set()
         for entry in task_entries:
@@ -71,7 +77,7 @@ class InternTimesheetSerializer(serializers.ModelSerializer):
             seen_task_ids.add(task_id)
 
             # Must belong to this intern
-            intern_task = InternTask.objects.filter(id=task_id, assigned_to_id=user_id).first()
+            intern_task = intern_tasks.get(str(task_id))
             if not intern_task:
                 raise serializers.ValidationError(
                     {"task": f"Task '{task_id}' is not assigned to you or does not exist."}
@@ -140,3 +146,93 @@ class InternTimesheetHistorySerializer(serializers.ModelSerializer):
 
     def get_score(self, obj):
         return 25 if obj.status == 'APPROVED' else 0
+
+
+class InternTimesheetEditSerializer(serializers.ModelSerializer):
+    task = TaskUpdateEntrySerializer(many=True, required=False, allow_null=True)
+    description = serializers.CharField(max_length=2000, required=False)
+    blockers = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
+    end_of_day_note = serializers.CharField(max_length=1000, required=False, allow_blank=True, allow_null=True)
+    edit_reason = serializers.CharField(max_length=300, required=True, allow_blank=False, allow_null=False)
+    entry_date = serializers.DateField(required=False)
+    hours = serializers.DecimalField(max_digits=4, decimal_places=2, required=False)
+
+    class Meta:
+        model = InternDailyTimesheet
+        fields = [
+            'entry_date', 'task', 'description',
+            'hours', 'blockers', 'end_of_day_note', 'edit_reason',
+        ]
+
+    def validate(self, data):
+        timesheet = self.instance
+        user_id = self.context.get('user_id')
+
+        # 0. edit_reason is mandatory for all modifications
+        if 'edit_reason' not in data or not data.get('edit_reason'):
+            raise serializers.ValidationError({"edit_reason": "edit_reason is mandatory for all modifications."})
+
+        # 1. Validate entry_date if provided
+        entry_date = data.get('entry_date')
+        if entry_date is not None:
+            today = now().date()
+            if entry_date > today:
+                raise serializers.ValidationError({"entry_date": "Future dates are not allowed."})
+
+            # Check duplicate timesheet on the same date for the same user, excluding current timesheet
+            if InternDailyTimesheet.objects.filter(user_id=user_id, entry_date=entry_date).exclude(id=timesheet.id).exists():
+                raise serializers.ValidationError({"entry_date": "A timesheet for this date has already been submitted."})
+
+        # 2. Validate description if provided
+        if 'description' in data and not data.get('description'):
+            raise serializers.ValidationError({"description": "Description is required."})
+
+        # 3. Validate hours if provided
+        if 'hours' in data:
+            hours = data.get('hours')
+            if hours is None or hours <= 0:
+                raise serializers.ValidationError({"hours": "Hours must be greater than 0."})
+            if hours > 24:
+                raise serializers.ValidationError({"hours": "Hours cannot exceed 24 in a single day."})
+
+        # 4. Validate task entries if provided
+        if 'task' in data:
+            task_entries = data.get('task') or []
+            task_ids = [entry.get('task_id') for entry in task_entries if entry.get('task_id')]
+            
+            # Bulk fetch tasks
+            intern_tasks = {
+                str(t.id): t for t in InternTask.objects.filter(id__in=task_ids, assigned_to_id=user_id)
+            }
+            
+            seen_task_ids = set()
+            for entry in task_entries:
+                task_id = entry.get('task_id')
+                status = entry.get('status')
+
+                if task_id in seen_task_ids:
+                    raise serializers.ValidationError(
+                        {"task": f"Duplicate task_id '{task_id}' in submission."}
+                    )
+                seen_task_ids.add(task_id)
+
+                intern_task = intern_tasks.get(str(task_id))
+                if not intern_task:
+                    raise serializers.ValidationError(
+                        {"task": f"Task '{task_id}' is not assigned to you or does not exist."}
+                    )
+
+                if intern_task.is_verified:
+                    raise serializers.ValidationError(
+                        {"task": f"Task '{intern_task.title}' is already verified and cannot be modified."}
+                    )
+
+                if status == InternTaskStatus.COMPLETED.value and not intern_task.output_link:
+                    raise serializers.ValidationError(
+                        {"task": f"Task '{intern_task.title}' requires an output_link before marking COMPLETED. Use the task submit endpoint first."}
+                    )
+
+                # Enrich entry with title for the snapshot
+                entry['title'] = intern_task.title
+
+        return data

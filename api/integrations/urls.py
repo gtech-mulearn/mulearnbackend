@@ -5,4 +5,5 @@ urlpatterns = [
     path('kkem/', include('api.integrations.kkem.urls')),
     path('wadhwani/', include('api.integrations.wadhwani.urls')),
     path('qseverse/', include('api.integrations.qseverse.urls', )),
+    path('mufifa/', include('api.integrations.mulearn_api.urls')),
 ]
