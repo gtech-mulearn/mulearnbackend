@@ -83,7 +83,7 @@ class EventVenueSerializer(serializers.Serializer):
     venue_type = serializers.CharField()
     venue_address = serializers.CharField(allow_null=True, required=False)
     venue_city = serializers.CharField(allow_null=True, required=False)
-    venue_maps_url = serializers.CharField(allow_null=True, required=False)
+    venue_maps_url = serializers.URLField(allow_null=True, required=False)
     venue_online_link = serializers.CharField(allow_null=True, required=False)
     venue_platform = serializers.CharField(allow_null=True, required=False)
 
@@ -483,6 +483,54 @@ class EventWriteSerializer(serializers.ModelSerializer):
             # event_type is optional (defaults to 'others')
             'event_type': {'required': False},
         }
+
+    def validate_venue_maps_url(self, value):
+        """Ensure venue_maps_url is a valid Google Maps URL when provided."""
+        import re
+        from urllib.parse import urlparse
+
+        if not value:
+            return value
+
+        # Basic URL structure check
+        try:
+            parsed = urlparse(value)
+            if not parsed.scheme or not parsed.netloc:
+                raise serializers.ValidationError(
+                    'Enter a valid URL (e.g. https://maps.google.com/...).'
+                )
+        except Exception:
+            raise serializers.ValidationError('Enter a valid URL.')
+
+        # Only accept recognised Google Maps hostnames
+        # Allowed patterns:
+        #   maps.google.*         (e.g. maps.google.com, maps.google.co.in)
+        #   www.google.*/maps     (path must start with /maps)
+        #   google.*/maps         (path must start with /maps)
+        #   goo.gl                (Google shortlink)
+        host = parsed.netloc.lower().lstrip('www.')
+        path = parsed.path.lower()
+
+        google_maps_hosts = re.compile(
+            r'^maps\.google\.'         # maps.google.*
+            r'|^google\..+$'           # google.* (needs /maps path)
+            r'|^goo\.gl$'             # goo.gl shortlinks
+        )
+
+        if not google_maps_hosts.match(host):
+            raise serializers.ValidationError(
+                'Only Google Maps URLs are accepted '
+                '(e.g. https://maps.google.com/... or https://goo.gl/maps/...).'
+            )
+
+        # If host is google.* (not maps.google.*), path must start with /maps
+        if re.match(r'^google\..+$', host) and not path.startswith('/maps'):
+            raise serializers.ValidationError(
+                'Only Google Maps URLs are accepted '
+                '(e.g. https://www.google.com/maps/...).'
+            )
+
+        return value
 
     def validate_category(self, value):
         """Ensure the provided Category belongs to the event entity type."""

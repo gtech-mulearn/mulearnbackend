@@ -478,3 +478,96 @@ class CampusExecomRoleAPI(APIView):
         )
 
         return CustomResponse(general_message="Role created successfully").get_success_response()
+
+
+class CampusUserSearchAPI(APIView):
+    """
+    GET  campus/execom/search/?q=<query>
+
+    Searches campus members by full_name or muid (case-insensitive partial match).
+    Returns all matching members regardless of whether they already hold an Execom
+    role — this fixes the inconsistency where some existing Execom members were
+    missing from search results because a plain exact-muid lookup was used.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @campus_staff_required
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description=(
+            "Search campus members by name or muid. "
+            "Returns all matching members including existing Execom role holders."
+        ),
+        responses={
+            200: inline_serializer(
+                name="CampusUserSearchResponse",
+                fields={
+                    "hasError": s.BooleanField(),
+                    "statusCode": s.IntegerField(),
+                    "message": s.DictField(),
+                    "response": inline_serializer(
+                        name="CampusUserSearchData",
+                        fields={
+                            "data": inline_serializer(
+                                name="CampusUserSearchItem",
+                                fields={
+                                    "id": s.CharField(),
+                                    "full_name": s.CharField(),
+                                    "muid": s.CharField(),
+                                    "profile_pic": s.CharField(allow_null=True),
+                                },
+                                many=True,
+                            )
+                        },
+                    ),
+                },
+            )
+        },
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User has no organization"
+            ).get_failure_response()
+
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
+
+        org = user_org_link.org
+        query = request.query_params.get("q", "").strip()
+
+        if not query:
+            return CustomResponse(
+                general_message="Query parameter 'q' is required"
+            ).get_failure_response()
+
+        # Fetch all active (non-alumni) member IDs for this campus
+        campus_user_ids = UserOrganizationLink.objects.filter(
+            org=org,
+            org__org_type=OrganizationType.COLLEGE.value,
+            is_alumni=False,
+        ).values_list("user_id", flat=True)
+
+        # Search by full_name OR muid — case-insensitive partial match.
+        # Using User.objects (ActiveUserManager) so suspended users are excluded.
+        users = User.objects.filter(
+            id__in=campus_user_ids
+        ).filter(
+            Q(full_name__icontains=query) | Q(muid__icontains=query)
+        ).order_by("full_name")[:20]
+
+        data = [
+            {
+                "id": u.id,
+                "full_name": u.full_name,
+                "muid": u.muid,
+                "profile_pic": u.profile_pic,
+            }
+            for u in users
+        ]
+
+        return CustomResponse(response={"data": data}).get_success_response()

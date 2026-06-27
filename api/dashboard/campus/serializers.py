@@ -456,6 +456,19 @@ class CampusLeaderboardSerializer(CampusStudentDetailsSerializer):
     # get_rank and get_full_name are inherited from CampusStudentDetailsSerializer
 
 
+class CampusStudentListSerializer(serializers.Serializer):
+    full_name = serializers.CharField()
+    muid = serializers.CharField()
+    profile_pic = serializers.SerializerMethodField()
+
+    class Meta:
+        fields = ("full_name", "muid", "profile_pic")
+
+    def get_profile_pic(self, obj):
+        return str(obj.profile_pic) if getattr(obj, 'profile_pic', None) else None
+
+
+
 class CampusIGChapterListSerializer(serializers.ModelSerializer):
     ig_id = serializers.ReadOnlyField(source="ig.id")
     ig_name = serializers.ReadOnlyField(source="ig.name")
@@ -476,6 +489,7 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             "lead_id",
             "lead_name",
             "description",
+            "icon_link",
             "is_active",
             "campus_ig_member_count",
         ]
@@ -493,10 +507,17 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
 
 
 class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
+    # Accept muid instead of UUID pk so the frontend can pass e.g. "john-doe@mulearn"
+    lead = serializers.SlugRelatedField(
+        slug_field="muid",
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = CampusIGChapter
-        fields = ["ig", "description", "lead"]
+        fields = ["ig", "description", "icon_link", "lead"]
 
     def validate_ig(self, value):
         org = self.context.get("org")
@@ -530,10 +551,17 @@ class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
 
 
 class CampusIGChapterUpdateSerializer(serializers.ModelSerializer):
+    # Accept muid instead of UUID pk so the frontend can pass e.g. "john-doe@mulearn"
+    lead = serializers.SlugRelatedField(
+        slug_field="muid",
+        queryset=User.objects.all(),
+        required=False,
+        allow_null=True,
+    )
 
     class Meta:
         model = CampusIGChapter
-        fields = ["description", "lead", "is_active"]
+        fields = ["description", "icon_link", "lead", "is_active"]
 
     def validate_lead(self, value):
         if value is None:
@@ -548,12 +576,17 @@ class CampusIGChapterUpdateSerializer(serializers.ModelSerializer):
         new_lead = validated_data.get("lead")
 
         instance.description = validated_data.get("description", instance.description)
+        instance.icon_link = validated_data.get("icon_link", instance.icon_link)
         instance.is_active = validated_data.get("is_active", instance.is_active)
         instance.updated_by_id = user_id
 
         # If lead changed, reassign campus IG lead role
         if new_lead and new_lead != instance.lead:
-            assign_ig_campus_lead(instance, new_lead, user_id)
+            success = assign_ig_campus_lead(instance, new_lead, user_id)
+            if not success:
+                raise serializers.ValidationError(
+                    {"lead": "Could not transfer lead: the required IG campus lead role does not exist."}
+                )
         else:
             instance.save()
 

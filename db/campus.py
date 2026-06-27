@@ -18,6 +18,7 @@ class CampusIGChapter(models.Model):
     lead = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='lead_id',
                              related_name='campus_ig_chapter_lead', blank=True, null=True)
     description = models.TextField(blank=True, null=True)
+    icon_link = models.URLField(max_length=500, blank=True, null=True)
     is_active = models.BooleanField(default=True)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='campus_ig_chapter_created_by')
