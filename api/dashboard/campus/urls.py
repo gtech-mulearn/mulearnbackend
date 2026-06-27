@@ -109,6 +109,11 @@ urlpatterns = [
         name="campus-execom-roles",
     ),
     path(
+        "execom/search/",
+        events_views.CampusUserSearchAPI.as_view(),
+        name="campus-execom-search",
+    ),
+    path(
         "execom/<str:member_id>/",
         events_views.CampusExecomAPI.as_view(),
         name="campus-execom-delete",
@@ -145,6 +150,11 @@ urlpatterns = [
     ),
 
     # New Analytics & Dashboard Routes
+    path(
+        "student-list/",
+        campus_views.CampusStudentListAPI.as_view(),
+        name="campus-student-list",
+    ),
     path(
         "students/<str:muid>/activity/",
         campus_views.CampusStudentActivityAPI.as_view(),

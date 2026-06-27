@@ -204,88 +204,63 @@ class CampusStudentDetailsAPI(APIView):
             return CustomResponse(
                 general_message="User have no organization"
             ).get_failure_response()
-        is_alumni = request.query_params.get("is_alumni")
-        is_alumni_filter = None
-        if is_alumni is not None:
-            is_alumni_filter = str(is_alumni).lower() == "true"
-
 
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
-        if is_alumni_filter is not None:
-            rank = (
-                Wallet.objects.filter(
-                    user__user_organization_link_user__org=user_org_link.org,
-                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user__user_organization_link_user__is_alumni=is_alumni_filter,
-                )
-                .distinct()
-                .order_by("-karma", "-created_at")
-                .values(
-                    "user_id",
-                    "karma",
-                )
-            )
 
-            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+        # Build dynamic filters from query params
+        is_alumni = request.query_params.get("is_alumni")
+        ig = request.query_params.get("ig")
+        category = request.query_params.get("category")
 
-            user_org_links = (
-                User.objects.filter(
-                    user_organization_link_user__org=user_org_link.org,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user_organization_link_user__is_alumni=is_alumni_filter,
-                )
-                .distinct()
-                .annotate(
-                    user_id=F("id"),
-                    email_=F("email"),
-                    mobile_=F("mobile"),
-                    karma=F("wallet_user__karma"),
-                    level=F("user_lvl_link_user__level__name"),
-                    join_date=F("created_at"),
-                    last_karma_gained=F("wallet_user__karma_last_updated_at"),
-                    department=F("user_organization_link_user__department__title"),
-                    graduation_year=F("user_organization_link_user__graduation_year"),
-                    is_alumni=F("user_organization_link_user__is_alumni"),
-                )
-            )
-        else:
-            rank = (
-                Wallet.objects.filter(
-                    user__user_organization_link_user__org=user_org_link.org,
-                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                )
-                .distinct()
-                .order_by("-karma", "-created_at")
-                .values(
-                    "user_id",
-                    "karma",
-                )
-            )
+        wallet_filters = Q(
+            user__user_organization_link_user__org=user_org_link.org,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        )
+        user_filters = Q(
+            user_organization_link_user__org=user_org_link.org,
+            user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        )
 
-            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+        if is_alumni is not None:
+            is_alumni_filter = str(is_alumni).lower() == "true"
+            wallet_filters &= Q(user__user_organization_link_user__is_alumni=is_alumni_filter)
+            user_filters &= Q(user_organization_link_user__is_alumni=is_alumni_filter)
 
-            user_org_links = (
-                User.objects.filter(
-                    user_organization_link_user__org=user_org_link.org,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                )
-                .distinct()
-                .annotate(
-                    user_id=F("id"),
-                    email_=F("email"),
-                    mobile_=F("mobile"),
-                    karma=F("wallet_user__karma"),
-                    level=F("user_lvl_link_user__level__name"),
-                    join_date=F("created_at"),
-                    last_karma_gained=F("wallet_user__karma_last_updated_at"),
-                    department=F("user_organization_link_user__department__title"),
-                    graduation_year=F("user_organization_link_user__graduation_year"),
-                    is_alumni=F("user_organization_link_user__is_alumni"),
-                )
+        if ig is not None:
+            wallet_filters &= Q(user__user_ig_link_user__ig__id=ig)
+            user_filters &= Q(user_ig_link_user__ig__id=ig)
+
+        if category is not None:
+            wallet_filters &= Q(user__user_ig_link_user__ig__category=category)
+            user_filters &= Q(user_ig_link_user__ig__category=category)
+
+        rank = (
+            Wallet.objects.filter(wallet_filters)
+            .distinct()
+            .order_by("-karma", "-created_at")
+            .values("user_id", "karma")
+        )
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(user_filters)
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                email_=F("email"),
+                mobile_=F("mobile"),
+                karma=F("wallet_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+                join_date=F("created_at"),
+                last_karma_gained=F("wallet_user__karma_last_updated_at"),
+                department=F("user_organization_link_user__department__title"),
+                graduation_year=F("user_organization_link_user__graduation_year"),
+                is_alumni=F("user_organization_link_user__is_alumni"),
             )
+        )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
@@ -330,89 +305,63 @@ class CampusStudentDetailsCSVAPI(APIView):
             return CustomResponse(
                 general_message="User have no organization"
             ).get_failure_response()
-        is_alumni = request.query_params.get("is_alumni")
-        is_alumni_filter = None
-        if is_alumni is not None:
-            is_alumni_filter = str(is_alumni).lower() == "true"
-
 
         if user_org_link.org is None:
             return CustomResponse(
                 general_message="Campus lead has no college"
             ).get_failure_response()
 
-        if is_alumni_filter is not None:
-            rank = (
-                Wallet.objects.filter(
-                    user__user_organization_link_user__org=user_org_link.org,
-                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user__user_organization_link_user__is_alumni=is_alumni_filter,
-                )
-                .distinct()
-                .order_by("-karma", "-created_at")
-                .values(
-                    "user_id",
-                    "karma",
-                )
-            )
+        # Build dynamic filters from query params
+        is_alumni = request.query_params.get("is_alumni")
+        ig = request.query_params.get("ig")
+        category = request.query_params.get("category")
 
-            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+        wallet_filters = Q(
+            user__user_organization_link_user__org=user_org_link.org,
+            user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        )
+        user_filters = Q(
+            user_organization_link_user__org=user_org_link.org,
+            user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        )
 
-            user_org_links = (
-                User.objects.filter(
-                    user_organization_link_user__org=user_org_link.org,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user_organization_link_user__is_alumni=is_alumni_filter,
-                )
-                .distinct()
-                .annotate(
-                    user_id=F("id"),
-                    email_=F("email"),
-                    mobile_=F("mobile"),
-                    karma=F("wallet_user__karma"),
-                    level=F("user_lvl_link_user__level__name"),
-                    join_date=F("created_at"),
-                    last_karma_gained=F("wallet_user__karma_last_updated_at"),
-                    department=F("user_organization_link_user__department__title"),
-                    graduation_year=F("user_organization_link_user__graduation_year"),
-                    is_alumni=F("user_organization_link_user__is_alumni"),
-                )
-            )
-        else:
-            rank = (
-                Wallet.objects.filter(
-                    user__user_organization_link_user__org=user_org_link.org,
-                    user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                )
-                .distinct()
-                .order_by("-karma", "-created_at")
-                .values(
-                    "user_id",
-                    "karma",
-                )
-            )
+        if is_alumni is not None:
+            is_alumni_filter = str(is_alumni).lower() == "true"
+            wallet_filters &= Q(user__user_organization_link_user__is_alumni=is_alumni_filter)
+            user_filters &= Q(user_organization_link_user__is_alumni=is_alumni_filter)
 
-            ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+        if ig is not None:
+            wallet_filters &= Q(user__user_ig_link_user__ig__id=ig)
+            user_filters &= Q(user_ig_link_user__ig__id=ig)
 
-            user_org_links = (
-                User.objects.filter(
-                    user_organization_link_user__org=user_org_link.org,
-                    user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                )
-                .distinct()
-                .annotate(
-                    user_id=F("id"),
-                    email_=F("email"),
-                    mobile_=F("mobile"),
-                    karma=F("wallet_user__karma"),
-                    level=F("user_lvl_link_user__level__name"),
-                    join_date=F("created_at"),
-                    last_karma_gained=F("wallet_user__karma_last_updated_at"),
-                    department=F("user_organization_link_user__department__title"),
-                    graduation_year=F("user_organization_link_user__graduation_year"),
-                    is_alumni=F("user_organization_link_user__is_alumni"),
-                )
+        if category is not None:
+            wallet_filters &= Q(user__user_ig_link_user__ig__category=category)
+            user_filters &= Q(user_ig_link_user__ig__category=category)
+
+        rank = (
+            Wallet.objects.filter(wallet_filters)
+            .distinct()
+            .order_by("-karma", "-created_at")
+            .values("user_id", "karma")
+        )
+        ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
+
+        user_org_links = (
+            User.objects.filter(user_filters)
+            .distinct()
+            .annotate(
+                user_id=F("id"),
+                email_=F("email"),
+                mobile_=F("mobile"),
+                karma=F("wallet_user__karma"),
+                level=F("user_lvl_link_user__level__name"),
+                join_date=F("created_at"),
+                last_karma_gained=F("wallet_user__karma_last_updated_at"),
+                department=F("user_organization_link_user__department__title"),
+                graduation_year=F("user_organization_link_user__graduation_year"),
+                is_alumni=F("user_organization_link_user__is_alumni"),
             )
+        )
 
         filtered_queryset = CommonUtils.get_paginated_queryset(
             user_org_links,
@@ -682,11 +631,11 @@ class TransferIGRoleAPI(APIView):
                 general_message="User have no organization"
             ).get_failure_response()
         ig_list = (
-            User.objects.filter(
-                user_organization_link_user__org=user_org_link.org,
-                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            CampusIGChapter.objects.filter(
+                org=user_org_link.org,
+                is_active=True,
             )
-            .values_list("user_ig_link_user__ig__code", flat=True)
+            .values_list("ig__code", flat=True)
             .distinct()
         )
 
@@ -772,6 +721,66 @@ class TransferIGRoleAPI(APIView):
 
 # ...existing code...
 
+class CampusStudentListAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @campus_staff_required
+    @extend_schema(
+        tags=['Dashboard - Campus'],
+        description="Retrieve a lightweight list of students (full_name, muid, profile_pic) for the authenticated user's college.",
+        responses={200: serializers.CampusStudentListSerializer(many=True)},
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not (user_org_link := get_user_college_link(user_id)):
+            return CustomResponse(
+                general_message="User have no organization"
+            ).get_failure_response()
+
+        if user_org_link.org is None:
+            return CustomResponse(
+                general_message="Campus lead has no college"
+            ).get_failure_response()
+            
+        org = user_org_link.org
+
+        qs = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            )
+            .distinct()
+            .annotate(
+                full_name=F("full_name"),
+                muid=F("muid"),
+                profile_pic=F("profile_pic"),
+            )
+            .order_by("full_name")
+        )
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            qs,
+            request,
+            search_fields=["full_name", "muid"],
+            sort_fields={
+                "full_name": "full_name",
+                "muid": "muid",
+            },
+        )
+
+        serializer = serializers.CampusStudentListSerializer(
+            paginated_queryset.get("queryset"),
+            many=True,
+        )
+
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+
+
 class CampusStudentLeaderboardAPI(APIView):
 
     authentication_classes = [CustomizePermission]
@@ -783,20 +792,27 @@ class CampusStudentLeaderboardAPI(APIView):
     def get(self, request, org_id=None):
 
         if not org_id:
-            return CustomResponse(
-                general_message="College not found"
-            ).get_failure_response()
-                                        
-  
-        org = Organization.objects.filter(
-            id=org_id,
-            org_type=OrganizationType.COLLEGE.value
-        ).first()
-  
-        if org is None:
-            return CustomResponse(
-                general_message="Campus not found"
-            ).get_failure_response()
+            user_id = JWTUtils.fetch_user_id(request)
+            if not (user_org_link := get_user_college_link(user_id)):
+                return CustomResponse(
+                    general_message="User have no organization"
+                ).get_failure_response()
+
+            if user_org_link.org is None:
+                return CustomResponse(
+                    general_message="Campus lead has no college"
+                ).get_failure_response()
+            org = user_org_link.org
+        else:
+            org = Organization.objects.filter(
+                id=org_id,
+                org_type=OrganizationType.COLLEGE.value
+            ).first()
+      
+            if org is None:
+                return CustomResponse(
+                    general_message="Campus not found"
+                ).get_failure_response()
         
        
        
