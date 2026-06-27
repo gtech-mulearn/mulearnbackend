@@ -724,6 +724,7 @@ class TransferIGRoleAPI(APIView):
 class CampusStudentListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @campus_staff_required
     @extend_schema(
         tags=['Dashboard - Campus'],
         description="Retrieve a lightweight list of students (full_name, muid, profile_pic) for the authenticated user's college.",
