@@ -508,13 +508,13 @@ class EventWriteSerializer(serializers.ModelSerializer):
         #   www.google.*/maps     (path must start with /maps)
         #   google.*/maps         (path must start with /maps)
         #   goo.gl                (Google shortlink)
-        host = parsed.netloc.lower().lstrip('www.')
+        host = parsed.netloc.lower().removeprefix('www.')
         path = parsed.path.lower()
 
         google_maps_hosts = re.compile(
-            r'^maps\.google\.'         # maps.google.*
-            r'|^google\..+$'           # google.* (needs /maps path)
-            r'|^goo\.gl$'             # goo.gl shortlinks
+            r'^maps\.google\.(?:com|co\.[a-z]{2})$'    # maps.google.com, maps.google.co.in
+            r'|^google\.(?:com|co\.[a-z]{2})$'         # google.com (needs /maps path)
+            r'|^goo\.gl$'                              # goo.gl shortlinks
         )
 
         if not google_maps_hosts.match(host):
@@ -524,7 +524,7 @@ class EventWriteSerializer(serializers.ModelSerializer):
             )
 
         # If host is google.* (not maps.google.*), path must start with /maps
-        if re.match(r'^google\..+$', host) and not path.startswith('/maps'):
+        if re.match(r'^google\.(?:com|co\.[a-z]{2})$', host) and not path.startswith('/maps'):
             raise serializers.ValidationError(
                 'Only Google Maps URLs are accepted '
                 '(e.g. https://www.google.com/maps/...).'
