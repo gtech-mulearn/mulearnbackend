@@ -29,6 +29,7 @@ urlpatterns = [
     path("projects/", include("api.dashboard.projects.urls")),
     path("achievement/", include("api.dashboard.achievement.urls")),
     path("skill/", include("api.dashboard.skill.urls")),
+    path("media-content/", include("api.dashboard.media_content.urls")),
 
     path("category/", include("api.dashboard.category.urls")),
     path("mentor/", include("api.dashboard.mentor.urls")),
