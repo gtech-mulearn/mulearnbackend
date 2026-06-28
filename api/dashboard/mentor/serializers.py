@@ -63,18 +63,12 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, data):
-        # An IG mentor must keep at least one Interest Group — clearing it would
-        # strand them (no IG to create sessions for). Only enforced when the
-        # field is actually present in this (partial) update.
+        # Every mentor must mentor at least one Interest Group (regardless of
+        # tier or any org scope) — the IG list cannot be cleared to empty.
         instance = self.instance
-        if (
-            instance
-            and instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR
-            and "preferred_ig_ids" in data
-            and not data["preferred_ig_ids"]
-        ):
+        if instance and "preferred_ig_ids" in data and not data["preferred_ig_ids"]:
             raise serializers.ValidationError(
-                {"preferred_ig_ids": "IG mentors must keep at least one Interest Group."}
+                {"preferred_ig_ids": "You must mentor at least one Interest Group."}
             )
         return data
 
@@ -88,15 +82,11 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             setattr(instance, attr, value)
         instance.save()
 
-        # Self-service: an APPROVED IG mentor editing their Interest Groups takes
-        # effect immediately — no admin re-approval. (The profile PATCH endpoint
-        # already restricts to APPROVED mentors; the status check is a safe
-        # redundancy. PENDING mentors are linked by the admin approval flow.)
-        if (
-            igs_in_payload
-            and instance.status == UserMentor.Status.APPROVED
-            and instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR
-        ):
+        # Self-service: any APPROVED mentor (any tier) editing their Interest
+        # Groups takes effect immediately — no admin re-approval. IG mentoring is
+        # an orthogonal scope, so company/campus/global mentors can manage IGs too.
+        # (The profile PATCH endpoint already restricts to APPROVED mentors.)
+        if igs_in_payload and instance.status == UserMentor.Status.APPROVED:
             from .dash_mentor_helper import reconcile_mentor_ig_links
 
             reconcile_mentor_ig_links(
@@ -175,11 +165,12 @@ class MentorVerifySerializer(serializers.Serializer):
                     role_link.verified = True
                     role_link.save(update_fields=["verified"])
 
-            # Auto-assign UserIgLink for IG_MENTOR via the shared reconciler.
-            # This creates/reactivates the chosen IGs (and deactivates any the
-            # mentor removed before re-approval) using the same logic as the
-            # self-service edit path, and only ever touches MENTOR-type links.
-            if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR and instance.preferred_ig_ids:
+            # Auto-assign UserIgLink from preferred IGs for ANY tier — IG
+            # mentoring is an orthogonal scope, so company/campus/global mentors
+            # can also mentor Interest Groups. Uses the shared reconciler
+            # (creates/reactivates chosen IGs, deactivates removed ones, only
+            # touches MENTOR-type links).
+            if instance.preferred_ig_ids:
                 from .dash_mentor_helper import reconcile_mentor_ig_links
 
                 reconcile_mentor_ig_links(
@@ -311,20 +302,30 @@ class SessionCreateSerializer(serializers.ModelSerializer):
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
-        
-        session = MentorshipSession.objects.create(
-            status=MentorshipSession.Status.PENDING_APPROVAL,
-            created_by_id=user_id,
-            updated_by_id=user_id,
-            **validated_data
-        )
-        
-        if session.is_recurring:
-            child_sessions = generate_recurring_sessions(session)
-            session._child_session_ids = [c.id for c in child_sessions]
-        else:
-            session._child_session_ids = []
-            
+        now = DateTimeUtils.get_current_utc_time()
+
+        # Approved mentors are pre-vetted, so their sessions go live immediately
+        # (no per-session admin gate). Admins moderate reactively via cancel.
+        # This serializer is shared by the mentor and campus create paths; both
+        # are gated to approved mentors, so auto-approval is safe for both.
+        # Parent + recurring children are a multi-write → wrap atomically so a
+        # failure mid-series never leaves an orphan parent.
+        with transaction.atomic():
+            session = MentorshipSession.objects.create(
+                status=MentorshipSession.Status.SCHEDULED,
+                approved_by_id=user_id,
+                approved_at=now,
+                created_by_id=user_id,
+                updated_by_id=user_id,
+                **validated_data
+            )
+
+            if session.is_recurring:
+                child_sessions = generate_recurring_sessions(session)
+                session._child_session_ids = [c.id for c in child_sessions]
+            else:
+                session._child_session_ids = []
+
         return session
 
 class SessionUpdateSerializer(serializers.ModelSerializer):
@@ -377,16 +378,14 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
-        
-        # If edited after being SCHEDULED, revert to PENDING_APPROVAL
-        if instance.status == MentorshipSession.Status.SCHEDULED:
-            instance.status = MentorshipSession.Status.PENDING_APPROVAL
-            
+
+        # Editing no longer reverts a SCHEDULED session to PENDING_APPROVAL —
+        # approved mentors edit their own live sessions without re-approval.
         instance.updated_by_id = user_id
-        
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-            
+
         instance.save()
         return instance
 
@@ -440,8 +439,9 @@ class SessionDetailSerializer(SessionListSerializer):
 
 class AdminSessionVerifySerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[
-        MentorshipSession.Status.SCHEDULED, 
-        MentorshipSession.Status.REJECTED
+        MentorshipSession.Status.SCHEDULED,
+        MentorshipSession.Status.REJECTED,
+        MentorshipSession.Status.CANCELLED,
     ])
     apply_to_series = serializers.BooleanField(default=False, required=False)
 
@@ -449,21 +449,25 @@ class AdminSessionVerifySerializer(serializers.Serializer):
         user_id = self.context.get("user_id")
         status = validated_data.get("status")
         apply_to_series = validated_data.get("apply_to_series", False)
-        
+
         now = DateTimeUtils.get_current_utc_time()
-        
+        # Capture the pre-update status so a series bulk-update only touches
+        # siblings in the same source state (PENDING→approve/reject,
+        # SCHEDULED→cancel) — the transition is validated in the view.
+        source_status = instance.status
+
         with transaction.atomic():
             # 1. Update and save the targeted session instance (triggers cache signal once)
             instance.status = status
             instance.updated_by_id = user_id
-            
+
             if status == MentorshipSession.Status.SCHEDULED:
                 instance.approved_by_id = user_id
                 instance.approved_at = now
-                
+
             instance.save()
-            
-            # 2. Bulk update all other pending sessions in the series if requested (bypasses signal overhead)
+
+            # 2. Bulk update the rest of the series (same source state) if requested
             if apply_to_series:
                 root_id = instance.parent_session_id or instance.id
                 update_kwargs = {
@@ -473,10 +477,10 @@ class AdminSessionVerifySerializer(serializers.Serializer):
                 if status == MentorshipSession.Status.SCHEDULED:
                     update_kwargs["approved_by_id"] = user_id
                     update_kwargs["approved_at"] = now
-                    
+
                 MentorshipSession.objects.filter(
                     Q(id=root_id) | Q(parent_session_id=root_id),
-                    status=MentorshipSession.Status.PENDING_APPROVAL,
+                    status=source_status,
                     is_deleted=False
                 ).exclude(id=instance.id).update(**update_kwargs)
                 
@@ -1177,9 +1181,13 @@ class MentorStudentRequestVerifySerializer(serializers.Serializer):
                 if value is not None:
                     setattr(instance, field, value)
 
-            instance.status        = MentorshipSession.Status.PENDING_APPROVAL
-            instance.created_by_id = mentor_id   # mentor takes ownership
-            instance.updated_by_id = mentor_id
+            # Mentor approval is the trust gate — the session goes live directly
+            # (no separate admin approval).
+            instance.status         = MentorshipSession.Status.SCHEDULED
+            instance.approved_by_id = mentor_id
+            instance.approved_at    = DateTimeUtils.get_current_utc_time()
+            instance.created_by_id  = mentor_id   # mentor takes ownership
+            instance.updated_by_id  = mentor_id
             instance.save()
 
         else:  # REJECTED

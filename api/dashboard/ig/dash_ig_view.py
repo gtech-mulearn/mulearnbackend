@@ -145,59 +145,37 @@ class InterestGroupAPI(APIView):
         )
 
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                serializer.save()
 
-            role_serializer = RoleDashboardSerializer(
-                data={
-                    "title": request_data.get("name"),
-                    "description": request_data.get("name") + " Interest Group Member",
-                    "created_by": request_data.get("created_by"),
-                    "updated_by": request_data.get("updated_by"),
-                },
-                context={"request": request},
-            )
+                ig_name = request_data.get("name")
+                ig_code = request_data.get("code")
 
-            if role_serializer.is_valid():
-                role_serializer.save()
-            else:
-                return CustomResponse(
-                    general_message=role_serializer.errors
-                ).get_failure_response()
+                roles_to_ensure = [
+                    {
+                        "title": ig_name,
+                        "description": f"{ig_name} Interest Group Member",
+                    },
+                    {
+                        "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
+                        "description": f"{ig_name} Interest Group Campus Lead",
+                    },
+                    {
+                        "title": RoleType.IG_LEAD_ROLE(ig_code),
+                        "description": f"{ig_name} Interest Group Lead",
+                    },
+                ]
 
-            campus_role_serializer = RoleDashboardSerializer(
-                data={
-                    "title": RoleType.IG_CAMPUS_LEAD_ROLE(request_data.get("code")),
-                    "description": request_data.get("name")
-                    + " Intrest Group Campus Lead",
-                    "created_by": request_data.get("created_by"),
-                    "updated_by": request_data.get("updated_by"),
-                },
-                context={"request": request},
-            )
-
-            if campus_role_serializer.is_valid():
-                campus_role_serializer.save()
-            else:
-                return CustomResponse(
-                    general_message=campus_role_serializer.errors
-                ).get_failure_response()
-
-            ig_lead_role_serializer = RoleDashboardSerializer(
-                data={
-                    "title": RoleType.IG_LEAD_ROLE(request_data.get("code")),
-                    "description": request_data.get("name") + " Interest Group Lead",
-                    "created_by": request_data.get("created_by"),
-                    "updated_by": request_data.get("updated_by"),
-                },
-                context={"request": request},
-            )
-
-            if ig_lead_role_serializer.is_valid():
-                ig_lead_role_serializer.save()
-            else:
-                return CustomResponse(
-                    general_message=ig_lead_role_serializer.errors
-                ).get_failure_response()
+                for role_data in roles_to_ensure:
+                    Role.objects.get_or_create(
+                        title=role_data["title"],
+                        defaults={
+                            "id": str(uuid.uuid4()),
+                            "description": role_data["description"],
+                            "created_by_id": request_data.get("created_by"),
+                            "updated_by_id": request_data.get("updated_by"),
+                        }
+                    )
 
             DiscordWebhooks.general_updates(
                 WebHookCategory.INTEREST_GROUP.value,

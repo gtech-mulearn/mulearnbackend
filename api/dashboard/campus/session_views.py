@@ -9,53 +9,10 @@ from api.dashboard.mentor import serializers as mentor_serializers
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from .dash_campus_helper import get_user_college_link
 
-class CampusMentorSessionCreateAPI(APIView):
-    permission_classes = [CustomizePermission]
+# sessions are Interest-Group-scoped
+# only, and campus mentors do not create sessions. (The list endpoint remains for
+# viewing any legacy campus sessions.)
 
-    @extend_schema(
-        tags=['Dashboard - Campus Sessions'],
-        description="Create a new mentorship session for the campus.",
-        request=mentor_serializers.SessionCreateSerializer,
-        responses={200: mentor_serializers.SessionCreateSerializer},
-    )
-    @role_required([RoleType.MENTOR.value])
-    def post(self, request):
-        user_id = JWTUtils.fetch_user_id(request)
-        
-        # Verify the user is an approved Campus Mentor
-        mentor = UserMentor.objects.filter(
-            user_id=user_id, 
-            status=UserMentor.Status.APPROVED, 
-            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR
-        ).first()
-
-        if not mentor:
-            return CustomResponse(
-                general_message="You are not an approved Campus Mentor."
-            ).get_failure_response(status_code=403)
-
-        user_org_link = get_user_college_link(user_id)
-        if not user_org_link:
-            return CustomResponse(
-                general_message="You are not associated with any campus."
-            ).get_failure_response(status_code=404)
-
-        data = request.data.copy()
-        data["entity_id"] = user_org_link.org_id
-        data["session_type"] = MentorshipSession.SessionType.CAMPUS_SESSION
-
-        serializer = mentor_serializers.SessionCreateSerializer(
-            data=data, context={"user_id": user_id}
-        )
-
-        if serializer.is_valid():
-            serializer.save()
-            return CustomResponse(
-                general_message="Campus session created successfully and is pending approval.",
-                response=serializer.data
-            ).get_success_response()
-            
-        return CustomResponse(message=serializer.errors).get_failure_response()
 
 class CampusSessionListAPI(APIView):
     permission_classes = [CustomizePermission]

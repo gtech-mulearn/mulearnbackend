@@ -29,31 +29,28 @@ class MentorSessionCreateAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         data = request.data.copy()
 
-        # ── Company Mentor path ──────────────────────────────────────────────
-        from db.user import UserMentor
-        company_mentor = UserMentor.objects.filter(
-            user_id=user_id,
-            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-            status=UserMentor.Status.APPROVED,
-        ).select_related("org").first()
+        # ── IG-scoped sessions only ──────────────────────────────────────────
+        # Every session is for an Interest Group the mentor mentors (an active
+        # MENTOR UserIgLink). There are no company- or campus-scoped sessions.
+        ig_id = (request.data.get("ig") or "").strip()
 
-        if company_mentor and company_mentor.org:
-            data["entity_id"] = str(company_mentor.org.id)
-            data["session_type"] = MentorshipSession.SessionType.COMPANY_SESSION
-        else:
-            # ── IG Mentor path ───────────────────────────────────────────────
-            ig_id = request.data.get("ig")
-            if not UserIgLink.objects.filter(
-                user_id=user_id,
-                ig_id=ig_id,
-                assignment_type=UserIgLink.AssignmentType.MENTOR,
-                is_active=True
-            ).exists():
-                return CustomResponse(
-                    general_message="You are not assigned as a mentor for this Interest Group."
-                ).get_failure_response(status_code=403)
-            data["entity_id"] = ig_id
-            data["session_type"] = MentorshipSession.SessionType.IG_SESSION
+        if not ig_id:
+            return CustomResponse(
+                general_message="Select an Interest Group to create a session."
+            ).get_failure_response(status_code=400)
+
+        if not UserIgLink.objects.filter(
+            user_id=user_id,
+            ig_id=ig_id,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=True,
+        ).exists():
+            return CustomResponse(
+                general_message="You are not assigned as a mentor for this Interest Group."
+            ).get_failure_response(status_code=403)
+
+        data["entity_id"] = ig_id
+        data["session_type"] = MentorshipSession.SessionType.IG_SESSION
 
         # Pop 'ig' to prevent DRF unknown field validation errors
         data.pop("ig", None)
@@ -64,7 +61,7 @@ class MentorSessionCreateAPI(APIView):
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
-                general_message="Session created successfully and is pending approval.",
+                general_message="Session created successfully.",
                 response=serializer.data
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -225,11 +222,28 @@ class AdminSessionVerifyAPI(APIView):
                 general_message="Session not found."
             ).get_failure_response(status_code=404)
             
-        if session.status not in [MentorshipSession.Status.PENDING_APPROVAL]:
+        # Allowed admin transitions:
+        #   PENDING_APPROVAL → SCHEDULED / REJECTED   (legacy pre-moderation)
+        #   SCHEDULED        → CANCELLED              (reactive unpublish)
+        target = request.data.get("status")
+        allowed_transition = (
+            (
+                session.status == MentorshipSession.Status.PENDING_APPROVAL
+                and target in [
+                    MentorshipSession.Status.SCHEDULED,
+                    MentorshipSession.Status.REJECTED,
+                ]
+            )
+            or (
+                session.status == MentorshipSession.Status.SCHEDULED
+                and target == MentorshipSession.Status.CANCELLED
+            )
+        )
+        if not allowed_transition:
             return CustomResponse(
-                general_message="Only pending sessions can be verified or rejected."
+                general_message="Invalid status transition for this session."
             ).get_failure_response(status_code=400)
-            
+
         serializer = serializers.AdminSessionVerifySerializer(
             session, data=request.data, context={"user_id": user_id}
         )
