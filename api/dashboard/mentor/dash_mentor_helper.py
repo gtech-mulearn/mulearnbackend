@@ -1,14 +1,79 @@
 from datetime import timedelta
+from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
 from db.user import UserMentor
 from db.organization import UserOrganizationLink
-from db.task import UserIgLink, TaskList, KarmaActivityLog
+from db.task import InterestGroup, UserIgLink, TaskList, KarmaActivityLog
 from db.mentor import MentorshipSession, IgOpportunity
 from db.learning_circle import LearningCircle
+from utils.utils import DateTimeUtils
 
 
 CACHE_TTL = 15 * 60  # 15 minutes
+
+
+@transaction.atomic
+def reconcile_mentor_ig_links(user, preferred_ig_ids, actor_user_id):
+    """
+    Make the user's ACTIVE MENTOR UserIgLink set exactly equal the (valid)
+    preferred_ig_ids: adds/reactivates links for newly chosen IGs and
+    deactivates links for removed IGs.
+
+    Only ever touches assignment_type=MENTOR rows — LEARNER/LEAD/MODERATOR
+    links for the same IG are never modified. Used both for first-time admin
+    approval and for self-service edits by already-approved IG mentors.
+
+    Returns (added_ig_ids, removed_ig_ids) as sets of str.
+    """
+    desired = {str(i) for i in (preferred_ig_ids or []) if i}
+    if desired:
+        desired &= {
+            str(x)
+            for x in InterestGroup.objects.filter(id__in=desired).values_list(
+                "id", flat=True
+            )
+        }
+
+    mentor_links = list(
+        UserIgLink.objects.filter(
+            user=user, assignment_type=UserIgLink.AssignmentType.MENTOR
+        )
+    )
+    current_active = {str(link.ig_id) for link in mentor_links if link.is_active}
+
+    to_add = desired - current_active
+    to_remove = current_active - desired
+    now = DateTimeUtils.get_current_utc_time()
+
+    for ig_id in to_add:
+        existing = next((l for l in mentor_links if str(l.ig_id) == ig_id), None)
+        if existing:
+            existing.is_active = True
+            existing.unassigned_at = None
+            existing.assigned_by_id = actor_user_id
+            existing.save(
+                update_fields=["is_active", "unassigned_at", "assigned_by"]
+            )
+        else:
+            UserIgLink.objects.create(
+                user=user,
+                ig_id=ig_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True,
+                assigned_by_id=actor_user_id,
+                created_by_id=actor_user_id,
+            )
+
+    if to_remove:
+        UserIgLink.objects.filter(
+            user=user,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            ig_id__in=to_remove,
+            is_active=True,
+        ).update(is_active=False, unassigned_at=now)
+
+    return to_add, to_remove
 
 def get_mentor_overview(user_id):
         """

@@ -62,13 +62,49 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
                     raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
 
+    def validate(self, data):
+        # An IG mentor must keep at least one Interest Group — clearing it would
+        # strand them (no IG to create sessions for). Only enforced when the
+        # field is actually present in this (partial) update.
+        instance = self.instance
+        if (
+            instance
+            and instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR
+            and "preferred_ig_ids" in data
+            and not data["preferred_ig_ids"]
+        ):
+            raise serializers.ValidationError(
+                {"preferred_ig_ids": "IG mentors must keep at least one Interest Group."}
+            )
+        return data
+
     def update(self, instance, validated_data):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['updated_by_id'] = self.context.get("user_id", instance.user_id)
-        
+
+        igs_in_payload = "preferred_ig_ids" in validated_data
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        # Self-service: an APPROVED IG mentor editing their Interest Groups takes
+        # effect immediately — no admin re-approval. (The profile PATCH endpoint
+        # already restricts to APPROVED mentors; the status check is a safe
+        # redundancy. PENDING mentors are linked by the admin approval flow.)
+        if (
+            igs_in_payload
+            and instance.status == UserMentor.Status.APPROVED
+            and instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR
+        ):
+            from .dash_mentor_helper import reconcile_mentor_ig_links
+
+            reconcile_mentor_ig_links(
+                instance.user,
+                instance.preferred_ig_ids,
+                self.context.get("user_id", instance.user_id),
+            )
+
         return instance
 
 class MentorListSerializer(serializers.ModelSerializer):
@@ -139,29 +175,16 @@ class MentorVerifySerializer(serializers.Serializer):
                     role_link.verified = True
                     role_link.save(update_fields=["verified"])
 
-            # Auto-assign UserIgLink for IG_MENTOR
+            # Auto-assign UserIgLink for IG_MENTOR via the shared reconciler.
+            # This creates/reactivates the chosen IGs (and deactivates any the
+            # mentor removed before re-approval) using the same logic as the
+            # self-service edit path, and only ever touches MENTOR-type links.
             if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR and instance.preferred_ig_ids:
-                for ig_id in instance.preferred_ig_ids:
-                    ig = InterestGroup.objects.filter(id=ig_id).first()
-                    if ig:
-                        ig_link, created = UserIgLink.objects.get_or_create(
-                            user=instance.user,
-                            ig=ig,
-                            defaults={
-                                "assignment_type": UserIgLink.AssignmentType.MENTOR,
-                                "is_active": True,
-                                "assigned_by_id": user_id,
-                                "created_by_id": user_id,
-                                "created_at": DateTimeUtils.get_current_utc_time(),
-                            },
-                        )
-                        if not created:
-                            ig_link.assignment_type = UserIgLink.AssignmentType.MENTOR
-                            ig_link.is_active = True
-                            ig_link.assigned_by_id = user_id
-                            ig_link.save(
-                                update_fields=["assignment_type", "is_active", "assigned_by_id"]
-                            )
+                from .dash_mentor_helper import reconcile_mentor_ig_links
+
+                reconcile_mentor_ig_links(
+                    instance.user, instance.preferred_ig_ids, user_id
+                )
 
             # Auto-link COMPANY_MENTOR to the company's Organization
             if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
