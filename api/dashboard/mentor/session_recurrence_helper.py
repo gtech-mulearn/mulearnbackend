@@ -61,6 +61,8 @@ def generate_recurring_sessions(parent_session: MentorshipSession):
             meeting_link=parent_session.meeting_link,
             venue=parent_session.venue,
             status=parent_session.status,
+            approved_by_id=parent_session.approved_by_id,
+            approved_at=parent_session.approved_at,
             max_participants=parent_session.max_participants,
             is_deleted=parent_session.is_deleted,
             

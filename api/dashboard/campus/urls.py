@@ -204,11 +204,6 @@ urlpatterns = [
     ),
 
     path(
-        "sessions/create/",
-        campus_session_views.CampusMentorSessionCreateAPI.as_view(),
-        name="campus-mentor-session-create",
-    ),
-    path(
         "sessions/list/",
         campus_session_views.CampusSessionListAPI.as_view(),
         name="campus-session-list",
