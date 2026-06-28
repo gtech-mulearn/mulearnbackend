@@ -3,6 +3,7 @@ from django.db.models import Q
 from django.db import transaction
 from rest_framework.views import APIView
 from collections import defaultdict
+import uuid
 from db.organization import Organization, UserOrganizationLink
 from db.task import Level, Wallet, InterestGroup
 from db.campus import CampusIGChapter, CampusSocialLink
@@ -12,7 +13,7 @@ from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
 from utils.utils import CommonUtils
 from . import serializers
-from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters, campus_staff_required
+from .dash_campus_helper import get_user_college_link, get_campus_ig_chapters, campus_staff_required, assign_ig_campus_lead
 from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
 from rest_framework import serializers as s
 
@@ -684,40 +685,27 @@ class TransferIGRoleAPI(APIView):
                 general_message="User already has this role."
             ).get_failure_response()
 
-        # need to change title according to the ig role
-        # below code filter role for title=ig_code + ' CampusLead'
-        role_id = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).first()
-        if role_id is None:
-            return CustomResponse(
-                general_message="Can't find the role"
-            ).get_failure_response()
-        role_id = role_id.id
+        chapter = CampusIGChapter.objects.filter(
+            org=user_org_link.org,
+            ig__code=ig_code
+        ).first()
 
-        if UserRoleLink.objects.filter(user=new_ig, role_id=role_id).exists():
+        if not chapter:
+            return CustomResponse(
+                general_message="Interest Group chapter not found in your campus"
+            ).get_failure_response()
+
+        if UserRoleLink.objects.filter(user=new_ig, role__title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).exists():
             return CustomResponse(
                 general_message="User already has this role."
             ).get_failure_response()
 
         with transaction.atomic():
-            UserRoleLink.objects.filter(
-                user__user_organization_link_user__org=user_org_link.org,
-                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                role__id=role_id,
-            ).delete()
+            assign_ig_campus_lead(chapter, new_ig, user_id)
 
-            serializer = serializers.UserRoleLinkSerializer(
-                data={
-                    "user": new_ig.id,
-                    "role": role_id,
-                },
-                context={"user_id": user_id},
-            )
-            if serializer.is_valid():
-                serializer.save()
-                return CustomResponse(
-                    general_message="Assigned new IG Campus Lead successfully"
-                ).get_success_response()
-            return CustomResponse(message=serializer.errors).get_failure_response()
+        return CustomResponse(
+            general_message="Assigned new IG Campus Lead successfully"
+        ).get_success_response()
 
 # ...existing code...
 

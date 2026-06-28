@@ -121,9 +121,35 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
     Mirrors the role-transfer logic in TransferIGRoleAPI.post().
     """
     ig_code = chapter.ig.code
-    role = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).first()
-    if role is None:
-        return False
+    ig_name = chapter.ig.name
+
+    roles_to_ensure = [
+        {
+            "title": ig_name,
+            "description": f"{ig_name} Interest Group Member",
+        },
+        {
+            "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
+            "description": f"{ig_name} Interest Group Campus Lead",
+        },
+        {
+            "title": RoleType.IG_LEAD_ROLE(ig_code),
+            "description": f"{ig_name} Interest Group Lead",
+        },
+    ]
+
+    for role_data in roles_to_ensure:
+        Role.objects.get_or_create(
+            title=role_data["title"],
+            defaults={
+                "id": str(uuid.uuid4()),
+                "description": role_data["description"],
+                "created_by_id": acting_user_id,
+                "updated_by_id": acting_user_id,
+            }
+        )
+
+    role = Role.objects.get(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code))
 
     # Remove existing campus-level IG lead role for this campus
     UserRoleLink.objects.filter(
