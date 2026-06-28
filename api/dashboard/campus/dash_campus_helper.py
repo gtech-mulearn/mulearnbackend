@@ -139,16 +139,17 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
     ]
 
     for role_data in roles_to_ensure:
-        if not Role.objects.filter(title=role_data["title"]).exists():
-            Role.objects.create(
-                id=str(uuid.uuid4()),
-                title=role_data["title"],
-                description=role_data["description"],
-                created_by_id=acting_user_id,
-                updated_by_id=acting_user_id
-            )
+        Role.objects.get_or_create(
+            title=role_data["title"],
+            defaults={
+                "id": str(uuid.uuid4()),
+                "description": role_data["description"],
+                "created_by_id": acting_user_id,
+                "updated_by_id": acting_user_id,
+            }
+        )
 
-    role = Role.objects.filter(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code)).first()
+    role = Role.objects.get(title=RoleType.IG_CAMPUS_LEAD_ROLE(ig_code))
 
     # Remove existing campus-level IG lead role for this campus
     UserRoleLink.objects.filter(

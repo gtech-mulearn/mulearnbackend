@@ -145,34 +145,36 @@ class InterestGroupAPI(APIView):
         )
 
         if serializer.is_valid():
-            serializer.save()
+            with transaction.atomic():
+                serializer.save()
 
-            ig_name = request_data.get("name")
-            ig_code = request_data.get("code")
+                ig_name = request_data.get("name")
+                ig_code = request_data.get("code")
 
-            roles_to_ensure = [
-                {
-                    "title": ig_name,
-                    "description": f"{ig_name} Interest Group Member",
-                },
-                {
-                    "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
-                    "description": f"{ig_name} Interest Group Campus Lead",
-                },
-                {
-                    "title": RoleType.IG_LEAD_ROLE(ig_code),
-                    "description": f"{ig_name} Interest Group Lead",
-                },
-            ]
+                roles_to_ensure = [
+                    {
+                        "title": ig_name,
+                        "description": f"{ig_name} Interest Group Member",
+                    },
+                    {
+                        "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
+                        "description": f"{ig_name} Interest Group Campus Lead",
+                    },
+                    {
+                        "title": RoleType.IG_LEAD_ROLE(ig_code),
+                        "description": f"{ig_name} Interest Group Lead",
+                    },
+                ]
 
-            for role_data in roles_to_ensure:
-                if not Role.objects.filter(title=role_data["title"]).exists():
-                    Role.objects.create(
-                        id=str(uuid.uuid4()),
+                for role_data in roles_to_ensure:
+                    Role.objects.get_or_create(
                         title=role_data["title"],
-                        description=role_data["description"],
-                        created_by_id=request_data.get("created_by"),
-                        updated_by_id=request_data.get("updated_by"),
+                        defaults={
+                            "id": str(uuid.uuid4()),
+                            "description": role_data["description"],
+                            "created_by_id": request_data.get("created_by"),
+                            "updated_by_id": request_data.get("updated_by"),
+                        }
                     )
 
             DiscordWebhooks.general_updates(
