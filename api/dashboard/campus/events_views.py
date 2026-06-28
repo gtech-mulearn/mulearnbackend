@@ -321,6 +321,15 @@ class CampusExecomAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+
+            if role_title.endswith("CampusLead") and role_title not in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
+                ig_code = role_title.replace("CampusLead", "").strip()
+                chapter = CampusIGChapter.objects.filter(org=org, ig__code=ig_code, is_active=True).first()
+                if chapter:
+                    chapter.lead = new_user
+                    chapter.updated_by_id = user_id
+                    chapter.save()
+
             return CustomResponse(
                 general_message="Role assigned successfully"
             ).get_success_response()
@@ -382,7 +391,18 @@ class CampusExecomAPI(APIView):
                 general_message="Cannot remove your own Campus Lead role. Use transfer-lead-role instead."
             ).get_failure_response()
 
+        role_title = role_link.role.title
+        user_id_of_role = role_link.user_id
         role_link.delete()
+
+        if role_title.endswith("CampusLead") and role_title not in [RoleType.CAMPUS_LEAD.value, RoleType.LEAD_ENABLER.value]:
+            ig_code = role_title.replace("CampusLead", "").strip()
+            chapter = CampusIGChapter.objects.filter(org=org, ig__code=ig_code, is_active=True).first()
+            if chapter and chapter.lead_id == user_id_of_role:
+                chapter.lead = None
+                chapter.updated_by_id = user_id
+                chapter.save()
+
         return CustomResponse(
             general_message="Role removed successfully"
         ).get_success_response()
