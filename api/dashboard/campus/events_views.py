@@ -434,10 +434,7 @@ class CampusExecomRoleAPI(APIView):
         for chapter in active_chapters:
             if chapter.ig:
                 roles.add(f"{chapter.ig.code} CampusLead")
-                roles.add(f"{chapter.ig.name} Design Lead")
-                roles.add(f"{chapter.ig.name} Tech Lead")
-                roles.add(f"{chapter.ig.name} IG Lead")
-                roles.add(f"{chapter.ig.name} IGLead")
+                roles.add(f"{chapter.ig.code} IGLead")
 
         return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
 

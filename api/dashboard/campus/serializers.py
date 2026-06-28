@@ -543,6 +543,36 @@ class CampusIGChapterCreateSerializer(serializers.ModelSerializer):
 
         chapter = CampusIGChapter.objects.create(**validated_data)
 
+        # Ensure IG roles exist in the database
+        ig_name = chapter.ig.name
+        ig_code = chapter.ig.code
+
+        roles_to_ensure = [
+            {
+                "title": ig_name,
+                "description": f"{ig_name} Interest Group Member",
+            },
+            {
+                "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
+                "description": f"{ig_name} Interest Group Campus Lead",
+            },
+            {
+                "title": RoleType.IG_LEAD_ROLE(ig_code),
+                "description": f"{ig_name} Interest Group Lead",
+            },
+        ]
+
+        from db.user import Role
+        for role_data in roles_to_ensure:
+            if not Role.objects.filter(title=role_data["title"]).exists():
+                Role.objects.create(
+                    id=str(uuid.uuid4()),
+                    title=role_data["title"],
+                    description=role_data["description"],
+                    created_by_id=user_id,
+                    updated_by_id=user_id,
+                )
+
         # Assign campus IG lead role if lead is provided
         if chapter.lead:
             assign_ig_campus_lead(chapter, chapter.lead, user_id)
