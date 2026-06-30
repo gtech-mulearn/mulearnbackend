@@ -106,7 +106,7 @@ class MentorParticipantListAPI(APIView):
                 general_message="You don't have permission to view participants for this session."
             ).get_failure_response(status_code=403)
             
-        links = MentorshipSessionUserLink.objects.filter(session_id=session_id).select_related('user')
+        links = MentorshipSessionUserLink.objects.filter(session_id=session_id).select_related('user', 'session')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             links, request, 
