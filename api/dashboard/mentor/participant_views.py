@@ -71,15 +71,19 @@ class UserSessionHistoryAPI(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        links = MentorshipSessionUserLink.objects.filter(user_id=user_id).select_related('session')
+        links = MentorshipSessionUserLink.objects.filter(user_id=user_id).select_related('session', 'user')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            links, request, 
+            links, request,
             search_fields=["session__title", "participant_role"],
             sort_fields={"created_at": "created_at"}
         )
-        
-        serializer = serializers.ParticipantListSerializer(paginated_queryset.get("queryset"), many=True)
+
+        page = list(paginated_queryset.get("queryset"))
+        ig_map = serializers.ParticipantListSerializer.build_ig_map(page)
+        serializer = serializers.ParticipantListSerializer(
+            page, many=True, context={"ig_map": ig_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -109,12 +113,16 @@ class MentorParticipantListAPI(APIView):
         links = MentorshipSessionUserLink.objects.filter(session_id=session_id).select_related('user', 'session')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            links, request, 
+            links, request,
             search_fields=["user__full_name", "user__mu_id"],
             sort_fields={"created_at": "created_at", "user_full_name": "user__full_name"}
         )
-        
-        serializer = serializers.ParticipantListSerializer(paginated_queryset.get("queryset"), many=True)
+
+        page = list(paginated_queryset.get("queryset"))
+        ig_map = serializers.ParticipantListSerializer.build_ig_map(page)
+        serializer = serializers.ParticipantListSerializer(
+            page, many=True, context={"ig_map": ig_map}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,

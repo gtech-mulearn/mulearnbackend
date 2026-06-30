@@ -684,11 +684,35 @@ class ParticipantListSerializer(serializers.ModelSerializer):
             "session_entity_name",
         ]
 
+    @staticmethod
+    def build_ig_map(links):
+        """
+        Resolve the Interest Group name for a page of participant links in a
+        single query. List views should call this and pass the result as
+        ``context={"ig_map": ...}`` so ``get_session_entity_name`` does not fire
+        one InterestGroup query per row (entity_id is a CharField, not a FK, so
+        select_related cannot cover it).
+        """
+        ig_ids = {
+            link.session.entity_id
+            for link in links
+            if getattr(link, "session", None) and link.session.entity_id
+        }
+        if not ig_ids:
+            return {}
+        return InterestGroup.objects.filter(id__in=ig_ids).in_bulk()
+
     def get_session_entity_name(self, obj):
         session = getattr(obj, "session", None)
         if not session or not session.entity_id:
             return None
-        # All sessions are IG-scoped; resolve the Interest Group name.
+        # All sessions are IG-scoped; resolve the Interest Group name. Prefer the
+        # batch-resolved map injected by list views (avoids an N+1); fall back to
+        # a single lookup for single-object responses that don't build a map.
+        ig_map = self.context.get("ig_map")
+        if ig_map is not None:
+            ig = ig_map.get(session.entity_id)
+            return ig.name if ig else None
         ig = InterestGroup.objects.filter(id=session.entity_id).first()
         return ig.name if ig else None
 
@@ -944,9 +968,12 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
     """
     Used by students to create a session request.
 
+    All sessions are Interest-Group scoped, so only ``ig_session`` requests are
+    accepted; company/campus session types are rejected.
+
     Validates:
-      - The student is actually linked to the target entity (campus / company org
-        or IG) determined by session_type + entity_id.
+      - The session_type is ig_session and the student is a member of the target
+        Interest Group (entity_id).
       - Time constraints (starts_at < ends_at, starts_at in future).
       - Mode / venue / meeting-link consistency (same rules as SessionCreateSerializer).
       - No duplicate pending request (same student + entity + title + starts_at).
