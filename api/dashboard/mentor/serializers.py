@@ -646,7 +646,19 @@ class MentorAddParticipantSerializer(serializers.Serializer):
 class ParticipantListSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     mu_id = serializers.CharField(source='user.mu_id', read_only=True)
-    
+
+    # Session details — lets the participant-history view render a session
+    # (title/time/meeting link) without an extra detail fetch per row.
+    session_title = serializers.CharField(source="session.title", read_only=True)
+    session_starts_at = serializers.DateTimeField(source="session.starts_at", read_only=True)
+    session_ends_at = serializers.DateTimeField(source="session.ends_at", read_only=True)
+    session_mode = serializers.CharField(source="session.mode", read_only=True)
+    session_meeting_link = serializers.CharField(source="session.meeting_link", read_only=True)
+    session_venue = serializers.CharField(source="session.venue", read_only=True)
+    session_status = serializers.CharField(source="session.status", read_only=True)
+    session_entity_id = serializers.CharField(source="session.entity_id", read_only=True)
+    session_entity_name = serializers.SerializerMethodField()
+
     class Meta:
         model = MentorshipSessionUserLink
         fields = [
@@ -660,8 +672,49 @@ class ParticipantListSerializer(serializers.ModelSerializer):
             "progress_note",
             "feedback",
             "contributed_minutes",
-            "created_at"
+            "created_at",
+            "session_title",
+            "session_starts_at",
+            "session_ends_at",
+            "session_mode",
+            "session_meeting_link",
+            "session_venue",
+            "session_status",
+            "session_entity_id",
+            "session_entity_name",
         ]
+
+    @staticmethod
+    def build_ig_map(links):
+        """
+        Resolve the Interest Group name for a page of participant links in a
+        single query. List views should call this and pass the result as
+        ``context={"ig_map": ...}`` so ``get_session_entity_name`` does not fire
+        one InterestGroup query per row (entity_id is a CharField, not a FK, so
+        select_related cannot cover it).
+        """
+        ig_ids = {
+            link.session.entity_id
+            for link in links
+            if getattr(link, "session", None) and link.session.entity_id
+        }
+        if not ig_ids:
+            return {}
+        return InterestGroup.objects.filter(id__in=ig_ids).in_bulk()
+
+    def get_session_entity_name(self, obj):
+        session = getattr(obj, "session", None)
+        if not session or not session.entity_id:
+            return None
+        # All sessions are IG-scoped; resolve the Interest Group name. Prefer the
+        # batch-resolved map injected by list views (avoids an N+1); fall back to
+        # a single lookup for single-object responses that don't build a map.
+        ig_map = self.context.get("ig_map")
+        if ig_map is not None:
+            ig = ig_map.get(session.entity_id)
+            return ig.name if ig else None
+        ig = InterestGroup.objects.filter(id=session.entity_id).first()
+        return ig.name if ig else None
 
 class ParticipantUpdateSerializer(serializers.ModelSerializer):
     class Meta:
@@ -859,8 +912,15 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         role_link.verified = True
                         role_link.save(update_fields=["verified"])
 
-                # ── 3. Tier-specific side-effects ───────────────────────────
-                if tier == UserMentor.MentorTier.IG_MENTOR and ig_ids:
+                # ── 3. Side-effects (IG links + org link can coexist) ───────
+                # Every mentor tier can mentor Interest Groups, so create MENTOR
+                # UserIgLink rows for ANY tier whenever ig_ids are supplied —
+                # not just IG_MENTOR. Without this, a company/campus mentor's
+                # preferred_ig_ids snapshot would be saved while the authoritative
+                # UserIgLink rows (used by session-create + the IG dropdown) stay
+                # empty, leaving them unable to create sessions for IGs they
+                # appear to mentor.
+                if ig_ids:
                     for ig_id in ig_ids:
                         ig = InterestGroup.objects.filter(id=ig_id).first()
                         if ig:
@@ -881,7 +941,8 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                                 ig_link.assigned_by_id  = admin_id
                                 ig_link.save(update_fields=["assignment_type", "is_active", "assigned_by_id"])
 
-                elif tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR) and org:
+                # Company/campus mentors also get their verified org link.
+                if tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR) and org:
                     from db.organization import UserOrganizationLink
                     org_link, created = UserOrganizationLink.objects.get_or_create(
                         user=user,
@@ -907,9 +968,12 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
     """
     Used by students to create a session request.
 
+    All sessions are Interest-Group scoped, so only ``ig_session`` requests are
+    accepted; company/campus session types are rejected.
+
     Validates:
-      - The student is actually linked to the target entity (campus / company org
-        or IG) determined by session_type + entity_id.
+      - The session_type is ig_session and the student is a member of the target
+        Interest Group (entity_id).
       - Time constraints (starts_at < ends_at, starts_at in future).
       - Mode / venue / meeting-link consistency (same rules as SessionCreateSerializer).
       - No duplicate pending request (same student + entity + title + starts_at).
@@ -932,7 +996,6 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
         ]
 
     def validate(self, data):
-        from db.organization import UserOrganizationLink
         from db.task import UserIgLink
         from django.utils import timezone
 
@@ -954,41 +1017,26 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
             )
 
         # ── Entity-membership validation ─────────────────────────────────────
-        if session_type == MentorshipSession.SessionType.CAMPUS_SESSION:
-            if not UserOrganizationLink.objects.filter(
-                user_id=user_id,
-                org_id=entity_id,
-                org__org_type="College",
-                verified=True,
-            ).exists():
-                raise serializers.ValidationError(
-                    {"entity_id": "You are not a verified member of this campus."}
-                )
-
-        elif session_type == MentorshipSession.SessionType.COMPANY_SESSION:
-            if not UserOrganizationLink.objects.filter(
-                user_id=user_id,
-                org_id=entity_id,
-                org__org_type="Company",
-                verified=True,
-            ).exists():
-                raise serializers.ValidationError(
-                    {"entity_id": "You are not a verified member of this company."}
-                )
-
-        elif session_type == MentorshipSession.SessionType.IG_SESSION:
-            if not UserIgLink.objects.filter(
-                user_id=user_id,
-                ig_id=entity_id,
-                is_active=True,
-            ).exists():
-                raise serializers.ValidationError(
-                    {"entity_id": "You are not a member of this Interest Group."}
-                )
-
-        else:
+        # All sessions are Interest-Group scoped. Company- and campus-scoped
+        # sessions are no longer supported, so any non-IG session_type is
+        # rejected rather than persisted.
+        if session_type != MentorshipSession.SessionType.IG_SESSION:
             raise serializers.ValidationError(
-                {"session_type": f"Unsupported session type: {session_type}"}
+                {
+                    "session_type": (
+                        "Only Interest Group sessions can be requested. "
+                        "Company- and campus-scoped sessions are not supported."
+                    )
+                }
+            )
+
+        if not UserIgLink.objects.filter(
+            user_id=user_id,
+            ig_id=entity_id,
+            is_active=True,
+        ).exists():
+            raise serializers.ValidationError(
+                {"entity_id": "You are not a member of this Interest Group."}
             )
 
         # ── Mode / venue / meeting-link constraints ──────────────────────────

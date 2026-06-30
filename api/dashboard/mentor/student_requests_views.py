@@ -1,5 +1,4 @@
 from rest_framework.views import APIView
-from django.db.models import Q
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -115,14 +114,14 @@ class MentorStudentRequestListAPI(APIView):
     GET /session/student-requests/
 
     Returns all REQUESTED sessions that fall within the logged-in mentor's
-    scope (their IG(s), Campus, or Company). Mentors only see requests they
-    are eligible to act on.
+    scope. All sessions are Interest-Group scoped, so a mentor sees requests
+    for the IGs they actively mentor — regardless of mentor tier.
 
     Scoping rules:
-      - IG_MENTOR      → IG sessions where entity_id is one of the mentor's IGs.
-      - CAMPUS_MENTOR  → CAMPUS_SESSION where entity_id is the mentor's org.
-      - COMPANY_MENTOR → COMPANY_SESSION where entity_id is the mentor's org.
-      - Global MENTOR  → All REQUESTED sessions (admin-level visibility).
+      - Global MENTOR → All REQUESTED sessions (admin-level visibility).
+      - Any other tier (IG / COMPANY / CAMPUS mentor) → IG_SESSION requests
+        whose entity_id is one of the mentor's active MENTOR Interest Groups.
+        (A company/campus mentor who also mentors IGs sees those IG requests.)
     """
 
     permission_classes = [CustomizePermission]
@@ -138,67 +137,45 @@ class MentorStudentRequestListAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+        from db.task import UserIgLink
 
-        # Collect all approved mentor records for this user to determine scope
+        # Approved mentor records for this user.
         mentor_records = UserMentor.objects.filter(
             user_id=user_id,
             status=UserMentor.Status.APPROVED,
-        ).select_related("org")
+        )
 
-        # found_any_scope tracks whether at least one approved mentor record
-        # contributed a meaningful filter clause.  If the loop never sets it,
-        # the user has the MENTOR role but zero APPROVED records, so we must
-        # return an empty queryset instead of leaking every REQUESTED session.
-        scope_filter = Q()
-        found_any_scope = False
-
-        for record in mentor_records:
-            tier = record.mentor_tier
-
-            if tier == UserMentor.MentorTier.IG_MENTOR:
-                from db.task import UserIgLink
-                ig_ids = UserIgLink.objects.filter(
+        if not mentor_records.exists():
+            # Has the MENTOR role but no approved record → no visibility.
+            sessions = MentorshipSession.objects.none()
+        elif mentor_records.filter(
+            mentor_tier=UserMentor.MentorTier.MENTOR
+        ).exists():
+            # Global mentor: admin-level visibility into all pending requests.
+            sessions = MentorshipSession.objects.filter(
+                status=MentorshipSession.Status.REQUESTED,
+                is_deleted=False,
+            )
+        else:
+            # Any other tier mentors Interest Groups via active MENTOR links.
+            # All sessions are IG-scoped, so they see IG_SESSION requests for
+            # the IGs they actively mentor — independent of tier.
+            ig_ids = list(
+                UserIgLink.objects.filter(
                     user_id=user_id,
                     assignment_type=UserIgLink.AssignmentType.MENTOR,
                     is_active=True,
                 ).values_list("ig_id", flat=True)
-
-                if ig_ids:
-                    scope_filter |= Q(
-                        session_type=MentorshipSession.SessionType.IG_SESSION,
-                        entity_id__in=ig_ids,
-                    )
-                    found_any_scope = True
-
-            elif tier == UserMentor.MentorTier.CAMPUS_MENTOR and record.org:
-                scope_filter |= Q(
-                    session_type=MentorshipSession.SessionType.CAMPUS_SESSION,
-                    entity_id=str(record.org.id),
-                )
-                found_any_scope = True
-
-            elif tier == UserMentor.MentorTier.COMPANY_MENTOR and record.org:
-                scope_filter |= Q(
-                    session_type=MentorshipSession.SessionType.COMPANY_SESSION,
-                    entity_id=str(record.org.id),
-                )
-                found_any_scope = True
-
-            elif tier == UserMentor.MentorTier.MENTOR:
-                # Global mentor: sees all requests — short-circuit immediately.
-                found_any_scope = True
-                scope_filter = Q()
-                break
-
-        # Guard: no approved record ever produced a scope → deny access entirely.
-        if not found_any_scope:
-            sessions = MentorshipSession.objects.none()
-        else:
-            sessions = MentorshipSession.objects.filter(
-                scope_filter,
-                status=MentorshipSession.Status.REQUESTED,
-                is_deleted=False,
             )
+            if not ig_ids:
+                sessions = MentorshipSession.objects.none()
+            else:
+                sessions = MentorshipSession.objects.filter(
+                    session_type=MentorshipSession.SessionType.IG_SESSION,
+                    entity_id__in=ig_ids,
+                    status=MentorshipSession.Status.REQUESTED,
+                    is_deleted=False,
+                )
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             sessions, request,
@@ -300,46 +277,33 @@ class MentorStudentRequestVerifyAPI(APIView):
 def _mentor_can_act(user_id: str, session: MentorshipSession) -> bool:
     """
     Returns True if the given user (mentor) is authorised to approve/reject
-    the session based on the mentor's tier and scoped entity.
+    the session. All sessions are Interest-Group scoped, so eligibility is:
+
+      - Global MENTOR → may act on anything.
+      - Any other tier → may act on an IG_SESSION request for an Interest
+        Group they actively mentor (active MENTOR UserIgLink), regardless of
+        tier.
     """
+    from db.task import UserIgLink
+
     mentor_records = UserMentor.objects.filter(
         user_id=user_id,
         status=UserMentor.Status.APPROVED,
-    ).select_related("org")
+    )
 
-    for record in mentor_records:
-        tier = record.mentor_tier
+    if not mentor_records.exists():
+        return False
 
-        # Global mentor can act on anything
-        if tier == UserMentor.MentorTier.MENTOR:
-            return True
+    # Global mentor can act on anything.
+    if mentor_records.filter(mentor_tier=UserMentor.MentorTier.MENTOR).exists():
+        return True
 
-        if tier == UserMentor.MentorTier.IG_MENTOR:
-            if session.session_type != MentorshipSession.SessionType.IG_SESSION:
-                continue
-            from db.task import UserIgLink
-            if UserIgLink.objects.filter(
-                user_id=user_id,
-                ig_id=session.entity_id,
-                assignment_type=UserIgLink.AssignmentType.MENTOR,
-                is_active=True,
-            ).exists():
-                return True
+    if session.session_type != MentorshipSession.SessionType.IG_SESSION:
+        return False
 
-        elif tier == UserMentor.MentorTier.CAMPUS_MENTOR:
-            if (
-                session.session_type == MentorshipSession.SessionType.CAMPUS_SESSION
-                and record.org
-                and str(record.org.id) == session.entity_id
-            ):
-                return True
-
-        elif tier == UserMentor.MentorTier.COMPANY_MENTOR:
-            if (
-                session.session_type == MentorshipSession.SessionType.COMPANY_SESSION
-                and record.org
-                and str(record.org.id) == session.entity_id
-            ):
-                return True
-
-    return False
+    return UserIgLink.objects.filter(
+        user_id=user_id,
+        ig_id=session.entity_id,
+        assignment_type=UserIgLink.AssignmentType.MENTOR,
+        is_active=True,
+    ).exists()
