@@ -402,6 +402,7 @@ class SessionListSerializer(serializers.ModelSerializer):
             "entity_name",
             "session_type",
             "title",
+            "description",
             "mode",
             "starts_at",
             "ends_at",
@@ -410,6 +411,8 @@ class SessionListSerializer(serializers.ModelSerializer):
             "created_by_name",
             "created_at",
             "max_participants",
+            "meeting_link",
+            "venue",
             "is_recurring",
             "parent_session_id",
             "recurrence_type",
@@ -430,12 +433,9 @@ class SessionListSerializer(serializers.ModelSerializer):
         return None
 
 class SessionDetailSerializer(SessionListSerializer):
-    class Meta(SessionListSerializer.Meta):
-        fields = SessionListSerializer.Meta.fields + [
-            "description",
-            "meeting_link",
-            "venue"
-        ]
+    # All fields are already exposed by the list serializer; detail is kept as a
+    # distinct type for endpoint clarity / future divergence.
+    pass
 
 class AdminSessionVerifySerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[
