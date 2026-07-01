@@ -269,7 +269,6 @@ class CompanyVerifySerializer(serializers.Serializer):
             if not org:
                 org_code = generate_unique_code()
                 org = Organization.objects.create(
-                    id=str(uuid.uuid4()),
                     title=instance.name,
                     code=org_code,
                     org_type=OrganizationType.COMPANY.value,
