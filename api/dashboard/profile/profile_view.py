@@ -19,7 +19,7 @@ from db.user import Role, UserRoleLink
 
 from django.utils.timezone import now
 
-from db.organization import UserOrganizationLink
+from db.organization import UserOrganizationLink, Department
 from db.task import InterestGroup, KarmaActivityLog, Level, UserIgLink, UserLvlLink
 from db.user import (
     Role,
@@ -49,6 +49,24 @@ from .profile_serializer import UserTermSerializer
 class UserProfileEditView(APIView):
     authentication_classes = [CustomizePermission]
 
+    @staticmethod
+    def _get_user(user_id):
+        """Fetch the user with all data needed by UserProfileEditSerializer
+        pre-loaded in a single query set, avoiding per-call SQL round-trips
+        for communities and department inside to_representation."""
+        return (
+            User.objects
+            .select_related('district__zone__state__country')
+            .prefetch_related(
+                Prefetch(
+                    'user_organization_link_user',
+                    queryset=UserOrganizationLink.objects.select_related('department'),
+                )
+            )
+            .filter(id=user_id)
+            .first()
+        )
+
     @extend_schema(
         tags=['Dashboard - Profile'],
         description="Retrieve User Profile Edit.",
@@ -56,7 +74,7 @@ class UserProfileEditView(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.select_related('district__zone__state__country').filter(id=user_id).first()
+        user = self._get_user(user_id)
 
         if not user:
             return CustomResponse(
@@ -74,7 +92,12 @@ class UserProfileEditView(APIView):
     )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.select_related('district__zone__state__country').get(id=user_id)
+        user = self._get_user(user_id)
+
+        if not user:
+            return CustomResponse(
+                general_message="User Not Exists"
+            ).get_failure_response()
 
         serializer = profile_serializer.UserProfileEditSerializer(
             user, data=request.data, partial=True
@@ -82,6 +105,10 @@ class UserProfileEditView(APIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            # Re-fetch to reflect any updates made by save() (e.g. district FK).
+            user = self._get_user(user_id)
+            serializer = profile_serializer.UserProfileEditSerializer(user, many=False)
 
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER_NAME.value,
