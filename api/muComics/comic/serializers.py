@@ -135,7 +135,7 @@ class ComicWriteSerializer(serializers.ModelSerializer):
         base = slugify(title)[:70]
         slug = base
         counter = 1
-        while Comic.objects.filter(slug=slug).exists():
+        while Comic.objects.filter(slug=slug).exclude(id=self.instance.id).exists():
             slug = f'{base}-{counter}'
             counter += 1
         return slug
