@@ -355,16 +355,14 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
         venue = (data.get('venue') if 'venue' in data else (self.instance.venue if self.instance else None)) or ""
         meeting_link = (data.get('meeting_link') if 'meeting_link' in data else (self.instance.meeting_link if self.instance else None)) or ""
 
+        # On a mode change we auto-clear the field that no longer applies rather
+        # than rejecting stale data. Switching an online session to offline (or
+        # vice-versa) would otherwise fail because the previous meeting_link /
+        # venue is still stored on the row.
         if mode == MentorshipSession.Mode.ONLINE:
-            if venue.strip():
-                raise serializers.ValidationError(
-                    {"venue": "Venue must not be provided for an online session."}
-                )
+            data["venue"] = ""
         elif mode == MentorshipSession.Mode.OFFLINE:
-            if meeting_link.strip():
-                raise serializers.ValidationError(
-                    {"meeting_link": "Meeting link must not be provided for an offline session."}
-                )
+            data["meeting_link"] = ""
         elif mode == MentorshipSession.Mode.HYBRID:
             errors = {}
             if not venue.strip():
