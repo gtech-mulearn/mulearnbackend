@@ -291,8 +291,14 @@ class EventTypesScopesAPI(APIView):
         return CustomResponse(
             general_message='Event types and scopes retrieved.',
             response={
-                "event_type": list(Event.EventType.labels),
-                "event_scope": list(Event.EventScope.labels),
+                "event_type": [
+                    {"value": v, "label": l}
+                    for v, l in zip(Event.EventType.values, Event.EventType.labels)
+                ],
+                "event_scope": [
+                    {"value": v, "label": l}
+                    for v, l in zip(Event.EventScope.values, Event.EventScope.labels)
+                ],
             },
         ).get_success_response()
 

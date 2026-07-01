@@ -106,7 +106,7 @@ def _public_events_queryset(request, *, featured_only=False):
     params = request.query_params
 
     if event_type := params.get('event_type'):
-        events = events.filter(organiser_type=event_type)
+        events = events.filter(event_type=event_type)
     if ig_id := params.get('ig_id'):
         events = events.filter(scope_ig_id=ig_id)
     if campus_id := params.get('campus_id'):
