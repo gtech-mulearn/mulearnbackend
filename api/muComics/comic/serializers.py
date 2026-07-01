@@ -105,7 +105,7 @@ class ComicWriteSerializer(serializers.ModelSerializer):
         extra_kwargs = {
             'title': {
                 'required': True,
-                'max_length': 75,   # matches Comic.title max_length in db/comic.py
+                'max_length': 150,  # matches Comic.title max_length in db/comic.py
             },
             'description': {
                 'required': False,

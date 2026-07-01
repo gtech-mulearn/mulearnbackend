@@ -5,7 +5,6 @@ from django.conf import settings
 
 from .user import User
 
-
 class Comic(models.Model):
 
     class Status(models.TextChoices):
@@ -15,7 +14,7 @@ class Comic(models.Model):
 
     id              = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title           = models.CharField(max_length=150)
-    slug            = models.CharField(max_length=180, unique=True)
+    slug            = models.CharField(max_length=75, unique=True)
     description     = models.TextField(blank=True, null=True)
     cover_image_key = models.CharField(max_length=255, blank=True, null=True)  # S3 object key
 
@@ -38,13 +37,13 @@ class Comic(models.Model):
 
     # Audit
     updated_by      = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='updated_by', related_name='comic_updated_by'
     )
     updated_at      = models.DateTimeField()
 
     created_by      = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='comic_created_by'
     )
     created_at      = models.DateTimeField()
@@ -62,17 +61,17 @@ class Genre(models.Model):
 
     id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name       = models.CharField(max_length=75, unique=True)
-    slug       = models.CharField(max_length=90, unique=True)
+    slug       = models.CharField(max_length=75, unique=True)
 
     # Audit
     updated_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='updated_by', related_name='genre_updated_by'
     )
     updated_at = models.DateTimeField()
 
     created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='genre_created_by'
     )
     created_at = models.DateTimeField()
@@ -96,7 +95,7 @@ class ComicGenreLink(models.Model):
 
     # Audit
     created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='comic_genre_link_created_by'
     )
     created_at = models.DateTimeField()
@@ -134,7 +133,7 @@ class ComicContributorLink(models.Model):
 
     # Audit
     created_by       = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='comic_contributor_link_created_by'
     )
     created_at       = models.DateTimeField()

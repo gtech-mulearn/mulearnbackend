@@ -14,6 +14,8 @@ Endpoints:
 from django.utils import timezone
 from django.db.models import Q
 
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 from rest_framework.views import APIView
 
 from db.comic import Comic, ComicContributorLink
@@ -62,6 +64,11 @@ class ComicListCreateView(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['muComics'],
+        description="List all active (non-deleted) comics. Supports search by title, status filter, and sort by created_at or title.",
+        responses={200: ComicListItemSerializer(many=True)},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         queryset = _get_active_comics()
@@ -93,6 +100,12 @@ class ComicListCreateView(APIView):
             pagination=paginated['pagination'],
         )
 
+    @extend_schema(
+        tags=['muComics'],
+        description="Create a new comic. Any authenticated user may create a comic. Returns the full comic detail on success.",
+        request=ComicWriteSerializer,
+        responses={200: ComicDetailSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -134,6 +147,11 @@ class ComicDetailView(APIView):
             return None, 'Comic not found.'
         return comic, None
 
+    @extend_schema(
+        tags=['muComics'],
+        description="Retrieve full detail for a single active comic, including contributors and genres.",
+        responses={200: ComicDetailSerializer},
+    )
     def get(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         comic, error = self._get_comic_or_error(comic_id)
@@ -147,6 +165,12 @@ class ComicDetailView(APIView):
             ).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['muComics'],
+        description="Partially update a comic's title, description, or cover image. Only the creator or an assigned editor contributor may edit. Archived comics cannot be edited.",
+        request=ComicWriteSerializer,
+        responses={200: ComicDetailSerializer},
+    )
     def patch(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         comic, error = self._get_comic_or_error(comic_id)
@@ -157,7 +181,7 @@ class ComicDetailView(APIView):
         if not can_edit_comic(user_id, comic):
             return CustomResponse(
                 general_message='You do not have permission to edit this comic.'
-            ).get_failure_response()
+            ).get_unauthorized_response()
 
         # Archived comics cannot be edited
         if comic.status == Comic.Status.ARCHIVED:
@@ -184,6 +208,14 @@ class ComicDetailView(APIView):
             ).data,
         ).get_success_response()
 
+    @extend_schema(
+        tags=['muComics'],
+        description="Soft-delete a comic (sets deleted_at). Only the original creator may delete. The comic is hidden from all list/detail responses after deletion.",
+        responses={200: inline_serializer(
+            name='ComicDeleteResponse',
+            fields={'id': s.CharField()},
+        )},
+    )
     def delete(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         comic, error = self._get_comic_or_error(comic_id)
@@ -194,7 +226,7 @@ class ComicDetailView(APIView):
         if comic.created_by_id != user_id:
             return CustomResponse(
                 general_message='Only the comic creator can delete this comic.'
-            ).get_failure_response()
+            ).get_unauthorized_response()
 
         now = timezone.now()
         comic.deleted_at    = now
@@ -227,6 +259,17 @@ class ComicPublishView(APIView):
 
     REQUIRED_FIELDS = ['title', 'description']
 
+    @extend_schema(
+        tags=['muComics'],
+        description="Publish a draft comic (draft → published). Only the creator may publish. Requires title and description to be present. Archived comics cannot be re-published.",
+        responses={200: inline_serializer(
+            name='ComicPublishResponse',
+            fields={
+                'id':     s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
+    )
     def post(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         comic   = _get_active_comics().filter(id=comic_id).first()
@@ -238,7 +281,7 @@ class ComicPublishView(APIView):
         if comic.created_by_id != user_id:
             return CustomResponse(
                 general_message='Only the comic creator can publish this comic.'
-            ).get_failure_response()
+            ).get_unauthorized_response()
 
         if comic.status == Comic.Status.PUBLISHED:
             return CustomResponse(
@@ -286,6 +329,17 @@ class ComicArchiveView(APIView):
     """
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['muComics'],
+        description="Archive a draft or published comic (draft/published → archived). Only the creator may archive. Already-archived comics are rejected.",
+        responses={200: inline_serializer(
+            name='ComicArchiveResponse',
+            fields={
+                'id':     s.CharField(),
+                'status': s.CharField(),
+            },
+        )},
+    )
     def post(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         comic   = _get_active_comics().filter(id=comic_id).first()
@@ -297,7 +351,7 @@ class ComicArchiveView(APIView):
         if comic.created_by_id != user_id:
             return CustomResponse(
                 general_message='Only the comic creator can archive this comic.'
-            ).get_failure_response()
+            ).get_unauthorized_response()
 
         if comic.status == Comic.Status.ARCHIVED:
             return CustomResponse(
