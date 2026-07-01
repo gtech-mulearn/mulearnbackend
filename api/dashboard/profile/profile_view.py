@@ -56,7 +56,7 @@ class UserProfileEditView(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.filter(id=user_id).first()
+        user = User.objects.select_related('district__zone__state__country').filter(id=user_id).first()
 
         if not user:
             return CustomResponse(
@@ -74,7 +74,7 @@ class UserProfileEditView(APIView):
     )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        user = User.objects.get(id=user_id)
+        user = User.objects.select_related('district__zone__state__country').get(id=user_id)
 
         serializer = profile_serializer.UserProfileEditSerializer(
             user, data=request.data, partial=True
