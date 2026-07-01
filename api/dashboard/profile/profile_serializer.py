@@ -428,6 +428,13 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
 class UserProfileEditSerializer(serializers.ModelSerializer):
     communities = serializers.ListField(write_only=True)
+    district_id = serializers.PrimaryKeyRelatedField(
+        queryset=District.objects.all(),
+        source="district",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -440,7 +447,21 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
         district = instance.district
         if district:
-            data["district"] = district.name
+            zone = district.zone
+            state = zone.state if zone else None
+            country = state.country if state else None
+            data["district"] = {
+                "id": district.id,
+                "name": district.name,
+                "state": {
+                    "id": state.id if state else None,
+                    "name": state.name if state else None,
+                    "country": {
+                        "id": country.id if country else None,
+                        "name": country.name if country else None,
+                    },
+                },
+            }
         else:
             data["district"] = None
 
@@ -478,7 +499,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "communities",
             "gender",
             "dob",
-            "district",
+            "district_id",
         ]
 
 
