@@ -465,6 +465,17 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
         else:
             data["district"] = None
 
+        college_link = instance.user_organization_link_user.filter(
+            org__org_type=OrganizationType.COLLEGE.value
+        ).select_related("department").first()
+        if college_link and college_link.department:
+            data["department"] = {
+                "id": college_link.department.id,
+                "title": college_link.department.title,
+            }
+        else:
+            data["department"] = None
+
         return data
 
     def update(self, instance, validated_data):
