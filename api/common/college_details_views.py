@@ -1,16 +1,18 @@
-from rest_framework.views import APIView
-from rest_framework.throttling import AnonRateThrottle, UserRateThrottle
-from django.db.models import Count, F, Sum, Q
+from datetime import timedelta
 
-from db.organization import Organization
+from rest_framework.views import APIView
+from rest_framework.throttling import AnonRateThrottle
+from django.db.models import Count, F, Q, Subquery, OuterRef, Sum
+
+from db.organization import Organization, UserOrganizationLink
 from db.user import User
-from db.task import InterestGroup
+from db.task import Wallet
 from db.learning_circle import LearningCircle
 
 from utils.response import CustomResponse
 from utils.types import OrganizationType
+from utils.utils import DateTimeUtils
 
-from api.dashboard.campus.serializers import CampusDetailsPublicSerializer
 
 class CollegeDetailsRateThrottle(AnonRateThrottle):
     rate = '60/minute'
@@ -22,90 +24,146 @@ class CollegeDetailsRateThrottle(AnonRateThrottle):
             # Fallback to True if Redis cache is not available (e.g. locally)
             return True
 
+
 class CollegeDetailsAPI(APIView):
     throttle_classes = [CollegeDetailsRateThrottle]
 
     def get(self, request, college_code):
-        org = Organization.objects.filter(code=college_code, org_type=OrganizationType.COLLEGE.value).first()
+        org = Organization.objects.filter(
+            code=college_code, org_type=OrganizationType.COLLEGE.value
+        ).first()
         if not org:
             return CustomResponse(general_message="College not found").get_failure_response()
 
-        # 1. Basic Campus Details
-        basic_campus_details = CampusDetailsPublicSerializer(org, many=False).data
-        # Remove UUID and social_links
-        basic_campus_details.pop("org_id", None)
-        basic_campus_details.pop("social_links", None)
+        return CustomResponse(
+            response={
+                "campus_details": self._get_campus_details(org),
+                "top_learners": self._get_top_learners(org),
+                "ig_details": self._get_ig_details(org),
+                "lc_details": self._get_lc_details(org),
+            }
+        ).get_success_response()
 
-        # 2. All Students & Top 20 Leaderboard
-        all_students_qs = (
+    def _get_campus_details(self, org):
+        campus = org.college_org
+        six_months_ago = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
+        members = org.user_organization_link_org
+
+        return {
+            "college_name": org.title,
+            "campus_code": org.code,
+            "campus_zone": org.district.zone.name if org.district and org.district.zone else None,
+            "campus_level": campus.level if campus else None,
+            "total_karma": (
+                members.filter(user__wallet_user__isnull=False)
+                .aggregate(total=Sum("user__wallet_user__karma"))["total"]
+                or 0
+            ),
+            "total_members": members.count(),
+            "active_members": members.filter(
+                user__wallet_user__isnull=False,
+                user__wallet_user__karma_last_updated_at__gte=six_months_ago,
+            ).count(),
+            "rank": self._get_campus_rank(org),
+        }
+
+    def _get_campus_rank(self, org):
+        org_karma = (
+            UserOrganizationLink.objects.filter(
+                org__org_type=OrganizationType.COLLEGE.value
+            )
+            .values("org")
+            .annotate(total_karma=Sum("user__wallet_user__karma"))
+            .order_by("-total_karma", "org__created_at")
+        )
+
+        rank_dict = {
+            row["org"]: row["total_karma"] if row["total_karma"] is not None else 0
+            for row in org_karma
+        }
+        sorted_orgs = sorted(rank_dict.items(), key=lambda item: item[1], reverse=True)
+
+        for position, (org_id, _) in enumerate(sorted_orgs, start=1):
+            if org_id == org.id:
+                return position
+
+    def _get_top_learners(self, org):
+        top_learners_qs = (
             User.objects.filter(
                 user_organization_link_user__org=org,
-                user_organization_link_user__is_alumni=False
+                user_organization_link_user__is_alumni=False,
             )
-            .annotate(
-                karma=F("wallet_user__karma"),
-                level=F("user_lvl_link_user__level__name")
-            )
+            .annotate(karma=F("wallet_user__karma"))
             .order_by("-karma", "-created_at")
-            .values("full_name", "muid", "karma", "level")
+            .values("full_name", "muid", "karma", "profile_pic")[:20]
         )
 
-        all_students = []
-        for index, student in enumerate(all_students_qs):
-            all_students.append({
-                "full_name": student["full_name"],
-                "muid": student["muid"],
-                "karma": student["karma"] or 0,
-                "rank": index + 1,
-                "level": student["level"]
-            })
+        return [
+            {
+                "full_name": learner["full_name"],
+                "muid": learner["muid"],
+                "karma": learner["karma"] or 0,
+                "profile_pic": (
+                    str(learner["profile_pic"]) if learner["profile_pic"] else None
+                ),
+            }
+            for learner in top_learners_qs
+        ]
 
-        top_20_leaderboard = all_students[:20]
+    def _get_ig_details(self, org):
+        wallet_karma_sq = Wallet.objects.filter(user=OuterRef("pk")).values("karma")[:1]
 
-        # 3. Active IGs
-        active_igs_qs = (
-            InterestGroup.objects.filter(
-                user_ig_link_ig__user__user_organization_link_user__org=org,
-                user_ig_link_ig__user__user_organization_link_user__verified=True,
-                status="active"
+        rows = (
+            User.objects.filter(
+                user_organization_link_user__org=org,
+                user_organization_link_user__verified=True,
+                user_ig_link_user__ig__status="active",
             )
-            .annotate(
-                member_count=Count("user_ig_link_ig", filter=Q(user_ig_link_ig__user__user_organization_link_user__org=org), distinct=True)
+            .annotate(user_karma=Subquery(wallet_karma_sq))
+            .values(
+                "id",
+                "user_ig_link_user__ig__name",
+                "user_ig_link_user__ig__code",
+                "user_karma",
             )
-            .values("name", "code", "member_count")
+            .distinct()
         )
 
-        active_igs = []
-        for ig in active_igs_qs:
-            active_igs.append({
-                "ig_name": ig["name"],
-                "ig_code": ig["code"],
-                "member_count": ig["member_count"]
-            })
+        ig_map = {}
+        for row in rows:
+            ig_code = row["user_ig_link_user__ig__code"]
+            if not ig_code:
+                continue
+            if ig_code not in ig_map:
+                ig_map[ig_code] = {
+                    "ig_name": row["user_ig_link_user__ig__name"],
+                    "ig_code": ig_code,
+                    "members": 0,
+                    "total_karma": 0,
+                }
+            ig_map[ig_code]["members"] += 1
+            ig_map[ig_code]["total_karma"] += row["user_karma"] or 0
 
-        # 4. Learning Circles
+        return sorted(ig_map.values(), key=lambda item: item["members"], reverse=True)
+
+    def _get_lc_details(self, org):
         learning_circles_qs = (
             LearningCircle.objects.filter(org=org)
             .annotate(
-                member_count=Count("user_circle_link_circle")
+                members=Count(
+                    "user_circle_link_circle",
+                    filter=Q(user_circle_link_circle__accepted=True),
+                )
             )
-            .values("title", "ig__name", "member_count")
+            .values("title", "ig__code", "ig__name", "members")
         )
 
-        learning_circles = []
-        for lc in learning_circles_qs:
-            learning_circles.append({
-                "circle_name": lc["title"],
+        return [
+            {
+                "title": lc["title"] or "",
+                "ig_code": lc["ig__code"],
                 "ig_name": lc["ig__name"],
-                "member_count": lc["member_count"]
-            })
-
-        return CustomResponse(
-            response={
-                "basic_campus_details": basic_campus_details,
-                "all_students": all_students,
-                "top_20_leaderboard": top_20_leaderboard,
-                "active_igs": active_igs,
-                "learning_circles": learning_circles
+                "members": lc["members"],
             }
-        ).get_success_response()
+            for lc in learning_circles_qs
+        ]

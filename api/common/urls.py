@@ -7,6 +7,7 @@ from .college_details_views import CollegeDetailsAPI
 from api.dashboard.company import job_views
 
 urlpatterns = [
+    path('campus-details/<str:college_code>/', CollegeDetailsAPI.as_view()),
     path('lc-list', common_views.LcListAPI.as_view()),
     path('<str:circle_id>/lc-details/', common_views.LcDetailsAPI.as_view()),
     path('lc-dashboard/', common_views.LcDashboardAPI.as_view()),
@@ -14,7 +15,6 @@ urlpatterns = [
     path('college-wise-lc-report/', common_views.CollegeWiseLcReport.as_view()),
     path('college-wise-lc-report/csv/', common_views.CollegeWiseLcReportCSV.as_view()),
     path('lc-report/csv/', common_views.LcReportDownloadAPI.as_view()),
-    path('college-details/<str:college_code>/', CollegeDetailsAPI.as_view()),
     path('lc-enrollment/', common_views.LearningCircleEnrollment.as_view()),
     path('lc-enrollment/csv/', common_views.LearningCircleEnrollmentCSV.as_view()),
 

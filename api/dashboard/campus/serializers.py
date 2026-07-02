@@ -56,18 +56,15 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         return obj.user_organization_link_org.count()
 
     def get_active_members(self, obj):
-        last_month = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
+        six_months_ago = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
         return obj.user_organization_link_org.filter(
-            verified=True,
             user__wallet_user__isnull=False,
-            user__wallet_user__karma_last_updated_at__gte=last_month,
+            user__wallet_user__karma_last_updated_at__gte=six_months_ago,
         ).count()
 
     def get_total_karma(self, obj):
         return (
             obj.user_organization_link_org.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
                 user__wallet_user__isnull=False,
             ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
             or 0
