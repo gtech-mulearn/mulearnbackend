@@ -111,17 +111,15 @@ class CollegeDetailsAPI(APIView):
             User.objects.filter(id__in=member_user_ids)
             .annotate(karma=Coalesce(F("wallet_user__karma"), _ZERO))
             .order_by("-karma", "-created_at")
-            .values("full_name", "muid", "karma", "profile_pic")[:20]
+            [:20]
         )
 
         return [
             {
-                "full_name": learner["full_name"],
-                "muid": learner["muid"],
-                "karma": learner["karma"],
-                "profile_pic": (
-                    str(learner["profile_pic"]) if learner["profile_pic"] else None
-                ),
+                "full_name": learner.full_name,
+                "muid": learner.muid,
+                "karma": learner.karma,
+                "profile_pic": learner.profile_pic or None,
             }
             for learner in top_learners_qs
         ]
