@@ -43,25 +43,21 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         return None
 
     def get_total_members(self, obj):
-        return obj.user_organization_link_org.count()
+        return obj.user_organization_link_org.values('user').distinct().count()
 
     def get_active_members(self, obj):
-        last_month = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
         return obj.user_organization_link_org.filter(
-            verified=True,
-            user__wallet_user__isnull=False,
-            user__wallet_user__karma_last_updated_at__gte=last_month,
-        ).count()
+            user__discord_id__isnull=False,
+            user__exist_in_guild=True
+        ).values('user').distinct().count()
 
     def get_total_karma(self, obj):
-        return (
-            obj.user_organization_link_org.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-                user__wallet_user__isnull=False,
-            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-            or 0
-        )
+        from db.task import Wallet
+        users_in_org = obj.user_organization_link_org.values_list('user', flat=True)
+        return Wallet.objects.filter(
+            user__in=users_in_org
+        ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
+
 
     def get_rank(self, obj):
         org_karma_dict = (
