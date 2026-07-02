@@ -55,12 +55,12 @@ class CollegeDetailsAPI(APIView):
 
     def _get_campus_details(self, org):
         campus = org.college_org
-        six_months_ago = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
-        members = org.user_organization_link_org
+        
+        users = User.objects.filter(user_organization_link_user__org=org).distinct()
 
-        total_karma = members.filter(
-            user__wallet_user__isnull=False,
-        ).aggregate(total=Sum("user__wallet_user__karma"))["total"]
+        total_karma = users.filter(
+            wallet_user__isnull=False
+        ).aggregate(total=Sum("wallet_user__karma"))["total"] or 0
 
         return {
             "college_name": org.title,
@@ -71,11 +71,11 @@ class CollegeDetailsAPI(APIView):
                 else None
             ),
             "campus_level": campus.level if campus else None,
-            "total_karma": total_karma or 0,
-            "total_members": members.count(),
-            "active_members": members.filter(
-                user__wallet_user__isnull=False,
-                user__wallet_user__karma_last_updated_at__gte=six_months_ago,
+            "total_karma": total_karma,
+            "total_members": users.count(),
+            "active_members": users.filter(
+                discord_id__isnull=False, 
+                exist_in_guild=True
             ).count(),
             "rank": self._get_campus_rank(org),
         }
