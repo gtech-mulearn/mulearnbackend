@@ -135,7 +135,15 @@ class ComicWriteSerializer(serializers.ModelSerializer):
         base = slugify(title)[:70]
         slug = base
         counter = 1
-        while Comic.objects.filter(slug=slug).exclude(id=self.instance.id).exists():
+        # On update: exclude the current comic so its own slug is not treated as a collision.
+        # On create: self.instance is None, so no exclusion is applied.
+        exclude_id = self.instance.id if self.instance else None
+        while True:
+            qs = Comic.objects.filter(slug=slug)
+            if exclude_id:
+                qs = qs.exclude(id=exclude_id)
+            if not qs.exists():
+                break
             slug = f'{base}-{counter}'
             counter += 1
         return slug
