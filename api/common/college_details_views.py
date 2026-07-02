@@ -2,7 +2,7 @@ from datetime import timedelta
 
 from rest_framework.views import APIView
 from rest_framework.throttling import AnonRateThrottle
-from django.db.models import Count, F, Q, Sum
+from django.db.models import Count, F, Min, Q, Sum, Value, IntegerField
 from django.db.models.functions import Coalesce
 
 from db.organization import Organization, UserOrganizationLink
@@ -13,6 +13,8 @@ from db.learning_circle import LearningCircle
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from utils.utils import DateTimeUtils
+
+_ZERO = Value(0, output_field=IntegerField())
 
 
 class CollegeDetailsRateThrottle(AnonRateThrottle):
@@ -56,6 +58,10 @@ class CollegeDetailsAPI(APIView):
         six_months_ago = DateTimeUtils.get_current_utc_time() - timedelta(weeks=26)
         members = org.user_organization_link_org
 
+        total_karma = members.filter(
+            user__wallet_user__isnull=False,
+        ).aggregate(total=Sum("user__wallet_user__karma"))["total"]
+
         return {
             "college_name": org.title,
             "campus_code": org.code,
@@ -65,10 +71,7 @@ class CollegeDetailsAPI(APIView):
                 else None
             ),
             "campus_level": campus.level if campus else None,
-            "total_karma": (
-                members.filter(user__wallet_user__isnull=False)
-                .aggregate(total=Coalesce(Sum("user__wallet_user__karma"), 0))["total"]
-            ),
+            "total_karma": total_karma or 0,
             "total_members": members.count(),
             "active_members": members.filter(
                 user__wallet_user__isnull=False,
@@ -83,8 +86,11 @@ class CollegeDetailsAPI(APIView):
                 org__org_type=OrganizationType.COLLEGE.value
             )
             .values("org")
-            .annotate(total_karma=Coalesce(Sum("user__wallet_user__karma"), 0))
-            .order_by("-total_karma", "org__created_at")
+            .annotate(
+                total_karma=Coalesce(Sum("user__wallet_user__karma"), _ZERO),
+                org_created_at=Min("org__created_at"),
+            )
+            .order_by("-total_karma", "org_created_at")
         )
 
         for position, row in enumerate(ranked_orgs, start=1):
@@ -95,35 +101,30 @@ class CollegeDetailsAPI(APIView):
         return 0
 
     def _get_top_learners(self, org):
+        member_user_ids = (
+            UserOrganizationLink.objects.filter(org=org)
+            .exclude(is_alumni=True)
+            .values_list("user_id", flat=True)
+        )
+
         top_learners_qs = (
-            User.objects.filter(
-                user_organization_link_user__org=org,
-            )
-            .exclude(user_organization_link_user__is_alumni=True)
-            .distinct()
-            .annotate(karma=Coalesce(F("wallet_user__karma"), 0))
+            User.objects.filter(id__in=member_user_ids)
+            .annotate(karma=Coalesce(F("wallet_user__karma"), _ZERO))
             .order_by("-karma", "-created_at")
-            .values("full_name", "muid", "karma", "profile_pic")[:20]
+            [:20]
         )
 
         return [
             {
-                "full_name": learner["full_name"],
-                "muid": learner["muid"],
-                "karma": learner["karma"],
-                "profile_pic": (
-                    str(learner["profile_pic"]) if learner["profile_pic"] else None
-                ),
+                "full_name": learner.full_name,
+                "muid": learner.muid,
+                "karma": learner.karma,
+                "profile_pic": learner.profile_pic or None,
             }
             for learner in top_learners_qs
         ]
 
     def _get_ig_details(self, org):
-        campus_member_filter = Q(
-            user_ig_link_ig__user__user_organization_link_user__org=org,
-            user_ig_link_ig__user__user_organization_link_user__verified=True,
-        )
-
         ig_rows = (
             InterestGroup.objects.filter(
                 status="active",
@@ -131,17 +132,10 @@ class CollegeDetailsAPI(APIView):
                 user_ig_link_ig__user__user_organization_link_user__verified=True,
             )
             .annotate(
-                members=Count(
-                    "user_ig_link_ig__user",
-                    filter=campus_member_filter,
-                    distinct=True,
-                ),
+                members=Count("user_ig_link_ig__user", distinct=True),
                 total_karma=Coalesce(
-                    Sum(
-                        "user_ig_link_ig__user__wallet_user__karma",
-                        filter=campus_member_filter,
-                    ),
-                    0,
+                    Sum("user_ig_link_ig__user__wallet_user__karma"),
+                    _ZERO,
                 ),
             )
             .values("name", "code", "members", "total_karma")
@@ -161,7 +155,6 @@ class CollegeDetailsAPI(APIView):
     def _get_lc_details(self, org):
         learning_circles_qs = (
             LearningCircle.objects.filter(org=org)
-            .select_related("ig")
             .annotate(
                 members=Count(
                     "user_circle_link_circle",
