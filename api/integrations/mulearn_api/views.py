@@ -6,7 +6,6 @@ from db.task import TaskList, KarmaActivityLog
 from utils.response import CustomResponse
 
 class ExternalTaskVerificationAPI(APIView):
-
     def get(self, request):
         muid = request.query_params.get('muid')
         email = request.query_params.get('email')
