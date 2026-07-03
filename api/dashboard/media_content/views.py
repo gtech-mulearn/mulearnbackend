@@ -22,6 +22,7 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 import csv
+import codecs
 
 from .serializers import (
     OfficeHoursReadSerializer,
@@ -501,7 +502,7 @@ class MediaContentBulkImportAPI(APIView):
                 general_message='Invalid file type. Please upload a CSV file.',
             ).get_failure_response()
 
-        import codecs
+       
         try:
             reader = csv.DictReader(codecs.iterdecode(file, 'utf-8-sig'))
             rows = list(reader)  # materialize here so decode errors are caught
