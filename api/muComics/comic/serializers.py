@@ -173,5 +173,14 @@ class ComicWriteSerializer(serializers.ModelSerializer):
 
         instance.updated_by_id = user_id
         instance.updated_at    = now
-        instance.save()
+
+        # Only write columns this PATCH actually touched.
+        # 'status' and 'published_at' are intentionally absent — this prevents
+        # a concurrent publish/archive from being silently reverted.
+        changed_fields = list(validated_data.keys())
+        if 'title' in changed_fields:
+            changed_fields.append('slug')   # slug is derived from title
+        changed_fields += ['updated_by', 'updated_at']
+
+        instance.save(update_fields=changed_fields)
         return instance
