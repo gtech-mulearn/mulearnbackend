@@ -305,7 +305,7 @@ class ComicPublishView(APIView):
         comic.published_at  = now
         comic.updated_by_id = user_id
         comic.updated_at    = now
-        comic.save()
+        comic.save(update_fields=['status', 'published_at', 'updated_by', 'updated_at'])
 
         return CustomResponse(
             general_message=f'Comic "{comic.title}" published successfully.',
@@ -362,7 +362,7 @@ class ComicArchiveView(APIView):
         comic.status        = Comic.Status.ARCHIVED
         comic.updated_by_id = user_id
         comic.updated_at    = now
-        comic.save()
+        comic.save(update_fields=['status', 'updated_by', 'updated_at'])
 
         return CustomResponse(
             general_message=f'Comic "{comic.title}" archived successfully.',
