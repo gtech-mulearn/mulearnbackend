@@ -616,7 +616,7 @@ class MediaContentBulkExportAPI(APIView):
                 general_message='Invalid content type. Must be office_hours, salt_mango_tree, or inspiration_station.'
             ).get_failure_response()
 
-        return CommonUtils.generate_csv(serializer.data, f"{content_type}_export.csv")
+        return CommonUtils.generate_csv(serializer.data, f"{content_type}_export")
         
 
         
