@@ -21,6 +21,8 @@ from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
+import csv
+import codecs
 
 from .serializers import (
     OfficeHoursReadSerializer,
@@ -480,3 +482,142 @@ class InspirationStationDetailAPI(PublicGetMixin, APIView):
         return CustomResponse(
             general_message='Inspiration Station episode deleted.'
         ).get_success_response()
+
+
+class MediaContentBulkImportAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Media Content - Import'])
+    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    def post(self, request):
+        file = request.data.get('file')
+        if not file:
+            return CustomResponse(
+                general_message='File is required.',
+            ).get_failure_response()
+
+        ALLOWED_CSV_MIME_TYPES = {'text/csv', 'application/csv', 'application/vnd.ms-excel'}
+        if file.content_type not in ALLOWED_CSV_MIME_TYPES:
+            return CustomResponse(
+                general_message='Invalid file type. Please upload a CSV file.',
+            ).get_failure_response()
+
+       
+        try:
+            reader = csv.DictReader(codecs.iterdecode(file, 'utf-8-sig'))
+            rows = list(reader)  # materialize here so decode errors are caught
+        except Exception:
+            return CustomResponse(
+                general_message='Error reading CSV file. Ensure it is UTF-8 encoded.',
+            ).get_failure_response()
+
+        if not rows:
+            return CustomResponse(
+                general_message='CSV file is empty. No records to import.',
+            ).get_failure_response()
+
+        user_id = JWTUtils.fetch_user_id(request)
+        success_count = 0
+        failed_rows = []
+
+        for row_num, row in enumerate(rows, start=2):
+            content_type = row.get('content_type', '').strip()
+            row_data = dict(row)
+
+            # Clean up empty values to avoid validation issues
+            row_data = {k: v for k, v in row_data.items() if v is not None and str(v).strip() != ''}
+
+            if content_type == MediaContent.ContentType.OFFICE_HOURS:
+                # Normalize: CSV may use 'topic' instead of 'title'
+                if 'topic' in row_data and not row_data.get('title'):
+                    row_data['title'] = row_data.pop('topic')
+                if 'interest_groups' in row_data:
+                    row_data['interest_groups'] = [
+                        ig.strip()
+                        for ig in str(row_data['interest_groups']).split(',')
+                        if ig.strip()
+                    ]
+                serializer = OfficeHoursWriteSerializer(data=row_data)
+
+            elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
+                # Normalize: CSV may use 'title' instead of 'topic'
+                if 'title' in row_data and not row_data.get('topic'):
+                    row_data['topic'] = row_data.pop('title')
+                serializer = SaltMangoTreeWriteSerializer(data=row_data)
+
+            elif content_type == MediaContent.ContentType.INSPIRATION_STATION:
+                # Normalize: CSV may use 'title' instead of 'topic'
+                if 'title' in row_data and not row_data.get('topic'):
+                    row_data['topic'] = row_data.pop('title')
+                serializer = InspirationStationWriteSerializer(data=row_data)
+
+            else:
+                failed_rows.append({
+                    "row": row_num,
+                    "title": row.get('title') or row.get('topic', ''),
+                    "reason": (
+                        f"Invalid or missing content_type: '{content_type}'. "
+                        "Must be 'office_hours', 'salt_mango_tree', or 'inspiration_station'."
+                    ),
+                })
+                continue
+
+            if serializer.is_valid():
+                data = serializer.validated_data
+                MediaContent.objects.create(
+                    id=str(uuid.uuid4()),
+                    created_by_id=user_id,
+                    updated_by_id=user_id,
+                    **data,
+                )
+                success_count += 1
+            else:
+                failed_rows.append({
+                    "row": row_num,
+                    "title": row.get('title') or row.get('topic', ''),
+                    "reason": serializer.errors,
+                })
+
+        return CustomResponse(
+            general_message='Bulk import completed.',
+            response={
+                'success_count': success_count,
+                'failed_count': len(failed_rows),
+                'failed_rows': failed_rows,
+            }
+        ).get_success_response()
+
+
+class MediaContentBulkExportAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Media Content - Export'])
+    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    def get(self, request, content_type):
+        if content_type == MediaContent.ContentType.OFFICE_HOURS:
+            queryset = MediaContent.objects.filter(
+                content_type=MediaContent.ContentType.OFFICE_HOURS,
+                deleted_at__isnull=True,
+            )
+            serializer = OfficeHoursReadSerializer(queryset, many=True)
+        elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
+            queryset = MediaContent.objects.filter(
+                content_type=MediaContent.ContentType.SALT_MANGO_TREE,
+                deleted_at__isnull=True,
+            )
+            serializer = SaltMangoTreeReadSerializer(queryset, many=True)
+        elif content_type == MediaContent.ContentType.INSPIRATION_STATION:
+            queryset = MediaContent.objects.filter(
+                content_type=MediaContent.ContentType.INSPIRATION_STATION,
+                deleted_at__isnull=True,
+            )
+            serializer = InspirationStationReadSerializer(queryset, many=True)
+        else:
+            return CustomResponse(
+                general_message='Invalid content type. Must be office_hours, salt_mango_tree, or inspiration_station.'
+            ).get_failure_response()
+
+        return CommonUtils.generate_csv(serializer.data, f"{content_type}_export")
+        
+
+        
