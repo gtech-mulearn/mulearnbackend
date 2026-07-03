@@ -123,12 +123,13 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
     """
     Write serializer for Office Hours sessions (POST / PATCH).
 
-    Date format accepted: DD/MM/YYYY (matches the CMS schema).
-    It is converted to a Python ``date`` object for DB storage.
+    Date format accepted: YYYY-MM-DD — identical to _EpisodeWriteSerializer so
+    that a mixed bulk-import CSV can use a single date format for all rows.
     """
     title            = serializers.CharField(max_length=300)
-    date             = serializers.CharField(
-        help_text='Format: DD/MM/YYYY'
+    date             = serializers.DateField(
+        input_formats=['%Y-%m-%d'],
+        help_text='Format: YYYY-MM-DD'
     )
     performer        = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
     designation      = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
@@ -138,15 +139,6 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
         child=serializers.CharField(), required=False, allow_null=True
     )
     poster_thumbnail = serializers.CharField(max_length=512, required=False, allow_blank=True, allow_null=True)
-
-    def validate_date(self, value):
-        from datetime import datetime
-        try:
-            return datetime.strptime(value, '%d/%m/%Y').date()
-        except ValueError:
-            raise serializers.ValidationError(
-                "Invalid date format. Expected DD/MM/YYYY (e.g. 27/06/2025)."
-            )
 
     def to_internal_value(self, data):
         value = super().to_internal_value(data)

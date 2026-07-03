@@ -486,7 +486,7 @@ class MediaContentBulkImportAPI(APIView):
                 general_message='File is required.',
             ).get_failure_response()
 
-        ALLOWED_CSV_MIME_TYPES = {'text/csv', 'application/csv', 'application/vnd.ms-excel'}
+        ALLOWED_CSV_MIME_TYPES = {'text/csv', 'application/csv', 'text/plain'}
         if file.content_type not in ALLOWED_CSV_MIME_TYPES:
             return CustomResponse(
                 general_message='Invalid file type. Please upload a CSV file.',
