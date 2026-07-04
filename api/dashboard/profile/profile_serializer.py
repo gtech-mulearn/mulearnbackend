@@ -173,13 +173,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         else:
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
@@ -192,9 +192,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     )
                 )
                 .order_by("-karma", "-updated_at", "created_at")
+                .distinct()
             )
         ranks = list(ranks.values_list("user_id", flat=True))
-        return ranks.index(obj.id) + 1
+        try:
+            return ranks.index(obj.id) + 1
+        except ValueError:
+            return None
 
     def get_karma_distribution(self, obj):
         # Exists subqueries to safely check creator's roles WITHOUT joining,
@@ -376,13 +380,13 @@ class UserRankSerializer(ModelSerializer):
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         else:
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
@@ -395,10 +399,14 @@ class UserRankSerializer(ModelSerializer):
                     )
                 )
                 .order_by("-karma", "-updated_at", "created_at")
+                .distinct()
             )
 
         ranks = list(ranks.values_list("user_id", flat=True))
-        return ranks.index(obj.id) + 1
+        try:
+            return ranks.index(obj.id) + 1
+        except ValueError:
+            return None
 
     def get_karma(self, obj):
         return total_karma.karma if (total_karma := obj.wallet_user) else None
