@@ -11,8 +11,8 @@ def intern_daily_status_cron():
     """
     Cron job to evaluate intern status.
     Rules:
-    - >= 2 missed timesheets -> AT_RISK
-    - >= 5 missed timesheets -> INACTIVE
+    - >= 6 missed timesheets (out of last 10 working days) -> AT_RISK
+    - >= 10 missed timesheets (out of last 10 working days) -> INACTIVE
     """
     active_interns = UserInternGuildLink.objects.filter(
         status__in=[InternGuildStatus.ACTIVE.value, InternGuildStatus.AT_RISK.value]
@@ -20,8 +20,8 @@ def intern_daily_status_cron():
     
     today = now().date()
     
-    # 1. Batch fetch all timesheets for the last 10 days
-    date_range_start = today - timedelta(days=10)
+    # 1. Batch fetch all timesheets for the last 20 days (to cover 10 working days)
+    date_range_start = today - timedelta(days=20)
     active_intern_user_ids = list(active_interns.values_list('user_id', flat=True))
     
     # Using set of tuples for O(1) lookup
@@ -61,7 +61,7 @@ def intern_daily_status_cron():
         days_checked = 0
         days_back = 1
         
-        while days_checked < 5:
+        while days_checked < 10:
             check_date = today - timedelta(days=days_back)
             days_back += 1
             
@@ -82,9 +82,9 @@ def intern_daily_status_cron():
             days_checked += 1
                 
         new_status = intern.status
-        if missed_count >= 5:
+        if missed_count >= 10:
             new_status = InternGuildStatus.INACTIVE.value
-        elif missed_count >= 2:
+        elif missed_count >= 6:
             new_status = InternGuildStatus.AT_RISK.value
         else:
             new_status = InternGuildStatus.ACTIVE.value
