@@ -36,6 +36,7 @@ from api.dashboard.media_content.image_utils import (
     merge_media_write_payload,
     delete_stale_media,
 )
+from mu_celery.media_content_tasks import fetch_and_attach_poster
 
 from drf_spectacular.utils import extend_schema
 
@@ -123,7 +124,9 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        payload, merge_error = merge_media_write_payload(request, partial=False)
+        payload, merge_error, pending_urls = merge_media_write_payload(
+            request, partial=False, skip_remote_fetch=True
+        )
         if merge_error:
             return CustomResponse(
                 general_message=merge_error,
@@ -143,6 +146,9 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
             updated_by_id=user_id,
             **data,
         )
+
+        for field, (raw_url, subdir) in pending_urls.items():
+            fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
 
         return CustomResponse(
             general_message='Office Hours session created successfully.',
@@ -189,7 +195,9 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
                 general_message='Office Hours session not found.'
             ).get_failure_response()
 
-        payload, merge_error = merge_media_write_payload(request, partial=True)
+        payload, merge_error, pending_urls = merge_media_write_payload(
+            request, partial=True, skip_remote_fetch=True
+        )
         if merge_error:
             return CustomResponse(
                 general_message=merge_error,
@@ -212,6 +220,9 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
         record.updated_by_id = user_id
         record.save()
         delete_stale_media(old_poster, record.poster_thumbnail)
+
+        for field, (raw_url, subdir) in pending_urls.items():
+            fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
 
         return CustomResponse(
             general_message='Office Hours session updated.',

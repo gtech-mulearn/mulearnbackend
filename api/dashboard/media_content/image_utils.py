@@ -7,7 +7,6 @@ module is fully self-contained and does not depend on the events app.
 from __future__ import annotations
 
 import ipaddress
-import json
 import os
 import socket
 import uuid
@@ -106,6 +105,15 @@ def _validate_image_bytes(data: bytes, filename_ext: str) -> tuple[str | None, s
         return None, 'Invalid or corrupted image file'
 
 
+# NOTE (hardening gap): there is a DNS rebinding window between the
+# getaddrinfo call below and the actual TCP connection made by
+# session.get().  An attacker who controls a DNS record with a very
+# short TTL can serve a public IP during the check and flip to a private
+# address before the connection is established.  Fully closing this gap
+# requires resolving DNS once, binding the socket to that IP, and
+# disabling further DNS resolution for the session — non-trivial with
+# the requests library.  Treat this guard as a best-effort control, not
+# a hard security boundary.
 def _hostname_is_blocked(hostname: str) -> bool:
     if not hostname:
         return True
@@ -187,8 +195,8 @@ def fetch_image_from_url(url: str, subdir: str) -> tuple[str | None, str | None]
                 allow_redirects=False,
                 headers={'User-Agent': 'mulearnbackend-media-image/1.0'},
             )
-        except requests.RequestException as exc:
-            return None, f'Failed to download image: {exc}'
+        except requests.RequestException:
+            return None, 'Failed to download image: connection error'
 
         if resp.status_code in (301, 302, 303, 307, 308):
             loc = resp.headers.get('Location')
@@ -295,25 +303,34 @@ def merge_media_write_payload(
     *,
     partial: bool,
     image_fields: tuple[tuple[str, str], ...] = (('poster_thumbnail', 'posters'),),
-) -> tuple[dict | None, str | None]:
+    skip_remote_fetch: bool = False,
+) -> tuple[dict | None, str | None, dict[str, tuple[str, str]]]:
     """
     Merge multipart/JSON body with resolved image paths.
 
     For each (field, subdir) pair in image_fields:
       - If the field is present in request.FILES, validate and save the upload.
-      - If the field is present in request.data as a URL, fetch and save the remote image.
+      - If the field is present in request.data as a URL:
+          * When skip_remote_fetch=False (default): fetch the remote image
+            synchronously and store the resulting relative path.
+          * When skip_remote_fetch=True: leave the field as None in the
+            payload and report the pending URL in pending_url_fields so the
+            caller can dispatch a Celery task instead of blocking the worker.
       - If partial=True and the field is absent, leave it untouched.
 
-    Returns (payload_dict, error_message).
+    Returns (payload_dict, error_message, pending_url_fields).
+    pending_url_fields maps field -> (raw_url, subdir) for every remote URL
+    that was deferred when skip_remote_fetch=True.
     """
     payload = _querydict_to_plain_dict(request.data)
+    pending_url_fields: dict[str, tuple[str, str]] = {}
 
     for field, subdir in image_fields:
         upload = request.FILES.get(field)
         if upload:
             rel, err = save_uploaded_image(upload, subdir)
             if err:
-                return None, err
+                return None, err, {}
             payload[field] = rel
             continue
 
@@ -347,11 +364,17 @@ def merge_media_write_payload(
             continue
 
         if raw.lower().startswith(('http://', 'https://')):
-            rel, err = fetch_image_from_url(raw, subdir)
-            if err:
-                return None, err
-            payload[field] = rel
+            if skip_remote_fetch:
+                # Defer the download to a Celery task; the field is stored
+                # as None until the task completes.
+                payload[field] = None
+                pending_url_fields[field] = (raw, subdir)
+            else:
+                rel, err = fetch_image_from_url(raw, subdir)
+                if err:
+                    return None, err, {}
+                payload[field] = rel
         else:
             payload[field] = raw
 
-    return payload, None
+    return payload, None, pending_url_fields
