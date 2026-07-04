@@ -536,13 +536,13 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         with transaction.atomic():
+            ig_details = set(validated_data.pop("interest_group", []))
+            if len(ig_details) > 3:
+                raise CustomException("Cannot add more than 3 interest groups")
             # Only remove LEARNER-type links; preserve MENTOR/LEAD/MODERATOR assignments.
             instance.user_ig_link_user.filter(
                 assignment_type=UserIgLink.AssignmentType.LEARNER
             ).delete()
-            ig_details = set(validated_data.pop("interest_group", []))
-            if len(ig_details) > 3:
-                raise CustomException("Cannot add more than 3 interest groups")
             user_ig_links = [
                 UserIgLink(
                     id=uuid.uuid4(),
