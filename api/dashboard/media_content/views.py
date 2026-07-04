@@ -219,15 +219,26 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
             setattr(record, attr, value)
         record.updated_by_id = user_id
         record.save()
-        delete_stale_media(old_poster, record.poster_thumbnail)
+
+        # Only delete the old file when its replacement is already in hand
+        # (i.e. the field was resolved synchronously via a direct upload or
+        # an already-relative path).  For deferred URL fields the old path is
+        # forwarded to the Celery task, which removes it *after* the new file
+        # is confirmed written — preventing unrecoverable data loss if the
+        # task exhausts its retries.
+        poster_field_deferred = 'poster_thumbnail' in pending_urls
+        if not poster_field_deferred:
+            delete_stale_media(old_poster, record.poster_thumbnail)
 
         for field, (raw_url, subdir) in pending_urls.items():
-            fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
+            field_old_path = old_poster if field == 'poster_thumbnail' else None
+            fetch_and_attach_poster.delay(record.id, raw_url, subdir, field, field_old_path)
 
         return CustomResponse(
             general_message='Office Hours session updated.',
             response=OfficeHoursReadSerializer(record, context={'request': request}).data,
         ).get_success_response()
+
 
 
     @extend_schema(tags=['Media Content - Office Hours'])

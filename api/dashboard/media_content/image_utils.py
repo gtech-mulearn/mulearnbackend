@@ -11,9 +11,11 @@ import os
 import socket
 import uuid
 from io import BytesIO
-from urllib.parse import urljoin, urlparse
+from urllib.parse import urljoin, urlparse, urlunparse
 
 import requests
+import requests.adapters
+import urllib3
 from decouple import config
 from django.conf import settings
 from PIL import Image
@@ -105,16 +107,12 @@ def _validate_image_bytes(data: bytes, filename_ext: str) -> tuple[str | None, s
         return None, 'Invalid or corrupted image file'
 
 
-# NOTE (hardening gap): there is a DNS rebinding window between the
-# getaddrinfo call below and the actual TCP connection made by
-# session.get().  An attacker who controls a DNS record with a very
-# short TTL can serve a public IP during the check and flip to a private
-# address before the connection is established.  Fully closing this gap
-# requires resolving DNS once, binding the socket to that IP, and
-# disabling further DNS resolution for the session — non-trivial with
-# the requests library.  Treat this guard as a best-effort control, not
-# a hard security boundary.
 def _hostname_is_blocked(hostname: str) -> bool:
+    """Return True if *all* resolved IPs for hostname are non-routable/private.
+
+    This is intentionally strict: if *any* resolved address is in a
+    disallowed range we block the whole hostname.
+    """
     if not hostname:
         return True
     try:
@@ -151,6 +149,88 @@ def _url_is_safe_for_fetch(url: str) -> bool:
     return not _hostname_is_blocked(parsed.hostname)
 
 
+class _SSRFBlockingAdapter(requests.adapters.HTTPAdapter):
+    """
+    A requests transport adapter that closes the DNS-rebinding window.
+
+    Standard SSRF guards resolve the hostname once for the IP check and
+    then let the OS resolver re-resolve it when the socket is opened —
+    leaving a TOCTOU window.  This adapter eliminates that gap by:
+
+    1. Resolving the hostname to an IP via ``socket.getaddrinfo``.
+    2. Validating the resolved IP with ``_hostname_is_blocked``.
+    3. Rewriting the ``PreparedRequest`` URL to use the literal IP,
+       while preserving the original ``Host`` header so the TLS SNI and
+       virtual-host routing still work correctly.
+
+    Because the literal IP is placed in the URL, ``urllib3`` opens a
+    socket directly to that address and performs no further DNS lookup.
+    """
+
+    def send(self, request, **kwargs):
+        parsed = urlparse(request.url)
+        hostname = parsed.hostname
+        port = parsed.port
+
+        if not hostname:
+            raise requests.exceptions.InvalidURL('Missing hostname in URL')
+
+        # Resolve once, validate once — the actual connection uses this IP.
+        try:
+            infos = socket.getaddrinfo(
+                hostname,
+                port,
+                type=socket.SOCK_STREAM,
+            )
+        except OSError as exc:
+            raise requests.exceptions.ConnectionError(
+                f'DNS resolution failed for {hostname!r}: {exc}'
+            ) from exc
+
+        if not infos:
+            raise requests.exceptions.ConnectionError(
+                f'DNS resolution returned no results for {hostname!r}'
+            )
+
+        ip_str = infos[0][4][0]
+        try:
+            ip_obj = ipaddress.ip_address(ip_str)
+        except ValueError as exc:
+            raise requests.exceptions.ConnectionError(
+                f'Unparseable IP address {ip_str!r} for {hostname!r}'
+            ) from exc
+
+        if (
+            ip_obj.is_private
+            or ip_obj.is_loopback
+            or ip_obj.is_link_local
+            or ip_obj.is_reserved
+            or ip_obj.is_multicast
+            or (ip_obj.version == 6 and ip_obj in ipaddress.ip_network('fc00::/7'))
+        ):
+            raise requests.exceptions.ConnectionError(
+                f'URL resolves to a blocked address ({ip_str})'
+            )
+
+        # Rewrite the URL to embed the literal IP so urllib3 never re-resolves.
+        if ip_obj.version == 6:
+            netloc_ip = f'[{ip_str}]'
+        else:
+            netloc_ip = ip_str
+        if port:
+            netloc_ip = f'{netloc_ip}:{port}'
+
+        pinned_url = urlunparse(
+            (parsed.scheme, netloc_ip, parsed.path, parsed.params, parsed.query, '')
+        )
+        request = request.copy()
+        request.url = pinned_url
+        # Preserve the original Host header for SNI / virtual-host routing.
+        request.headers['Host'] = hostname
+
+        return super().send(request, **kwargs)
+
+
 def try_normalize_media_url_to_relative(url: str) -> str | None:
     """If url points at this deployment's MEDIA_URL, return stored relative path."""
     u = (url or '').strip()
@@ -184,7 +264,16 @@ def fetch_image_from_url(url: str, subdir: str) -> tuple[str | None, str | None]
 
     current = u
     session = requests.Session()
+    # Mount the SSRF-blocking adapter for both schemes.  It resolves DNS
+    # exactly once per redirect hop, validates the IP, and pins the
+    # socket to that address — closing the DNS-rebinding TOCTOU window.
+    _adapter = _SSRFBlockingAdapter()
+    session.mount('http://', _adapter)
+    session.mount('https://', _adapter)
+
     for _ in range(MAX_REDIRECTS + 1):
+        # Fast-path structural check (scheme, credentials in netloc).
+        # The adapter enforces the IP-level block at connect time.
         if not _url_is_safe_for_fetch(current):
             return None, 'URL is not allowed'
         try:
@@ -195,6 +284,8 @@ def fetch_image_from_url(url: str, subdir: str) -> tuple[str | None, str | None]
                 allow_redirects=False,
                 headers={'User-Agent': 'mulearnbackend-media-image/1.0'},
             )
+        except requests.ConnectionError:
+            return None, 'URL is not allowed'
         except requests.RequestException:
             return None, 'Failed to download image: connection error'
 

@@ -7,13 +7,20 @@ import logging
 
 from celery import shared_task
 
-from api.dashboard.media_content.image_utils import fetch_image_from_url
+from api.dashboard.media_content.image_utils import delete_stale_media, fetch_image_from_url
 
 logger = logging.getLogger(__name__)
 
 
 @shared_task(bind=True, max_retries=3, default_retry_delay=30)
-def fetch_and_attach_poster(self, record_id: str, url: str, subdir: str, field: str = 'poster_thumbnail') -> None:
+def fetch_and_attach_poster(
+    self,
+    record_id: str,
+    url: str,
+    subdir: str,
+    field: str = 'poster_thumbnail',
+    old_path: str | None = None,
+) -> None:
     """
     Download a remote poster image and write the result back to a MediaContent record.
 
@@ -22,6 +29,11 @@ def fetch_and_attach_poster(self, record_id: str, url: str, subdir: str, field: 
         url:       The remote image URL to fetch.
         subdir:    Storage subdirectory under MEDIA_ROOT/media_content/ (e.g. 'posters').
         field:     Model field to update (default: 'poster_thumbnail').
+        old_path:  Relative path of the previous file to delete *after* a
+                   successful download.  Passed by the PATCH view so that
+                   stale-file cleanup only happens once the replacement is
+                   safely written, avoiding unrecoverable data loss on retry
+                   failure.
     """
     # Import here to avoid circular imports at module load time.
     from db.events import MediaContent
@@ -50,7 +62,12 @@ def fetch_and_attach_poster(self, record_id: str, url: str, subdir: str, field: 
         )
         return
 
+    # Only delete the old file *after* the DB row is confirmed updated so
+    # the old asset is never removed before its replacement is in place.
+    delete_stale_media(old_path, rel)
+
     logger.info(
         'fetch_and_attach_poster: set %s=%s on MediaContent %s',
         field, rel, record_id,
     )
+
