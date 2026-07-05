@@ -13,6 +13,7 @@ Endpoints:
 
 from django.utils import timezone
 from django.db.models import Q
+from django.db import IntegrityError
 
 from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
@@ -22,11 +23,15 @@ from db.comic import Comic, ComicContributorLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
+from utils.types import RoleType
 
 from .serializers import (
     ComicListItemSerializer,
     ComicDetailSerializer,
     ComicWriteSerializer,
+    ContributorWriteSerializer,
+    ContributorRoleUpdateSerializer,
+    ContributorListSerializer,
 )
 
 
@@ -37,6 +42,16 @@ from .serializers import (
 def _get_active_comics():
     """Base queryset: exclude soft-deleted rows."""
     return Comic.objects.filter(deleted_at__isnull=True)
+
+
+def _is_creator_or_admin(user_id, comic, request):
+    """
+    True if the user is the comic's original creator
+    OR holds the platform Admin role in their JWT.
+    """
+    if comic.created_by_id == user_id:
+        return True
+    return RoleType.ADMIN.value in JWTUtils.fetch_role(request)
 
 
 def can_edit_comic(user_id, comic):
@@ -367,4 +382,185 @@ class ComicArchiveView(APIView):
         return CustomResponse(
             general_message=f'Comic "{comic.title}" archived successfully.',
             response={'id': comic.id, 'status': Comic.Status.ARCHIVED},
+        ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTRIBUTORS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ComicContributorListView(APIView):
+    """
+    GET  /muComics/comics/<comic_id>/contributors/
+         → list all contributors for the comic (any authenticated user)
+
+    POST /muComics/comics/<comic_id>/contributors/
+         → add a contributor (comic creator or Admin only)
+         Request body: { "muid": "...", "role": "ARTIST" }
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['muComics'],
+        description="List all contributors for a comic.",
+        responses={200: ContributorListSerializer(many=True)},
+    )
+    def get(self, request, comic_id):
+        comic = _get_active_comics().filter(id=comic_id).first()
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        role_filter = request.query_params.get('role')
+        links = ComicContributorLink.objects.filter(comic=comic)
+        
+        if role_filter:
+            links = links.filter(contributor_type=role_filter)
+            
+        links = links.select_related('user', 'comic')
+        
+        if not links:
+            if role_filter:
+                return CustomResponse(general_message=f'No {role_filter} contributor found for this comic.', response=[]).get_success_response()
+            return CustomResponse(general_message='There are no contributors for this comic.', response=[]).get_success_response()
+            
+        serializer = ContributorListSerializer(links, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Add a contributor to a comic by muid and role. Only the comic creator or an Admin may call this. The CREATOR role cannot be assigned via this endpoint.",
+        request=ContributorWriteSerializer,
+        responses={200: inline_serializer(
+            name='ContributorAddResponse',
+            fields={'message': s.CharField()},
+        )},
+    )
+    def post(self, request, comic_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic   = _get_active_comics().filter(id=comic_id).first()
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        if not _is_creator_or_admin(user_id, comic, request):
+            return CustomResponse(
+                general_message='Only the comic creator or an admin can add contributors.'
+            ).get_unauthorized_response()
+
+        serializer = ContributorWriteSerializer(
+            data=request.data,
+            context={'comic': comic, 'user_id': user_id},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message=serializer.errors
+            ).get_failure_response()
+
+        try:
+            serializer.save()
+        except IntegrityError:
+            return CustomResponse(
+                general_message='Contributor with this role already exists.'
+            ).get_failure_response()
+
+        # muid comes from validated_data['muid'] which is a User object after validate_muid
+        muid = serializer.validated_data['muid'].muid
+        role = serializer.validated_data['role']
+        return CustomResponse(
+            general_message=f'{role} {muid} added successfully.'
+        ).get_success_response()
+
+
+class ComicContributorDetailView(APIView):
+    """
+    PATCH  /muComics/comics/<comic_id>/contributors/<contributor_id>/
+           → update a contributor's role (comic creator or Admin only)
+
+    DELETE /muComics/comics/<comic_id>/contributors/<contributor_id>/
+           → remove a contributor (comic creator or Admin only)
+    """
+    authentication_classes = [CustomizePermission]
+
+    def _get_link_or_error(self, comic, contributor_id):
+        """Fetch a ComicContributorLink by PK scoped to the given comic."""
+        link = (
+            ComicContributorLink.objects
+            .filter(id=contributor_id, comic=comic)
+            .select_related('user')
+            .first()
+        )
+        if not link:
+            return None, 'Contributor not found.'
+        return link, None
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Update a contributor's role. Only the comic creator or an Admin may call this. The CREATOR role cannot be assigned.",
+        request=ContributorRoleUpdateSerializer,
+        responses={200: inline_serializer(
+            name='ContributorUpdateResponse',
+            fields={'message': s.CharField()},
+        )},
+    )
+    def patch(self, request, comic_id, contributor_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic   = _get_active_comics().filter(id=comic_id).first()
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        if not _is_creator_or_admin(user_id, comic, request):
+            return CustomResponse(
+                general_message='Only the comic creator or an admin can update contributors.'
+            ).get_unauthorized_response()
+
+        link, error = self._get_link_or_error(comic, contributor_id)
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
+
+        serializer = ContributorRoleUpdateSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message=serializer.errors
+            ).get_failure_response()
+
+        link.contributor_type = serializer.validated_data['role']
+        try:
+            link.save()
+        except IntegrityError:
+            return CustomResponse(
+                general_message='Contributor with this role already exists.'
+            ).get_failure_response()
+
+        return CustomResponse(
+            general_message=f'{link.contributor_type} {link.user.muid} updated.'
+        ).get_success_response()
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Remove a contributor from a comic. Only the comic creator or an Admin may call this.",
+        responses={200: inline_serializer(
+            name='ContributorRemoveResponse',
+            fields={'message': s.CharField()},
+        )},
+    )
+    def delete(self, request, comic_id, contributor_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic   = _get_active_comics().filter(id=comic_id).first()
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        if not _is_creator_or_admin(user_id, comic, request):
+            return CustomResponse(
+                general_message='Only the comic creator or an admin can remove contributors.'
+            ).get_unauthorized_response()
+
+        link, error = self._get_link_or_error(comic, contributor_id)
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
+
+        muid = link.user.muid
+        role=link.contributor_type
+        link.delete()
+
+        return CustomResponse(
+            general_message=f'{role} {muid} removed.'
         ).get_success_response()

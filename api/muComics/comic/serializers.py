@@ -184,3 +184,69 @@ class ComicWriteSerializer(serializers.ModelSerializer):
 
         instance.save(update_fields=changed_fields)
         return instance
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# CONTRIBUTOR MANAGEMENT  (add / list / update-role / remove)
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Valid roles that can be assigned via the API.
+# CREATOR is intentionally excluded — it is tracked via comic.created_by.
+_ASSIGNABLE_CONTRIBUTOR_CHOICES = [
+    (ct.value, ct.label)
+    for ct in ComicContributorLink.ContributorType
+    if ct != ComicContributorLink.ContributorType.CREATOR
+]
+
+
+class ContributorWriteSerializer(serializers.Serializer):
+    """
+    Input for POST /comics/{comicId}/contributors/.
+    Resolves `muid` → User object during validation so create() receives a
+    ready-to-use User instance.
+    """
+    muid = serializers.CharField()
+    role = serializers.ChoiceField(choices=_ASSIGNABLE_CONTRIBUTOR_CHOICES)
+
+    def validate_muid(self, value):
+        try:
+            return User.objects.get(muid=value)
+        except User.DoesNotExist:
+            raise serializers.ValidationError(f'User with muid "{value}" not found.')
+
+    def create(self, validated_data):
+        comic   = self.context['comic']
+        user    = validated_data['muid']   # User object — resolved in validate_muid
+        role    = validated_data['role']
+        user_id = self.context['user_id']
+        now     = timezone.now()
+
+        return ComicContributorLink.objects.create(
+            id               = str(uuid.uuid4()),
+            comic            = comic,
+            user             = user,
+            contributor_type = role,
+            created_by_id    = user_id,
+            created_at       = now,
+        )
+
+
+class ContributorRoleUpdateSerializer(serializers.Serializer):
+    """Input for PATCH /comics/{comicId}/contributors/{contributorId}/."""
+    role = serializers.ChoiceField(choices=_ASSIGNABLE_CONTRIBUTOR_CHOICES)
+
+
+class ContributorListSerializer(serializers.ModelSerializer):
+    """
+    Output shape for GET /comics/{comicId}/contributors/.
+    Flattens the ComicContributorLink → User / Comic relations.
+    """
+    contributor_id = serializers.CharField(source='id')
+    user_id        = serializers.CharField(source='user.id')
+    role           = serializers.CharField(source='contributor_type')
+    name           = serializers.CharField(source='user.full_name')
+    comic_name     = serializers.CharField(source='comic.title')
+
+    class Meta:
+        model  = ComicContributorLink
+        fields = ['contributor_id', 'user_id', 'role', 'name', 'comic_name']
