@@ -24,7 +24,7 @@ class AdminCommentListAPI(APIView):
     def get(self, request):
         queryset = ComicComment.objects.select_related(
             'user', 'comic', 'deleted_by'
-        ).order_by('-created_at')
+        ).prefetch_related('replies').order_by('-created_at')
 
         # Filter by comic_id
         comic_id = request.query_params.get('comic_id')
@@ -57,8 +57,21 @@ class AdminCommentListAPI(APIView):
             sort_fields={'created_at': 'created_at'},
         )
 
+        # Bulk fetch chapter titles for the paginated page
+        chapter_ids = [c.chapter_id for c in paginated['queryset'] if c.chapter_id]
+        chapter_titles = {}
+        if chapter_ids:
+            unique_chapter_ids = list(set(chapter_ids))
+            from django.db import connection
+            with connection.cursor() as cursor:
+                format_strings = ','.join(['%s'] * len(unique_chapter_ids))
+                cursor.execute(f"SELECT id, title FROM chapter WHERE id IN ({format_strings})", unique_chapter_ids)
+                for row in cursor.fetchall():
+                    chapter_titles[row[0]] = row[1]
+
         serializer = AdminCommentListSerializer(
             paginated['queryset'], many=True,
+            context={'chapter_titles': chapter_titles}
         )
 
         return CustomResponse().paginated_response(

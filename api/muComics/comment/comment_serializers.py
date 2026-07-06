@@ -143,14 +143,7 @@ class AdminCommentListSerializer(serializers.Serializer):
     def get_chapter_title(self, obj):
         if not obj.chapter_id:
             return None
-        from django.db import connection
-        try:
-            with connection.cursor() as cursor:
-                cursor.execute("SELECT title FROM chapter WHERE id = %s", [obj.chapter_id])
-                row = cursor.fetchone()
-                return row[0] if row else None
-        except Exception:
-            return None
+        return self.context.get('chapter_titles', {}).get(obj.chapter_id)
 
     def get_user(self, obj):
         return CommentUserSerializer(obj.user).data
@@ -168,4 +161,4 @@ class AdminCommentListSerializer(serializers.Serializer):
         }
 
     def get_reply_count(self, obj):
-        return obj.replies.count()
+        return len(obj.replies.all())
