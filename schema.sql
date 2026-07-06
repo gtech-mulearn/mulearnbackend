@@ -2248,6 +2248,38 @@ CREATE TABLE `zone` (
   CONSTRAINT `fk_zone_ref_updated_by` FOREIGN KEY (`updated_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `comic_comment`
+--
+
+DROP TABLE IF EXISTS `comic_comment`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `comic_comment` (
+  `id` varchar(36) NOT NULL,
+  `comic_id` varchar(36) NOT NULL,
+  `chapter_id` varchar(36) DEFAULT NULL,
+  `parent_id` varchar(36) DEFAULT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `message` text NOT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `deleted_by` varchar(36) DEFAULT NULL,
+  `updated_by` varchar(36) NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  KEY `idx_comic_comment_comic` (`comic_id`,`created_at`),
+  KEY `idx_comic_comment_chapter` (`chapter_id`,`created_at`),
+  KEY `idx_comic_comment_parent` (`parent_id`),
+  KEY `idx_comic_comment_user` (`user_id`),
+  CONSTRAINT `fk_comic_comment_ref_comic_id` FOREIGN KEY (`comic_id`) REFERENCES `comic` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_comment_ref_parent_id` FOREIGN KEY (`parent_id`) REFERENCES `comic_comment` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_comment_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_comment_ref_del_by` FOREIGN KEY (`deleted_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
 SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 
