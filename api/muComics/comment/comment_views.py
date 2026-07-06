@@ -68,10 +68,9 @@ def _decrement_comment_count(comic_id):
 from django.db import models
 
 
-class ComicCommentListCreateAPI(APIView):
+class ComicCommentListAPI(APIView):
     """
-    GET  /comments/comic/<comic_id>/  — list top-level comments with replies
-    POST /comments/comic/<comic_id>/  — create a comment (top-level or reply)
+    GET  /comments/comic/<comic_id>/list/  — list top-level comments with replies
     """
 
     def get(self, request, comic_id):
@@ -121,14 +120,14 @@ class ComicCommentListCreateAPI(APIView):
             pagination=paginated['pagination'],
         )
 
-    def post(self, request, comic_id):
-        try:
-            JWTUtils.is_jwt_authenticated(request)
-        except Exception:
-            return CustomResponse(
-                general_message="Invalid token header"
-            ).get_failure_response(status_code=1000, http_status_code=401)
 
+class ComicCommentCreateAPI(APIView):
+    """
+    POST /comments/comic/<comic_id>/create/  — create a comment (top-level or reply)
+    """
+    permission_classes = [CustomizePermission]
+
+    def post(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
 
         comic = Comic.objects.filter(id=comic_id, deleted_at__isnull=True).first()
