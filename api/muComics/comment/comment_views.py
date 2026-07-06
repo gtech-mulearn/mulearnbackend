@@ -428,6 +428,7 @@ class CommentDetailAPI(APIView):
             comment.deleted_at = now
             comment.deleted_by_id = user_id
             comment.updated_at = now
+            comment.updated_by_id = user_id
             comment.save()
 
             _decrement_comment_count(comment.comic_id)
