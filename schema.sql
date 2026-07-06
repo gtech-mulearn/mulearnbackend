@@ -2277,7 +2277,9 @@ CREATE TABLE `comic_comment` (
   CONSTRAINT `fk_comic_comment_ref_comic_id` FOREIGN KEY (`comic_id`) REFERENCES `comic` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_comic_comment_ref_parent_id` FOREIGN KEY (`parent_id`) REFERENCES `comic_comment` (`id`) ON DELETE CASCADE,
   CONSTRAINT `fk_comic_comment_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE,
-  CONSTRAINT `fk_comic_comment_ref_del_by` FOREIGN KEY (`deleted_by`) REFERENCES `user` (`id`) ON DELETE SET NULL
+  CONSTRAINT `fk_comic_comment_ref_del_by` FOREIGN KEY (`deleted_by`) REFERENCES `user` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_comic_comment_ref_upd_by` FOREIGN KEY (`updated_by`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_comment_ref_cre_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
 SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;

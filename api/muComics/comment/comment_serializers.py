@@ -161,4 +161,4 @@ class AdminCommentListSerializer(serializers.Serializer):
         }
 
     def get_reply_count(self, obj):
-        return len(obj.replies.all())
+        return len([r for r in obj.replies.all() if not r.is_deleted])
