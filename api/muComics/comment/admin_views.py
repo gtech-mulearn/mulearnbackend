@@ -4,6 +4,7 @@ Requires Comic Admin role.
 """
 from django.utils import timezone
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from db.comic_comment import ComicComment
 from utils.permission import CustomizePermission, JWTUtils, role_required
@@ -20,6 +21,7 @@ class AdminCommentListAPI(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['muComics'])
     @role_required(["Comic Admin"])
     def get(self, request):
         queryset = ComicComment.objects.select_related(
@@ -86,6 +88,7 @@ class AdminCommentDeleteAPI(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['muComics'])
     @role_required(["Comic Admin"])
     def delete(self, request, comment_id):
         user_id = JWTUtils.fetch_user_id(request)

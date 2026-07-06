@@ -15,6 +15,7 @@ from django.db import connection
 from django.db.models import Q, Exists, OuterRef, Prefetch
 from django.utils import timezone
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from db.comic import Comic
 from db.comic_comment import ComicComment
@@ -73,6 +74,7 @@ class ComicCommentListAPI(APIView):
     GET  /comments/comic/<comic_id>/list/  — list top-level comments with replies
     """
 
+    @extend_schema(tags=['muComics'])
     def get(self, request, comic_id):
         comic = Comic.objects.filter(id=comic_id, deleted_at__isnull=True).first()
         if not comic:
@@ -130,6 +132,7 @@ class ComicCommentCreateAPI(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['muComics'])
     def post(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -207,12 +210,12 @@ class ComicCommentCreateAPI(APIView):
         ).get_success_response()
 
 
-class ChapterCommentListCreateAPI(APIView):
+class ChapterCommentListAPI(APIView):
     """
-    GET  /comments/chapter/<chapter_id>/  — list chapter comments
-    POST /comments/chapter/<chapter_id>/  — create chapter comment
+    GET  /comments/chapter/<chapter_id>/list/  — list chapter comments
     """
 
+    @extend_schema(tags=['muComics'])
     def get(self, request, chapter_id):
         comic_id = _chapter_exists(chapter_id)
         if not comic_id:
@@ -263,14 +266,15 @@ class ChapterCommentListCreateAPI(APIView):
             pagination=paginated['pagination'],
         )
 
-    def post(self, request, chapter_id):
-        try:
-            JWTUtils.is_jwt_authenticated(request)
-        except Exception:
-            return CustomResponse(
-                general_message="Invalid token header"
-            ).get_failure_response(status_code=1000, http_status_code=401)
 
+class ChapterCommentCreateAPI(APIView):
+    """
+    POST /comments/chapter/<chapter_id>/create/  — create chapter comment
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(tags=['muComics'])
+    def post(self, request, chapter_id):
         user_id = JWTUtils.fetch_user_id(request)
 
         comic_id = _chapter_exists(chapter_id)
@@ -353,6 +357,7 @@ class CommentDetailAPI(APIView):
     """
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['muComics'])
     def patch(self, request, comment_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -395,6 +400,7 @@ class CommentDetailAPI(APIView):
             },
         ).get_success_response()
 
+    @extend_schema(tags=['muComics'])
     def delete(self, request, comment_id):
         user_id = JWTUtils.fetch_user_id(request)
 
