@@ -12,7 +12,7 @@ Endpoints:
 import uuid
 
 from django.db import connection
-from django.db.models import Q, Exists, OuterRef
+from django.db.models import Q, Exists, OuterRef, Prefetch
 from django.utils import timezone
 from rest_framework.views import APIView
 
@@ -88,6 +88,15 @@ class ComicCommentListAPI(APIView):
             deleted_at__isnull=True
         )
 
+        # Prefetch replies for the serializer
+        prefetch_replies = Prefetch(
+            'replies',
+            queryset=ComicComment.objects.filter(
+                deleted_at__isnull=True
+            ).select_related('user').order_by('created_at'),
+            to_attr='active_replies'
+        )
+
         queryset = ComicComment.objects.filter(
             comic_id=comic_id,
             parent__isnull=True,
@@ -95,7 +104,7 @@ class ComicCommentListAPI(APIView):
             has_active_replies=Exists(active_replies)
         ).filter(
             Q(deleted_at__isnull=True) | Q(has_active_replies=True)
-        ).select_related('user').order_by('-created_at')
+        ).select_related('user').prefetch_related(prefetch_replies).order_by('-created_at')
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
@@ -219,6 +228,15 @@ class ChapterCommentListCreateAPI(APIView):
             deleted_at__isnull=True
         )
 
+        # Prefetch replies for the serializer
+        prefetch_replies = Prefetch(
+            'replies',
+            queryset=ComicComment.objects.filter(
+                deleted_at__isnull=True
+            ).select_related('user').order_by('created_at'),
+            to_attr='active_replies'
+        )
+
         queryset = ComicComment.objects.filter(
             chapter_id=chapter_id,
             parent__isnull=True,
@@ -226,7 +244,7 @@ class ChapterCommentListCreateAPI(APIView):
             has_active_replies=Exists(active_replies)
         ).filter(
             Q(deleted_at__isnull=True) | Q(has_active_replies=True)
-        ).select_related('user').order_by('-created_at')
+        ).select_related('user').prefetch_related(prefetch_replies).order_by('-created_at')
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,

@@ -79,12 +79,18 @@ class CommentListSerializer(serializers.Serializer):
         return obj.user_id == request_user_id
 
     def get_reply_count(self, obj):
+        if hasattr(obj, 'active_replies'):
+            return len(obj.active_replies)
         return obj.replies.filter(deleted_at__isnull=True).count()
 
     def get_replies(self, obj):
-        active_replies = obj.replies.filter(
-            deleted_at__isnull=True
-        ).select_related('user').order_by('created_at')
+        if hasattr(obj, 'active_replies'):
+            active_replies = obj.active_replies
+        else:
+            active_replies = obj.replies.filter(
+                deleted_at__isnull=True
+            ).select_related('user').order_by('created_at')
+            
         return CommentReplySerializer(
             active_replies, many=True, context=self.context
         ).data
