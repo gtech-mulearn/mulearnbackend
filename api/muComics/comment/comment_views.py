@@ -12,7 +12,7 @@ Endpoints:
 import uuid
 
 from django.db import connection
-from django.db.models import Q
+from django.db.models import Q, Exists, OuterRef
 from django.utils import timezone
 from rest_framework.views import APIView
 
@@ -82,25 +82,19 @@ class ComicCommentListAPI(APIView):
 
         user_id = _get_user_id_or_none(request)
 
-        # Get top-level comments (parent_id is NULL)
-        # Include: active comments OR soft-deleted comments that have active replies
-        top_level = ComicComment.objects.filter(
-            comic_id=comic_id,
-            parent__isnull=True,
-        ).select_related('user')
-
-        # Filter out soft-deleted comments with no active replies
-        visible_ids = []
-        for comment in top_level:
-            if not comment.is_deleted:
-                visible_ids.append(comment.id)
-            else:
-                has_active_replies = comment.replies.filter(deleted_at__isnull=True).exists()
-                if has_active_replies:
-                    visible_ids.append(comment.id)
+        # Filter: active comments OR soft-deleted comments that have active replies
+        active_replies = ComicComment.objects.filter(
+            parent_id=OuterRef('pk'),
+            deleted_at__isnull=True
+        )
 
         queryset = ComicComment.objects.filter(
-            id__in=visible_ids
+            comic_id=comic_id,
+            parent__isnull=True,
+        ).annotate(
+            has_active_replies=Exists(active_replies)
+        ).filter(
+            Q(deleted_at__isnull=True) | Q(has_active_replies=True)
         ).select_related('user').order_by('-created_at')
 
         paginated = CommonUtils.get_paginated_queryset(
@@ -219,21 +213,19 @@ class ChapterCommentListCreateAPI(APIView):
 
         user_id = _get_user_id_or_none(request)
 
-        top_level = ComicComment.objects.filter(
-            chapter_id=chapter_id,
-            parent__isnull=True,
-        ).select_related('user')
-
-        visible_ids = []
-        for comment in top_level:
-            if not comment.is_deleted:
-                visible_ids.append(comment.id)
-            else:
-                if comment.replies.filter(deleted_at__isnull=True).exists():
-                    visible_ids.append(comment.id)
+        # Filter: active comments OR soft-deleted comments that have active replies
+        active_replies = ComicComment.objects.filter(
+            parent_id=OuterRef('pk'),
+            deleted_at__isnull=True
+        )
 
         queryset = ComicComment.objects.filter(
-            id__in=visible_ids
+            chapter_id=chapter_id,
+            parent__isnull=True,
+        ).annotate(
+            has_active_replies=Exists(active_replies)
+        ).filter(
+            Q(deleted_at__isnull=True) | Q(has_active_replies=True)
         ).select_related('user').order_by('-created_at')
 
         paginated = CommonUtils.get_paginated_queryset(
