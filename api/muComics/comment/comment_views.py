@@ -175,6 +175,11 @@ class ComicCommentCreateAPI(APIView):
                     message={"parent_id": ["Cannot reply to a deleted comment"]}
                 ).get_failure_response()
 
+            if parent.chapter_id is not None:
+                return CustomResponse(
+                    message={"parent_id": ["Replies to chapter comments must use the chapter endpoint"]}
+                ).get_failure_response()
+
         now = timezone.now()
         with transaction.atomic():
             comment = ComicComment.objects.create(
