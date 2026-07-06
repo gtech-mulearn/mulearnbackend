@@ -11,7 +11,7 @@ Endpoints:
 """
 import uuid
 
-from django.db import connection
+from django.db import connection, transaction
 from django.db.models import Q, Exists, OuterRef, Prefetch
 from django.utils import timezone
 from rest_framework.views import APIView
@@ -176,20 +176,21 @@ class ComicCommentCreateAPI(APIView):
                 ).get_failure_response()
 
         now = timezone.now()
-        comment = ComicComment.objects.create(
-            id=str(uuid.uuid4()),
-            comic_id=comic_id,
-            chapter_id=None,
-            parent_id=parent_id,
-            user_id=user_id,
-            message=message,
-            updated_by_id=user_id,
-            updated_at=now,
-            created_by_id=user_id,
-            created_at=now,
-        )
+        with transaction.atomic():
+            comment = ComicComment.objects.create(
+                id=str(uuid.uuid4()),
+                comic_id=comic_id,
+                chapter_id=None,
+                parent_id=parent_id,
+                user_id=user_id,
+                message=message,
+                updated_by_id=user_id,
+                updated_at=now,
+                created_by_id=user_id,
+                created_at=now,
+            )
 
-        _increment_comment_count(comic_id)
+            _increment_comment_count(comic_id)
 
         from db.user import User
         user = User.objects.get(id=user_id)
@@ -316,20 +317,21 @@ class ChapterCommentCreateAPI(APIView):
                 ).get_failure_response()
 
         now = timezone.now()
-        comment = ComicComment.objects.create(
-            id=str(uuid.uuid4()),
-            comic_id=comic_id,
-            chapter_id=chapter_id,
-            parent_id=parent_id,
-            user_id=user_id,
-            message=message,
-            updated_by_id=user_id,
-            updated_at=now,
-            created_by_id=user_id,
-            created_at=now,
-        )
+        with transaction.atomic():
+            comment = ComicComment.objects.create(
+                id=str(uuid.uuid4()),
+                comic_id=comic_id,
+                chapter_id=chapter_id,
+                parent_id=parent_id,
+                user_id=user_id,
+                message=message,
+                updated_by_id=user_id,
+                updated_at=now,
+                created_by_id=user_id,
+                created_at=now,
+            )
 
-        _increment_comment_count(comic_id)
+            _increment_comment_count(comic_id)
 
         from db.user import User
         user = User.objects.get(id=user_id)
@@ -422,12 +424,13 @@ class CommentDetailAPI(APIView):
             ).get_failure_response(status_code=403, http_status_code=403)
 
         now = timezone.now()
-        comment.deleted_at = now
-        comment.deleted_by_id = user_id
-        comment.updated_at = now
-        comment.save()
+        with transaction.atomic():
+            comment.deleted_at = now
+            comment.deleted_by_id = user_id
+            comment.updated_at = now
+            comment.save()
 
-        _decrement_comment_count(comment.comic_id)
+            _decrement_comment_count(comment.comic_id)
 
         return CustomResponse(
             general_message="Comment deleted successfully"

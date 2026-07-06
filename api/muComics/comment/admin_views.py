@@ -3,6 +3,7 @@ MuComics Admin/Moderation views (Endpoints 7-8).
 Requires Comic Admin role.
 """
 from django.utils import timezone
+from django.db import transaction
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
@@ -106,12 +107,13 @@ class AdminCommentDeleteAPI(APIView):
             ).get_failure_response()
 
         now = timezone.now()
-        comment.deleted_at = now
-        comment.deleted_by_id = user_id
-        comment.updated_at = now
-        comment.save()
+        with transaction.atomic():
+            comment.deleted_at = now
+            comment.deleted_by_id = user_id
+            comment.updated_at = now
+            comment.save()
 
-        _decrement_comment_count(comment.comic_id)
+            _decrement_comment_count(comment.comic_id)
 
         return CustomResponse(
             general_message="Comment removed by moderator"
