@@ -193,7 +193,7 @@ class ComicCommentCreateAPI(APIView):
             _increment_comment_count(comic_id)
 
         from db.user import User
-        user = User.objects.get(id=user_id)
+        user = User.every.get(id=user_id)
 
         return CustomResponse(
             general_message="Comment created successfully",
@@ -334,7 +334,7 @@ class ChapterCommentCreateAPI(APIView):
             _increment_comment_count(comic_id)
 
         from db.user import User
-        user = User.objects.get(id=user_id)
+        user = User.every.get(id=user_id)
 
         return CustomResponse(
             general_message="Comment created successfully",
