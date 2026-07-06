@@ -35,13 +35,13 @@ class ComicComment(models.Model):
 
     # Audit
     updated_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='updated_by', related_name='comic_comment_updated_by'
     )
     updated_at = models.DateTimeField()
 
     created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='comic_comment_created_by'
     )
     created_at = models.DateTimeField()
