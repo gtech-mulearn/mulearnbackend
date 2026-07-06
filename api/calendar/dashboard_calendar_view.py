@@ -166,34 +166,6 @@ def _build_event_filter(user_role, user_ig_ids, user_org_ids):
     return q
 
 
-def _group_events(qs):
-    """Split an Event queryset into upcoming / ongoing / completed buckets."""
-    upcoming, ongoing, completed = [], [], []
-    for event in qs:
-        if event.status == Event.Status.COMPLETED:
-            completed.append(event)
-        elif event.status == Event.Status.ONGOING:
-            ongoing.append(event)
-        else:
-            upcoming.append(event)
-    return upcoming, ongoing, completed
-
-
-def _group_sessions(qs):
-    """Split a MentorshipSession queryset into upcoming / ongoing / completed buckets."""
-    now = timezone.now()
-    upcoming, ongoing, completed = [], [], []
-    for session in qs:
-        if session.status == MentorshipSession.Status.COMPLETED:
-            completed.append(session)
-        elif session.status == MentorshipSession.Status.SCHEDULED:
-            if session.starts_at > now:
-                upcoming.append(session)
-            else:
-                ongoing.append(session)
-    return upcoming, ongoing, completed
-
-
 # ───────────────────────────────────────────────────────────────
 # Main View
 # ───────────────────────────────────────────────────────────────
@@ -242,6 +214,16 @@ class DashboardCalendarAPI(APIView):
         responses={200: EventCalendarItemSerializer(many=True)},
     )
     def get(self, request):
+        # ── 0. Strict Authentication Check ───────────────────────
+        auth_header = request.META.get('HTTP_AUTHORIZATION')
+        if auth_header:
+            try:
+                JWTUtils.is_jwt_authenticated(request)
+            except Exception:
+                return CustomResponse(
+                    general_message='Invalid or expired token.'
+                ).get_failure_response(http_status_code=401)
+
         # ── 1. Parse & validate date range ───────────────────────
         start_date_str = request.query_params.get('start_date')
         end_date_str = request.query_params.get('end_date')
@@ -315,7 +297,7 @@ class DashboardCalendarAPI(APIView):
         # ── 3. Build events queryset ─────────────────────────────
         event_scope_filter = _build_event_filter(user_role, user_ig_ids, user_org_ids)
 
-        events_qs = (
+        events_base_qs = (
             Event.objects.filter(
                 status__in=EVENT_STATUSES_VISIBLE,
                 deleted_at__isnull=True,
@@ -326,22 +308,22 @@ class DashboardCalendarAPI(APIView):
                 end_datetime__gt=start_dt,
             )
             .select_related('category', 'organiser_ig', 'organiser_org')
-            .order_by('start_datetime', 'end_datetime')
+            .order_by('start_datetime')
             .distinct()
         )
 
+        upcoming_events, ongoing_events, completed_events = [], [], []
+
         # Optional status filter for events
         status_filter = request.query_params.get('status')
-        if status_filter:
-            sf = status_filter.lower()
-            if sf == 'upcoming':
-                events_qs = events_qs.filter(status=Event.Status.PUBLISHED)
-            elif sf == 'ongoing':
-                events_qs = events_qs.filter(status=Event.Status.ONGOING)
-            elif sf == 'completed':
-                events_qs = events_qs.filter(status=Event.Status.COMPLETED)
+        sf = status_filter.lower() if status_filter else None
 
-        upcoming_events, ongoing_events, completed_events = _group_events(events_qs)
+        if not sf or sf == 'upcoming':
+            upcoming_events = list(events_base_qs.filter(status=Event.Status.PUBLISHED)[:100])
+        if not sf or sf == 'ongoing':
+            ongoing_events = list(events_base_qs.filter(status=Event.Status.ONGOING)[:100])
+        if not sf or sf == 'completed':
+            completed_events = list(events_base_qs.filter(status=Event.Status.COMPLETED)[:100])
 
         # ── 4. Build sessions queryset (mentor only) ─────────────
         sessions_data = {'upcoming': [], 'ongoing': [], 'completed': []}
@@ -353,7 +335,7 @@ class DashboardCalendarAPI(APIView):
                 participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
             ).values_list('session_id', flat=True)
 
-            sessions_qs = (
+            sessions_base_qs = (
                 MentorshipSession.objects.filter(
                     id__in=session_ids,
                     is_deleted=False,
@@ -366,15 +348,31 @@ class DashboardCalendarAPI(APIView):
                 .order_by('starts_at')
             )
 
-            # Optional status filter for sessions
-            if status_filter:
-                sf = status_filter.upper()
-                if sf in ['SCHEDULED', 'COMPLETED', 'CANCELLED']:
-                    sessions_qs = sessions_qs.filter(status=sf)
-                elif status_filter.lower() == 'upcoming':
-                    sessions_qs = sessions_qs.filter(status=MentorshipSession.Status.SCHEDULED)
+            now = timezone.now()
+            upcoming_sessions, ongoing_sessions, completed_sessions = [], [], []
+            
+            sf_session = status_filter.lower() if status_filter else None
 
-            upcoming_sessions, ongoing_sessions, completed_sessions = _group_sessions(sessions_qs)
+            if not sf_session or sf_session == 'upcoming':
+                upcoming_sessions = list(sessions_base_qs.filter(
+                    status=MentorshipSession.Status.SCHEDULED,
+                    starts_at__gt=now
+                )[:100])
+
+            if not sf_session or sf_session == 'ongoing':
+                ongoing_sessions = list(sessions_base_qs.filter(
+                    status=MentorshipSession.Status.SCHEDULED,
+                    starts_at__lte=now
+                )[:100])
+
+            if not sf_session or sf_session == 'completed':
+                completed_sessions = list(sessions_base_qs.filter(
+                    status__in=[
+                        MentorshipSession.Status.COMPLETED,
+                        MentorshipSession.Status.CANCELLED,
+                        MentorshipSession.Status.REJECTED
+                    ]
+                )[:100])
 
             sessions_data = {
                 'upcoming': calendar_serializers.MentorshipSessionCalendarSerializer(
