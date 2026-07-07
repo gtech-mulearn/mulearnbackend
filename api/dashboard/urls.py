@@ -1,7 +1,9 @@
 from django.urls import path, include
+from api.calendar.dashboard_calendar_view import DashboardCalendarAPI
 
 # app_name will help us do a reverse look-up latter.
 urlpatterns = [
+    path("calendar/events/", DashboardCalendarAPI.as_view()),
     path("home/", include("api.dashboard.home.urls")),
     path("user/", include("api.dashboard.user.urls")),
     path("zonal/", include("api.dashboard.zonal.urls")),
