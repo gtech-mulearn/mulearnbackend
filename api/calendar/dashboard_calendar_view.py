@@ -131,23 +131,23 @@ def _build_event_filter(user_role, user_ig_ids, user_org_ids):
     """
     Build Q filter for events based on the user's role.
 
-    Mentor  → global + IG (user's IGs) + campus (user's orgs) + campus_ig
-    Student → IG (user's IGs) + campus (user's orgs) + campus_ig
-    Enabler → IG (user's IGs) + campus (user's orgs) + campus_ig
-    None    → global + all IG-scoped events
+    Campus events  → only visible to users in that specific campus
+    IG events      → only visible to students in that specific IG
+    Global events  → visible to everyone
+    Company events → visible to everyone
     """
+    # Global + Company events are always visible to everyone
+    q = Q(scope=Event.Scope.GLOBAL) | Q(scope=Event.Scope.COMPANY)
+
     if user_role is None:
-        # Unauthenticated: global events + ALL IG-scoped events
-        return Q(scope=Event.Scope.GLOBAL) | Q(scope=Event.Scope.IG)
+        # Unauthenticated: global + company + ALL IG-scoped events
+        return q | Q(scope=Event.Scope.IG)
 
-    # ALL authenticated users see global events
-    q = Q(scope=Event.Scope.GLOBAL)
-
-    # All authenticated users see their IG events
+    # Authenticated users see their own IG events
     if user_ig_ids:
         q |= Q(scope=Event.Scope.IG, scope_ig_id__in=user_ig_ids)
 
-    # All authenticated users see their campus events
+    # Authenticated users see their own campus events
     if user_org_ids:
         q |= Q(scope=Event.Scope.CAMPUS, scope_org_id__in=user_org_ids)
 
@@ -158,10 +158,6 @@ def _build_event_filter(user_role, user_ig_ids, user_org_ids):
             scope_org_id__in=user_org_ids,
             scope_ig_id__in=user_ig_ids,
         )
-        
-    # All authenticated users see events for their company (if they belong to any)
-    if user_org_ids:
-        q |= Q(scope=Event.Scope.COMPANY, scope_org_id__in=user_org_ids)
 
     return q
 
