@@ -17,5 +17,6 @@ urlpatterns = [
     path('launchpad/', include('api.launchpad.urls')),
     path('donate/', include('api.donate.urls')),
     path('calendar/', include('api.calendar.urls')),
+    path('muComics/', include('api.muComics.urls')),
     path("__debug__/", include(debug_toolbar.urls)),
 ]
