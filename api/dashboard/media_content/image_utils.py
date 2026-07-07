@@ -9,13 +9,15 @@ from __future__ import annotations
 import ipaddress
 import os
 import socket
+import threading
 import uuid
 from io import BytesIO
-from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.parse import urljoin, urlparse
 
 import requests
 import requests.adapters
 import urllib3
+import urllib3.util.connection
 from decouple import config
 from django.conf import settings
 from PIL import Image
@@ -149,6 +151,43 @@ def _url_is_safe_for_fetch(url: str) -> bool:
     return not _hostname_is_blocked(parsed.hostname)
 
 
+# Thread-local storage used by _SSRFBlockingAdapter to pass the pre-validated
+# IP to our patched create_connection without touching global state.
+_ssrf_local = threading.local()
+
+# Keep a reference to the real urllib3 create_connection so we can call it
+# after substituting the resolved (and validated) IP address.
+_real_create_connection = urllib3.util.connection.create_connection
+
+
+def _pinned_create_connection(address, *args, **kwargs):
+    """
+    Drop-in replacement for ``urllib3.util.connection.create_connection``.
+
+    When ``_ssrf_local.pinned_ip`` is set by ``_SSRFBlockingAdapter.send``
+    for the current thread, the hostname in *address* is silently replaced
+    with the pre-validated IP so urllib3 connects to that address directly
+    instead of re-resolving DNS.  The original hostname is preserved in the
+    URL, so urllib3 still uses it for TLS SNI and certificate verification.
+
+    Outside of an ``_SSRFBlockingAdapter`` call the function is transparent.
+    """
+    pinned_ip = getattr(_ssrf_local, 'pinned_ip', None)
+    if pinned_ip is not None:
+        host, port = address
+        address = (pinned_ip, port)
+    return _real_create_connection(address, *args, **kwargs)
+
+
+# Patch once at import time.  This is the same technique used by the
+# ``responses`` test library and various urllib3 extension packages.
+urllib3.util.connection.create_connection = _pinned_create_connection
+# urllib3 imports create_connection into the connection module's namespace too.
+urllib3.connection.HTTPConnection.is_verified  # ensure module is imported
+import urllib3.connection as _urllib3_connection  # noqa: E402
+_urllib3_connection.create_connection = _pinned_create_connection
+
+
 class _SSRFBlockingAdapter(requests.adapters.HTTPAdapter):
     """
     A requests transport adapter that closes the DNS-rebinding window.
@@ -159,12 +198,14 @@ class _SSRFBlockingAdapter(requests.adapters.HTTPAdapter):
 
     1. Resolving the hostname to an IP via ``socket.getaddrinfo``.
     2. Validating the resolved IP with ``_hostname_is_blocked``.
-    3. Rewriting the ``PreparedRequest`` URL to use the literal IP,
-       while preserving the original ``Host`` header so the TLS SNI and
-       virtual-host routing still work correctly.
+    3. Pinning the TCP connection to that IP at the socket layer so
+       urllib3 never performs a second DNS lookup.
 
-    Because the literal IP is placed in the URL, ``urllib3`` opens a
-    socket directly to that address and performs no further DNS lookup.
+    Crucially, the request URL is **not** rewritten.  urllib3 therefore
+    derives ``server_hostname`` from the original hostname, which means
+    TLS SNI is sent correctly and the server certificate is verified
+    against the hostname — not against a raw IP literal that almost no
+    CDN certificate covers.
     """
 
     def send(self, request, **kwargs):
@@ -212,23 +253,18 @@ class _SSRFBlockingAdapter(requests.adapters.HTTPAdapter):
                 f'URL resolves to a blocked address ({ip_str})'
             )
 
-        # Rewrite the URL to embed the literal IP so urllib3 never re-resolves.
-        if ip_obj.version == 6:
-            netloc_ip = f'[{ip_str}]'
-        else:
-            netloc_ip = ip_str
-        if port:
-            netloc_ip = f'{netloc_ip}:{port}'
-
-        pinned_url = urlunparse(
-            (parsed.scheme, netloc_ip, parsed.path, parsed.params, parsed.query, '')
-        )
-        request = request.copy()
-        request.url = pinned_url
-        # Preserve the original Host header for SNI / virtual-host routing.
-        request.headers['Host'] = hostname
-
-        return super().send(request, **kwargs)
+        # Inject the pre-validated IP into the thread-local so that
+        # _pinned_create_connection uses it instead of re-resolving DNS.
+        # The URL itself is left unchanged so that urllib3's TLS layer
+        # sends the correct SNI extension and verifies the certificate
+        # against the original hostname.
+        _ssrf_local.pinned_ip = ip_str
+        try:
+            return super().send(request, **kwargs)
+        finally:
+            # Always clear the pin, even on exception, to avoid leaking
+            # state into unrelated requests on the same thread.
+            _ssrf_local.pinned_ip = None
 
 
 def try_normalize_media_url_to_relative(url: str) -> str | None:
