@@ -14,6 +14,8 @@ When you add a new model module under ``db/``, add it to the import list below.
 from db import (  # noqa: F401
     achievement,
     campus,
+    comic,
+    comic_comment,
     company,
     donation,
     donor,

@@ -32,6 +32,11 @@ from .serializers import (
     InspirationStationReadSerializer,
     InspirationStationWriteSerializer,
 )
+from api.dashboard.media_content.image_utils import (
+    merge_media_write_payload,
+    delete_stale_media,
+)
+from mu_celery.media_content_tasks import fetch_and_attach_poster
 
 from drf_spectacular.utils import extend_schema
 
@@ -107,7 +112,7 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
             },
         )
 
-        serializer = OfficeHoursReadSerializer(paginated['queryset'], many=True)
+        serializer = OfficeHoursReadSerializer(paginated['queryset'], many=True, context={'request': request})
         return CustomResponse().paginated_response(
             data=serializer.data,
             pagination=paginated['pagination'],
@@ -118,7 +123,16 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
     @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        serializer = OfficeHoursWriteSerializer(data=request.data)
+
+        payload, merge_error, pending_urls = merge_media_write_payload(
+            request, partial=False, skip_remote_fetch=True
+        )
+        if merge_error:
+            return CustomResponse(
+                general_message=merge_error,
+            ).get_failure_response()
+
+        serializer = OfficeHoursWriteSerializer(data=payload)
         if not serializer.is_valid():
             return CustomResponse(
                 general_message='Invalid data.',
@@ -133,9 +147,12 @@ class OfficeHoursListCreateAPI(PublicGetMixin, APIView):
             **data,
         )
 
+        for field, (raw_url, subdir) in pending_urls.items():
+            fetch_and_attach_poster.delay(record.id, raw_url, subdir, field)
+
         return CustomResponse(
             general_message='Office Hours session created successfully.',
-            response=OfficeHoursReadSerializer(record).data,
+            response=OfficeHoursReadSerializer(record, context={'request': request}).data,
         ).get_success_response()
 
 
@@ -162,7 +179,7 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
                 general_message='Office Hours session not found.'
             ).get_failure_response()
 
-        serializer = OfficeHoursReadSerializer(record)
+        serializer = OfficeHoursReadSerializer(record, context={'request': request})
         return CustomResponse(
             general_message='Office Hours session retrieved.',
             response=serializer.data,
@@ -178,7 +195,15 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
                 general_message='Office Hours session not found.'
             ).get_failure_response()
 
-        serializer = OfficeHoursWriteSerializer(data=request.data, partial=True)
+        payload, merge_error, pending_urls = merge_media_write_payload(
+            request, partial=True, skip_remote_fetch=True
+        )
+        if merge_error:
+            return CustomResponse(
+                general_message=merge_error,
+            ).get_failure_response()
+
+        serializer = OfficeHoursWriteSerializer(data=payload, partial=True)
         if not serializer.is_valid():
             return CustomResponse(
                 general_message='Invalid data.',
@@ -189,15 +214,31 @@ class OfficeHoursDetailAPI(PublicGetMixin, APIView):
         data = serializer.validated_data
         data.pop('content_type', None)  # never allow overriding the discriminator
 
+        old_poster = record.poster_thumbnail
         for attr, value in data.items():
             setattr(record, attr, value)
         record.updated_by_id = user_id
         record.save()
 
+        # Only delete the old file when its replacement is already in hand
+        # (i.e. the field was resolved synchronously via a direct upload or
+        # an already-relative path).  For deferred URL fields the old path is
+        # forwarded to the Celery task, which removes it *after* the new file
+        # is confirmed written — preventing unrecoverable data loss if the
+        # task exhausts its retries.
+        poster_field_deferred = 'poster_thumbnail' in pending_urls
+        if not poster_field_deferred:
+            delete_stale_media(old_poster, record.poster_thumbnail)
+
+        for field, (raw_url, subdir) in pending_urls.items():
+            field_old_path = old_poster if field == 'poster_thumbnail' else None
+            fetch_and_attach_poster.delay(record.id, raw_url, subdir, field, field_old_path)
+
         return CustomResponse(
             general_message='Office Hours session updated.',
-            response=OfficeHoursReadSerializer(record).data,
+            response=OfficeHoursReadSerializer(record, context={'request': request}).data,
         ).get_success_response()
+
 
 
     @extend_schema(tags=['Media Content - Office Hours'])
@@ -599,7 +640,7 @@ class MediaContentBulkExportAPI(APIView):
                 content_type=MediaContent.ContentType.OFFICE_HOURS,
                 deleted_at__isnull=True,
             )
-            serializer = OfficeHoursReadSerializer(queryset, many=True)
+            serializer = OfficeHoursReadSerializer(queryset, many=True, context={'request': request})
         elif content_type == MediaContent.ContentType.SALT_MANGO_TREE:
             queryset = MediaContent.objects.filter(
                 content_type=MediaContent.ContentType.SALT_MANGO_TREE,

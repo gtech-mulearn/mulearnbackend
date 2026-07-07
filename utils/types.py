@@ -47,6 +47,7 @@ class RoleType(Enum):
     LEAD_ENABLER = "Lead Enabler"
     MULEARNER = "Mulearner"
     COMPANY = "Company"
+    COMIC_ADMIN = "Comic Admin"
 
     @classmethod
     def IG_CAMPUS_LEAD_ROLE(cls, ig_code: str):

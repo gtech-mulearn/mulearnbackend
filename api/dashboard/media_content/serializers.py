@@ -10,6 +10,7 @@ from datetime import date
 
 from rest_framework import serializers
 
+from api.dashboard.media_content.image_utils import resolve_image_url
 from db.events import MediaContent
 
 
@@ -38,6 +39,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
     Exposes all Office Hours fields plus a computed ``status`` flag.
     """
     status = serializers.SerializerMethodField()
+    poster_thumbnail = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaContent
@@ -58,6 +60,9 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return _compute_status(obj.date)
+
+    def get_poster_thumbnail(self, obj):
+        return resolve_image_url(obj.poster_thumbnail, self.context.get('request'))
 
 
 class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
