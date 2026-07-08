@@ -30,7 +30,7 @@ from rest_framework import serializers as s
 class AchievementListAPIView(APIView):
     @extend_schema(
         tags=['Dashboard - Achievement'],
-        description="Retrieve Achievement List.",
+        description="Retrieve Achievement List. Pass ?user_id=<muid> to include a 'has_achievement' flag per item.",
         responses={200: achievement_serializer.AchievementSerializer},
     )
     def get(self, request):
@@ -48,9 +48,24 @@ class AchievementListAPIView(APIView):
                 general_message="User Not Exists"
             ).get_failure_response()
 
+        # Optional: check which achievements a specific user already has
+        target_user_id = request.query_params.get('user_id')
+        user_achievement_ids = set()
+        if target_user_id:
+            user_achievement_ids = set(
+                UserAchievementsLog.objects.filter(
+                    user_id=target_user_id
+                ).values_list('achievement_id', flat=True)
+            )
+
         achievements = Achievement.objects.all()
         achievements_serializer = achievement_serializer.AchievementSerializer(
-            achievements, many=True
+            achievements,
+            many=True,
+            context={
+                'request': request,
+                'user_achievements': user_achievement_ids,
+            }
         )
 
         return CustomResponse(
