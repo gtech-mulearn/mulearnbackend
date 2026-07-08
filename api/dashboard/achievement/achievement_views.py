@@ -1114,12 +1114,12 @@ class AchievementLogListAPIView(APIView):
                 general_message="Invalid or missing token"
             ).get_failure_response()
             
-        logs = UserAchievementsLog.objects.select_related('user', 'achievement_id').order_by('-created_at')
+        logs = UserAchievementsLog.objects.select_related('user_id', 'achievement_id', 'updated_by').order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             logs, 
             request, 
-            search_fields=['user__muid', 'user__first_name', 'achievement_id__name'],
+            search_fields=['user_id__muid', 'user_id__first_name', 'achievement_id__name'],
             sort_fields={'created_at': 'created_at'}
         )
         
@@ -1127,8 +1127,8 @@ class AchievementLogListAPIView(APIView):
         for log in paginated_queryset.get('queryset'):
             data.append({
                 "id": str(log.id),
-                "muid": log.user.muid,
-                "user_name": log.user.full_name,
+                "muid": log.user_id.muid,
+                "user_name": log.user_id.full_name,
                 "achievement_name": log.achievement_id.name,
                 "is_issued": log.is_issued,
                 "created_at": log.created_at.isoformat() if log.created_at else None,
