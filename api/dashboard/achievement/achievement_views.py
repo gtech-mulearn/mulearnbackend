@@ -171,7 +171,7 @@ class AchievementCreateAPIView(APIView):
 
 
 class AchievementUpdateAPIView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
         tags=['Dashboard - Achievement'],
