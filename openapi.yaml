@@ -1687,6 +1687,79 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/dashboard/calendar/events/:
+    get:
+      operationId: dashboard_calendar_events_list
+      description: Unified dashboard calendar. Returns events and mentor sessions
+        based on the caller's role (detected from JWT token). Supports date-range
+        filtering via start_date and end_date.
+      parameters:
+      - in: query
+        name: end_date
+        schema:
+          type: string
+          format: date
+        description: End of date range (YYYY-MM-DD). Required if month is not provided.
+      - in: query
+        name: month
+        schema:
+          type: string
+        description: Optional. Filter by month name. Mutually exclusive with start_date/end_date.
+      - in: query
+        name: start_date
+        schema:
+          type: string
+          format: date
+        description: Start of date range (YYYY-MM-DD). Required if month is not provided.
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Optional. Filter by status: upcoming, ongoing, completed.'
+      - in: query
+        name: year
+        schema:
+          type: integer
+        description: Optional. Used with month filter (defaults to current year).
+      tags:
+      - Calendar
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/EventCalendarItem'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/dashboard/campus/{org_id}/:
     get:
       operationId: dashboard_campus_retrieve
@@ -2134,6 +2207,24 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/dashboard/campus/execom/search/:
+    get:
+      operationId: dashboard_campus_execom_search_retrieve
+      description: |-
+        GET  campus/execom/search/?q=<query>
+
+        Searches campus members by full_name or muid (case-insensitive partial match).
+        Returns all matching members regardless of whether they already hold an Execom
+        role — this fixes the inconsistency where some existing Execom members were
+        missing from search results because a plain exact-muid lookup was used.
+      tags:
+      - Campus
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/campus/home-summary/:
     get:
       operationId: dashboard_campus_home_summary_retrieve
@@ -2454,58 +2545,6 @@ paths:
                 - message
                 - response
           description: ''
-  /api/v1/dashboard/campus/sessions/create/:
-    post:
-      operationId: dashboard_campus_sessions_create_create
-      description: Create a new mentorship session for the campus.
-      tags:
-      - Campus
-      requestBody:
-        content:
-          application/json:
-            schema:
-              $ref: '#/components/schemas/SessionCreate'
-          application/x-www-form-urlencoded:
-            schema:
-              $ref: '#/components/schemas/SessionCreate'
-          multipart/form-data:
-            schema:
-              $ref: '#/components/schemas/SessionCreate'
-        required: true
-      security:
-      - cookieAuth: []
-      - basicAuth: []
-      - jwtAuth: []
-      responses:
-        '200':
-          content:
-            application/json:
-              schema:
-                type: object
-                properties:
-                  hasError:
-                    type: boolean
-                    default: false
-                    example: false
-                  statusCode:
-                    type: integer
-                    default: 200
-                    example: 200
-                  message:
-                    type: object
-                    properties:
-                      general:
-                        type: array
-                        items:
-                          type: string
-                  response:
-                    $ref: '#/components/schemas/SessionCreate'
-                required:
-                - hasError
-                - statusCode
-                - message
-                - response
-          description: ''
   /api/v1/dashboard/campus/sessions/list/:
     get:
       operationId: dashboard_campus_sessions_list_list
@@ -2736,6 +2775,17 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/dashboard/campus/student-list/:
+    get:
+      operationId: dashboard_campus_student_list_retrieve
+      tags:
+      - Campus
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/campus/students/{muid}/activity/:
     get:
       operationId: dashboard_campus_students_activity_retrieve
@@ -3663,7 +3713,9 @@ paths:
           description: ''
     post:
       operationId: dashboard_company_jobs_create
-      description: Post a new job/gig.
+      description: Post a new job/gig. Jobs are always created with status='Draft'
+        regardless of any status value sent in the request body. Use PATCH /jobs/{job_id}/
+        to change the status to 'Active' (or any other value) after creation.
       tags:
       - Company
       requestBody:
@@ -4079,21 +4131,27 @@ paths:
         schema:
           type: string
       - in: query
-        name: country
+        name: country_id
         schema:
           type: string
+          format: uuid
+        description: Filter by country UUID
       - in: query
-        name: district
+        name: district_id
         schema:
           type: string
+          format: uuid
+        description: Filter by district UUID
       - in: query
         name: industry_sector
         schema:
           type: string
       - in: query
-        name: state
+        name: state_id
         schema:
           type: string
+          format: uuid
+        description: Filter by state UUID
       - in: query
         name: status
         schema:
@@ -5680,6 +5738,38 @@ paths:
       - {}
       responses:
         '200':
+          description: No response body
+    patch:
+      operationId: dashboard_enabler_campuses_notes_partial_update
+      parameters:
+      - in: path
+        name: campus_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Enabler
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_enabler_campuses_notes_destroy
+      parameters:
+      - in: path
+        name: campus_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Enabler
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
           description: No response body
   /api/v1/dashboard/enabler/campuses/{campus_id}/review/:
     get:
@@ -7681,6 +7771,47 @@ paths:
                           type: string
                   response:
                     $ref: '#/components/schemas/EventCollaborationTargets'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/events/meta/event-type-scope/:
+    get:
+      operationId: dashboard_events_meta_event_type_scope_retrieve
+      description: Retrieve Event Types and Scopes.
+      tags:
+      - Events
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/EventTypesScopesResponse'
                 required:
                 - hasError
                 - statusCode
@@ -12337,6 +12468,28 @@ paths:
       responses:
         '200':
           description: No response body
+  /api/v1/dashboard/manage-interns/interns/import/:
+    post:
+      operationId: dashboard_manage_interns_interns_import_create
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/manage-interns/interns/import/template/:
+    get:
+      operationId: dashboard_manage_interns_interns_import_template_retrieve
+      tags:
+      - Manage Interns
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/manage-interns/leave/:
     get:
       operationId: dashboard_manage_interns_leave_retrieve
@@ -12620,6 +12773,298 @@ paths:
       - {}
       responses:
         '200':
+          description: No response body
+  /api/v1/dashboard/media-content/bulk/export/{content_type}/:
+    get:
+      operationId: dashboard_media_content_bulk_export_retrieve
+      parameters:
+      - in: path
+        name: content_type
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/media-content/bulk/import/:
+    post:
+      operationId: dashboard_media_content_bulk_import_create
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/media-content/inspiration-station/:
+    get:
+      operationId: dashboard_media_content_inspiration_station_retrieve
+      description: |-
+        GET  /media-content/inspiration-station/  — Public paginated list.
+        POST /media-content/inspiration-station/  — Create an episode (Admin only).
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_media_content_inspiration_station_create
+      description: |-
+        GET  /media-content/inspiration-station/  — Public paginated list.
+        POST /media-content/inspiration-station/  — Create an episode (Admin only).
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/media-content/inspiration-station/{record_id}/:
+    get:
+      operationId: dashboard_media_content_inspiration_station_retrieve_2
+      description: |-
+        GET    /media-content/inspiration-station/<record_id>/
+        PATCH  /media-content/inspiration-station/<record_id>/  (Admin)
+        DELETE /media-content/inspiration-station/<record_id>/  (Admin)
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_media_content_inspiration_station_partial_update
+      description: |-
+        GET    /media-content/inspiration-station/<record_id>/
+        PATCH  /media-content/inspiration-station/<record_id>/  (Admin)
+        DELETE /media-content/inspiration-station/<record_id>/  (Admin)
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_media_content_inspiration_station_destroy
+      description: |-
+        GET    /media-content/inspiration-station/<record_id>/
+        PATCH  /media-content/inspiration-station/<record_id>/  (Admin)
+        DELETE /media-content/inspiration-station/<record_id>/  (Admin)
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/media-content/office-hours/:
+    get:
+      operationId: dashboard_media_content_office_hours_retrieve
+      description: |-
+        GET  /media-content/office-hours/  — Public paginated list of sessions.
+        POST /media-content/office-hours/  — Create a session (Admin only).
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_media_content_office_hours_create
+      description: |-
+        GET  /media-content/office-hours/  — Public paginated list of sessions.
+        POST /media-content/office-hours/  — Create a session (Admin only).
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/media-content/office-hours/{record_id}/:
+    get:
+      operationId: dashboard_media_content_office_hours_retrieve_2
+      description: |-
+        GET    /media-content/office-hours/<record_id>/  — Public session detail.
+        PATCH  /media-content/office-hours/<record_id>/  — Partial update (Admin only).
+        DELETE /media-content/office-hours/<record_id>/  — Soft-delete (Admin only).
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_media_content_office_hours_partial_update
+      description: |-
+        GET    /media-content/office-hours/<record_id>/  — Public session detail.
+        PATCH  /media-content/office-hours/<record_id>/  — Partial update (Admin only).
+        DELETE /media-content/office-hours/<record_id>/  — Soft-delete (Admin only).
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_media_content_office_hours_destroy
+      description: |-
+        GET    /media-content/office-hours/<record_id>/  — Public session detail.
+        PATCH  /media-content/office-hours/<record_id>/  — Partial update (Admin only).
+        DELETE /media-content/office-hours/<record_id>/  — Soft-delete (Admin only).
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/dashboard/media-content/salt-mango-tree/:
+    get:
+      operationId: dashboard_media_content_salt_mango_tree_retrieve
+      description: |-
+        GET  /media-content/salt-mango-tree/  — Public paginated list of episodes.
+        POST /media-content/salt-mango-tree/  — Create an episode (Admin only).
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    post:
+      operationId: dashboard_media_content_salt_mango_tree_create
+      description: |-
+        GET  /media-content/salt-mango-tree/  — Public paginated list of episodes.
+        POST /media-content/salt-mango-tree/  — Create an episode (Admin only).
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/media-content/salt-mango-tree/{record_id}/:
+    get:
+      operationId: dashboard_media_content_salt_mango_tree_retrieve_2
+      description: |-
+        GET    /media-content/salt-mango-tree/<record_id>/
+        PATCH  /media-content/salt-mango-tree/<record_id>/  (Admin)
+        DELETE /media-content/salt-mango-tree/<record_id>/  (Admin)
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    patch:
+      operationId: dashboard_media_content_salt_mango_tree_partial_update
+      description: |-
+        GET    /media-content/salt-mango-tree/<record_id>/
+        PATCH  /media-content/salt-mango-tree/<record_id>/  (Admin)
+        DELETE /media-content/salt-mango-tree/<record_id>/  (Admin)
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: dashboard_media_content_salt_mango_tree_destroy
+      description: |-
+        GET    /media-content/salt-mango-tree/<record_id>/
+        PATCH  /media-content/salt-mango-tree/<record_id>/  (Admin)
+        DELETE /media-content/salt-mango-tree/<record_id>/  (Admin)
+      parameters:
+      - in: path
+        name: record_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Media Content
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
           description: No response body
   /api/v1/dashboard/mentor/activity/:
     get:
@@ -14120,6 +14565,184 @@ paths:
                           type: string
                   response:
                     $ref: '#/components/schemas/ParticipantList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/student-requests/:
+    get:
+      operationId: dashboard_mentor_session_student_requests_list
+      description: List all pending student session requests that are within the logged-in
+        mentor's scope (their assigned IGs, campus, or company).
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentSessionRequestList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/student-requests/{session_id}/verify/:
+    patch:
+      operationId: dashboard_mentor_session_student_requests_verify_partial_update
+      description: Approve or reject a student's session request. Only mentors whose
+        scope covers the session's entity may act on it. When approving, optional
+        overrides for starts_at, ends_at, mode, meeting_link, and venue allow the
+        mentor to adjust logistics.
+      parameters:
+      - in: path
+        name: session_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorStudentRequestVerify'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorStudentRequestVerify'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedMentorStudentRequestVerify'
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/dashboard/mentor/session/student/my-requests/:
+    get:
+      operationId: dashboard_mentor_session_student_my_requests_list
+      description: List all session requests made by the logged-in student.
+      parameters:
+      - in: query
+        name: status
+        schema:
+          type: string
+        description: 'Filter by status: REQUESTED, PENDING_APPROVAL, REJECTED, etc.'
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/StudentSessionRequestList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/session/student/request/:
+    post:
+      operationId: dashboard_mentor_session_student_request_create
+      description: Request a mentorship session from the mentor(s) of a campus, company,
+        or IG. The student must be a verified member of the target entity. The session
+        starts in REQUESTED status and waits for a mentor to approve or reject it.
+      tags:
+      - Mentor
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/StudentSessionRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/StudentSessionRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/StudentSessionRequest'
+        required: true
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '201':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/StudentSessionRequest'
                 required:
                 - hasError
                 - statusCode
@@ -18516,6 +19139,21 @@ paths:
     get:
       operationId: dashboard_task_list_retrieve
       description: Retrieve Task Public List.
+      parameters:
+      - in: query
+        name: task_source
+        schema:
+          type: string
+          enum:
+          - campus_mentor
+          - company
+          - ig_mentor
+          - platform
+        description: 'Filter tasks by creator type: ''company'' = tasks submitted
+          by a verified company user, ''ig_mentor'' = tasks submitted by an approved
+          IG mentor, ''campus_mentor'' = tasks submitted by an approved campus mentor,
+          ''platform'' = tasks created by platform admins. Eligibility (IG/campus
+          membership) is enforced by the existing visibility rules.'
       tags:
       - Task
       security:
@@ -20572,6 +21210,19 @@ paths:
         schema:
           type: string
         required: true
+      tags:
+      - Integrations
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/integrations/mufifa/verify-task/:
+    get:
+      operationId: integrations_mufifa_verify_task_retrieve
       tags:
       - Integrations
       security:
@@ -23368,6 +24019,494 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/muComics/comics/:
+    get:
+      operationId: muComics_comics_list
+      description: List all active (non-deleted) comics. Supports search by title,
+        status filter, and sort by created_at or title.
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ComicListItem'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: muComics_comics_create
+      description: Create a new comic. Any authenticated user may create a comic.
+        Returns the full comic detail on success.
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComicWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ComicWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ComicWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/{comic_id}/:
+    get:
+      operationId: muComics_comics_retrieve
+      description: Retrieve full detail for a single active comic, including contributors
+        and genres.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    patch:
+      operationId: muComics_comics_partial_update
+      description: Partially update a comic's title, description, or cover image.
+        Only the creator or an assigned editor contributor may edit. Archived comics
+        cannot be edited.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedComicWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedComicWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedComicWrite'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: muComics_comics_destroy
+      description: Soft-delete a comic (sets deleted_at). Only the original creator
+        may delete. The comic is hidden from all list/detail responses after deletion.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicDeleteResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/{comic_id}/archive/:
+    post:
+      operationId: muComics_comics_archive_create
+      description: Archive a draft or published comic (draft/published → archived).
+        Only the creator may archive. Already-archived comics are rejected.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicArchiveResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/{comic_id}/publish/:
+    post:
+      operationId: muComics_comics_publish_create
+      description: Publish a draft comic (draft → published). Only the creator may
+        publish. Requires title and description to be present. Archived comics cannot
+        be re-published.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicPublishResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comments/{comment_id}/:
+    patch:
+      operationId: muComics_comments_partial_update
+      description: |-
+        PATCH  /comments/<comment_id>/  — edit own comment
+        DELETE /comments/<comment_id>/  — soft-delete own comment
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: muComics_comments_destroy
+      description: |-
+        PATCH  /comments/<comment_id>/  — edit own comment
+        DELETE /comments/<comment_id>/  — soft-delete own comment
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/muComics/comments/admin/:
+    get:
+      operationId: muComics_comments_admin_retrieve
+      description: GET /admin/comments/ — list all comments for moderation (flat list)
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/comments/admin/{comment_id}/:
+    delete:
+      operationId: muComics_comments_admin_destroy
+      description: DELETE /admin/comments/<comment_id>/ — soft-delete any comment
+        (moderator)
+      parameters:
+      - in: path
+        name: comment_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '204':
+          description: No response body
+  /api/v1/muComics/comments/chapter/{chapter_id}/create/:
+    post:
+      operationId: muComics_comments_chapter_create_create
+      description: POST /comments/chapter/<chapter_id>/create/  — create chapter comment
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/comments/chapter/{chapter_id}/list/:
+    get:
+      operationId: muComics_comments_chapter_list_retrieve
+      description: GET  /comments/chapter/<chapter_id>/list/  — list chapter comments
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/comments/comic/{comic_id}/create/:
+    post:
+      operationId: muComics_comments_comic_create_create
+      description: POST /comments/comic/<comic_id>/create/  — create a comment (top-level
+        or reply)
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/comments/comic/{comic_id}/list/:
+    get:
+      operationId: muComics_comments_comic_list_retrieve
+      description: GET  /comments/comic/<comic_id>/list/  — list top-level comments
+        with replies
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
   /api/v1/notification/broadcast/create/:
     post:
       operationId: notification_broadcast_create_create
@@ -23850,9 +24989,9 @@ paths:
                 - message
                 - response
           description: ''
-  /api/v1/public/college-details/{college_code}/:
+  /api/v1/public/campus-details/{college_code}/:
     get:
-      operationId: public_college_details_retrieve
+      operationId: public_campus_details_retrieve
       parameters:
       - in: path
         name: college_code
@@ -27760,6 +28899,187 @@ components:
       - number_of_members
       - org
       - total_karma
+    ComicArchiveResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - status
+    ComicDeleteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+      - id
+    ComicDetail:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        title:
+          type: string
+          maxLength: 150
+        slug:
+          type: string
+          maxLength: 75
+        description:
+          type: string
+          nullable: true
+        cover_image_key:
+          type: string
+          nullable: true
+          maxLength: 255
+        status:
+          enum:
+          - draft
+          - published
+          - archived
+          type: string
+          description: |-
+            * `draft` - Draft
+            * `published` - Published
+            * `archived` - Archived
+          x-spec-enum-id: 3999cf41a064d13a
+        like_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        comment_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        bookmark_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        genres:
+          type: string
+          readOnly: true
+        contributors:
+          type: string
+          readOnly: true
+        created_by:
+          allOf:
+          - $ref: '#/components/schemas/MinimalUser'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+        updated_by:
+          allOf:
+          - $ref: '#/components/schemas/MinimalUser'
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - contributors
+      - created_at
+      - created_by
+      - genres
+      - slug
+      - title
+      - updated_at
+      - updated_by
+    ComicListItem:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        title:
+          type: string
+          maxLength: 150
+        slug:
+          type: string
+          maxLength: 75
+        cover_image_key:
+          type: string
+          nullable: true
+          maxLength: 255
+        status:
+          enum:
+          - draft
+          - published
+          - archived
+          type: string
+          description: |-
+            * `draft` - Draft
+            * `published` - Published
+            * `archived` - Archived
+          x-spec-enum-id: 3999cf41a064d13a
+        like_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        comment_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        bookmark_count:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        published_at:
+          type: string
+          format: date-time
+          nullable: true
+        created_by:
+          allOf:
+          - $ref: '#/components/schemas/MinimalUser'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - created_by
+      - slug
+      - title
+    ComicPublishResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - status
+    ComicWrite:
+      type: object
+      description: |-
+        Input serializer for POST /comics/ and PATCH /comics/<id>/.
+        The caller never sends: slug, status, *_count, published_at, or audit fields.
+      properties:
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        cover_image_key:
+          type: string
+          nullable: true
+          maxLength: 255
+      required:
+      - title
     Comment:
       type: object
       properties:
@@ -29942,6 +31262,20 @@ components:
       - hashtag
       - title
       - type
+    EventTypesScopesResponse:
+      type: object
+      properties:
+        event_type:
+          type: array
+          items:
+            type: string
+        event_scope:
+          type: array
+          items:
+            type: string
+      required:
+      - event_scope
+      - event_type
     EventVenue:
       type: object
       description: Flattens venue_* fields from the Event model.
@@ -29956,6 +31290,7 @@ components:
           nullable: true
         venue_maps_url:
           type: string
+          format: uri
           nullable: true
         venue_online_link:
           type: string
@@ -30534,9 +31869,6 @@ components:
           nullable: true
           maxLength: 36
         job_type:
-          type: string
-          maxLength: 20
-        status:
           type: string
           maxLength: 20
         duration_value:
@@ -31634,9 +32966,13 @@ components:
         institution:
           type: string
           nullable: true
+        profile_pic:
+          type: string
+          nullable: true
       required:
       - full_name
       - institution
+      - profile_pic
       - total_karma
     LearningCircleAttendeeReportGetResponse:
       type: object
@@ -32423,6 +33759,7 @@ components:
           format: date-time
         status:
           enum:
+          - REQUESTED
           - SCHEDULED
           - PENDING_APPROVAL
           - COMPLETED
@@ -32430,12 +33767,13 @@ components:
           - REJECTED
           type: string
           description: |-
+            * `REQUESTED` - Requested
             * `SCHEDULED` - Scheduled
             * `PENDING_APPROVAL` - Pending Approval
             * `COMPLETED` - Completed
             * `CANCELLED` - Cancelled
             * `REJECTED` - Rejected
-          x-spec-enum-id: 829e033712bec382
+          x-spec-enum-id: 64931a7c8f0e87bb
         meeting_link:
           type: string
           nullable: true
@@ -32883,11 +34221,49 @@ components:
           type: string
           format: date-time
           readOnly: true
+        session_title:
+          type: string
+          readOnly: true
+        session_starts_at:
+          type: string
+          format: date-time
+          readOnly: true
+        session_ends_at:
+          type: string
+          format: date-time
+          readOnly: true
+        session_mode:
+          type: string
+          readOnly: true
+        session_meeting_link:
+          type: string
+          readOnly: true
+        session_venue:
+          type: string
+          readOnly: true
+        session_status:
+          type: string
+          readOnly: true
+        session_entity_id:
+          type: string
+          readOnly: true
+        session_entity_name:
+          type: string
+          readOnly: true
       required:
       - created_at
       - mu_id
       - participant_role
+      - session_ends_at
+      - session_entity_id
+      - session_entity_name
       - session_id
+      - session_meeting_link
+      - session_mode
+      - session_starts_at
+      - session_status
+      - session_title
+      - session_venue
       - user_full_name
       - user_id
     ParticipantUpdate:
@@ -32920,11 +34296,13 @@ components:
           enum:
           - SCHEDULED
           - REJECTED
+          - CANCELLED
           type: string
           description: |-
             * `SCHEDULED` - SCHEDULED
             * `REJECTED` - REJECTED
-          x-spec-enum-id: a2b796bef1a02f76
+            * `CANCELLED` - CANCELLED
+          x-spec-enum-id: 5bb964df4ed9f171
         apply_to_series:
           type: boolean
           default: false
@@ -33000,6 +34378,22 @@ components:
           type: string
           nullable: true
           maxLength: 36
+    PatchedComicWrite:
+      type: object
+      description: |-
+        Input serializer for POST /comics/ and PATCH /comics/<id>/.
+        The caller never sends: slug, status, *_count, published_at, or audit fields.
+      properties:
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        cover_image_key:
+          type: string
+          nullable: true
+          maxLength: 255
     PatchedCompanyTaskPatch:
       type: object
       description: |-
@@ -33032,6 +34426,12 @@ components:
           type: string
           nullable: true
           maxLength: 36
+        skill_ids:
+          type: array
+          items:
+            type: string
+            maxLength: 36
+          description: List of active Skill UUIDs to link to this task.
     PatchedCompanyUpdate:
       type: object
       properties:
@@ -33212,6 +34612,59 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/JobRule'
+    PatchedMentorStudentRequestVerify:
+      type: object
+      description: |-
+        Allows a mentor to approve or reject a student's session request.
+
+        On APPROVE:
+          - Optional overrides (starts_at, ends_at, mode, meeting_link, venue) are
+            applied so the mentor can adjust the proposed time / logistics.
+          - The session transitions from REQUESTED → PENDING_APPROVAL.
+          - created_by is updated to the approving mentor so the session appears in
+            their dashboard and they can edit/cancel it using existing APIs.
+          - requested_by is left untouched — permanent audit trail.
+
+        On REJECT:
+          - The session transitions from REQUESTED → REJECTED.
+          - requested_by remains set; the student can view their rejected requests.
+      properties:
+        status:
+          enum:
+          - APPROVED
+          - REJECTED
+          type: string
+          description: |-
+            * `APPROVED` - APPROVED
+            * `REJECTED` - REJECTED
+          x-spec-enum-id: 00a806fd4640c2d2
+        starts_at:
+          type: string
+          format: date-time
+          nullable: true
+        ends_at:
+          type: string
+          format: date-time
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          - null
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+          nullable: true
+        meeting_link:
+          type: string
+          nullable: true
+        venue:
+          type: string
+          nullable: true
     PatchedMentorUpdate:
       type: object
       properties:
@@ -33973,6 +35426,9 @@ components:
         title:
           type: string
           maxLength: 150
+        description:
+          type: string
+          nullable: true
         mode:
           enum:
           - ONLINE
@@ -33992,6 +35448,7 @@ components:
           format: date-time
         status:
           enum:
+          - REQUESTED
           - SCHEDULED
           - PENDING_APPROVAL
           - COMPLETED
@@ -33999,12 +35456,13 @@ components:
           - REJECTED
           type: string
           description: |-
+            * `REQUESTED` - Requested
             * `SCHEDULED` - Scheduled
             * `PENDING_APPROVAL` - Pending Approval
             * `COMPLETED` - Completed
             * `CANCELLED` - Cancelled
             * `REJECTED` - Rejected
-          x-spec-enum-id: 829e033712bec382
+          x-spec-enum-id: 64931a7c8f0e87bb
         created_by_id:
           type: string
           readOnly: true
@@ -34020,6 +35478,14 @@ components:
           maximum: 2147483647
           minimum: -2147483648
           nullable: true
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
         is_recurring:
           type: boolean
         parent_session_id:
@@ -34219,6 +35685,183 @@ components:
       - full_name
       - institution
       - profile_pic
+    StudentSessionRequest:
+      type: object
+      description: |-
+        Used by students to create a session request.
+
+        All sessions are Interest-Group scoped, so only ``ig_session`` requests are
+        accepted; company/campus session types are rejected.
+
+        Validates:
+          - The session_type is ig_session and the student is a member of the target
+            Interest Group (entity_id).
+          - Time constraints (starts_at < ends_at, starts_at in future).
+          - Mode / venue / meeting-link consistency (same rules as SessionCreateSerializer).
+          - No duplicate pending request (same student + entity + title + starts_at).
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        session_type:
+          enum:
+          - ig_session
+          - campus_session
+          - company_session
+          type: string
+          description: |-
+            * `ig_session` - IG Session
+            * `campus_session` - Campus Session
+            * `company_session` - Company Session
+          x-spec-enum-id: ab9317e33b7b40a3
+        entity_id:
+          type: string
+          nullable: true
+          maxLength: 36
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
+        max_participants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+      required:
+      - ends_at
+      - starts_at
+      - title
+    StudentSessionRequestList:
+      type: object
+      description: |-
+        Read-only serializer used by mentors to see incoming student session requests.
+        Includes the requesting student's name for quick identification.
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        session_type:
+          enum:
+          - ig_session
+          - campus_session
+          - company_session
+          type: string
+          description: |-
+            * `ig_session` - IG Session
+            * `campus_session` - Campus Session
+            * `company_session` - Company Session
+          x-spec-enum-id: ab9317e33b7b40a3
+        entity_id:
+          type: string
+          nullable: true
+          maxLength: 36
+        entity_name:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        mode:
+          enum:
+          - ONLINE
+          - OFFLINE
+          - HYBRID
+          type: string
+          description: |-
+            * `ONLINE` - Online
+            * `OFFLINE` - Offline
+            * `HYBRID` - Hybrid
+          x-spec-enum-id: af88be50a5259b14
+        starts_at:
+          type: string
+          format: date-time
+        ends_at:
+          type: string
+          format: date-time
+        meeting_link:
+          type: string
+          nullable: true
+          maxLength: 500
+        venue:
+          type: string
+          nullable: true
+          maxLength: 255
+        max_participants:
+          type: integer
+          maximum: 2147483647
+          minimum: -2147483648
+          nullable: true
+        status:
+          enum:
+          - REQUESTED
+          - SCHEDULED
+          - PENDING_APPROVAL
+          - COMPLETED
+          - CANCELLED
+          - REJECTED
+          type: string
+          description: |-
+            * `REQUESTED` - Requested
+            * `SCHEDULED` - Scheduled
+            * `PENDING_APPROVAL` - Pending Approval
+            * `COMPLETED` - Completed
+            * `CANCELLED` - Cancelled
+            * `REJECTED` - Rejected
+          x-spec-enum-id: 64931a7c8f0e87bb
+        requested_by_id:
+          type: string
+          nullable: true
+          readOnly: true
+        requested_by_name:
+          type: string
+          readOnly: true
+        requested_by_muid:
+          type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - created_at
+      - ends_at
+      - entity_name
+      - requested_by_id
+      - requested_by_muid
+      - requested_by_name
+      - starts_at
+      - status
+      - title
     SubjectInfo:
       type: object
       properties:
@@ -34491,13 +36134,17 @@ components:
           enum:
           - Male
           - Female
+          - Other
+          - Prefer not to say
           - ''
           - null
           type: string
           description: |-
             * `Male` - Male
             * `Female` - Female
-          x-spec-enum-id: 4048b1fb433dc7b5
+            * `Other` - Other
+            * `Prefer not to say` - Prefer not to say
+          x-spec-enum-id: a804cfc7585be0eb
           nullable: true
         dob:
           type: string
@@ -34808,13 +36455,17 @@ components:
           enum:
           - Male
           - Female
+          - Other
+          - Prefer not to say
           - ''
           - null
           type: string
           description: |-
             * `Male` - Male
             * `Female` - Female
-          x-spec-enum-id: 4048b1fb433dc7b5
+            * `Other` - Other
+            * `Prefer not to say` - Prefer not to say
+          x-spec-enum-id: a804cfc7585be0eb
           nullable: true
         muid:
           type: string
@@ -34899,20 +36550,25 @@ components:
           enum:
           - Male
           - Female
+          - Other
+          - Prefer not to say
           - ''
           - null
           type: string
           description: |-
             * `Male` - Male
             * `Female` - Female
-          x-spec-enum-id: 4048b1fb433dc7b5
+            * `Other` - Other
+            * `Prefer not to say` - Prefer not to say
+          x-spec-enum-id: a804cfc7585be0eb
           nullable: true
         dob:
           type: string
           format: date
           nullable: true
-        district:
+        district_id:
           type: string
+          writeOnly: true
           nullable: true
       required:
       - communities
