@@ -207,8 +207,10 @@ class AchievementUpdateAPIView(APIView):
         # Convert QueryDict to regular dict to properly handle list/boolean assignments
         data = dict(request.data)
         # QueryDict wraps values in lists, so unwrap single values
+        # Exclude intentional list fields like 'tags' from unwrapping
+        list_fields = {'tags'}
         for key in data:
-            if isinstance(data[key], list) and len(data[key]) == 1:
+            if key not in list_fields and isinstance(data[key], list) and len(data[key]) == 1:
                 data[key] = data[key][0]
         data["updated_by"] = user_id
 
@@ -674,6 +676,39 @@ class AchievementRuleDeactivateAPIView(APIView):
 
         return CustomResponse(
             general_message=f"Rule v{rule.version} deactivated"
+        ).get_success_response()
+
+
+class AchievementRuleActivateAPIView(APIView):
+    """Activate a rule (admin)"""
+
+    @extend_schema(tags=['Dashboard - Achievement'], description="Activate an Achievement Rule.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
+    def post(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        if rule.is_active:
+            return CustomResponse(
+                general_message=f"Rule v{rule.version} is already active"
+            ).get_failure_response()
+
+        rule.is_active = True
+        rule.save()
+
+        return CustomResponse(
+            general_message=f"Rule v{rule.version} activated"
         ).get_success_response()
 
 
