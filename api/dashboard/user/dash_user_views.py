@@ -544,7 +544,13 @@ class UserAddOrgAPI(APIView):
         )
         if serializer.is_valid():
             org_link = serializer.save()
+            if not org_link or isinstance(org_link, str):
+                return CustomResponse(
+                    general_message="organisation linked successfully"
+                ).get_success_response()
+
             try:
+                cache.delete(f"db_user_{user_id}")
                 cache.delete(f"db_user_{user.muid}")
             except Exception:
                 pass
