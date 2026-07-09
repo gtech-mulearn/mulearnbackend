@@ -228,10 +228,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
         organizations_data = []
         for link in organization_links:
-            if (
-                link.org.org_type == OrganizationType.COLLEGE.value
-                or OrganizationType.SCHOOL.value
-            ):
+            if link.org.org_type in (OrganizationType.COLLEGE.value, OrganizationType.SCHOOL.value):
                 serializer = CollegeSerializer(link)
             else:
                 serializer = OrgSerializer(link)
