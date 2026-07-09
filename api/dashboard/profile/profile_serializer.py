@@ -101,7 +101,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if not getattr(self, "user_org_link", None):
             self.user_org_link = obj.user_organization_link_user.filter(
                 org__org_type=org_type
-            ).first()
+            ).order_by("-created_at", "-id").first()
         return self.user_org_link
 
     def _get_org_type(self, obj):
