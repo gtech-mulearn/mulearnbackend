@@ -31,8 +31,7 @@ class UserInfoAPI(APIView):
     )
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        # user = cache.get(f"db_user_{user_muid}")
-        # if not user:
+        user_id = JWTUtils.fetch_user_id(request)
         user = (
             User.objects.prefetch_related(
                 "user_domains", "user_endgoals", "user_role_link_user"
@@ -40,6 +39,8 @@ class UserInfoAPI(APIView):
             .filter(muid=user_muid)
             .first()
         )
+        if user is not None:
+            cache.set(f"db_user_{user_id}", user, timeout=60)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
@@ -115,6 +116,7 @@ class UserGetPatchDeleteAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            cache.delete(f"db_user_{user_id}")
 
             cache.delete(f"db_user_{user.muid}")
 

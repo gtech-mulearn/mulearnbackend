@@ -30,7 +30,7 @@ from rest_framework import serializers as s
 class AchievementListAPIView(APIView):
     @extend_schema(
         tags=['Dashboard - Achievement'],
-        description="Retrieve Achievement List.",
+        description="Retrieve Achievement List. Pass ?user_id=<muid> to include a 'has_achievement' flag per item.",
         responses={200: achievement_serializer.AchievementSerializer},
     )
     def get(self, request):
@@ -48,9 +48,24 @@ class AchievementListAPIView(APIView):
                 general_message="User Not Exists"
             ).get_failure_response()
 
+        # Optional: check which achievements a specific user already has
+        target_user_id = request.query_params.get('user_id')
+        user_achievement_ids = set()
+        if target_user_id:
+            user_achievement_ids = set(
+                UserAchievementsLog.objects.filter(
+                    user_id=target_user_id
+                ).values_list('achievement_id', flat=True)
+            )
+
         achievements = Achievement.objects.all()
         achievements_serializer = achievement_serializer.AchievementSerializer(
-            achievements, many=True
+            achievements,
+            many=True,
+            context={
+                'request': request,
+                'user_achievements': user_achievement_ids,
+            }
         )
 
         return CustomResponse(
@@ -171,7 +186,7 @@ class AchievementCreateAPIView(APIView):
 
 
 class AchievementUpdateAPIView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
     @extend_schema(
         tags=['Dashboard - Achievement'],
@@ -207,8 +222,10 @@ class AchievementUpdateAPIView(APIView):
         # Convert QueryDict to regular dict to properly handle list/boolean assignments
         data = dict(request.data)
         # QueryDict wraps values in lists, so unwrap single values
+        # Exclude intentional list fields like 'tags' from unwrapping
+        list_fields = {'tags'}
         for key in data:
-            if isinstance(data[key], list) and len(data[key]) == 1:
+            if key not in list_fields and isinstance(data[key], list) and len(data[key]) == 1:
                 data[key] = data[key][0]
         data["updated_by"] = user_id
 
@@ -677,6 +694,39 @@ class AchievementRuleDeactivateAPIView(APIView):
         ).get_success_response()
 
 
+class AchievementRuleActivateAPIView(APIView):
+    """Activate a rule (admin)"""
+
+    @extend_schema(tags=['Dashboard - Achievement'], description="Activate an Achievement Rule.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
+    def post(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        if rule.is_active:
+            return CustomResponse(
+                general_message=f"Rule v{rule.version} is already active"
+            ).get_failure_response()
+
+        rule.is_active = True
+        rule.save()
+
+        return CustomResponse(
+            general_message=f"Rule v{rule.version} activated"
+        ).get_success_response()
+
+
 class SimulateRulesAPIView(APIView):
     """Simulate rule evaluation for a user (admin/debug)"""
 
@@ -1064,12 +1114,12 @@ class AchievementLogListAPIView(APIView):
                 general_message="Invalid or missing token"
             ).get_failure_response()
             
-        logs = UserAchievementsLog.objects.select_related('user', 'achievement_id').order_by('-created_at')
+        logs = UserAchievementsLog.objects.select_related('user_id', 'achievement_id', 'updated_by').order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             logs, 
             request, 
-            search_fields=['user__muid', 'user__first_name', 'achievement_id__name'],
+            search_fields=['user_id__muid', 'user_id__first_name', 'achievement_id__name'],
             sort_fields={'created_at': 'created_at'}
         )
         
@@ -1077,8 +1127,8 @@ class AchievementLogListAPIView(APIView):
         for log in paginated_queryset.get('queryset'):
             data.append({
                 "id": str(log.id),
-                "muid": log.user.muid,
-                "user_name": log.user.full_name,
+                "muid": log.user_id.muid,
+                "user_name": log.user_id.full_name,
                 "achievement_name": log.achievement_id.name,
                 "is_issued": log.is_issued,
                 "created_at": log.created_at.isoformat() if log.created_at else None,

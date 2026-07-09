@@ -230,10 +230,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
         organizations_data = []
         for link in organization_links:
-            if (
-                link.org.org_type == OrganizationType.COLLEGE.value
-                or OrganizationType.SCHOOL.value
-            ):
+            if link.org.org_type in (OrganizationType.COLLEGE.value, OrganizationType.SCHOOL.value):
                 serializer = CollegeSerializer(link)
             else:
                 serializer = OrgSerializer(link)
@@ -278,7 +275,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
     roles = serializers.ListField(write_only=True)
     interest_groups = serializers.ListField(write_only=True)
     department = serializers.CharField(write_only=True)
-    graduation_year = serializers.CharField(write_only=True)
+    graduation_year = serializers.CharField(write_only=True, required=False, allow_null=True)
     admin = serializers.CharField(write_only=True)
 
     class Meta:
@@ -353,12 +350,16 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                     id__in=organization_ids
                 ).order_by("org_type")
 
+                # Extract these before the loop so all orgs get the correct value
+                department_id = validated_data.pop("department", None)
+                graduation_year = validated_data.pop("graduation_year", None)
+
                 if (
                     organizations.exists()
                     and organizations.first().org_type != OrganizationType.COLLEGE.value
                 ):
-                    validated_data.pop("department", None)
-                    validated_data.pop("graduation_year", None)
+                    department_id = None
+                    graduation_year = None
 
                 UserOrganizationLink.objects.bulk_create(
                     [
@@ -368,8 +369,8 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                             created_by=admin,
                             created_at=current_time,
                             verified=True,
-                            department_id=validated_data.pop("department", None),
-                            graduation_year=validated_data.pop("graduation_year", None),
+                            department_id=department_id,
+                            graduation_year=graduation_year,
                         )
                         for org in organizations
                     ]
