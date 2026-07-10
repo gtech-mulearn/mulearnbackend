@@ -4,7 +4,6 @@
 
 ### Clone the Project
 Clone the repository to your local machine using the following command:
-
 ```commandline
 git clone <repo-url>
 ```
