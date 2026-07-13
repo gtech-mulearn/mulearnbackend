@@ -25,6 +25,7 @@ urlpatterns = [
     path('rules/create/', achievement_views.AchievementRuleCreateAPIView.as_view(), name='achievement-rules-create'),
     path('rules/<str:rule_id>/', achievement_views.AchievementRuleDetailAPIView.as_view(), name='achievement-rules-detail'),
     path('rules/<str:rule_id>/deactivate/', achievement_views.AchievementRuleDeactivateAPIView.as_view(), name='achievement-rules-deactivate'),
+    path('rules/<str:rule_id>/activate/', achievement_views.AchievementRuleActivateAPIView.as_view(), name='achievement-rules-activate'),
 
     # Simulation & Debug
     path('simulate/<str:muid>/', achievement_views.SimulateRulesAPIView.as_view(), name='achievement-simulate'),
