@@ -79,7 +79,8 @@ class ComicDetailSerializer(serializers.ModelSerializer):
         ]
 
     def get_genres(self, obj):
-        links = obj.genre_links.select_related('genre').all()
+        # Option A: only active genres shown; inactive genre hides from comic detail
+        links = obj.genre_links.select_related('genre').filter(genre__is_active=True)
         return MinimalGenreSerializer(
             [link.genre for link in links], many=True
         ).data
@@ -250,3 +251,140 @@ class ContributorListSerializer(serializers.ModelSerializer):
     class Meta:
         model  = ComicContributorLink
         fields = ['contributor_id', 'user_id', 'role', 'name', 'comic_name']
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GENRE MANAGEMENT  (admin read / write)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GenreReadSerializer(serializers.ModelSerializer):
+    """Output shape for genre list / detail responses."""
+
+    class Meta:
+        model  = Genre
+        fields = ['id', 'name', 'slug', 'is_active', 'created_at', 'updated_at']
+
+
+class GenreWriteSerializer(serializers.ModelSerializer):
+    """
+    Input serializer for POST /comics/genres/ and PATCH /comics/genres/<id>/.
+    Caller only sends `name`; slug and audit fields are set internally.
+    """
+
+    class Meta:
+        model  = Genre
+        fields = ['name']
+        extra_kwargs = {
+            'name': {
+                'required':    True,
+                'max_length':  75,
+                'allow_blank': False,
+            },
+        }
+
+    def validate_name(self, value):
+        if not value or not value.strip():
+            raise serializers.ValidationError('Name must not be blank.')
+        return value.strip()
+
+    def _generate_unique_slug(self, name):
+        """
+        URL-safe slug from name. Appends an incrementing counter on collision.
+        Truncated to 70 chars before suffix to stay within max_length=75.
+        On update, excludes the current genre's own slug from collision check.
+        """
+        base       = slugify(name)[:70]
+        slug       = base
+        counter    = 1
+        exclude_id = self.instance.id if self.instance else None
+
+        while True:
+            qs = Genre.objects.filter(slug=slug)
+            if exclude_id:
+                qs = qs.exclude(id=exclude_id)
+            if not qs.exists():
+                break
+            slug    = f'{base}-{counter}'
+            counter += 1
+        return slug
+
+    def create(self, validated_data):
+        user_id = self.context['user_id']
+        now     = timezone.now()
+
+        validated_data['id']            = str(uuid.uuid4())
+        validated_data['slug']          = self._generate_unique_slug(validated_data['name'])
+        validated_data['is_active']     = True
+        validated_data['created_by_id'] = user_id
+        validated_data['updated_by_id'] = user_id
+        validated_data['created_at']    = now
+        validated_data['updated_at']    = now
+
+        return Genre.objects.create(**validated_data)
+
+    def update(self, instance, validated_data):
+        user_id = self.context['user_id']
+        now     = timezone.now()
+
+        if 'name' in validated_data and validated_data['name'] != instance.name:
+            validated_data['slug'] = self._generate_unique_slug(validated_data['name'])
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+
+        instance.updated_by_id = user_id
+        instance.updated_at    = now
+
+        changed_fields = list(validated_data.keys())
+        if 'name' in changed_fields:
+            changed_fields.append('slug')
+        changed_fields += ['updated_by', 'updated_at']
+
+        instance.save(update_fields=changed_fields)
+        return instance
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMIC GENRE LINK MANAGEMENT
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ComicGenreAssignSerializer(serializers.Serializer):
+    """
+    Input serializer for POST /comics/{comicId}/genres/.
+    Validates that:
+    - The genre exists.
+    - The genre is active (is_active=True).
+    - The genre is not already assigned to this comic.
+    """
+    genre_id = serializers.CharField()
+
+    def validate_genre_id(self, value):
+        try:
+            genre = Genre.objects.get(id=value)
+        except Genre.DoesNotExist:
+            raise serializers.ValidationError(f"Genre with id '{value}' not found.")
+
+        if not genre.is_active:
+            raise serializers.ValidationError("Cannot assign an inactive genre.")
+
+        comic = self.context['comic']
+        if ComicGenreLink.objects.filter(comic=comic, genre=genre).exists():
+            raise serializers.ValidationError("This genre is already assigned to the comic.")
+
+        return genre
+
+    def create(self, validated_data):
+        comic   = self.context['comic']
+        genre   = validated_data['genre_id'] # This is a Genre instance populated in validate_genre_id
+        user_id = self.context['user_id']
+        now     = timezone.now()
+
+        return ComicGenreLink.objects.create(
+            id=str(uuid.uuid4()),
+            comic=comic,
+            genre=genre,
+            created_by_id=user_id,
+            created_at=now,
+        )
+
+

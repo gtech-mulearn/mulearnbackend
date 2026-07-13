@@ -19,7 +19,7 @@ from drf_spectacular.utils import extend_schema, inline_serializer
 from rest_framework import serializers as s
 from rest_framework.views import APIView
 
-from db.comic import Comic, ComicContributorLink
+from db.comic import Comic, ComicContributorLink, ComicGenreLink, Genre
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.utils import CommonUtils
@@ -32,6 +32,7 @@ from .serializers import (
     ContributorWriteSerializer,
     ContributorRoleUpdateSerializer,
     ContributorListSerializer,
+    ComicGenreAssignSerializer,
 )
 
 
@@ -564,3 +565,115 @@ class ComicContributorDetailView(APIView):
         return CustomResponse(
             general_message=f'{role} {muid} removed.'
         ).get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMIC GENRE LINKS (assign / remove)
+# ─────────────────────────────────────────────────────────────────────────────
+
+class ComicGenreListView(APIView):
+    """
+    POST /muComics/comics/<comic_id>/genres/
+         Assign a genre to a comic.
+         Required role: Creator, Editor or Admin
+         Request body: { "genre_id": "<uuid>" }
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Assign a genre to a comic. Only the creator, an assigned editor, or an admin might perform this action.",
+        request=ComicGenreAssignSerializer,
+        responses={200: inline_serializer(
+            name='ComicGenreAssignResponse',
+            fields={
+                'link_id': s.CharField(),
+                'genre': inline_serializer(
+                    name='GenreMinimalObj',
+                    fields={
+                        'id': s.CharField(),
+                        'name': s.CharField(),
+                        'slug': s.CharField(),
+                    }
+                )
+            }
+        )},
+    )
+    def post(self, request, comic_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic = _get_active_comics().filter(id=comic_id).first()
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        # Permission role check: Creator, Editor or Admin
+        if not (can_edit_comic(user_id, comic) or RoleType.ADMIN.value in JWTUtils.fetch_role(request)):
+            return CustomResponse(
+                general_message='Only the comic creator, assigned editor, or an Admin can manage genres for this comic.'
+            ).get_unauthorized_response()
+
+        serializer = ComicGenreAssignSerializer(
+            data=request.data,
+            context={'comic': comic, 'user_id': user_id},
+        )
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message=serializer.errors
+            ).get_failure_response()
+
+        link = serializer.save()
+
+        return CustomResponse(
+            general_message=f'Genre "{link.genre.name}" assigned to comic "{comic.title}" successfully.',
+            response={
+                'link_id': link.id,
+                'genre': {
+                    'id': link.genre.id,
+                    'name': link.genre.name,
+                    'slug': link.genre.slug,
+                }
+            },
+        ).get_success_response()
+
+
+class ComicGenreDetailView(APIView):
+    """
+    DELETE /muComics/comics/<comic_id>/genres/<link_id>/
+           Remove a genre link from a comic.
+           Required role: Creator, Editor or Admin
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['muComics'],
+        description="Remove a genre from a comic. Only the creator, an assigned editor, or an admin might perform this action.",
+        responses={200: inline_serializer(
+            name='ComicGenreRemoveResponse',
+            fields={'link_id': s.CharField()}
+        )},
+    )
+    def delete(self, request, comic_id, link_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        comic = _get_active_comics().filter(id=comic_id).first()
+        if not comic:
+            return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+        # Permission role check: Creator, Editor or Admin
+        if not (can_edit_comic(user_id, comic) or RoleType.ADMIN.value in JWTUtils.fetch_role(request)):
+            return CustomResponse(
+                general_message='Only the comic creator, assigned editor, or an Admin can manage genres for this comic.'
+            ).get_unauthorized_response()
+
+        link = ComicGenreLink.objects.filter(id=link_id, comic=comic).select_related('genre').first()
+        if not link:
+            return CustomResponse(
+                general_message='Genre link not found for this comic.'
+            ).get_failure_response()
+
+        genre_name = link.genre.name
+        link.delete()
+
+        return CustomResponse(
+            general_message=f'Genre "{genre_name}" removed from comic "{comic.title}" successfully.',
+            response={'link_id': link_id},
+        ).get_success_response()
+
