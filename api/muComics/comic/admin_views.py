@@ -110,7 +110,7 @@ class GenreListCreateView(APIView):
         if not serializer.is_valid():
             return CustomResponse(
                 general_message=serializer.errors
-            ).get_failure_response("problem here")
+            ).get_failure_response("")
 
         genre = serializer.save()
 
