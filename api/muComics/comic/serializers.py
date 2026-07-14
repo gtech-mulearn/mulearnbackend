@@ -47,6 +47,7 @@ class ContributorSerializer(serializers.ModelSerializer):
 
 class ComicListItemSerializer(serializers.ModelSerializer):
     created_by = MinimalUserSerializer(read_only=True)
+    genres     = serializers.SerializerMethodField()
 
     class Meta:
         model = Comic
@@ -54,7 +55,12 @@ class ComicListItemSerializer(serializers.ModelSerializer):
             'id', 'title', 'slug', 'cover_image_key',
             'status', 'like_count', 'comment_count', 'bookmark_count',
             'published_at', 'created_by', 'created_at',
+            'genres',
         ]
+
+    def get_genres(self, obj):
+        links = obj.genre_links.select_related('genre').filter(genre__is_active=True)
+        return MinimalGenreSerializer([link.genre for link in links], many=True).data
 
 
 # ─────────────────────────────────────────────────────────────────────────────

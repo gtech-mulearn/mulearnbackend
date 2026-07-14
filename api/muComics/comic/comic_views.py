@@ -97,8 +97,20 @@ class ComicListCreateView(APIView):
                 ).get_failure_response()
             queryset = queryset.filter(status=status_filter)
 
+        # Optional multi-genre filter: ?genre=action,horror
+        # Accepts one or more genre slugs (comma-separated).
+        # Returns comics that have at least one of the given active genres.
+        if genre_param := request.query_params.get('genre'):
+            genre_slugs = [s.strip() for s in genre_param.split(',') if s.strip()]
+          
+            if genre_slugs:
+                queryset = queryset.filter(
+                    genre_links__genre__slug__in=genre_slugs,
+                    genre_links__genre__is_active=True,
+                ).distinct()
+
         paginated = CommonUtils.get_paginated_queryset(
-            queryset.select_related('created_by'),
+            queryset.select_related('created_by').prefetch_related('genre_links__genre'),
             request,
             search_fields=['title'],
             sort_fields={
@@ -655,7 +667,7 @@ class ComicGenreDetailView(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         comic = _get_active_comics().filter(id=comic_id).first()
         if not comic:
-            return CustomResponse(general_message='Comic not found.').get_failure_response()
+            return CustomResponse(general_message=f'Comic {comic_id} not found.').get_failure_response()
 
         # Permission role check: Creator, Editor or Admin
         if not (can_edit_comic(user_id, comic) or RoleType.ADMIN.value in JWTUtils.fetch_role(request)):
