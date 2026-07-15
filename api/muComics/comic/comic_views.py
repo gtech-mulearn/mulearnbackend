@@ -560,7 +560,7 @@ class ComicContributorDetailView(APIView):
 
         link.contributor_type = serializer.validated_data['role']
         try:
-            link.save()
+            link.save(update_fields=['contributor_type'])
         except IntegrityError:
             return CustomResponse(
                 general_message='Contributor with this role already exists.'
@@ -655,7 +655,12 @@ class ComicGenreListView(APIView):
                 general_message=serializer.errors
             ).get_failure_response()
 
-        link = serializer.save()
+        try:
+            link = serializer.save()
+        except IntegrityError:
+            return CustomResponse(
+                general_message='This genre is already assigned to this comic.'
+            ).get_failure_response()
 
         return CustomResponse(
             general_message=f'Genre "{link.genre.name}" assigned to comic "{comic.title}" successfully.',
