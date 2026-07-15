@@ -418,26 +418,49 @@ class ComicContributorListView(APIView):
         description="List all contributors for a comic.",
         responses={200: ContributorListSerializer(many=True)},
     )
+    # def get(self, request, comic_id):
+    #     comic = _get_active_comics().filter(id=comic_id).first()
+    #     if not comic:
+    #         return CustomResponse(general_message='Comic not found.').get_failure_response()
+
+    #     role_filter = request.query_params.get('role')
+    #     links = ComicContributorLink.objects.filter(comic=comic)
+        
+    #     if role_filter:
+    #         links = links.filter(contributor_type=role_filter)
+            
+    #     links = links.select_related('user', 'comic')
+        
+    #     if not links:
+    #         if role_filter:
+    #             return CustomResponse(general_message=f'No {role_filter} contributor found for this comic.', response=[]).get_success_response()
+    #         return CustomResponse(general_message='There are no contributors for this comic.', response=[]).get_success_response()
+            
+    #     serializer = ContributorListSerializer(links, many=True)
+    #     return CustomResponse(response=serializer.data).get_success_response()
     def get(self, request, comic_id):
         comic = _get_active_comics().filter(id=comic_id).first()
         if not comic:
             return CustomResponse(general_message='Comic not found.').get_failure_response()
 
+        links = ComicContributorLink.objects.filter(comic=comic).select_related('user', 'comic')
+
         role_filter = request.query_params.get('role')
-        links = ComicContributorLink.objects.filter(comic=comic)
-        
         if role_filter:
             links = links.filter(contributor_type=role_filter)
-            
-        links = links.select_related('user', 'comic')
-        
-        if not links:
-            if role_filter:
-                return CustomResponse(general_message=f'No {role_filter} contributor found for this comic.', response=[]).get_success_response()
-            return CustomResponse(general_message='There are no contributors for this comic.', response=[]).get_success_response()
-            
-        serializer = ContributorListSerializer(links, many=True)
-        return CustomResponse(response=serializer.data).get_success_response()
+
+        paginated = CommonUtils.get_paginated_queryset(
+            links,
+            request,
+            search_fields=['user__full_name', 'contributor_type'],
+            sort_fields={'role': 'contributor_type'},
+        )
+
+        serializer = ContributorListSerializer(paginated['queryset'], many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
 
     @extend_schema(
         tags=['muComics'],

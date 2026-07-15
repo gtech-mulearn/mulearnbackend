@@ -48,7 +48,7 @@ class ContributorSerializer(serializers.ModelSerializer):
 class ComicListItemSerializer(serializers.ModelSerializer):
     created_by = MinimalUserSerializer(read_only=True)
     genres     = serializers.SerializerMethodField()
-
+ 
     class Meta:
         model = Comic
         fields = [
@@ -59,8 +59,10 @@ class ComicListItemSerializer(serializers.ModelSerializer):
         ]
 
     def get_genres(self, obj):
-        links = obj.genre_links.select_related('genre').filter(genre__is_active=True)
-        return MinimalGenreSerializer([link.genre for link in links], many=True).data
+        links = obj.genre_links.all()
+        active_genres = [link.genre for link in links if link.genre.is_active]
+        return MinimalGenreSerializer(active_genres, many=True).data
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -217,9 +219,9 @@ class ContributorWriteSerializer(serializers.Serializer):
 
     def validate_muid(self, value):
         try:
-            return User.objects.get(muid=value)
+            return User.objects.get(muid=value, is_active=True)
         except User.DoesNotExist:
-            raise serializers.ValidationError(f'User with muid "{value}" not found.')
+            raise serializers.ValidationError(f'No Active user with muid "{value}" not found.')
 
     def create(self, validated_data):
         comic   = self.context['comic']
