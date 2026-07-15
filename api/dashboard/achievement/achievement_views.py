@@ -55,7 +55,7 @@ class AchievementListAPIView(APIView):
             user_achievement_ids = set(
                 UserAchievementsLog.objects.filter(
                     user_id=target_user_id
-                ).values_list('achievement_id', flat=True)
+                ).values_list('achievement_id_id', flat=True)
             )
 
         achievements = Achievement.objects.all()
@@ -506,7 +506,8 @@ class ClaimAchievementAPIView(APIView):
 class UserProgressAPIView(APIView):
     """Get progress towards all achievements"""
 
-    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve User Progress.",
+    @extend_schema(
+        tags=['Dashboard - Achievement'], description="Retrieve User Progress.",
         responses={200: inline_serializer("AchievementUserProgressResponse", fields={
             "hasError": s.BooleanField(default=False),
             "statusCode": s.IntegerField(default=200),
@@ -516,6 +517,7 @@ class UserProgressAPIView(APIView):
                     "achievement_id": s.CharField(),
                     "achievement_name": s.CharField(),
                     "eligible": s.BooleanField(),
+                    "claimed": s.BooleanField(),
                     "reason": s.CharField(allow_null=True),
                     "progress": s.DictField(
                         help_text="Rule-engine progress data (e.g. current vs. required counts)"
@@ -542,6 +544,7 @@ class UserProgressAPIView(APIView):
                 "achievement_id": result.achievement_id,
                 "achievement_name": result.achievement_name,
                 "eligible": result.eligible,
+                "claimed": result.claimed,
                 "reason": result.reason,
                 "progress": result.progress,
             }
@@ -633,7 +636,7 @@ class AchievementRuleCreateAPIView(APIView):
 
 
 class AchievementRuleDetailAPIView(APIView):
-    """Get details of a specific rule (admin)"""
+    """Get or update details of a specific rule (admin)"""
 
     @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Achievement Rule Detail.",
         responses={200: achievement_serializer.AchievementSerializer},
@@ -664,6 +667,70 @@ class AchievementRuleDetailAPIView(APIView):
         }
 
         return CustomResponse(response=data).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Achievement'],
+        description="Update a rule's rule_type and/or conditions. Works for both active and deactivated rules. Version and achievement association are immutable.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
+    @RoleRequired([RoleType.ADMIN.value])
+    def patch(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.select_related("achievement").get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        EDITABLE_FIELDS = {"rule_type", "conditions"}
+        data = request.data
+
+        unknown_fields = set(data.keys()) - EDITABLE_FIELDS
+        if unknown_fields:
+            return CustomResponse(
+                general_message=f"Fields not editable: {', '.join(sorted(unknown_fields))}. Only rule_type and conditions can be updated."
+            ).get_failure_response()
+
+        if not EDITABLE_FIELDS.intersection(data.keys()):
+            return CustomResponse(
+                general_message="No editable fields provided. Supply at least one of: rule_type, conditions."
+            ).get_failure_response()
+
+        if "rule_type" in data:
+            valid_rule_types = [choice[0] for choice in AchievementRule.RULE_TYPE_CHOICES]
+            if data["rule_type"] not in valid_rule_types:
+                return CustomResponse(
+                    general_message=f"Invalid rule_type '{data['rule_type']}'. Valid choices: {', '.join(valid_rule_types)}"
+                ).get_failure_response()
+            rule.rule_type = data["rule_type"]
+
+        if "conditions" in data:
+            if not isinstance(data["conditions"], dict):
+                return CustomResponse(
+                    general_message="conditions must be a JSON object."
+                ).get_failure_response()
+            rule.conditions = data["conditions"]
+
+        rule.save(update_fields=[f for f in EDITABLE_FIELDS if f in data] + ["updated_at"])
+
+        return CustomResponse(
+            general_message=f"Rule v{rule.version} updated successfully",
+            response={
+                "id": str(rule.id),
+                "achievement_id": str(rule.achievement_id),
+                "achievement_name": rule.achievement.name,
+                "version": rule.version,
+                "rule_type": rule.rule_type,
+                "conditions": rule.conditions,
+                "is_active": rule.is_active,
+            },
+        ).get_success_response()
 
 
 class AchievementRuleDeactivateAPIView(APIView):
@@ -740,6 +807,7 @@ class SimulateRulesAPIView(APIView):
                     "achievement_id": s.CharField(),
                     "achievement_name": s.CharField(),
                     "eligible": s.BooleanField(),
+                    "claimed": s.BooleanField(),
                     "reason": s.CharField(allow_null=True),
                     "progress": s.DictField(
                         help_text="Rule-engine progress data for the target user"
@@ -773,6 +841,7 @@ class SimulateRulesAPIView(APIView):
                 "achievement_id": result.achievement_id,
                 "achievement_name": result.achievement_name,
                 "eligible": result.eligible,
+                "claimed": result.claimed,
                 "reason": result.reason,
                 "progress": result.progress,
             }

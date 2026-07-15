@@ -62,7 +62,7 @@ class Genre(models.Model):
     id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name       = models.CharField(max_length=75, unique=True)
     slug       = models.CharField(max_length=75, unique=True)
-
+    is_active= models.BooleanField(default=True)
     # Audit
     updated_by = models.ForeignKey(
         User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
