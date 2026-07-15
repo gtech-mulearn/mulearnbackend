@@ -673,6 +673,7 @@ class AchievementRuleDetailAPIView(APIView):
         description="Update a rule's rule_type and/or conditions. Works for both active and deactivated rules. Version and achievement association are immutable.",
         responses={200: achievement_serializer.AchievementSerializer},
     )
+    @RoleRequired([RoleType.ADMIN.value])
     def patch(self, request, rule_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
