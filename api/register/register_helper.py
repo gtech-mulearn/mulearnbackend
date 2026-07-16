@@ -1,9 +1,6 @@
-import decouple
-import requests
 from db.user import User
 
 from utils.exception import CustomException
-from utils.response import CustomResponse
 
 
 AUTH_TIMEOUT = (3, 10)  # (connect seconds, read seconds) — B4
@@ -41,16 +38,18 @@ def _post_auth(path, **kwargs):
 
 
 def get_auth_token(muid, password):
-    AUTH_DOMAIN = decouple.config("AUTH_DOMAIN")
-    response = requests.post(
-        f"{AUTH_DOMAIN}/api/v1/auth/user-authentication/",
+    resp = _post_auth(
+        "/api/v1/auth/user-authentication/",
         data={"emailOrMuid": muid, "password": password},
     )
-    response = response.json()
-    if response.get("statusCode") != 200:
-        raise CustomException(response.get("message"))
-
-    return response.get("response")
+    if not resp.ok:
+        raise CustomException(
+            "Auth service returned an unexpected error. Please try again."
+        )
+    body = resp.json()
+    if body.get("statusCode") != 200:
+        raise CustomException(body.get("message"))
+    return body.get("response")
 
 
 def verify_google_temp_token(temp_token):
@@ -66,6 +65,10 @@ def verify_google_temp_token(temp_token):
         data={"tempToken": temp_token},
         headers={"protectionKey": decouple.config("PROTECTED_API_KEY")},
     )
+    if not resp.ok:
+        raise CustomException(
+            "Auth service returned an unexpected error. Please try again."
+        )
     body = resp.json()
     if body.get("statusCode") != 200:
         raise CustomException(
@@ -88,6 +91,10 @@ def get_auth_token_by_id(user_id):
         f"/api/v1/auth/token-verification/{user_id}/",
         headers={"protectionKey": decouple.config("PROTECTED_API_KEY")},
     )
+    if not resp.ok:
+        raise CustomException(
+            "Auth service returned an unexpected error. Please try again."
+        )
     body = resp.json()
     if body.get("statusCode") != 200:
         raise CustomException(body.get("message"))
