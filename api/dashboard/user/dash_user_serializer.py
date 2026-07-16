@@ -254,8 +254,8 @@ class UserVerificationSerializer(serializers.ModelSerializer):
     mobile = serializers.ReadOnlyField(source="user.mobile")
     gender = serializers.ReadOnlyField(source="user.gender")
     dob = serializers.ReadOnlyField(source="user.dob")
-    admin = serializers.ReadOnlyField(source="user.admin")
     joined = serializers.ReadOnlyField(source="user.created_at")
+
 
     # Geographic info
     district = serializers.SerializerMethodField()
@@ -284,7 +284,6 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             "mobile",
             "gender",
             "dob",
-            "admin",
             "joined",
             "district",
             "state",
@@ -318,11 +317,11 @@ class UserVerificationSerializer(serializers.ModelSerializer):
             return None
 
     def get_organizations(self, obj):
-        org_links = obj.user.user_organization_link_user.select_related(
-            "org", "org__district", "org__district__zone__state__country", "department"
-        ).all()
+        # Use .all() so Django resolves results from _prefetched_objects_cache.
+        # Calling .select_related() here would clone the queryset and clear the
+        # cache, issuing a new SQL query per user (N+1).
         result = []
-        for link in org_links:
+        for link in obj.user.user_organization_link_user.all():
             result.append({
                 "org_id": link.org.id if link.org else None,
                 "org_title": link.org.title if link.org else None,
@@ -334,17 +333,23 @@ class UserVerificationSerializer(serializers.ModelSerializer):
         return result
 
     def get_interest_groups(self, obj):
-        return list(
-            obj.user.user_ig_link_user.select_related("ig")
-            .values_list("ig__name", flat=True)
-        )
+        # Use .all() to stay in _prefetched_objects_cache; .select_related()
+        # or .values_list() would clone the queryset and bypass the prefetch cache.
+        return [
+            link.ig.name
+            for link in obj.user.user_ig_link_user.all()
+            if link.ig
+        ]
 
     def get_role_profile(self, obj):
         role_title = obj.role.title if obj.role else ""
 
         # ----- Mentor (all tiers) -----
         if RoleType.MENTOR.value in role_title or "Mentor" in role_title:
-            mentor = obj.user.user_mentor_user.first()
+            # Use next(iter(.all()), None) instead of .first() — .first() adds
+            # ORDER BY pk + LIMIT 1 and clears _result_cache, bypassing the
+            # prefetch set up in the view (N+1).
+            mentor = next(iter(obj.user.user_mentor_user.all()), None)
             if mentor:
                 return {
                     "type": "mentor",
