@@ -4,9 +4,10 @@ from decouple import config as decouple_config
 from django.db import transaction
 from rest_framework import serializers
 
+from db.company import Company
 from db.organization import Department, Organization, UserOrganizationLink
 from db.task import UserIgLink
-from db.user import Role, User, UserDomains, UserRoleLink
+from db.user import Role, User, UserDomains, UserMentor, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
 from utils.utils import DateTimeUtils
@@ -244,28 +245,157 @@ class UserDetailsSerializer(serializers.ModelSerializer):
 
 
 class UserVerificationSerializer(serializers.ModelSerializer):
-    full_name = serializers.ReadOnlyField(source="user.full_name")
+    # Core user identity
     user_id = serializers.ReadOnlyField(source="user.id")
-    discord_id = serializers.ReadOnlyField(source="user.discord_id")
+    full_name = serializers.ReadOnlyField(source="user.full_name")
     muid = serializers.ReadOnlyField(source="user.muid")
+    discord_id = serializers.ReadOnlyField(source="user.discord_id")
     email = serializers.ReadOnlyField(source="user.email")
     mobile = serializers.ReadOnlyField(source="user.mobile")
+    gender = serializers.ReadOnlyField(source="user.gender")
+    dob = serializers.ReadOnlyField(source="user.dob")
+    admin = serializers.ReadOnlyField(source="user.admin")
+    joined = serializers.ReadOnlyField(source="user.created_at")
+
+    # Geographic info
+    district = serializers.SerializerMethodField()
+    state = serializers.SerializerMethodField()
+    country = serializers.SerializerMethodField()
+
+    # Role info
     role_title = serializers.ReadOnlyField(source="role.title")
+
+    # Related data
+    organizations = serializers.SerializerMethodField()
+    interest_groups = serializers.SerializerMethodField()
+
+    # Role-specific profile
+    role_profile = serializers.SerializerMethodField()
 
     class Meta:
         model = UserRoleLink
         fields = [
             "id",
             "user_id",
-            "discord_id",
-            "muid",
             "full_name",
+            "muid",
+            "discord_id",
+            "email",
+            "mobile",
+            "gender",
+            "dob",
+            "admin",
+            "joined",
+            "district",
+            "state",
+            "country",
             "verified",
             "role_id",
             "role_title",
-            "email",
-            "mobile",
+            "organizations",
+            "interest_groups",
+            "role_profile",
         ]
+
+    def get_district(self, obj):
+        district = obj.user.district
+        if district:
+            return {"id": district.id, "name": district.name}
+        return None
+
+    def get_state(self, obj):
+        try:
+            state = obj.user.district.zone.state
+            return {"id": state.id, "name": state.name}
+        except AttributeError:
+            return None
+
+    def get_country(self, obj):
+        try:
+            country = obj.user.district.zone.state.country
+            return {"id": country.id, "name": country.name}
+        except AttributeError:
+            return None
+
+    def get_organizations(self, obj):
+        org_links = obj.user.user_organization_link_user.select_related(
+            "org", "org__district", "org__district__zone__state__country", "department"
+        ).all()
+        result = []
+        for link in org_links:
+            result.append({
+                "org_id": link.org.id if link.org else None,
+                "org_title": link.org.title if link.org else None,
+                "org_type": link.org.org_type if link.org else None,
+                "department": link.department.title if link.department else None,
+                "graduation_year": link.graduation_year,
+                "verified": link.verified,
+            })
+        return result
+
+    def get_interest_groups(self, obj):
+        return list(
+            obj.user.user_ig_link_user.select_related("ig")
+            .values_list("ig__name", flat=True)
+        )
+
+    def get_role_profile(self, obj):
+        role_title = obj.role.title if obj.role else ""
+
+        # ----- Mentor (all tiers) -----
+        if RoleType.MENTOR.value in role_title or "Mentor" in role_title:
+            mentor = obj.user.user_mentor_user.first()
+            if mentor:
+                return {
+                    "type": "mentor",
+                    "mentor_tier": mentor.mentor_tier,
+                    "about": mentor.about,
+                    "expertise": mentor.expertise,
+                    "reason": mentor.reason,
+                    "hours_available": mentor.hours,
+                    "preferred_ig_ids": mentor.preferred_ig_ids,
+                    "status": mentor.status,
+                    "org_id": mentor.org_id,
+                }
+            return {"type": "mentor"}
+
+        # ----- Company -----
+        if RoleType.COMPANY.value in role_title or "Company" in role_title:
+            company = getattr(obj.user, "company_profile", None)
+            if company:
+                return {
+                    "type": "company",
+                    "company_id": company.id,
+                    "name": company.name,
+                    "slug": company.slug,
+                    "description": company.description,
+                    "industry_sector": company.industry_sector,
+                    "company_size": company.company_size,
+                    "website_link": company.website_link,
+                    "linkedin_url": company.linkedin_url,
+                    "location": company.location,
+                    "legal_name": company.legal_name,
+                    "registration_number": company.registration_number,
+                    "tax_id": company.tax_id,
+                    "status": company.status,
+                    "verification_document_url": company.verification_document_url,
+                    "verification_requested_at": company.verification_requested_at,
+                    "rejection_reason": company.rejection_reason,
+                    "founded_year": company.founded_year,
+                }
+            return {"type": "company"}
+
+        # ----- Enabler -----
+        if RoleType.ENABLER.value in role_title or "Enabler" in role_title:
+            # Enablers do not have a dedicated profile table.
+            # Their key info is surfaced through the expanded user fields above.
+            return {
+                "type": "enabler",
+                "note": "Enabler-specific details are covered by the user fields above.",
+            }
+
+        # ----- Other / Unknown role -----
+        return None
 
 
 class UserDetailsEditSerializer(serializers.ModelSerializer):

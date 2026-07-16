@@ -250,7 +250,21 @@ class UserVerificationAPI(APIView):
         responses={200: dash_user_serializer.UserVerificationSerializer},
     )
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+        user_queryset = UserRoleLink.objects.select_related(
+            "user",
+            "user__district",
+            "user__district__zone",
+            "user__district__zone__state",
+            "user__district__zone__state__country",
+            "role",
+        ).prefetch_related(
+            "user__user_organization_link_user__org",
+            "user__user_organization_link_user__org__district",
+            "user__user_organization_link_user__department",
+            "user__user_ig_link_user__ig",
+            "user__user_mentor_user",
+            "user__company_profile",
+        ).filter(
             verified=False
         )
 
@@ -340,7 +354,21 @@ class UserVerificationCSV(APIView):
         responses={200: dash_user_serializer.UserVerificationSerializer},
     )
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+        user_queryset = UserRoleLink.objects.select_related(
+            "user",
+            "user__district",
+            "user__district__zone",
+            "user__district__zone__state",
+            "user__district__zone__state__country",
+            "role",
+        ).prefetch_related(
+            "user__user_organization_link_user__org",
+            "user__user_organization_link_user__org__district",
+            "user__user_organization_link_user__department",
+            "user__user_ig_link_user__ig",
+            "user__user_mentor_user",
+            "user__company_profile",
+        ).filter(
             verified=False
         )
 
