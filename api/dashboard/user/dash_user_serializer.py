@@ -83,7 +83,7 @@ class UserSerializer(serializers.ModelSerializer):
         ]
 
     def get_dynamic_type(self, obj):
-        return {
+        dynamic_types = {
             dynamic_role.type
             for dynamic_role in DynamicRole.objects.filter(
                 role__title__in=self.get_roles(obj)
@@ -91,6 +91,8 @@ class UserSerializer(serializers.ModelSerializer):
         }.union(
             {dynamic_user.type for dynamic_user in DynamicUser.objects.filter(user=obj)}
         )
+
+        return sorted(dynamic_type for dynamic_type in dynamic_types if dynamic_type is not None)
 
     def get_company(self, obj):
         roles = self.get_roles(obj)
@@ -437,6 +439,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             college := instance.user_organization_link_user.filter(
                 org__org_type=OrganizationType.COLLEGE.value
             )
+            .order_by("-created_at", "-id")
             .select_related("org__district__zone__state__country", "department")
             .first()
         ):
@@ -561,49 +564,85 @@ class UserOrgLinkSerializer(serializers.Serializer):
         is_alumni = validated_data.get("is_alumni", False)
         is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
         user_id = self.context.get("user")
-        if org := validated_data.get("organization"):
-            org_link = UserOrganizationLink.objects.create(
-                user=user_id,
-                org=org,
-                created_by=user_id,
-                created_at=DateTimeUtils.get_current_utc_time(),
-                verified=True,
-                department=(
-                    department
-                    if is_college(validated_data.get("organization"))
-                    else None
-                ),
-                graduation_year=(
-                    graduation_year
-                    if is_college(validated_data.get("organization"))
-                    else None
-                ),
-                is_alumni=(
-                    is_alumni
-                    if is_college(validated_data.get("organization"))
-                    else None
-                ),
-            )
-        else:
-            org_link = "skiped_creation"
-        if validated_data.get("is_student") or (
-            validated_data.get("organization")
-            and is_college(validated_data.get("organization"))
-        ):
-            student_role_id = (
-                Role.objects.only("id").get(title=RoleType.STUDENT.value).id
-            )
-            if not UserRoleLink.objects.filter(
-                user=user_id, role_id=student_role_id
-            ).exists():
-                UserRoleLink.objects.create(
+        with transaction.atomic():
+            org = validated_data.get("organization")
+            if org is None:
+                return "skiped_creation"
+
+            college_link = is_college(org)
+            if college_link:
+                existing_links = list(
+                    UserOrganizationLink.objects.filter(
+                        user=user_id,
+                        org__org_type=OrganizationType.COLLEGE.value,
+                    ).order_by("-created_at", "-id")
+                )
+
+                if existing_links:
+                    org_link = existing_links[0]
+                    org_link.org = org
+                    org_link.department = department
+                    org_link.graduation_year = graduation_year
+                    org_link.is_alumni = is_alumni
+                    org_link.verified = True
+                    org_link.created_by = user_id
+                    org_link.save(
+                        update_fields=[
+                            "org",
+                            "department",
+                            "graduation_year",
+                            "is_alumni",
+                            "verified",
+                            "created_by",
+                        ]
+                    )
+
+                    if len(existing_links) > 1:
+                        UserOrganizationLink.objects.filter(
+                            id__in=[link.id for link in existing_links[1:]]
+                        ).delete()
+                else:
+                    org_link = UserOrganizationLink.objects.create(
+                        user=user_id,
+                        org=org,
+                        created_by=user_id,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                        verified=True,
+                        department=department,
+                        graduation_year=graduation_year,
+                        is_alumni=is_alumni,
+                    )
+            else:
+                org_link = UserOrganizationLink.objects.create(
                     user=user_id,
-                    role_id=student_role_id,
+                    org=org,
                     created_by=user_id,
                     created_at=DateTimeUtils.get_current_utc_time(),
                     verified=True,
+                    department=None,
+                    graduation_year=None,
+                    is_alumni=None,
                 )
-        return org_link
+
+            if validated_data.get("is_student") or (
+                validated_data.get("organization")
+                and is_college(validated_data.get("organization"))
+            ):
+                student_role_id = (
+                    Role.objects.only("id").get(title=RoleType.STUDENT.value).id
+                )
+                if not UserRoleLink.objects.filter(
+                    user=user_id, role_id=student_role_id
+                ).exists():
+                    UserRoleLink.objects.create(
+                        user=user_id,
+                        role_id=student_role_id,
+                        created_by=user_id,
+                        created_at=DateTimeUtils.get_current_utc_time(),
+                        verified=True,
+                    )
+
+            return org_link
 
     class Meta:
         fields = [
