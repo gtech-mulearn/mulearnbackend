@@ -386,6 +386,13 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         )
         return meet
 
+    def validate_meet_time(self, value):
+        if value:
+            aware_time = _aware_meet_time(value)
+            if aware_time <= DateTimeUtils.get_current_utc_time():
+                raise serializers.ValidationError("Meeting time must be in the future.")
+        return value
+
     def validate(self, attrs):
         is_report_needed = attrs.get("is_report_needed")
         report_description = attrs.get("report_description")
