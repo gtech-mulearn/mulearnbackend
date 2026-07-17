@@ -8,7 +8,7 @@ from db.user import Role, User, UserDomains, UserEndgoals
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
-from .register_helper import get_auth_token
+from .register_helper import get_auth_token, verify_google_temp_token, get_auth_token_by_id
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from mu_celery.task import send_email
@@ -330,8 +330,61 @@ class RegisterDataAPI(APIView):
         responses={200: serializers.UserDetailSerializer},
     )
     def post(self, request):
-        data = request.data
+        from django.db import transaction
+        from utils.exception import CustomException
+
+        data = request.data.copy()
         data = {key: value for key, value in data.items() if value}
+
+        is_google_signup = False
+        temp_token = data.pop("tempToken", None)
+
+        if temp_token:
+            # ── Google sign-up path ──────────────────────────────────────────
+            try:
+                google_data = verify_google_temp_token(temp_token)
+            except CustomException as e:
+                return CustomResponse(general_message=str(e)).get_failure_response()
+
+            user_data = dict(data.get("user", {}))
+
+            # Only email is forced from Google — client cannot spoof it (B5 / D1)
+            user_data["email"] = google_data["email"].strip().lower()
+
+            # full_name comes from the form (editable per D1).
+            # Fall back to the Google value if the client didn't send one.
+            if not user_data.get("full_name"):
+                user_data["full_name"] = google_data["fullName"]
+
+            user_data.pop("password", None)   # no password for Google users
+            data["user"] = user_data
+            is_google_signup = True
+
+            # B3: idempotent re-issue — if this email already has a NULL-password
+            # user it is an orphan from a prior failed attempt; just re-issue tokens.
+            # Uses User.every (not User.objects) because the default ActiveUserManager
+            # excludes suspended accounts; their emails still occupy the unique constraint
+            # and would cause a DB-level IntegrityError on save().
+            existing = User.every.filter(email=user_data["email"]).first()
+            if existing:
+                if existing.password:
+                    # Has a real password → was registered via the classic path
+                    return CustomResponse(
+                        general_message="An account with this email already exists. Please sign in normally."
+                    ).get_failure_response()
+                if existing.suspended_at:
+                    # Suspended Google user — do not re-issue tokens
+                    return CustomResponse(
+                        general_message="This account has been suspended."
+                    ).get_failure_response()
+                # Orphan NULL-password user → re-issue tokens without creating a new row
+                try:
+                    res_data = get_auth_token_by_id(existing.id)
+                except CustomException as e:
+                    return CustomResponse(general_message=str(e)).get_failure_response()
+                res_data["data"] = serializers.UserDetailSerializer(existing).data
+                return CustomResponse(response=res_data).get_success_response()
+            # ── End Google sign-up path ──────────────────────────────────────
 
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
@@ -339,11 +392,26 @@ class RegisterDataAPI(APIView):
         if not create_user.is_valid():
             return CustomResponse(message=create_user.errors).get_failure_response()
 
-        user = create_user.save()
-        cache.set(f"db_user_{user.muid}", user, timeout=60)
-        password = request.data["user"]["password"]
-        cache.set(f"flag_register_{user.muid}", True, timeout=5)
-        res_data = get_auth_token(user.muid, password)
+        if not is_google_signup:
+            password = request.data.get("user", {}).get("password")
+            if not password:
+                return CustomResponse(
+                    general_message="Password is required for email registration."
+                ).get_failure_response()
+
+        try:
+            with transaction.atomic():   # B3: roll back DB rows if token call fails
+                user = create_user.save()
+                cache.set(f"db_user_{user.muid}", user, timeout=60)
+
+                if is_google_signup:
+                    # NULL password — use TokenVerificationAPI (no password needed)
+                    res_data = get_auth_token_by_id(user.id)  # raises → rolls back
+                else:
+                    cache.set(f"flag_register_{user.muid}", True, timeout=5)
+                    res_data = get_auth_token(user.muid, password)
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
         response_data = serializers.UserDetailSerializer(user, many=False).data
 
@@ -354,7 +422,6 @@ class RegisterDataAPI(APIView):
         )
 
         res_data["data"] = response_data
-
         return CustomResponse(response=res_data).get_success_response()
 
 
