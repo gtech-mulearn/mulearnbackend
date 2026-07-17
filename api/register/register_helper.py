@@ -48,17 +48,25 @@ def get_auth_token(muid, password):
         "/api/v1/auth/user-authentication/",
         data={"emailOrMuid": muid, "password": password},
     )
-    if not resp.ok:
+    try:
+        body = resp.json()
+    except Exception:
         logger.error(
-            "get_auth_token failed: HTTP %s | body: %s",
+            "get_auth_token: HTTP %s | non-JSON body: %s",
             resp.status_code, resp.text[:500],
         )
         raise CustomException(
             "Auth service returned an unexpected error. Please try again."
         )
-    body = resp.json()
-    if body.get("statusCode") != 200:
-        raise CustomException(body.get("message"))
+    if not resp.ok or body.get("statusCode") != 200:
+        logger.error(
+            "get_auth_token failed: HTTP %s | body: %s",
+            resp.status_code, resp.text[:500],
+        )
+        raise CustomException(
+            body.get("message")
+            or "Auth service returned an unexpected error. Please try again."
+        )
     return body.get("response")
 
 
@@ -67,24 +75,29 @@ def verify_google_temp_token(temp_token):
     Verifies a Google tempToken with the auth server.
     Returns {'email', 'fullName'} or raises CustomException.
 
-    Checks body statusCode rather than HTTP status as defense-in-depth (B1/P4).
-    Null-guards the response to avoid KeyError on an unexpected empty body (B1).
+    Parses the body on all HTTP statuses so the auth server's specific error
+    (expired, already-used, invalid key) is forwarded instead of swallowed.
     """
     resp = _post_auth(
         "/api/v1/auth/google/verify-temp-token/",
         data={"tempToken": temp_token},
         headers={"protectionKey": decouple.config("PROTECTED_API_KEY")},
     )
-    if not resp.ok:
+    try:
+        body = resp.json()
+    except Exception:
         logger.error(
-            "verify_google_temp_token failed: HTTP %s | body: %s",
+            "verify_google_temp_token: HTTP %s | non-JSON body: %s",
             resp.status_code, resp.text[:500],
         )
         raise CustomException(
             "Auth service returned an unexpected error. Please try again."
         )
-    body = resp.json()
-    if body.get("statusCode") != 200:
+    if not resp.ok or body.get("statusCode") != 200:
+        logger.error(
+            "verify_google_temp_token failed: HTTP %s | body: %s",
+            resp.status_code, resp.text[:500],
+        )
         raise CustomException(
             body.get("message")
             or "Invalid or expired Google session. Please sign in with Google again."
@@ -105,15 +118,23 @@ def get_auth_token_by_id(user_id):
         f"/api/v1/auth/token-verification/{user_id}/",
         headers={"protectionKey": decouple.config("PROTECTED_API_KEY")},
     )
-    if not resp.ok:
+    try:
+        body = resp.json()
+    except Exception:
         logger.error(
-            "get_auth_token_by_id failed: HTTP %s | body: %s",
+            "get_auth_token_by_id: HTTP %s | non-JSON body: %s",
             resp.status_code, resp.text[:500],
         )
         raise CustomException(
             "Auth service returned an unexpected error. Please try again."
         )
-    body = resp.json()
-    if body.get("statusCode") != 200:
-        raise CustomException(body.get("message"))
+    if not resp.ok or body.get("statusCode") != 200:
+        logger.error(
+            "get_auth_token_by_id failed: HTTP %s | body: %s",
+            resp.status_code, resp.text[:500],
+        )
+        raise CustomException(
+            body.get("message")
+            or "Auth service returned an unexpected error. Please try again."
+        )
     return body.get("response")
