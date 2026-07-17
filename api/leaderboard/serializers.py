@@ -92,7 +92,7 @@ class StudentLeaderboardSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = User
-        fields = ["full_name", "total_karma", "institution", "profile_pic"]
+        fields = ["muid", "full_name", "total_karma", "institution", "profile_pic"]
 
 class WadhwaniCollegeLeaderboardSerializer(serializers.Serializer):
     code = serializers.CharField()
