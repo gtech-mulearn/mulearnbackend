@@ -392,6 +392,13 @@ class RegisterDataAPI(APIView):
         if not create_user.is_valid():
             return CustomResponse(message=create_user.errors).get_failure_response()
 
+        if not is_google_signup:
+            password = request.data.get("user", {}).get("password")
+            if not password:
+                return CustomResponse(
+                    general_message="Password is required for email registration."
+                ).get_failure_response()
+
         try:
             with transaction.atomic():   # B3: roll back DB rows if token call fails
                 user = create_user.save()
@@ -401,11 +408,6 @@ class RegisterDataAPI(APIView):
                     # NULL password — use TokenVerificationAPI (no password needed)
                     res_data = get_auth_token_by_id(user.id)  # raises → rolls back
                 else:
-                    password = request.data.get("user", {}).get("password")
-                    if not password:
-                        return CustomResponse(
-                            general_message="Password is required for email registration."
-                        ).get_failure_response()
                     cache.set(f"flag_register_{user.muid}", True, timeout=5)
                     res_data = get_auth_token(user.muid, password)
         except CustomException as e:
