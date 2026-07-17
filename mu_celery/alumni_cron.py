@@ -18,6 +18,7 @@ def update_alumni_status_cron():
     updated_count = UserOrganizationLink.objects.filter(
         is_alumni=False,
         graduation_year__isnull=False,
+        graduation_year__regex=r'^\d{4}$',  # exclude malformed values (e.g. "25", "2025-06") before comparison
         graduation_year__lt=str(current_year),
     ).update(is_alumni=True)
 
