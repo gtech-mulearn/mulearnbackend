@@ -362,7 +362,10 @@ class RegisterDataAPI(APIView):
 
             # B3: idempotent re-issue — if this email already has a NULL-password
             # user it is an orphan from a prior failed attempt; just re-issue tokens.
-            existing = User.objects.filter(email=user_data["email"]).first()
+            # Uses User.every (not User.objects) because the default ActiveUserManager
+            # excludes suspended accounts; their emails still occupy the unique constraint
+            # and would cause a DB-level IntegrityError on save().
+            existing = User.every.filter(email=user_data["email"]).first()
             if existing:
                 if existing.password:
                     # Has a real password → was registered via the classic path
