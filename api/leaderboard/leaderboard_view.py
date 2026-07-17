@@ -55,6 +55,7 @@ class StudentsMonthlyLeaderboard(APIView):
         responses={200: inline_serializer(
             name='LeaderboardStudentsMonthlyItem',
             fields={
+                'muid': s.CharField(),
                 'full_name': s.CharField(),
                 'total_karma': s.IntegerField(),
                 'institution': s.CharField(allow_null=True),
@@ -94,6 +95,7 @@ class StudentsMonthlyLeaderboard(APIView):
             )
             .values(
                 "id",
+                "muid",
                 "full_name",
                 "total_karma",
                 "institution",
@@ -120,7 +122,17 @@ class StudentsMonthlyLeaderboard(APIView):
 
 class CollegeLeaderboard(APIView):
     @extend_schema(tags=['Leaderboard'], description="Retrieve College Leaderboard.",
-        responses={200: serializers.WadhwaniCollegeLeaderboardSerializer},
+        responses={200: inline_serializer(
+            name='LeaderboardCollegeItem',
+            fields={
+                'id': s.CharField(),
+                'code': s.CharField(),
+                'title': s.CharField(),
+                'total_students': s.IntegerField(),
+                'total_karma': s.IntegerField(),
+            },
+            many=True,
+        )},
     )
     def get(self, request):
         college_leaderboard = (
@@ -134,7 +146,7 @@ class CollegeLeaderboard(APIView):
                 total_students=Count("user_organization_link_org__user"),
                 total_karma=Sum("user_organization_link_org__user__wallet_user__karma"),
             )
-            .values("code", "title", "total_students", "total_karma")
+            .values("id", "code", "title", "total_students", "total_karma")
             .order_by("-total_karma")[:20]
         )
 
@@ -146,6 +158,7 @@ class CollegeMonthlyLeaderboard(APIView):
         responses={200: inline_serializer(
             name='LeaderboardCollegeMonthlyItem',
             fields={
+                'id': s.CharField(),
                 'code': s.CharField(),
                 'total_karma': s.IntegerField(),
                 'students': s.IntegerField(),
@@ -180,7 +193,7 @@ class CollegeMonthlyLeaderboard(APIView):
                 students=Count("user_organization_link_org__user", distinct=True),
                 institution=F("title"),
             )
-            .values("code", "total_karma", "students")
+            .values("id", "code", "total_karma", "students")
             .order_by("-total_karma")[:20]
         )
 
