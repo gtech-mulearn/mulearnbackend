@@ -23,6 +23,19 @@ from .serializers import (
 )
 
 
+def check_chapter_archived(chapter):
+    """
+    Helper function to check if a chapter is archived.
+    If it is archived, returns a CustomResponse failure response.
+    Otherwise, returns None.
+    """
+    if chapter.status == Comic.Status.ARCHIVED:
+        return CustomResponse(
+            general_message='Archived chapters cannot be edited.'
+        ).get_failure_response()
+    return None
+
+
 # ─────────────────────────────────────────────────────────────────────────────
 # CHAPTER LIST + CREATE
 # ─────────────────────────────────────────────────────────────────────────────
@@ -174,10 +187,8 @@ class ChapterDetailView(APIView):
             ).get_unauthorized_response()
 
         # Archived chapters cannot be edited
-        if chapter.status == Comic.Status.ARCHIVED:
-            return CustomResponse(
-                general_message='Archived chapters cannot be edited.'
-            ).get_failure_response()
+        if error_response := check_chapter_archived(chapter):
+            return error_response
 
         serializer = ChapterWriteSerializer(
             chapter, data=request.data,
@@ -378,6 +389,10 @@ class ChapterPageListCreateAPI(APIView):
         if not chapter:
             return CustomResponse(general_message='Chapter not found.').get_failure_response(status_code=404, http_status_code=404)
 
+        # Archived chapters cannot be edited
+        if error_response := check_chapter_archived(chapter):
+            return error_response
+
         # Permission: creator or assigned editor of the comic
         if not can_edit_comic(user_id, chapter.comic):
             return CustomResponse(
@@ -438,6 +453,10 @@ class ChapterPageDetailAPI(APIView):
         if error:
             return CustomResponse(general_message=error).get_failure_response(status_code=404, http_status_code=404)
 
+        # Archived chapters cannot be edited
+        if error_response := check_chapter_archived(page.chapter):
+            return error_response
+
         # Permission: creator or assigned editor of the comic
         if not can_edit_comic(user_id, page.chapter.comic):
             return CustomResponse(
@@ -477,6 +496,10 @@ class ChapterPageDetailAPI(APIView):
         page, error = self._get_page_or_error(page_id)
         if error:
             return CustomResponse(general_message=error).get_failure_response(status_code=404, http_status_code=404)
+
+        # Archived chapters cannot be edited
+        if error_response := check_chapter_archived(page.chapter):
+            return error_response
 
         # Permission: creator or assigned editor of the comic
         if not can_edit_comic(user_id, page.chapter.comic):
@@ -534,6 +557,10 @@ class ChapterPageReorderAPI(APIView):
         chapter = Chapter.objects.filter(id=chapter_id, deleted_at__isnull=True).select_related('comic').first()
         if not chapter:
             return CustomResponse(general_message='Chapter not found.').get_failure_response(status_code=404, http_status_code=404)
+
+        # Archived chapters cannot be edited
+        if error_response := check_chapter_archived(chapter):
+            return error_response
 
         # Permission: creator or assigned editor of the comic
         if not can_edit_comic(user_id, chapter.comic):
@@ -718,6 +745,10 @@ class ChapterRegisterImagesAPI(APIView):
         chapter = Chapter.objects.filter(id=chapter_id, deleted_at__isnull=True).select_related('comic').first()
         if not chapter:
             return CustomResponse(general_message='Chapter not found.').get_failure_response(status_code=404, http_status_code=404)
+
+        # Archived chapters cannot be edited
+        if error_response := check_chapter_archived(chapter):
+            return error_response
 
         # Permission: creator or assigned editor of the comic
         if not can_edit_comic(user_id, chapter.comic):
