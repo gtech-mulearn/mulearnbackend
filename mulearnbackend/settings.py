@@ -322,4 +322,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.intern_cron.intern_task_deadline_cron',
         'schedule': crontab(hour=0, minute=10),
     },
+    'update-alumni-status-cron': {
+        'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
+        'schedule': crontab(hour=0, minute=15),
+    },
 }
