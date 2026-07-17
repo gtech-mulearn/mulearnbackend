@@ -27,6 +27,7 @@ class EligibilityResult:
     rule_version: int
     reason: str
     progress: Dict[str, Any] = field(default_factory=dict)
+    claimed: bool = False  # True when the user has already claimed this achievement
 
 
 class RuleEvaluator:
@@ -94,10 +95,10 @@ class RuleEvaluator:
 
         for rule in active_rules:
             result = self.evaluate_rule(rule)
-            # Mark if already claimed
+            # Mark if already claimed without overriding the rule-based eligibility
             if str(rule.achievement_id) in claimed_ids:
+                result.claimed = True
                 result.reason = "Already claimed"
-                result.eligible = False
             results.append(result)
 
         return results

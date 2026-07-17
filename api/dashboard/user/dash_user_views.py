@@ -31,8 +31,7 @@ class UserInfoAPI(APIView):
     )
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        # user = cache.get(f"db_user_{user_muid}")
-        # if not user:
+        user_id = JWTUtils.fetch_user_id(request)
         user = (
             User.objects.prefetch_related(
                 "user_domains", "user_endgoals", "user_role_link_user"
@@ -40,11 +39,18 @@ class UserInfoAPI(APIView):
             .filter(muid=user_muid)
             .first()
         )
-        cache.set(f"db_user_{user_muid}", user, timeout=60)
+        if user is not None:
+            cache.set(f"db_user_{user_id}", user, timeout=60)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
             ).get_failure_response()
+
+        try:
+            cache.set(f"db_user_{user_muid}", user, timeout=60)
+        except Exception:
+            # Cache is an optimization; user info should still return when Redis is unavailable.
+            pass
 
         response = dash_user_serializer.UserSerializer(user, many=False).data
 
@@ -110,12 +116,17 @@ class UserGetPatchDeleteAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            cache.delete(f"db_user_{user_id}")
+
+            cache.delete(f"db_user_{user.muid}")
 
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER.value, WebHookActions.UPDATE.value, user_id
             )
+
             return CustomResponse(
-                general_message="User Edited Successfully"
+                general_message="User Edited Successfully",
+                response=serializer.data,
             ).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
@@ -249,7 +260,21 @@ class UserVerificationAPI(APIView):
         responses={200: dash_user_serializer.UserVerificationSerializer},
     )
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+        user_queryset = UserRoleLink.objects.select_related(
+            "user",
+            "user__district",
+            "user__district__zone",
+            "user__district__zone__state",
+            "user__district__zone__state__country",
+            "role",
+        ).prefetch_related(
+            "user__user_organization_link_user__org",
+            "user__user_organization_link_user__org__district",
+            "user__user_organization_link_user__department",
+            "user__user_ig_link_user__ig",
+            "user__user_mentor_user",
+            "user__company_profile",
+        ).filter(
             verified=False
         )
 
@@ -339,7 +364,21 @@ class UserVerificationCSV(APIView):
         responses={200: dash_user_serializer.UserVerificationSerializer},
     )
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+        user_queryset = UserRoleLink.objects.select_related(
+            "user",
+            "user__district",
+            "user__district__zone",
+            "user__district__zone__state",
+            "user__district__zone__state__country",
+            "role",
+        ).prefetch_related(
+            "user__user_organization_link_user__org",
+            "user__user_organization_link_user__org__district",
+            "user__user_organization_link_user__department",
+            "user__user_ig_link_user__ig",
+            "user__user_mentor_user",
+            "user__company_profile",
+        ).filter(
             verified=False
         )
 
@@ -523,8 +562,7 @@ class UserAddOrgAPI(APIView):
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        if not (user := cache.get(f"db_user_{user_id}")):
-            user = User.objects.filter(id=user_id).first()
+        user = User.objects.filter(id=user_id).first()
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
@@ -533,9 +571,25 @@ class UserAddOrgAPI(APIView):
             data=request.data, context={"user": user}
         )
         if serializer.is_valid():
-            serializer.save()
+            org_link = serializer.save()
+            if not org_link or isinstance(org_link, str):
+                return CustomResponse(
+                    general_message="organisation linked successfully"
+                ).get_success_response()
+
+            try:
+                cache.delete(f"db_user_{user_id}")
+                cache.delete(f"db_user_{user.muid}")
+            except Exception:
+                pass
+
             return CustomResponse(
-                general_message="organisation linked successfully"
+                general_message="organisation linked successfully",
+                response={
+                    "organization_link": dash_user_serializer.GetUserLinkSerializer(
+                        org_link
+                    ).data,
+                },
             ).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
@@ -553,7 +607,7 @@ class UserAddOrgAPI(APIView):
 
         links = UserOrganizationLink.objects.filter(
             user=user, org__org_type=OrganizationType.COLLEGE.value
-        ).select_related("org", "department")
+        ).order_by("-created_at", "-id").select_related("org", "department")[:1]
         serializer = dash_user_serializer.GetUserLinkSerializer(
             instance=links, many=True
         )
