@@ -1,5 +1,8 @@
 import decouple
+import logging
 import requests
+
+logger = logging.getLogger(__name__)
 
 from db.user import User
 
@@ -46,6 +49,10 @@ def get_auth_token(muid, password):
         data={"emailOrMuid": muid, "password": password},
     )
     if not resp.ok:
+        logger.error(
+            "get_auth_token failed: HTTP %s | body: %s",
+            resp.status_code, resp.text[:500],
+        )
         raise CustomException(
             "Auth service returned an unexpected error. Please try again."
         )
@@ -69,6 +76,10 @@ def verify_google_temp_token(temp_token):
         headers={"protectionKey": decouple.config("PROTECTED_API_KEY")},
     )
     if not resp.ok:
+        logger.error(
+            "verify_google_temp_token failed: HTTP %s | body: %s",
+            resp.status_code, resp.text[:500],
+        )
         raise CustomException(
             "Auth service returned an unexpected error. Please try again."
         )
@@ -95,6 +106,10 @@ def get_auth_token_by_id(user_id):
         headers={"protectionKey": decouple.config("PROTECTED_API_KEY")},
     )
     if not resp.ok:
+        logger.error(
+            "get_auth_token_by_id failed: HTTP %s | body: %s",
+            resp.status_code, resp.text[:500],
+        )
         raise CustomException(
             "Auth service returned an unexpected error. Please try again."
         )
