@@ -330,7 +330,6 @@ class RegisterDataAPI(APIView):
         responses={200: serializers.UserDetailSerializer},
     )
     def post(self, request):
-        from django.db import transaction
         from utils.exception import CustomException
 
         data = request.data.copy()
@@ -400,16 +399,21 @@ class RegisterDataAPI(APIView):
                 ).get_failure_response()
 
         try:
-            with transaction.atomic():   # B3: roll back DB rows if token call fails
-                user = create_user.save()
-                cache.set(f"db_user_{user.muid}", user, timeout=60)
+            # Save user first — commits to DB so the auth service can find
+            # the user when we request tokens (avoids uncommitted-row problem).
+            user = create_user.save()
+            cache.set(f"db_user_{user.muid}", user, timeout=60)
 
+            try:
                 if is_google_signup:
                     # NULL password — use TokenVerificationAPI (no password needed)
-                    res_data = get_auth_token_by_id(user.id)  # raises → rolls back
+                    res_data = get_auth_token_by_id(user.id)
                 else:
-                    cache.set(f"flag_register_{user.muid}", True, timeout=5)
                     res_data = get_auth_token(user.muid, password)
+            except CustomException:
+                # Auth service failed — clean up the orphaned user
+                user.delete()
+                raise
         except CustomException as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
 
