@@ -401,7 +401,11 @@ class RegisterDataAPI(APIView):
                     # NULL password — use TokenVerificationAPI (no password needed)
                     res_data = get_auth_token_by_id(user.id)  # raises → rolls back
                 else:
-                    password = request.data["user"]["password"]
+                    password = request.data.get("user", {}).get("password")
+                    if not password:
+                        return CustomResponse(
+                            general_message="Password is required for email registration."
+                        ).get_failure_response()
                     cache.set(f"flag_register_{user.muid}", True, timeout=5)
                     res_data = get_auth_token(user.muid, password)
         except CustomException as e:
