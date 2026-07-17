@@ -1,4 +1,5 @@
 from celery import shared_task
+from django.db.models import Q
 from django.utils.timezone import now
 
 from db.organization import UserOrganizationLink
@@ -16,7 +17,7 @@ def update_alumni_status_cron():
     current_year = now().year
 
     updated_count = UserOrganizationLink.objects.filter(
-        is_alumni=False,
+        ~Q(is_alumni=True),  # covers both is_alumni=False and is_alumni IS NULL
         graduation_year__isnull=False,
         graduation_year__regex=r'^\d{4}$',  # exclude malformed values (e.g. "25", "2025-06") before comparison
         graduation_year__lt=str(current_year),
