@@ -5,6 +5,7 @@ from decouple import config
 import django
 
 from connection import execute
+from django.db import connection as django_connection
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 os.chdir(BASE_DIR)
@@ -16,14 +17,18 @@ DB_NAME = config('DATABASE_NAME')
 
 
 def table_exists(table_name: str) -> bool:
-    query = f"""
-        SELECT COUNT(*)
-        FROM information_schema.TABLES
-        WHERE TABLE_SCHEMA = '{DB_NAME}'
-          AND TABLE_NAME = '{table_name}';
-    """
-    result = execute(query)
-    return result and result[0][0] > 0
+    with django_connection.cursor() as cursor:
+        cursor.execute(
+            """
+            SELECT COUNT(*)
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = %s
+              AND TABLE_NAME = %s;
+            """,
+            [DB_NAME, table_name]
+        )
+        row = cursor.fetchone()
+    return row and row[0] > 0
 
 
 def create_chapter_tables():

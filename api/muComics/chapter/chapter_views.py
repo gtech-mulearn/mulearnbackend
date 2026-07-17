@@ -73,7 +73,7 @@ class ChapterListCreateView(APIView):
             },
         )
 
-        serializer = ChapterListSerializer(paginated['queryset'], many=True)
+        serializer = ChapterListSerializer(paginated['queryset'], many=True, context={'request': request})
         return CustomResponse().paginated_response(
             data=serializer.data,
             pagination=paginated['pagination'],
@@ -118,7 +118,7 @@ class ChapterListCreateView(APIView):
         chapter = serializer.save()
         return CustomResponse(
             general_message=f'Chapter "{chapter.title}" created successfully.',
-            response=ChapterDetailSerializer(chapter).data,
+            response=ChapterDetailSerializer(chapter, context={'request': request}).data,
         ).get_success_response()
 
 
@@ -135,7 +135,7 @@ class ChapterDetailView(APIView):
     authentication_classes = [CustomizePermission]
 
     def _get_chapter_or_error(self, chapter_id):
-        chapter = Chapter.objects.filter(id=chapter_id, deleted_at__isnull=True).select_related('comic').first()
+        chapter = Chapter.objects.filter(id=chapter_id, deleted_at__isnull=True).select_related('comic', 'created_by', 'updated_by').first()
         if not chapter:
             return None, 'Chapter not found.'
         return chapter, None
@@ -152,7 +152,7 @@ class ChapterDetailView(APIView):
 
         return CustomResponse(
             general_message=f'Chapter "{chapter.title}" retrieved successfully.',
-            response=ChapterDetailSerializer(chapter).data,
+            response=ChapterDetailSerializer(chapter, context={'request': request}).data,
         ).get_success_response()
 
     @extend_schema(
@@ -192,7 +192,7 @@ class ChapterDetailView(APIView):
         chapter = serializer.save()
         return CustomResponse(
             general_message=f'Chapter "{chapter.title}" updated successfully.',
-            response=ChapterDetailSerializer(chapter).data,
+            response=ChapterDetailSerializer(chapter, context={'request': request}).data,
         ).get_success_response()
 
     @extend_schema(
@@ -348,12 +348,23 @@ class ChapterPageListCreateAPI(APIView):
         if not chapter:
             return CustomResponse(general_message='Chapter not found.').get_failure_response(status_code=404, http_status_code=404)
 
-        pages = ChapterPage.objects.filter(chapter_id=chapter_id, deleted_at__isnull=True).order_by('page_number')
-        serializer = ChapterPageSerializer(pages, many=True)
-        return CustomResponse(
-            general_message='Pages retrieved successfully.',
-            response=serializer.data,
-        ).get_success_response()
+        pages = ChapterPage.objects.filter(chapter_id=chapter_id, deleted_at__isnull=True)
+        
+        paginated = CommonUtils.get_paginated_queryset(
+            pages,
+            request,
+            search_fields=[],
+            sort_fields={
+                'page_number': 'page_number',
+                'created_at': 'created_at',
+            },
+        )
+
+        serializer = ChapterPageSerializer(paginated['queryset'], many=True, context={'request': request})
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
 
     @extend_schema(
         tags=['muComics - Pages'],
@@ -394,7 +405,7 @@ class ChapterPageListCreateAPI(APIView):
 
         return CustomResponse(
             general_message='Page added successfully.',
-            response=ChapterPageSerializer(page).data,
+            response=ChapterPageSerializer(page, context={'request': request}).data,
         ).get_success_response()
 
 
@@ -450,7 +461,7 @@ class ChapterPageDetailAPI(APIView):
 
         return CustomResponse(
             general_message='Page updated successfully.',
-            response=ChapterPageSerializer(page).data,
+            response=ChapterPageSerializer(page, context={'request': request}).data,
         ).get_success_response()
 
     @extend_schema(
@@ -574,16 +585,21 @@ class ChapterPageReorderAPI(APIView):
             ).get_failure_response()
 
         now = timezone.now()
+        updated_pages = []
+        for item in page_orders:
+            page_id = item['id']
+            new_num = item['page_number']
+            page = pages_dict[page_id]
+            page.page_number = new_num
+            page.updated_by_id = user_id
+            page.updated_at = now
+            updated_pages.append(page)
+
         with transaction.atomic():
-            # Update each page number individually using update_fields
-            for item in page_orders:
-                page_id = item['id']
-                new_num = item['page_number']
-                page = pages_dict[page_id]
-                page.page_number = new_num
-                page.updated_by_id = user_id
-                page.updated_at = now
-                page.save(update_fields=['page_number', 'updated_by', 'updated_at'])
+            ChapterPage.objects.bulk_update(
+                updated_pages,
+                fields=['page_number', 'updated_by', 'updated_at']
+            )
 
         return CustomResponse(
             general_message='Pages reordered successfully.',

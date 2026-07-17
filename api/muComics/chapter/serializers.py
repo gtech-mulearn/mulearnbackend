@@ -40,8 +40,8 @@ class ChapterPageSerializer(serializers.ModelSerializer):
         return value
 
     def validate(self, attrs):
-        chapter = attrs.get('chapter') or (self.instance.chapter if self.instance else None)
-        page_number = attrs.get('page_number') or (self.instance.page_number if self.instance else None)
+        chapter = attrs.get('chapter') if 'chapter' in attrs else (self.instance.chapter if self.instance else None)
+        page_number = attrs.get('page_number') if 'page_number' in attrs else (self.instance.page_number if self.instance else None)
 
         if chapter and page_number is not None:
             # Check unique constraint on (chapter, page_number) excluding deleted pages
@@ -176,8 +176,8 @@ class ChapterWriteSerializer(serializers.ModelSerializer):
         return slug
 
     def validate(self, attrs):
-        comic = attrs.get('comic') or (self.instance.comic if self.instance else None)
-        chapter_number = attrs.get('chapter_number') or (self.instance.chapter_number if self.instance else None)
+        comic = attrs.get('comic') if 'comic' in attrs else (self.instance.comic if self.instance else None)
+        chapter_number = attrs.get('chapter_number') if 'chapter_number' in attrs else (self.instance.chapter_number if self.instance else None)
 
         if comic and chapter_number is not None:
             # Check unique constraint on (comic, chapter_number) excluding deleted chapters
