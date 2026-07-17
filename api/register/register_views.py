@@ -372,6 +372,11 @@ class RegisterDataAPI(APIView):
                     return CustomResponse(
                         general_message="An account with this email already exists. Please sign in normally."
                     ).get_failure_response()
+                if existing.suspended_at:
+                    # Suspended Google user — do not re-issue tokens
+                    return CustomResponse(
+                        general_message="This account has been suspended."
+                    ).get_failure_response()
                 # Orphan NULL-password user → re-issue tokens without creating a new row
                 try:
                     res_data = get_auth_token_by_id(existing.id)

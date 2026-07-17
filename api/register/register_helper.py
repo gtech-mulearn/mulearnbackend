@@ -1,3 +1,6 @@
+import decouple
+import requests
+
 from db.user import User
 
 from utils.exception import CustomException
