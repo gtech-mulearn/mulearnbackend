@@ -45,8 +45,9 @@ class LikeComicAPI(APIView):
             deleted, _ = ComicLikeLink.objects.filter(comic_id=comic_id, user_id=user_id).delete()
             if deleted > 0:
                 Comic.objects.filter(id=comic_id).update(like_count=F('like_count') - 1)
-                
-        return CustomResponse(response={"message": "Comic unliked successfully"}).get_success_response()
+                return CustomResponse(response={"message": "Comic unliked successfully"}).get_success_response()
+            else:
+                return CustomResponse(general_message="Comic like not found.").get_failure_response(status_code=404)
 
 
 class BookmarkComicAPI(APIView):
@@ -83,8 +84,9 @@ class BookmarkComicAPI(APIView):
             deleted, _ = ComicBookmarkLink.objects.filter(comic_id=comic_id, user_id=user_id).delete()
             if deleted > 0:
                 Comic.objects.filter(id=comic_id).update(bookmark_count=F('bookmark_count') - 1)
-                
-        return CustomResponse(response={"message": "Comic bookmark removed successfully"}).get_success_response()
+                return CustomResponse(response={"message": "Comic bookmark removed successfully"}).get_success_response()
+            else:
+                return CustomResponse(general_message="Comic bookmark not found.").get_failure_response(status_code=404)
 
 
 class InteractionStatusAPI(APIView):

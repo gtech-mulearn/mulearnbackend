@@ -1,6 +1,5 @@
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
-from django.db.models import Q
 
 from db.comic import ComicLikeLink, ComicBookmarkLink, ComicReadingProgress
 from db.user import User
