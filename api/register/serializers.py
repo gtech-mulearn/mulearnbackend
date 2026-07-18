@@ -34,7 +34,7 @@ from db.user import (
 )
 from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, check_alumni_status
 from . import register_helper
 
 
@@ -137,6 +137,7 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
                     verified=True,
                     department=department if is_college(org) else None,
                     graduation_year=graduation_year if is_college(org) else None,
+                    is_alumni=check_alumni_status(graduation_year) if is_college(org) else False,
                 )
                 for org in validated_data["organizations"]
             }

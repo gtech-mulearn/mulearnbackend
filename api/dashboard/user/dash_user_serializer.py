@@ -1,3 +1,4 @@
+import re
 import uuid
 
 from decouple import config as decouple_config
@@ -10,7 +11,7 @@ from db.task import UserIgLink
 from db.user import Role, User, UserDomains, UserMentor, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, check_alumni_status
 from db.user import DynamicRole, DynamicUser
 
 # from db.user import UserInterests
@@ -201,6 +202,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
                         verified=True,
                         department_id=department,
                         graduation_year=graduation_year,
+                        is_alumni=check_alumni_status(graduation_year),
                     )
                     for org_id in orgs
                 ]
@@ -445,9 +447,9 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         ):
             data.update(
                 {
-                    "country": getattr(college.district.zone.state.country, "id", None),
-                    "state": getattr(college.district.zone.state, "id", None),
-                    "district": getattr(college.district, "id", None),
+                    "country": getattr(college.org.district.zone.state.country, "id", None) if college.org.district else None,
+                    "state": getattr(college.org.district.zone.state, "id", None) if college.org.district else None,
+                    "district": getattr(college.org.district, "id", None) if college.org.district else None,
                     "department": getattr(college.department, "id", None),
                     "graduation_year": college.graduation_year,
                 }
@@ -506,6 +508,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                             verified=True,
                             department_id=department_id,
                             graduation_year=graduation_year,
+                            is_alumni=check_alumni_status(graduation_year),
                         )
                         for org in organizations
                     ]
@@ -561,7 +564,8 @@ class UserOrgLinkSerializer(serializers.Serializer):
     def create(self, validated_data):
         department = validated_data.get("department", None)
         graduation_year = validated_data.get("graduation_year", None)
-        is_alumni = validated_data.get("is_alumni", False)
+        # Always compute is_alumni from graduation_year; ignore any client-supplied value.
+        is_alumni = check_alumni_status(graduation_year)
         is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
         user_id = self.context.get("user")
         with transaction.atomic():
