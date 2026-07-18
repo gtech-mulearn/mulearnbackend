@@ -143,7 +143,29 @@ class MentorDetailSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = UserMentor
-        fields = "__all__"
+        # Explicit list — this serializer is also used by
+        # MentorPublicProfileAPI, so internal/audit-only columns
+        # (verification_note, created_by, updated_by) must never appear
+        # here regardless of what gets added to UserMentor in future.
+        fields = [
+            "id",
+            "user",
+            "user_full_name",
+            "user_email",
+            "about",
+            "expertise",
+            "reason",
+            "hours",
+            "mentor_tier",
+            "status",
+            "preferred_ig_ids",
+            "org",
+            "verified_by",
+            "verified_at",
+            "company",
+            "created_at",
+            "updated_at",
+        ]
 
     def get_company(self, obj):
         from .dash_mentor_helper import get_mentor_company

@@ -51,10 +51,26 @@ def get_mentor_scopes(user_id):
 
     # Legacy fallback: grants may not exist yet for this mentor (e.g. before
     # the alter-1.63 backfill ran, or a race with grant creation).
-    mentors = UserMentor.objects.filter(
+    fallback = set()
+    for tier, org_id in UserMentor.objects.filter(
         user_id=user_id, status=UserMentor.Status.APPROVED
-    ).values_list('mentor_tier', 'org_id')
-    return {(tier, org_id) for tier, org_id in mentors}
+    ).values_list('mentor_tier', 'org_id'):
+        if tier == UserMentor.MentorTier.IG_MENTOR:
+            # org_id is always NULL on IG_MENTOR rows — IG authority lives
+            # per-IG in UserIgLink, not on the UserMentor row. Emit one scope
+            # per actively-mentored IG; a bare (IG_MENTOR, None) entry would
+            # be silently discarded by any caller filtering on a non-null
+            # scope_id (e.g. get_scope_ids), making the mentor appear to
+            # have no IG authority at all during the pre-backfill window.
+            ig_ids = UserIgLink.objects.filter(
+                user_id=user_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True,
+            ).values_list('ig_id', flat=True)
+            fallback.update((tier, str(ig_id)) for ig_id in ig_ids)
+        else:
+            fallback.add((tier, str(org_id) if org_id is not None else None))
+    return fallback
 
 
 def has_scope(user_id, scope_type, scope_id=None):

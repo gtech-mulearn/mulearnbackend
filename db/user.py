@@ -234,7 +234,7 @@ class MentorScopeGrant(models.Model):
 
     granted_by = models.ForeignKey(
         User,
-        on_delete=models.CASCADE,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='granted_by',
         related_name='mentor_grants_given'
     )
