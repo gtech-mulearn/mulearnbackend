@@ -20,7 +20,7 @@ class ReaderDashboardAPI(APIView):
         
         user = User.objects.filter(id=user_id).first()
         if not user:
-            return CustomResponse(general_message="User not found").get_failure_response(status_code=404)
+            return CustomResponse(general_message="User not found").get_failure_response(status_code=404, http_status_code=404)
             
         stats = {
             "total_likes": ComicLikeLink.objects.filter(user_id=user_id).count(),

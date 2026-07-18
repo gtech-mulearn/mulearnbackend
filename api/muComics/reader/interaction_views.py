@@ -30,7 +30,7 @@ class LikeComicAPI(APIView):
             except IntegrityError:
                 return CustomResponse(
                     general_message="Comic already liked."
-                ).get_failure_response(status_code=409)
+                ).get_failure_response(status_code=409, http_status_code=409)
         
         return CustomResponse(
             general_message="Validation failed.",
@@ -47,7 +47,7 @@ class LikeComicAPI(APIView):
                 Comic.objects.filter(id=comic_id).update(like_count=F('like_count') - 1)
                 return CustomResponse(response={"message": "Comic unliked successfully"}).get_success_response()
             else:
-                return CustomResponse(general_message="Comic like not found.").get_failure_response(status_code=404)
+                return CustomResponse(general_message="Comic like not found.").get_failure_response(status_code=404, http_status_code=404)
 
 
 class BookmarkComicAPI(APIView):
@@ -69,7 +69,7 @@ class BookmarkComicAPI(APIView):
             except IntegrityError:
                 return CustomResponse(
                     general_message="Comic already bookmarked."
-                ).get_failure_response(status_code=409)
+                ).get_failure_response(status_code=409, http_status_code=409)
         
         return CustomResponse(
             general_message="Validation failed.",
@@ -86,7 +86,7 @@ class BookmarkComicAPI(APIView):
                 Comic.objects.filter(id=comic_id).update(bookmark_count=F('bookmark_count') - 1)
                 return CustomResponse(response={"message": "Comic bookmark removed successfully"}).get_success_response()
             else:
-                return CustomResponse(general_message="Comic bookmark not found.").get_failure_response(status_code=404)
+                return CustomResponse(general_message="Comic bookmark not found.").get_failure_response(status_code=404, http_status_code=404)
 
 
 class InteractionStatusAPI(APIView):
