@@ -1,7 +1,25 @@
 import uuid
 from rest_framework import serializers
 
-from db.user import UserMentor, UserRoleLink, Role
+from db.user import UserMentor, UserRoleLink, Role, MentorScopeGrant
+
+
+class MentorScopeGrantSerializer(serializers.ModelSerializer):
+    granted_by_name = serializers.CharField(source='granted_by.full_name', read_only=True)
+    revoked_by_name = serializers.CharField(source='revoked_by.full_name', read_only=True, default=None)
+
+    class Meta:
+        model = MentorScopeGrant
+        fields = [
+            "id",
+            "scope_type",
+            "scope_id",
+            "is_active",
+            "granted_by_name",
+            "granted_at",
+            "revoked_by_name",
+            "revoked_at",
+        ]
 from db.task import InterestGroup, UserIgLink
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
@@ -87,13 +105,11 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         # an orthogonal scope, so company/campus/global mentors can manage IGs too.
         # (The profile PATCH endpoint already restricts to APPROVED mentors.)
         if igs_in_payload and instance.status == UserMentor.Status.APPROVED:
-            from .dash_mentor_helper import reconcile_mentor_ig_links
+            from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
 
-            reconcile_mentor_ig_links(
-                instance.user,
-                instance.preferred_ig_ids,
-                self.context.get("user_id", instance.user_id),
-            )
+            actor_id = self.context.get("user_id", instance.user_id)
+            reconcile_mentor_ig_links(instance.user, instance.preferred_ig_ids, actor_id)
+            reconcile_mentor_ig_grants(instance, instance.preferred_ig_ids, actor_id)
 
         return instance
 
@@ -123,10 +139,15 @@ class MentorListSerializer(serializers.ModelSerializer):
 class MentorDetailSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     user_email = serializers.CharField(source='user.email', read_only=True)
+    company = serializers.SerializerMethodField()
 
     class Meta:
         model = UserMentor
         fields = "__all__"
+
+    def get_company(self, obj):
+        from .dash_mentor_helper import get_mentor_company
+        return get_mentor_company(obj)
 
 class MentorVerifySerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[UserMentor.Status.APPROVED, UserMentor.Status.REJECTED])
@@ -148,7 +169,32 @@ class MentorVerifySerializer(serializers.Serializer):
         if status == UserMentor.Status.APPROVED:
             instance.verified_by_id = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
-            
+
+            # Grant the tier being approved. Additive — never touches any
+            # other scope grant this mentor may already hold. IG_MENTOR is
+            # excluded here: it has no single scope_id of its own — its
+            # grants are always per-IG, created below via
+            # reconcile_mentor_ig_grants from preferred_ig_ids. Creating a
+            # scope_id=None IG_MENTOR grant here would be a meaningless
+            # "mentor for no particular IG" row alongside the real ones.
+            if instance.mentor_tier != UserMentor.MentorTier.IG_MENTOR:
+                scope_id = str(instance.org_id) if instance.org_id else None
+                grant, grant_created = MentorScopeGrant.objects.get_or_create(
+                    mentor=instance,
+                    scope_type=instance.mentor_tier,
+                    scope_id=scope_id,
+                    defaults={
+                        "is_active": True,
+                        "granted_by_id": user_id,
+                        "granted_at": DateTimeUtils.get_current_utc_time(),
+                    },
+                )
+                if not grant_created and not grant.is_active:
+                    grant.is_active = True
+                    grant.revoked_by = None
+                    grant.revoked_at = None
+                    grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
+
             # Assign global MENTOR role
             mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
             if mentor_role:
@@ -171,10 +217,13 @@ class MentorVerifySerializer(serializers.Serializer):
             # (creates/reactivates chosen IGs, deactivates removed ones, only
             # touches MENTOR-type links).
             if instance.preferred_ig_ids:
-                from .dash_mentor_helper import reconcile_mentor_ig_links
+                from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
 
                 reconcile_mentor_ig_links(
                     instance.user, instance.preferred_ig_ids, user_id
+                )
+                reconcile_mentor_ig_grants(
+                    instance, instance.preferred_ig_ids, user_id
                 )
 
             # Auto-link COMPANY_MENTOR to the company's Organization
@@ -643,7 +692,7 @@ class MentorAddParticipantSerializer(serializers.Serializer):
 
 class ParticipantListSerializer(serializers.ModelSerializer):
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
-    mu_id = serializers.CharField(source='user.mu_id', read_only=True)
+    mu_id = serializers.CharField(source='user.muid', read_only=True)
 
     # Session details — lets the participant-history view render a session
     # (title/time/meeting link) without an extra detail fetch per row.
@@ -895,6 +944,27 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         "updated_by_id", "updated_at",
                     ])
 
+                # ── 1b. Grant the tier being assigned (additive). IG_MENTOR
+                # is excluded — it has no single scope_id of its own; its
+                # grants are per-IG, created in the ig_ids loop below.
+                if tier != UserMentor.MentorTier.IG_MENTOR:
+                    scope_id = str(org.id) if org else None
+                    grant, grant_created = MentorScopeGrant.objects.get_or_create(
+                        mentor=mentor_record,
+                        scope_type=tier,
+                        scope_id=scope_id,
+                        defaults={
+                            "is_active":     True,
+                            "granted_by_id": admin_id,
+                            "granted_at":    now,
+                        },
+                    )
+                    if not grant_created and not grant.is_active:
+                        grant.is_active = True
+                        grant.revoked_by = None
+                        grant.revoked_at = None
+                        grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
+
                 # ── 2. Assign global Mentor role ────────────────────────────
                 if mentor_role:
                     role_link, created = UserRoleLink.objects.get_or_create(
@@ -938,6 +1008,22 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                                 ig_link.is_active       = True
                                 ig_link.assigned_by_id  = admin_id
                                 ig_link.save(update_fields=["assignment_type", "is_active", "assigned_by_id"])
+
+                            ig_grant, ig_grant_created = MentorScopeGrant.objects.get_or_create(
+                                mentor=mentor_record,
+                                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
+                                scope_id=str(ig_id),
+                                defaults={
+                                    "is_active":     True,
+                                    "granted_by_id": admin_id,
+                                    "granted_at":    now,
+                                },
+                            )
+                            if not ig_grant_created and not ig_grant.is_active:
+                                ig_grant.is_active = True
+                                ig_grant.revoked_by = None
+                                ig_grant.revoked_at = None
+                                ig_grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
 
                 # Company/campus mentors also get their verified org link.
                 if tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR) and org:

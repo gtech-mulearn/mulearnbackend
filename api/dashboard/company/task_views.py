@@ -8,7 +8,6 @@ from rest_framework import serializers as s
 
 from db.task import TaskList
 from db.skill import Skill, TaskSkillLink
-from db.company import Company
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
@@ -39,23 +38,10 @@ def get_verified_company(user_id):
     """
     Return the verified Company for a user if they are:
     - the company creator (company_user_id == user_id), OR
-    - an approved COMPANY_MENTOR for that company.
+    - hold an active COMPANY_MENTOR grant for that company.
     """
-    company = Company.objects.filter(company_user_id=user_id, status="verified").first()
-    if company:
-        return company
-
-    from db.user import UserMentor
-    mentor = UserMentor.objects.filter(
-        user_id=user_id,
-        mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-        status=UserMentor.Status.APPROVED,
-    ).select_related("org").first()
-
-    if mentor and mentor.org:
-        return Company.objects.filter(name=mentor.org.title, status="verified").first()
-
-    return None
+    from api.dashboard.mentor.dash_mentor_helper import get_verified_company_for_mentor
+    return get_verified_company_for_mentor(user_id)
 
 
 class CompanyTaskListCreateAPI(APIView):

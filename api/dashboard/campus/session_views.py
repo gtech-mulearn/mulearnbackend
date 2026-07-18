@@ -4,10 +4,9 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.mentor import MentorshipSession
-from db.user import UserMentor
 from api.dashboard.mentor import serializers as mentor_serializers
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
-from .dash_campus_helper import get_user_college_link
+from .dash_campus_helper import get_user_college_link, is_approved_campus_mentor
 
 # sessions are Interest-Group-scoped
 # only, and campus mentors do not create sessions. (The list endpoint remains for
@@ -50,12 +49,7 @@ class CampusSessionListAPI(APIView):
             ]
         )
         if not is_elevated:
-            is_elevated = UserMentor.objects.filter(
-                user_id=user_id,
-                status=UserMentor.Status.APPROVED,
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                org_id=user_org_link.org_id,
-            ).exists()
+            is_elevated = is_approved_campus_mentor(user_id, user_org_link.org)
 
         if is_elevated:
             status = request.query_params.get("status")

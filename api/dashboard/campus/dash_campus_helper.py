@@ -2,7 +2,7 @@ import uuid
 
 from db.organization import UserOrganizationLink
 from db.campus import CampusIGChapter
-from db.user import Role, UserRoleLink, UserMentor
+from db.user import Role, UserRoleLink
 from utils.types import OrganizationType, RoleType
 
 
@@ -15,16 +15,13 @@ def get_user_college_link(user_id):
 
 def is_approved_campus_mentor(user_id, org):
     """
-    Return True if the user is an APPROVED CAMPUS_MENTOR scoped to the given org.
+    Return True if the user holds an active CAMPUS_MENTOR grant scoped to the given org.
     """
     if org is None:
         return False
-    return UserMentor.objects.filter(
-        user_id=user_id,
-        mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-        status=UserMentor.Status.APPROVED,
-        org=org,
-    ).exists()
+    from db.user import MentorScopeGrant
+    from api.dashboard.mentor.dash_mentor_helper import has_scope
+    return has_scope(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR, org.id)
 
 
 def campus_staff_required(view_func):

@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
-from db.user import UserMentor
+from db.user import UserMentor, MentorScopeGrant
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, UserIgLink, TaskList, KarmaActivityLog
 from db.mentor import MentorshipSession, IgOpportunity
@@ -11,6 +11,138 @@ from utils.utils import DateTimeUtils
 
 
 CACHE_TTL = 15 * 60  # 15 minutes
+
+
+def get_mentor_company(mentor):
+    """
+    Resolve a mentor's employer title.
+
+    A mentor's company is their identity, not a permission scope — it must
+    be visible regardless of which tier(s) they hold. Falls back from the
+    tier-scoped `UserMentor.org` (only ever set for COMPANY_MENTOR) to the
+    user's actual employment record, since IG-only mentors never get `org` set.
+    """
+    if mentor.org:
+        return mentor.org.title
+
+    org_link = UserOrganizationLink.objects.filter(
+        user=mentor.user, org__org_type="Company"
+    ).select_related("org").first()
+    return org_link.org.title if org_link else None
+
+
+def get_mentor_scopes(user_id):
+    """
+    Return the set of active (scope_type, scope_id) pairs this user holds
+    mentor authority over. This is the single deterministic source of truth
+    for permission checks — never query UserMentor.mentor_tier directly for
+    authorization, since a user can hold multiple tiers and grants are what
+    actually govern access.
+    """
+    grants = MentorScopeGrant.objects.filter(
+        mentor__user_id=user_id,
+        mentor__status=UserMentor.Status.APPROVED,
+        is_active=True,
+    ).values_list('scope_type', 'scope_id')
+
+    scopes = set(grants)
+    if scopes:
+        return scopes
+
+    # Legacy fallback: grants may not exist yet for this mentor (e.g. before
+    # the alter-1.63 backfill ran, or a race with grant creation).
+    mentors = UserMentor.objects.filter(
+        user_id=user_id, status=UserMentor.Status.APPROVED
+    ).values_list('mentor_tier', 'org_id')
+    return {(tier, org_id) for tier, org_id in mentors}
+
+
+def has_scope(user_id, scope_type, scope_id=None):
+    scope_id = str(scope_id) if scope_id is not None else None
+    return (scope_type, scope_id) in get_mentor_scopes(user_id)
+
+
+def get_scope_ids(user_id, scope_type):
+    """All active scope_ids (org/ig ids) this user holds `scope_type` authority over."""
+    return {sid for (st, sid) in get_mentor_scopes(user_id) if st == scope_type and sid}
+
+
+def get_verified_company_for_mentor(user_id):
+    """
+    Resolve the verified Company a user may act on behalf of: either they are
+    its registrant (company_user), or they hold an active COMPANY_MENTOR
+    grant scoped to its Organization. Single source of truth for the
+    previously-duplicated _get_company_for_user/get_verified_company helpers.
+    """
+    from db.company import Company
+    from db.organization import Organization
+    from db.user import MentorScopeGrant
+
+    company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+    if company:
+        return company
+
+    org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
+    if not org_ids:
+        return None
+    org = Organization.objects.filter(id__in=org_ids).first()
+    if not org:
+        return None
+    return Company.objects.filter(name=org.title, status="verified").first()
+
+
+@transaction.atomic
+def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
+    """
+    Make the mentor's active IG_MENTOR MentorScopeGrant set exactly equal
+    the (valid) preferred_ig_ids — the MentorScopeGrant counterpart to
+    reconcile_mentor_ig_links. Only ever touches IG_MENTOR grants; any
+    Company/Campus grant this mentor holds is untouched (grants are additive
+    and independent per scope).
+    """
+    desired = {str(i) for i in (preferred_ig_ids or []) if i}
+    if desired:
+        desired &= {
+            str(x)
+            for x in InterestGroup.objects.filter(id__in=desired).values_list(
+                "id", flat=True
+            )
+        }
+
+    ig_grants = list(
+        MentorScopeGrant.objects.filter(
+            mentor=mentor, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
+        )
+    )
+    current_active = {g.scope_id for g in ig_grants if g.is_active}
+
+    to_add = desired - current_active
+    to_remove = current_active - desired
+    now = DateTimeUtils.get_current_utc_time()
+
+    for ig_id in to_add:
+        existing = next((g for g in ig_grants if g.scope_id == ig_id), None)
+        if existing:
+            existing.is_active = True
+            existing.revoked_by = None
+            existing.revoked_at = None
+            existing.save(update_fields=["is_active", "revoked_by", "revoked_at"])
+        else:
+            MentorScopeGrant.objects.create(
+                mentor=mentor,
+                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
+                scope_id=ig_id,
+                is_active=True,
+                granted_by_id=actor_user_id,
+                granted_at=now,
+            )
+
+    if to_remove:
+        MentorScopeGrant.objects.filter(
+            mentor=mentor,
+            scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
+            scope_id__in=to_remove,
+        ).update(is_active=False, revoked_by_id=actor_user_id, revoked_at=now)
 
 
 @transaction.atomic

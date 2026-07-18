@@ -133,28 +133,21 @@ class OrganizerOptionsAPI(APIView):
                     }
                     
         if RoleType.MENTOR.value in roles:
-            from db.user import UserMentor
+            from db.user import MentorScopeGrant
             from db.task import UserIgLink
+            from db.organization import Organization
+            from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
 
             # Company Mentors → can create Company events for their org
-            company_mentors = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).select_related('org')
-            for mentor in company_mentors:
-                if mentor.org:
-                    company_options[mentor.org.id] = {
-                        'id': mentor.org.id,
-                        'title': mentor.org.title,
-                    }
+            company_org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
+            for org in Organization.objects.filter(id__in=company_org_ids):
+                company_options[org.id] = {
+                    'id': org.id,
+                    'title': org.title,
+                }
 
             # IG Mentors → can create Global IG events for their assigned IGs
-            ig_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).first()
+            ig_mentor = bool(get_scope_ids(user_id, MentorScopeGrant.ScopeType.IG_MENTOR))
             if ig_mentor:
                 mentored_ig_ids = list(
                     UserIgLink.objects.filter(
@@ -174,12 +167,8 @@ class OrganizerOptionsAPI(APIView):
                             options['can_create_as_ig'].append(ig)
 
             # Campus Mentors → can create Campus IG events scoped to their campus
-            campus_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).select_related('org').first()
-            if campus_mentor and campus_mentor.org:
+            has_campus_mentor_scope = bool(get_scope_ids(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR))
+            if has_campus_mentor_scope:
                 # Surface all IGs as campus_ig options — the scope is limited to their campus
                 # by the backend enforcement in manage_views.py
                 campus_igs = InterestGroup.objects.all().values('id', 'name', 'icon', 'code')
