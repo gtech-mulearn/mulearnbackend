@@ -173,6 +173,16 @@ class OrganizerOptionsAPI(APIView):
                 # campuses qualify as campus_ig organiser options.
                 campus_igs = InterestGroup.objects.filter(
                     campus_ig_chapter_ig__org_id__in=campus_org_ids,
+            campus_mentor = UserMentor.objects.filter(
+                user_id=user_id,
+                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                status=UserMentor.Status.APPROVED,
+            ).select_related('org').first()
+            if campus_mentor and campus_mentor.org:
+                # Only IGs with an active chapter at the mentor's campus qualify
+                # as campus_ig organiser options.
+                campus_igs = InterestGroup.objects.filter(
+                    campus_ig_chapter_ig__org_id=campus_mentor.org_id,
                     campus_ig_chapter_ig__is_active=True,
                 ).distinct().values('id', 'name', 'icon', 'code')
                 existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
@@ -207,8 +217,11 @@ class CollaborationTargetsAPI(APIView):
     Used to power the collaborator search input.
 
     Query params:
-      - search (str)  : partial name match
-      - type   (str)  : ig | campus | campus_ig | company  (optional filter)
+      - search    (str) : partial name match
+      - type      (str) : ig | campus | campus_ig | company  (optional filter)
+      - campus_id (str) : restrict campus_ig results to IGs with an active
+                          chapter at this campus (used by the scope pickers;
+                          collaborator search omits it and gets all IGs)
     """
     authentication_classes = [CustomizePermission]
 
@@ -234,16 +247,25 @@ class CollaborationTargetsAPI(APIView):
             'campus_ig': [],
         }
 
+        campus_id = request.query_params.get('campus_id', '').strip()
+
         if not filter_type or filter_type in ('ig', 'campus_ig'):
             qs = InterestGroup.objects.all()
             if search:
                 qs = qs.filter(name__icontains=search)
-            ig_results = list(qs.values('id', 'name', 'icon', 'code')[:20])
             if not filter_type or filter_type == 'ig':
-                results['ig'] = ig_results
+                results['ig'] = list(qs.values('id', 'name', 'icon', 'code')[:20])
             if not filter_type or filter_type == 'campus_ig':
-                # campus_ig collaborators are identified by their IG; return as campus_ig key
-                results['campus_ig'] = ig_results
+                # campus_ig entries are identified by their IG; return as campus_ig key.
+                # When a campus context is given, only IGs with an active chapter
+                # at that campus qualify — a campus with no chapters gets none.
+                ci_qs = qs
+                if campus_id:
+                    ci_qs = ci_qs.filter(
+                        campus_ig_chapter_ig__org_id=campus_id,
+                        campus_ig_chapter_ig__is_active=True,
+                    ).distinct()
+                results['campus_ig'] = list(ci_qs.values('id', 'name', 'icon', 'code')[:20])
 
         if not filter_type or filter_type == 'campus':
             qs = Organization.objects.filter(org_type='College')

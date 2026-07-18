@@ -685,8 +685,19 @@ class ManageEventPublishAPI(APIView):
             else:
                 new_status = Event.Status.PENDING_MENTOR_APPROVAL
         elif event.organiser_type == Event.OrganiserType.CAMPUS:
-            if RoleType.CAMPUS_LEAD.value in roles:
+            # Campus events scoped to the organiser's own campus never require
+            # admin approval: the campus lead is the approving authority, so
+            # their own events publish directly. Any wider scope still goes
+            # through admin approval.
+            campus_authority = {
+                RoleType.CAMPUS_LEAD.value,
+                RoleType.ZONAL_CAMPUS_LEAD.value,
+                RoleType.DISTRICT_CAMPUS_LEAD.value,
+            }
+            if event.scope != Event.Scope.CAMPUS:
                 new_status = Event.Status.PENDING_APPROVAL
+            elif set(roles) & campus_authority:
+                new_status = Event.Status.PUBLISHED
             else:
                 new_status = Event.Status.PENDING_CAMPUS_APPROVAL
         else:
@@ -1552,9 +1563,9 @@ class CampusEventApproveAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
         
-        # Must be campus lead or higher
-        if not set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ADMIN.value}:
-            return CustomResponse(general_message='Campus lead role required.').get_failure_response()
+        # Must be campus lead, enabler, or higher
+        if not set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value, RoleType.ADMIN.value}:
+            return CustomResponse(general_message='Campus lead or enabler role required.').get_failure_response()
 
         event = get_live_events().filter(id=event_id).first()
         if not event:
@@ -1572,24 +1583,54 @@ class CampusEventApproveAPI(APIView):
             ).exists()
             if not is_member:
                 return CustomResponse(general_message='You are not authorized to approve events for this campus.').get_failure_response()
-        
-        event.status = Event.Status.PENDING_APPROVAL
+
+        # Campus events scoped to their own campus publish on campus approval
+        # (no admin step); campus IG events and wider-scoped events continue
+        # to the next approval stage.
+        if event.organiser_type == Event.OrganiserType.CAMPUS and event.scope == Event.Scope.CAMPUS:
+            new_status = Event.Status.PUBLISHED
+        else:
+            new_status = Event.Status.PENDING_APPROVAL
+
+        event.status = new_status
         event.updated_by_id = user_id
         event.save()
 
-        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_CAMPUS_APPROVAL, 'to': Event.Status.PENDING_APPROVAL}})
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_CAMPUS_APPROVAL, 'to': new_status}})
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
         if creator and actor:
-            NotificationUtils.insert_notification(
-                user=creator,
-                title='Event Approved by Campus',
-                description=f'Your event "{event.title}" has been approved by the campus lead.',
-                button=None,
-                url=None,
+            if new_status == Event.Status.PUBLISHED:
+                NotificationUtils.insert_notification(
+                    user=creator,
+                    title='Event Published',
+                    description=f'Your event "{event.title}" was approved by the campus and is now live!',
+                    button='View',
+                    url=f'/events/{event.id}/',
+                    created_by=actor,
+                )
+            else:
+                NotificationUtils.insert_notification(
+                    user=creator,
+                    title='Event Approved by Campus',
+                    description=f'Your event "{event.title}" has been approved by the campus lead.',
+                    button=None,
+                    url=None,
+                    created_by=actor,
+                )
+
+        # Fire audience broadcast when the event reaches PUBLISHED
+        if new_status == Event.Status.PUBLISHED and actor:
+            BroadcastUtils.create_broadcast(
+                title='New Event Published',
+                description=f'A new Campus event "{event.title}" is now live!',
+                target_type='campus',
+                target_id=event.scope_org_id,
                 created_by=actor,
+                expiry_key='event_published',
+                url=f'/events/{event.id}/',
             )
 
         return CustomResponse(general_message='Event approved successfully.').get_success_response()
@@ -1603,8 +1644,8 @@ class CampusEventRejectAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         roles = JWTUtils.fetch_role(request)
         
-        if not set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ADMIN.value}:
-            return CustomResponse(general_message='Campus lead role required.').get_failure_response()
+        if not set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value, RoleType.ENABLER.value, RoleType.LEAD_ENABLER.value, RoleType.ADMIN.value}:
+            return CustomResponse(general_message='Campus lead or enabler role required.').get_failure_response()
 
         event = get_live_events().filter(id=event_id).first()
         if not event:
