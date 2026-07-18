@@ -233,3 +233,70 @@ class ChapterPage(models.Model):
             models.Index(fields=['chapter', 'page_number'], name='idx_chapter_page_order'),
         ]
 
+
+class ComicLikeLink(models.Model):
+    id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    comic      = models.ForeignKey(
+        Comic, on_delete=models.CASCADE,
+        db_column='comic_id', related_name='like_links'
+    )
+    user       = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='user_id', related_name='comic_like_links'
+    )
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='created_by', related_name='comic_like_link_created_by'
+    )
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'comic_like_link'
+        unique_together = [('comic', 'user')]
+
+
+class ComicBookmarkLink(models.Model):
+    id         = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    comic      = models.ForeignKey(
+        Comic, on_delete=models.CASCADE,
+        db_column='comic_id', related_name='bookmark_links'
+    )
+    user       = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='user_id', related_name='comic_bookmark_links'
+    )
+    created_by = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='created_by', related_name='comic_bookmark_link_created_by'
+    )
+    created_at = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'comic_bookmark_link'
+        unique_together = [('comic', 'user')]
+
+
+class ComicReadingProgress(models.Model):
+    id               = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    user             = models.ForeignKey(
+        User, on_delete=models.CASCADE,
+        db_column='user_id', related_name='comic_reading_progress'
+    )
+    comic            = models.ForeignKey(
+        Comic, on_delete=models.CASCADE,
+        db_column='comic_id', related_name='reading_progress'
+    )
+    last_chapter     = models.ForeignKey(
+        Chapter, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='last_chapter_id', related_name='reading_progress_refs'
+    )
+    last_page_number = models.IntegerField(blank=True, null=True)
+    updated_at       = models.DateTimeField()
+    created_at       = models.DateTimeField()
+
+    class Meta:
+        managed = False
+        db_table = 'comic_reading_progress'
+        unique_together = [('user', 'comic')]
