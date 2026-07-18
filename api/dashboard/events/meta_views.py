@@ -167,11 +167,14 @@ class OrganizerOptionsAPI(APIView):
                             options['can_create_as_ig'].append(ig)
 
             # Campus Mentors → can create Campus IG events scoped to their campus
-            has_campus_mentor_scope = bool(get_scope_ids(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR))
-            if has_campus_mentor_scope:
-                # Surface all IGs as campus_ig options — the scope is limited to their campus
-                # by the backend enforcement in manage_views.py
-                campus_igs = InterestGroup.objects.all().values('id', 'name', 'icon', 'code')
+            campus_org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR)
+            if campus_org_ids:
+                # Only IGs with an active chapter at one of the mentor's
+                # campuses qualify as campus_ig organiser options.
+                campus_igs = InterestGroup.objects.filter(
+                    campus_ig_chapter_ig__org_id__in=campus_org_ids,
+                    campus_ig_chapter_ig__is_active=True,
+                ).distinct().values('id', 'name', 'icon', 'code')
                 existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
                 for ig in campus_igs:
                     if ig['id'] not in existing_ci_ids:
