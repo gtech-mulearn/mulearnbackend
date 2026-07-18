@@ -1,6 +1,8 @@
+import re
 import uuid
 
 from decouple import config as decouple_config
+from django.utils.timezone import now
 from django.db import transaction
 from rest_framework import serializers
 
@@ -16,6 +18,17 @@ from db.user import DynamicRole, DynamicUser
 # from db.user import UserInterests
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
+
+
+def check_alumni_status(graduation_year):
+    """
+    Returns True if graduation_year is a valid 4-digit year and is in the past.
+    Mirrors the logic from mu_celery/alumni_cron.py so is_alumni is always
+    accurate at the point of creation or update — no cron lag.
+    """
+    if graduation_year and re.match(r'^[0-9]{4}$', str(graduation_year)):
+        return int(graduation_year) < now().year
+    return False
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
@@ -201,6 +214,7 @@ class UserDetailsSerializer(serializers.ModelSerializer):
                         verified=True,
                         department_id=department,
                         graduation_year=graduation_year,
+                        is_alumni=check_alumni_status(graduation_year),
                     )
                     for org_id in orgs
                 ]
@@ -445,9 +459,9 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
         ):
             data.update(
                 {
-                    "country": getattr(college.district.zone.state.country, "id", None),
-                    "state": getattr(college.district.zone.state, "id", None),
-                    "district": getattr(college.district, "id", None),
+                    "country": getattr(college.org.district.zone.state.country, "id", None) if college.org.district else None,
+                    "state": getattr(college.org.district.zone.state, "id", None) if college.org.district else None,
+                    "district": getattr(college.org.district, "id", None) if college.org.district else None,
                     "department": getattr(college.department, "id", None),
                     "graduation_year": college.graduation_year,
                 }
@@ -506,6 +520,7 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
                             verified=True,
                             department_id=department_id,
                             graduation_year=graduation_year,
+                            is_alumni=check_alumni_status(graduation_year),
                         )
                         for org in organizations
                     ]
@@ -561,7 +576,8 @@ class UserOrgLinkSerializer(serializers.Serializer):
     def create(self, validated_data):
         department = validated_data.get("department", None)
         graduation_year = validated_data.get("graduation_year", None)
-        is_alumni = validated_data.get("is_alumni", False)
+        # Always compute is_alumni from graduation_year; ignore any client-supplied value.
+        is_alumni = check_alumni_status(graduation_year)
         is_college = lambda org: org.org_type == OrganizationType.COLLEGE.value
         user_id = self.context.get("user")
         with transaction.atomic():

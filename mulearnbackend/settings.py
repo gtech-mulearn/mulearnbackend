@@ -323,7 +323,10 @@ CELERY_BEAT_SCHEDULE = {
         'schedule': crontab(hour=0, minute=10),
     },
     'update-alumni-status-cron': {
-        'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
-        'schedule': crontab(hour=0, minute=15),
+        # Alumni is_alumni flag is now computed synchronously in serializers
+        # (api/dashboard/user/dash_user_serializer.py and api/register/serializers.py).
+        # This cron is kept here as a reference but is no longer scheduled.
+        # 'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
+        # 'schedule': crontab(hour=0, minute=15),
     },
 }

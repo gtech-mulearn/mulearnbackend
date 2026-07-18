@@ -1,6 +1,8 @@
+import re
 import uuid
 from django.contrib.auth.hashers import make_password
 from django.db import transaction
+from django.utils.timezone import now
 from rest_framework import serializers
 
 from api.integrations.kkem.kkem_helper import decrypt_kkem_data, send_data_to_kkem
@@ -137,6 +139,14 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
                     verified=True,
                     department=department if is_college(org) else None,
                     graduation_year=graduation_year if is_college(org) else None,
+                    is_alumni=(
+                        bool(
+                            graduation_year
+                            and is_college(org)
+                            and re.match(r'^[0-9]{4}$', str(graduation_year))
+                            and int(graduation_year) < now().year
+                        )
+                    ),
                 )
                 for org in validated_data["organizations"]
             }
