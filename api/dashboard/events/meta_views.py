@@ -173,16 +173,6 @@ class OrganizerOptionsAPI(APIView):
                 # campuses qualify as campus_ig organiser options.
                 campus_igs = InterestGroup.objects.filter(
                     campus_ig_chapter_ig__org_id__in=campus_org_ids,
-            campus_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).select_related('org').first()
-            if campus_mentor and campus_mentor.org:
-                # Only IGs with an active chapter at the mentor's campus qualify
-                # as campus_ig organiser options.
-                campus_igs = InterestGroup.objects.filter(
-                    campus_ig_chapter_ig__org_id=campus_mentor.org_id,
                     campus_ig_chapter_ig__is_active=True,
                 ).distinct().values('id', 'name', 'icon', 'code')
                 existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
