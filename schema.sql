@@ -2282,6 +2282,70 @@ CREATE TABLE `comic_comment` (
   CONSTRAINT `fk_comic_comment_ref_cre_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
 /*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `chapter`
+--
+
+DROP TABLE IF EXISTS `chapter`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chapter` (
+  `id` varchar(36) NOT NULL,
+  `comic_id` varchar(36) NOT NULL,
+  `title` varchar(150) NOT NULL,
+  `slug` varchar(75) NOT NULL,
+  `description` text DEFAULT NULL,
+  `chapter_number` decimal(6,2) NOT NULL,
+  `cover_image_key` varchar(255) DEFAULT NULL,
+  `status` varchar(10) NOT NULL DEFAULT 'draft',
+  `published_at` datetime DEFAULT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `deleted_by` varchar(36) DEFAULT NULL,
+  `updated_by` varchar(36) NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `slug` (`slug`),
+  UNIQUE KEY `uq_comic_chapter_number` (`comic_id`,`chapter_number`),
+  KEY `idx_chapter_status_created` (`status`,`created_at`),
+  KEY `idx_chapter_comic_status` (`comic_id`,`status`),
+  CONSTRAINT `fk_chapter_ref_comic_id` FOREIGN KEY (`comic_id`) REFERENCES `comic` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_chapter_ref_del_by` FOREIGN KEY (`deleted_by`) REFERENCES `user` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_chapter_ref_upd_by` FOREIGN KEY (`updated_by`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_chapter_ref_cre_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
+--
+-- Table structure for table `chapter_page`
+--
+
+DROP TABLE IF EXISTS `chapter_page`;
+/*!40101 SET @saved_cs_client     = @@character_set_client */;
+/*!50503 SET character_set_client = utf8mb4 */;
+CREATE TABLE `chapter_page` (
+  `id` varchar(36) NOT NULL,
+  `chapter_id` varchar(36) NOT NULL,
+  `page_number` int unsigned NOT NULL,
+  `image_key` varchar(255) NOT NULL,
+  `deleted_at` datetime DEFAULT NULL,
+  `deleted_by` varchar(36) DEFAULT NULL,
+  `updated_by` varchar(36) NOT NULL,
+  `updated_at` datetime NOT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_chapter_page_number` (`chapter_id`,`page_number`),
+  KEY `idx_chapter_page_order` (`chapter_id`,`page_number`),
+  CONSTRAINT `fk_chapter_page_ref_chapter_id` FOREIGN KEY (`chapter_id`) REFERENCES `chapter` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_chapter_page_ref_del_by` FOREIGN KEY (`deleted_by`) REFERENCES `user` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_chapter_page_ref_upd_by` FOREIGN KEY (`updated_by`) REFERENCES `user` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_chapter_page_ref_cre_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+/*!40101 SET character_set_client = @saved_cs_client */;
+
 SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40103 SET TIME_ZONE=@OLD_TIME_ZONE */;
 

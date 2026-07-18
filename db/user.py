@@ -200,6 +200,63 @@ class UserMentor(models.Model):
         db_table = 'user_mentor'
 
 
+class MentorScopeGrant(models.Model):
+    """
+    A single unit of mentor authority: "this mentor may act as X within
+    scope Y". Additive and independent per (scope_type, scope_id) — granting
+    or revoking one grant never affects any other grant for the same mentor,
+    and never touches identity records like UserOrganizationLink.
+    """
+
+    class ScopeType(models.TextChoices):
+        COMPANY_MENTOR = 'COMPANY_MENTOR', 'Company Mentor'
+        IG_MENTOR      = 'IG_MENTOR',      'IG Mentor'
+        CAMPUS_MENTOR  = 'CAMPUS_MENTOR',  'Campus Mentor'
+        MENTOR         = 'MENTOR',         'Mentor'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+
+    mentor = models.ForeignKey(
+        UserMentor,
+        on_delete=models.CASCADE,
+        db_column='mentor_id',
+        related_name='scope_grants'
+    )
+
+    scope_type = models.CharField(max_length=14, choices=ScopeType.choices)
+
+    # NULL for scope types that aren't org/IG scoped in the future;
+    # currently always set (org id for COMPANY_MENTOR/CAMPUS_MENTOR, ig id
+    # for IG_MENTOR).
+    scope_id = models.CharField(max_length=36, null=True, blank=True)
+
+    is_active = models.BooleanField(default=True)
+
+    granted_by = models.ForeignKey(
+        User,
+        on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
+        db_column='granted_by',
+        related_name='mentor_grants_given'
+    )
+
+    granted_at = models.DateTimeField()
+
+    revoked_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='revoked_by',
+        related_name='mentor_grants_revoked'
+    )
+
+    revoked_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_scope_grant'
+
+
 class UserReferralLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name='user_referral_link_user')

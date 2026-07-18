@@ -87,6 +87,54 @@ def _resolve_muid_list(muid_list):
     return enriched
 
 
+def _resolve_ig_mentors(ig):
+    """
+    Active IG mentors for this IG, read from UserIgLink (authoritative)
+    rather than the legacy InterestGroup.mentors JSON column, enriched with
+    the same shape _resolve_muid_list produces plus the mentor's company.
+    """
+    from db.task import UserIgLink
+    from api.dashboard.mentor.dash_mentor_helper import get_mentor_company
+    from db.user import UserMentor
+
+    links = UserIgLink.objects.filter(
+        ig=ig,
+        assignment_type=UserIgLink.AssignmentType.MENTOR,
+        is_active=True,
+    ).select_related("user")
+
+    user_ids = [link.user_id for link in links]
+    socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
+        "user_id", "github", "facebook", "instagram", "linkedin",
+        "dribble", "behance", "stackoverflow", "medium", "hackerrank"
+    )
+    socials_map = {s["user_id"]: s for s in socials_qs}
+    mentor_profiles = {
+        m.user_id: m
+        for m in UserMentor.objects.filter(user_id__in=user_ids).select_related("org")
+    }
+
+    mentors = []
+    for link in links:
+        user = link.user
+        raw_socials = socials_map.get(user.id)
+        socials = {
+            key: (raw_socials.get(key) if raw_socials else None)
+            for key in ["github", "facebook", "instagram", "linkedin",
+                        "dribble", "behance", "stackoverflow", "medium", "hackerrank"]
+        }
+        mentor_profile = mentor_profiles.get(user.id)
+        mentors.append({
+            "muid": user.muid,
+            "full_name": user.full_name,
+            "email": user.email,
+            "profile_pic": user.profile_pic,
+            "company": get_mentor_company(mentor_profile) if mentor_profile else None,
+            "socials": socials,
+        })
+    return mentors
+
+
 class InterestGroupSerializer(serializers.ModelSerializer):
 
     updated_by = serializers.CharField(source="updated_by.full_name")
@@ -150,7 +198,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                     pass  # leave as-is (plain string)
 
         # MUID fields — parse + enrich with user details
-        for field in ["leads", "mentors"]:
+        for field in ["leads"]:
             val = data.get(field)
             if isinstance(val, str) and val:
                 try:
@@ -158,6 +206,11 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                     data[field] = _resolve_muid_list(parsed)
                 except Exception:
                     pass  # leave as-is if parsing fails
+
+        # 'mentors' is served from UserIgLink (the authoritative IG-permission
+        # table), not the legacy InterestGroup.mentors JSON column, so the IG
+        # detail page always reflects actual mentor authority.
+        data["mentors"] = _resolve_ig_mentors(instance)
 
         return data
 

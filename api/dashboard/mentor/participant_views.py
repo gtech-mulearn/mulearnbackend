@@ -114,7 +114,7 @@ class MentorParticipantListAPI(APIView):
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             links, request,
-            search_fields=["user__full_name", "user__mu_id"],
+            search_fields=["user__full_name", "user__muid"],
             sort_fields={"created_at": "created_at", "user_full_name": "user__full_name"}
         )
 

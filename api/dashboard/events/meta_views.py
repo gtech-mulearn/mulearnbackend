@@ -133,28 +133,21 @@ class OrganizerOptionsAPI(APIView):
                     }
                     
         if RoleType.MENTOR.value in roles:
-            from db.user import UserMentor
+            from db.user import MentorScopeGrant
             from db.task import UserIgLink
+            from db.organization import Organization
+            from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
 
             # Company Mentors → can create Company events for their org
-            company_mentors = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).select_related('org')
-            for mentor in company_mentors:
-                if mentor.org:
-                    company_options[mentor.org.id] = {
-                        'id': mentor.org.id,
-                        'title': mentor.org.title,
-                    }
+            company_org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
+            for org in Organization.objects.filter(id__in=company_org_ids):
+                company_options[org.id] = {
+                    'id': org.id,
+                    'title': org.title,
+                }
 
             # IG Mentors → can create Global IG events for their assigned IGs
-            ig_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).first()
+            ig_mentor = bool(get_scope_ids(user_id, MentorScopeGrant.ScopeType.IG_MENTOR))
             if ig_mentor:
                 mentored_ig_ids = list(
                     UserIgLink.objects.filter(
@@ -174,15 +167,14 @@ class OrganizerOptionsAPI(APIView):
                             options['can_create_as_ig'].append(ig)
 
             # Campus Mentors → can create Campus IG events scoped to their campus
-            campus_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                status=UserMentor.Status.APPROVED,
-            ).select_related('org').first()
-            if campus_mentor and campus_mentor.org:
-                # Surface all IGs as campus_ig options — the scope is limited to their campus
-                # by the backend enforcement in manage_views.py
-                campus_igs = InterestGroup.objects.all().values('id', 'name', 'icon', 'code')
+            campus_org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR)
+            if campus_org_ids:
+                # Only IGs with an active chapter at one of the mentor's
+                # campuses qualify as campus_ig organiser options.
+                campus_igs = InterestGroup.objects.filter(
+                    campus_ig_chapter_ig__org_id__in=campus_org_ids,
+                    campus_ig_chapter_ig__is_active=True,
+                ).distinct().values('id', 'name', 'icon', 'code')
                 existing_ci_ids = {ig['id'] for ig in options['can_create_as_campus_ig']}
                 for ig in campus_igs:
                     if ig['id'] not in existing_ci_ids:
@@ -215,8 +207,11 @@ class CollaborationTargetsAPI(APIView):
     Used to power the collaborator search input.
 
     Query params:
-      - search (str)  : partial name match
-      - type   (str)  : ig | campus | campus_ig | company  (optional filter)
+      - search    (str) : partial name match
+      - type      (str) : ig | campus | campus_ig | company  (optional filter)
+      - campus_id (str) : restrict campus_ig results to IGs with an active
+                          chapter at this campus (used by the scope pickers;
+                          collaborator search omits it and gets all IGs)
     """
     authentication_classes = [CustomizePermission]
 
@@ -242,16 +237,25 @@ class CollaborationTargetsAPI(APIView):
             'campus_ig': [],
         }
 
+        campus_id = request.query_params.get('campus_id', '').strip()
+
         if not filter_type or filter_type in ('ig', 'campus_ig'):
             qs = InterestGroup.objects.all()
             if search:
                 qs = qs.filter(name__icontains=search)
-            ig_results = list(qs.values('id', 'name', 'icon', 'code')[:20])
             if not filter_type or filter_type == 'ig':
-                results['ig'] = ig_results
+                results['ig'] = list(qs.values('id', 'name', 'icon', 'code')[:20])
             if not filter_type or filter_type == 'campus_ig':
-                # campus_ig collaborators are identified by their IG; return as campus_ig key
-                results['campus_ig'] = ig_results
+                # campus_ig entries are identified by their IG; return as campus_ig key.
+                # When a campus context is given, only IGs with an active chapter
+                # at that campus qualify — a campus with no chapters gets none.
+                ci_qs = qs
+                if campus_id:
+                    ci_qs = ci_qs.filter(
+                        campus_ig_chapter_ig__org_id=campus_id,
+                        campus_ig_chapter_ig__is_active=True,
+                    ).distinct()
+                results['campus_ig'] = list(ci_qs.values('id', 'name', 'icon', 'code')[:20])
 
         if not filter_type or filter_type == 'campus':
             qs = Organization.objects.filter(org_type='College')
