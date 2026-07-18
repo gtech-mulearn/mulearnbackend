@@ -245,7 +245,7 @@ class ComicLikeLink(models.Model):
         db_column='user_id', related_name='comic_like_links'
     )
     created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='comic_like_link_created_by'
     )
     created_at = models.DateTimeField()
@@ -267,7 +267,7 @@ class ComicBookmarkLink(models.Model):
         db_column='user_id', related_name='comic_bookmark_links'
     )
     created_by = models.ForeignKey(
-        User, on_delete=models.CASCADE,
+        User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID),
         db_column='created_by', related_name='comic_bookmark_link_created_by'
     )
     created_at = models.DateTimeField()

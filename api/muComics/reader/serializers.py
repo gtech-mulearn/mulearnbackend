@@ -39,7 +39,6 @@ class ComicLikeSerializer(ComicInteractionValidationMixin, serializers.ModelSeri
             created_by_id=user_id,
             created_at=timezone.now()
         )
-        Comic.objects.filter(id=comic_id).update(like_count=F('like_count') + 1)
         return like
 
 
@@ -60,7 +59,6 @@ class ComicBookmarkSerializer(ComicInteractionValidationMixin, serializers.Model
             created_by_id=user_id,
             created_at=timezone.now()
         )
-        Comic.objects.filter(id=comic_id).update(bookmark_count=F('bookmark_count') + 1)
         return bookmark
 
 
@@ -110,21 +108,23 @@ class ComicReadingProgressSerializer(ComicInteractionValidationMixin, serializer
         last_page_number = validated_data.get('last_page_number')
         now = timezone.now()
         
-        progress = ComicReadingProgress.objects.filter(user_id=user_id, comic_id=comic_id).first()
-        if progress:
+        try:
+            with transaction.atomic():
+                progress = ComicReadingProgress.objects.create(
+                    user_id=user_id,
+                    comic_id=comic_id,
+                    last_chapter_id=last_chapter_id,
+                    last_page_number=last_page_number,
+                    updated_at=now,
+                    created_at=now
+                )
+        except IntegrityError:
+            progress = ComicReadingProgress.objects.get(user_id=user_id, comic_id=comic_id)
             progress.last_chapter_id = last_chapter_id
             progress.last_page_number = last_page_number
             progress.updated_at = now
-            progress.save()
-        else:
-            progress = ComicReadingProgress.objects.create(
-                user_id=user_id,
-                comic_id=comic_id,
-                last_chapter_id=last_chapter_id,
-                last_page_number=last_page_number,
-                updated_at=now,
-                created_at=now
-            )
+            progress.save(update_fields=['last_chapter_id', 'last_page_number', 'updated_at'])
+            
         return progress
 
 

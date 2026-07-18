@@ -2358,3 +2358,50 @@ SET @@SESSION.SQL_LOG_BIN = @MYSQLDUMP_TEMP_LOG_BIN;
 /*!40111 SET SQL_NOTES=@OLD_SQL_NOTES */;
 
 -- Dump completed on 2026-01-03 23:24:46
+
+CREATE TABLE `comic_bookmark_link` (
+  `id` varchar(36) NOT NULL,
+  `comic_id` varchar(36) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_comic_bookmark` (`comic_id`,`user_id`),
+  KEY `fk_comic_bookmark_link_ref_created_by` (`created_by`),
+  KEY `idx_comic_bookmark_user` (`user_id`),
+  CONSTRAINT `fk_comic_bookmark_link_ref_comic_id` FOREIGN KEY (`comic_id`) REFERENCES `comic` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_bookmark_link_ref_created_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`),
+  CONSTRAINT `fk_comic_bookmark_link_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `comic_like_link` (
+  `id` varchar(36) NOT NULL,
+  `comic_id` varchar(36) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `created_by` varchar(36) NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_comic_like` (`comic_id`,`user_id`),
+  KEY `fk_comic_like_link_ref_created_by` (`created_by`),
+  KEY `idx_comic_like_user` (`user_id`),
+  CONSTRAINT `fk_comic_like_link_ref_comic_id` FOREIGN KEY (`comic_id`) REFERENCES `comic` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_like_link_ref_created_by` FOREIGN KEY (`created_by`) REFERENCES `user` (`id`),
+  CONSTRAINT `fk_comic_like_link_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;
+
+CREATE TABLE `comic_reading_progress` (
+  `id` varchar(36) NOT NULL,
+  `user_id` varchar(36) NOT NULL,
+  `comic_id` varchar(36) NOT NULL,
+  `last_chapter_id` varchar(36) DEFAULT NULL,
+  `last_page_number` int DEFAULT NULL,
+  `updated_at` datetime NOT NULL,
+  `created_at` datetime NOT NULL,
+  PRIMARY KEY (`id`),
+  UNIQUE KEY `uq_reading_progress` (`user_id`,`comic_id`),
+  KEY `fk_comic_reading_progress_ref_comic_id` (`comic_id`),
+  KEY `fk_comic_reading_progress_ref_last_chapter_id` (`last_chapter_id`),
+  CONSTRAINT `fk_comic_reading_progress_ref_comic_id` FOREIGN KEY (`comic_id`) REFERENCES `comic` (`id`) ON DELETE CASCADE,
+  CONSTRAINT `fk_comic_reading_progress_ref_last_chapter_id` FOREIGN KEY (`last_chapter_id`) REFERENCES `chapter` (`id`) ON DELETE SET NULL,
+  CONSTRAINT `fk_comic_reading_progress_ref_user_id` FOREIGN KEY (`user_id`) REFERENCES `user` (`id`) ON DELETE CASCADE
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci;

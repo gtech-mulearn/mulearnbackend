@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from db.comic import ComicReadingProgress
 from utils.permission import CustomizePermission, JWTUtils
@@ -10,6 +11,7 @@ from .serializers import ComicReadingProgressSerializer
 class ReadingProgressAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def put(self, request, comic_id):
         data = request.data.copy()
         data['comic_id'] = comic_id
@@ -37,6 +39,7 @@ class ReadingProgressAPI(APIView):
             response=serializer.errors
         ).get_failure_response()
 
+    @extend_schema(tags=["Comic Reader"])
     def get(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         

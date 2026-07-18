@@ -1,6 +1,7 @@
 from django.db import transaction, IntegrityError
 from django.db.models import F
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 
 from db.comic import Comic, ComicLikeLink, ComicBookmarkLink
 from utils.permission import CustomizePermission, JWTUtils
@@ -12,6 +13,7 @@ from .serializers import ComicLikeSerializer, ComicBookmarkSerializer
 class LikeComicAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def post(self, request, comic_id):
         # We pass comic_id into the serializer data for validation
         serializer = ComicLikeSerializer(
@@ -21,9 +23,9 @@ class LikeComicAPI(APIView):
         
         if serializer.is_valid():
             try:
-                # The creation logic and counter increment happens atomically inside serializer.save()
                 with transaction.atomic():
                     serializer.save()
+                    Comic.objects.filter(id=comic_id).update(like_count=F('like_count') + 1)
                 return CustomResponse(response={"message": "Comic liked successfully"}).get_success_response()
             except IntegrityError:
                 return CustomResponse(
@@ -35,6 +37,7 @@ class LikeComicAPI(APIView):
             response=serializer.errors
         ).get_failure_response()
 
+    @extend_schema(tags=["Comic Reader"])
     def delete(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -49,6 +52,7 @@ class LikeComicAPI(APIView):
 class BookmarkComicAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def post(self, request, comic_id):
         serializer = ComicBookmarkSerializer(
             data={'comic_id': comic_id},
@@ -59,6 +63,7 @@ class BookmarkComicAPI(APIView):
             try:
                 with transaction.atomic():
                     serializer.save()
+                    Comic.objects.filter(id=comic_id).update(bookmark_count=F('bookmark_count') + 1)
                 return CustomResponse(response={"message": "Comic bookmarked successfully"}).get_success_response()
             except IntegrityError:
                 return CustomResponse(
@@ -70,6 +75,7 @@ class BookmarkComicAPI(APIView):
             response=serializer.errors
         ).get_failure_response()
 
+    @extend_schema(tags=["Comic Reader"])
     def delete(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -84,6 +90,7 @@ class BookmarkComicAPI(APIView):
 class InteractionStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def get(self, request, comic_id):
         user_id = JWTUtils.fetch_user_id(request)
         

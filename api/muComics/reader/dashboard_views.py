@@ -1,4 +1,5 @@
 from rest_framework.views import APIView
+from drf_spectacular.utils import extend_schema
 from django.db.models import Q
 
 from db.comic import ComicLikeLink, ComicBookmarkLink, ComicReadingProgress
@@ -14,6 +15,7 @@ from .serializers import PaginatedBookmarkSerializer, PaginatedProgressSerialize
 class ReaderDashboardAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -38,6 +40,7 @@ class ReaderDashboardAPI(APIView):
 class MyBookmarksAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         
@@ -67,6 +70,7 @@ class MyBookmarksAPI(APIView):
 class MyReadingProgressAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=["Comic Reader"])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         
