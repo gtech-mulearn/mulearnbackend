@@ -120,6 +120,14 @@ class AdminEventApproveAPI(APIView):
 
         old_status = event.status
         new_status = APPROVAL_TRANSITIONS[event.status]
+        # Campus events scoped to their own campus have no admin stage —
+        # campus-level approval publishes them directly.
+        if (
+            old_status == Event.Status.PENDING_CAMPUS_APPROVAL
+            and event.organiser_type == Event.OrganiserType.CAMPUS
+            and event.scope == Event.Scope.CAMPUS
+        ):
+            new_status = Event.Status.PUBLISHED
         event.status = new_status
         event.updated_by_id = user_id
         event.save()
