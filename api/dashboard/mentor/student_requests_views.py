@@ -6,7 +6,6 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 from utils.utils import CommonUtils
 from db.mentor import MentorshipSession
-from db.user import UserMentor
 from . import serializers
 
 
@@ -138,19 +137,17 @@ class MentorStudentRequestListAPI(APIView):
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         from db.task import UserIgLink
+        from db.user import MentorScopeGrant
+        from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
 
-        # Approved mentor records for this user.
-        mentor_records = UserMentor.objects.filter(
-            user_id=user_id,
-            status=UserMentor.Status.APPROVED,
-        )
+        # Active scopes for this user (grant-driven, falls back to
+        # mentor_tier for accounts that predate grants).
+        scopes = get_mentor_scopes(user_id)
 
-        if not mentor_records.exists():
+        if not scopes:
             # Has the MENTOR role but no approved record → no visibility.
             sessions = MentorshipSession.objects.none()
-        elif mentor_records.filter(
-            mentor_tier=UserMentor.MentorTier.MENTOR
-        ).exists():
+        elif (MentorScopeGrant.ScopeType.MENTOR, None) in scopes:
             # Global mentor: admin-level visibility into all pending requests.
             sessions = MentorshipSession.objects.filter(
                 status=MentorshipSession.Status.REQUESTED,
@@ -285,17 +282,16 @@ def _mentor_can_act(user_id: str, session: MentorshipSession) -> bool:
         tier.
     """
     from db.task import UserIgLink
+    from db.user import MentorScopeGrant
+    from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
 
-    mentor_records = UserMentor.objects.filter(
-        user_id=user_id,
-        status=UserMentor.Status.APPROVED,
-    )
+    scopes = get_mentor_scopes(user_id)
 
-    if not mentor_records.exists():
+    if not scopes:
         return False
 
     # Global mentor can act on anything.
-    if mentor_records.filter(mentor_tier=UserMentor.MentorTier.MENTOR).exists():
+    if (MentorScopeGrant.ScopeType.MENTOR, None) in scopes:
         return True
 
     if session.session_type != MentorshipSession.SessionType.IG_SESSION:

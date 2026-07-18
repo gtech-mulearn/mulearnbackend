@@ -97,11 +97,14 @@ class MentorStatusAPI(APIView):
             return CustomResponse(
                 general_message="No mentor request found for your account."
             ).get_failure_response(status_code=404)
-            
+
+        from .dash_mentor_helper import get_mentor_company
+        organization = get_mentor_company(mentor)
+
         return CustomResponse(
             response={
                 "status": mentor.status,
-                "organization": getattr(mentor.org, "title", None) if mentor.org else None,
+                "organization": organization,
                 "verified_by": getattr(mentor.verified_by, "full_name", None) if mentor.verified_by else None,
                 "verified_at": mentor.verified_at,
             }
@@ -282,29 +285,57 @@ class MentorDetailAPI(APIView):
         serializer = serializers.MentorDetailSerializer(mentor)
         return CustomResponse(response=serializer.data).get_success_response()
 
+def _is_company_owner_of(actor_id, mentor):
+    """
+    True if `actor_id` owns the verified Company that `mentor`'s
+    COMPANY_MENTOR application is scoped to. Verification authority for a
+    company's own mentor applications belongs to that company's owner, not
+    only platform admins.
+    """
+    if mentor.mentor_tier != UserMentor.MentorTier.COMPANY_MENTOR or not mentor.org:
+        return False
+
+    from db.company import Company
+    return Company.objects.filter(
+        company_user_id=actor_id,
+        status="verified",
+        name=mentor.org.title,
+    ).exists()
+
+
 class MentorVerifyAPI(APIView):
     permission_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
-        description="Verify or reject a mentor application.",
+        description=(
+            "Verify or reject a mentor application. Platform admins can "
+            "verify any application; a Company's owner can verify "
+            "COMPANY_MENTOR applications scoped to their own company."
+        ),
         request=serializers.MentorVerifySerializer,
     )
-    @role_required([RoleType.ADMIN.value])
     def patch(self, request, mentor_id):
         user_id = JWTUtils.fetch_user_id(request)
         mentor = UserMentor.objects.filter(id=mentor_id).first()
-        
+
         if not mentor:
             return CustomResponse(
                 general_message="Mentor request not found."
             ).get_failure_response(status_code=404)
-            
+
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+        if not is_admin and not _is_company_owner_of(user_id, mentor):
+            return CustomResponse(
+                general_message="You are not authorized to verify this mentor application."
+            ).get_failure_response(status_code=403)
+
         if mentor.status == UserMentor.Status.APPROVED:
             return CustomResponse(
                 general_message="Mentor is already approved."
             ).get_failure_response()
-            
+
         serializer = serializers.MentorVerifySerializer(
             mentor, data=request.data, context={"user_id": user_id}
         )
@@ -481,16 +512,17 @@ class AdminAssignMentorAPI(APIView):
                         assignment_type=UserIgLink.AssignmentType.MENTOR,
                     ).update(is_active=False)
 
-                # Unverify org links for campus/company mentors
-                if record.mentor_tier in (
-                    UserMentor.MentorTier.CAMPUS_MENTOR,
-                    UserMentor.MentorTier.COMPANY_MENTOR,
-                ) and record.org:
-                    from db.organization import UserOrganizationLink
-                    UserOrganizationLink.objects.filter(
-                        user=user,
-                        org=record.org,
-                    ).update(verified=False)
+                # Deactivate matching scope grants. NOTE: revoking mentor
+                # authority must never touch UserOrganizationLink — that's
+                # the user's employment/identity record, not a permission.
+                from db.user import MentorScopeGrant
+                MentorScopeGrant.objects.filter(
+                    mentor=record, is_active=True
+                ).update(
+                    is_active=False,
+                    revoked_by_id=admin_id,
+                    revoked_at=now,
+                )
 
             # Strip the Mentor role only if no approved mentor records remain at all
             remaining_approved = UserMentor.objects.filter(
@@ -503,4 +535,103 @@ class AdminAssignMentorAPI(APIView):
 
         return CustomResponse(
             general_message="Mentor assignment revoked successfully."
+        ).get_success_response()
+
+
+class MentorScopeGrantListAPI(APIView):
+    """
+    GET /mentor/<mentor_id>/grants/ — list all scope grants for a mentor.
+    Admins see any mentor; a Company owner sees only their own employees'
+    grants.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="List all scope grants for a mentor.",
+        responses={200: serializers.MentorScopeGrantSerializer(many=True)},
+    )
+    def get(self, request, mentor_id):
+        from db.user import MentorScopeGrant
+
+        actor_id = JWTUtils.fetch_user_id(request)
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Mentor not found."
+            ).get_failure_response(status_code=404)
+
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+        if not is_admin and not _is_company_owner_of(actor_id, mentor):
+            return CustomResponse(
+                general_message="You are not authorized to view this mentor's grants."
+            ).get_failure_response(status_code=403)
+
+        grants = MentorScopeGrant.objects.filter(mentor=mentor).order_by('-granted_at')
+        serializer = serializers.MentorScopeGrantSerializer(grants, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+
+class MentorScopeGrantRevokeAPI(APIView):
+    """
+    DELETE /mentor/<mentor_id>/grants/<grant_id>/ — revoke a single scope
+    grant. Only ever deactivates that grant; every other grant this mentor
+    holds, and their UserOrganizationLink employment record, are untouched.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Revoke a single mentor scope grant.",
+        responses={200: None},
+    )
+    def delete(self, request, mentor_id, grant_id):
+        from db.user import MentorScopeGrant
+
+        actor_id = JWTUtils.fetch_user_id(request)
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        if not mentor:
+            return CustomResponse(
+                general_message="Mentor not found."
+            ).get_failure_response(status_code=404)
+
+        roles = JWTUtils.fetch_role(request)
+        is_admin = RoleType.ADMIN.value in roles
+        if not is_admin and not _is_company_owner_of(actor_id, mentor):
+            return CustomResponse(
+                general_message="You are not authorized to revoke this mentor's grants."
+            ).get_failure_response(status_code=403)
+
+        grant = MentorScopeGrant.objects.filter(id=grant_id, mentor=mentor, is_active=True).first()
+        if not grant:
+            return CustomResponse(
+                general_message="Active grant not found."
+            ).get_failure_response(status_code=404)
+
+        from utils.utils import DateTimeUtils
+        grant.is_active = False
+        grant.revoked_by_id = actor_id
+        grant.revoked_at = DateTimeUtils.get_current_utc_time()
+        grant.save(update_fields=["is_active", "revoked_by_id", "revoked_at"])
+
+        # IG_MENTOR grants are the display/audit counterpart of UserIgLink,
+        # the table session/task/availability endpoints actually check —
+        # keep them in sync so a surgical single-IG revoke actually removes
+        # that IG's mentoring capability, not just the audit-trail row.
+        if grant.scope_type == MentorScopeGrant.ScopeType.IG_MENTOR and grant.scope_id:
+            from db.task import UserIgLink
+            UserIgLink.objects.filter(
+                user=mentor.user,
+                ig_id=grant.scope_id,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+            ).update(is_active=False)
+
+        # If this was the mentor's last active grant for its tier and no
+        # other tier grant remains, the platform-wide Mentor role stays —
+        # that's governed by whether any UserMentor row is still APPROVED,
+        # which this grant revocation does not change.
+
+        return CustomResponse(
+            general_message="Grant revoked successfully."
         ).get_success_response()

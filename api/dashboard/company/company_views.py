@@ -309,31 +309,14 @@ class CompanyAdminSummaryAPI(APIView):
 # ---------------------------------------------------------------------------
 # Shared helper — resolves Company for both creator and approved COMPANY_MENTOR
 # ---------------------------------------------------------------------------
-from db.user import UserMentor as _UserMentor
-from db.organization import Organization as _Org
-from utils.types import OrganizationType as _OrgType
-
-
 def _get_company_for_user(user_id):
     """
     Returns the verified Company for a user if they are:
     - the company creator (company_user_id == user_id), OR
-    - an approved COMPANY_MENTOR for that company.
+    - hold an active COMPANY_MENTOR grant for that company.
     """
-    company = Company.objects.filter(company_user_id=user_id, status="verified").first()
-    if company:
-        return company
-
-    mentor = _UserMentor.objects.filter(
-        user_id=user_id,
-        mentor_tier=_UserMentor.MentorTier.COMPANY_MENTOR,
-        status=_UserMentor.Status.APPROVED,
-    ).select_related("org").first()
-
-    if mentor and mentor.org:
-        return Company.objects.filter(name=mentor.org.title, status="verified").first()
-
-    return None
+    from api.dashboard.mentor.dash_mentor_helper import get_verified_company_for_mentor
+    return get_verified_company_for_mentor(user_id)
 
 
 # ---------------------------------------------------------------------------
@@ -374,8 +357,24 @@ class CompanyMentorNominateAPI(APIView):
             return CustomResponse(message=serializer.errors).get_failure_response()
 
         mentor = serializer.save()
+
+        from api.notification.notifications_utils import NotificationUtils
+        from db.user import User
+        nominator = User.objects.filter(id=user_id).first()
+        NotificationUtils.insert_notification(
+            user=mentor.user,
+            title=f"Company Mentor nomination: {company.name}"[:50],
+            description=(
+                f"{nominator.full_name if nominator else 'Your company'} nominated you as a "
+                f"Company Mentor for {company.name}. Your application is pending approval."
+            )[:200],
+            button='View',
+            url='/mentor/status/',
+            created_by=nominator,
+        )
+
         return CustomResponse(
-            general_message="User nominated as Company Mentor. Pending admin approval.",
+            general_message="User nominated as Company Mentor. Pending approval.",
             response=serializers.CompanyMentorListSerializer(mentor).data,
         ).get_success_response()
 

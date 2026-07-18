@@ -21,7 +21,6 @@ from django.views.decorators.cache import cache_page
 from api.dashboard.roles.dash_roles_serializer import RoleDashboardSerializer
 from db.task import UserIgLink,UserIgLvlLink, Level
 from db.user import Role, UserMentor, UserRoleLink
-from db.notification import Notification
 from utils.types import RoleType
 from utils.utils import DateTimeUtils
 from drf_spectacular.utils import extend_schema
@@ -418,25 +417,53 @@ class InterestGroupGetAPI(APIView):
                     if not target_user:
                         continue
 
-                    # 1. Ensure UserMentor exists and is verified as IG_MENTOR
+                    # 1. Ensure an approved UserMentor profile exists.
+                    # Never overwrite mentor_tier on an existing profile —
+                    # a Company/Campus mentor gaining IG-mentor authority is
+                    # additive (via the MentorScopeGrant below), not a tier
+                    # replacement.
+                    now = DateTimeUtils.get_current_utc_time()
                     mentor_profile, created = UserMentor.objects.get_or_create(
                         user=target_user,
                         defaults={
-                            "is_verified":   True,
+                            "status":        UserMentor.Status.APPROVED,
                             "mentor_tier":   UserMentor.MentorTier.IG_MENTOR,
                             "verified_by_id": user_id,
-                            "verified_at":   DateTimeUtils.get_current_utc_time(),
+                            "verified_at":   now,
                             "created_by_id": user_id,
                             "updated_by_id": user_id,
+                            "created_at":    now,
+                            "updated_at":    now,
                         },
                     )
-                    if not created and not mentor_profile.is_verified:
-                        mentor_profile.is_verified  = True
-                        mentor_profile.mentor_tier  = UserMentor.MentorTier.IG_MENTOR
+                    if not created and mentor_profile.status != UserMentor.Status.APPROVED:
+                        mentor_profile.status = UserMentor.Status.APPROVED
                         mentor_profile.verified_by_id = user_id
-                        mentor_profile.verified_at  = DateTimeUtils.get_current_utc_time()
+                        mentor_profile.verified_at = now
                         mentor_profile.updated_by_id = user_id
-                        mentor_profile.save()
+                        mentor_profile.updated_at = now
+                        mentor_profile.save(update_fields=[
+                            "status", "verified_by_id", "verified_at",
+                            "updated_by_id", "updated_at",
+                        ])
+
+                    # 1b. Grant IG-scoped authority additively.
+                    from db.user import MentorScopeGrant
+                    grant, grant_created = MentorScopeGrant.objects.get_or_create(
+                        mentor=mentor_profile,
+                        scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
+                        scope_id=str(ig.id),
+                        defaults={
+                            "is_active":     True,
+                            "granted_by_id": user_id,
+                            "granted_at":    now,
+                        },
+                    )
+                    if not grant_created and not grant.is_active:
+                        grant.is_active = True
+                        grant.revoked_by = None
+                        grant.revoked_at = None
+                        grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
 
                     # 2. Assign Mentor role (idempotent)
                     if mentor_role:
@@ -463,18 +490,20 @@ class InterestGroupGetAPI(APIView):
                         link.save()
 
                     # 4. Notify the newly assigned mentor
-                    if created or link_created:
+                    if created or grant_created or link_created:
                         caller = User.objects.filter(id=user_id).first()
                         caller_name = caller.full_name if caller else "An IG Lead"
-                        Notification.objects.create(
+                        NotificationUtils.insert_notification(
                             user=target_user,
-                            title=f"🎓 You've been assigned as an IG Mentor — {ig.name}",
+                            title=f"IG Mentor: {ig.name}"[:50],
                             description=(
                                 f"{caller_name} has assigned you as an IG Mentor for "
                                 f"{ig.name}. You can now create sessions and manage "
                                 f"tasks within this interest group."
-                            ),
-                            created_by_id=user_id,
+                            )[:200],
+                            button='View',
+                            url=f'/interest-groups/{ig.id}/',
+                            created_by=caller,
                         )
 
             return CustomResponse(response={"interestGroup": serializer.data}).get_success_response()

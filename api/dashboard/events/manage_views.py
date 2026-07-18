@@ -64,7 +64,7 @@ def _get_manageable_events():
 def _get_user_company_org_ids(user_id, roles):
     """Returns a list of Organization IDs for companies where the user is a creator or mentor."""
     company_org_ids = set()
-    
+
     if RoleType.COMPANY.value in roles:
         from db.company import Company
         from db.organization import Organization
@@ -74,18 +74,12 @@ def _get_user_company_org_ids(user_id, roles):
             org = Organization.objects.filter(title=company.name, org_type=OrganizationType.COMPANY.value).first()
             if org:
                 company_org_ids.add(org.id)
-                
+
     if RoleType.MENTOR.value in roles:
-        from db.user import UserMentor
-        mentors = UserMentor.objects.filter(
-            user_id=user_id, 
-            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, 
-            status=UserMentor.Status.APPROVED
-        )
-        for mentor in mentors:
-            if mentor.org_id:
-                company_org_ids.add(mentor.org_id)
-                
+        from db.user import MentorScopeGrant
+        from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
+        company_org_ids |= get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
+
     return list(company_org_ids)
 
 
@@ -127,14 +121,11 @@ def _resolve_creator_campus_id(user_id):
     user's College organisation link. Used to stamp the owning campus
     (scope_org) onto Campus IG events, which the create wizard does not send.
     """
-    from db.user import UserMentor
-    mentor = UserMentor.objects.filter(
-        user_id=user_id,
-        mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-        status=UserMentor.Status.APPROVED,
-    ).first()
-    if mentor and mentor.org_id:
-        return mentor.org_id
+    from db.user import MentorScopeGrant
+    from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
+    campus_org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR)
+    if campus_org_ids:
+        return next(iter(campus_org_ids))
 
     from db.organization import UserOrganizationLink
     from utils.types import OrganizationType
@@ -198,29 +189,41 @@ class ManageEventListCreateAPI(APIView):
         if status := request.query_params.get('status'):
             if not is_admin:
                 if status == Event.Status.PENDING_MENTOR_APPROVAL and RoleType.MENTOR.value in roles:
-                    from db.user import UserMentor
-                    mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-                    if mentor:
-                        if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR:
-                            events = _get_manageable_events().filter(
-                                status=status,
-                                organiser_type=Event.OrganiserType.CAMPUS_IG,
-                                scope_org_id=mentor.org_id
-                            )
-                        elif mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
-                            from db.task import UserIgLink
-                            user_ig_ids = UserIgLink.objects.filter(
-                                user_id=user_id,
-                                assignment_type=UserIgLink.AssignmentType.MENTOR,
-                                is_active=True
-                            ).values_list('ig_id', flat=True)
-                            events = _get_manageable_events().filter(
-                                status=status,
-                                organiser_type=Event.OrganiserType.GLOBAL_IG,
-                                organiser_ig_id__in=user_ig_ids
-                            )
-                        else:
-                            events = _get_manageable_events().none()
+                    # A mentor can hold multiple tiers simultaneously (grants
+                    # are additive) — union the pending-approval queues for
+                    # every tier they actually hold, instead of picking one
+                    # arbitrary tier via .first().
+                    from django.db.models import Q as _Q
+                    from db.user import MentorScopeGrant
+                    from db.task import UserIgLink
+                    from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
+
+                    campus_org_ids = get_scope_ids(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR)
+                    user_ig_ids = list(
+                        UserIgLink.objects.filter(
+                            user_id=user_id,
+                            assignment_type=UserIgLink.AssignmentType.MENTOR,
+                            is_active=True
+                        ).values_list('ig_id', flat=True)
+                    )
+
+                    scope_filter = _Q()
+                    has_any_scope = False
+                    if campus_org_ids:
+                        scope_filter |= _Q(
+                            organiser_type=Event.OrganiserType.CAMPUS_IG,
+                            scope_org_id__in=campus_org_ids,
+                        )
+                        has_any_scope = True
+                    if user_ig_ids:
+                        scope_filter |= _Q(
+                            organiser_type=Event.OrganiserType.GLOBAL_IG,
+                            organiser_ig_id__in=user_ig_ids,
+                        )
+                        has_any_scope = True
+
+                    if has_any_scope:
+                        events = _get_manageable_events().filter(status=status).filter(scope_filter)
                     else:
                         events = _get_manageable_events().none()
                 elif status == Event.Status.PENDING_CAMPUS_APPROVAL and bool(set(roles) & {RoleType.CAMPUS_LEAD.value, RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value}):
@@ -266,22 +269,30 @@ class ManageEventListCreateAPI(APIView):
 
         # Enforce Mentor Creation Scopes
         if RoleType.MENTOR.value in roles and not (set(roles) & MANAGEABLE_ROLES - {RoleType.MENTOR.value}):
-            # User is ONLY a mentor
-            from db.user import UserMentor
-            mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-            if not mentor:
+            # User is ONLY a mentor. A mentor can hold multiple tiers
+            # simultaneously (grants are additive) — check the requested
+            # organiser_type against whichever scopes they actually hold,
+            # instead of pinning them to one arbitrary tier via .first().
+            from db.user import MentorScopeGrant
+            from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+            scopes = get_mentor_scopes(user_id)
+            if not scopes:
                 return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
-            
+
+            has_campus = any(st == MentorScopeGrant.ScopeType.CAMPUS_MENTOR for st, _ in scopes)
+            has_company = any(st == MentorScopeGrant.ScopeType.COMPANY_MENTOR for st, _ in scopes)
+            has_ig = any(st == MentorScopeGrant.ScopeType.IG_MENTOR for st, _ in scopes)
+
             payload_organiser_type = request.data.get('organiser_type')
-            
-            if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR:
-                if payload_organiser_type != Event.OrganiserType.CAMPUS_IG.value:
+
+            if payload_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
+                if not has_campus:
                     return CustomResponse(general_message='Campus Mentors can only create Campus IG events.').get_failure_response()
-            elif mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
-                if payload_organiser_type != Event.OrganiserType.COMPANY.value:
+            elif payload_organiser_type == Event.OrganiserType.COMPANY.value:
+                if not has_company:
                     return CustomResponse(general_message='Company Mentors can only create Company events.').get_failure_response()
-            elif mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
-                if payload_organiser_type != Event.OrganiserType.GLOBAL_IG.value:
+            elif payload_organiser_type == Event.OrganiserType.GLOBAL_IG.value:
+                if not has_ig:
                     return CustomResponse(general_message='IG Mentors can only create Global IG events.').get_failure_response()
                 # Verify that the IG being requested is one they mentor
                 payload_organiser_ig = request.data.get('organiser_ig')
@@ -445,22 +456,30 @@ class ManageEventDetailAPI(APIView):
         # Enforce Mentor Update Scopes
         roles = JWTUtils.fetch_role(request)
         if RoleType.MENTOR.value in roles and not (set(roles) & MANAGEABLE_ROLES - {RoleType.MENTOR.value}):
-            # User is ONLY a mentor
-            from db.user import UserMentor
-            mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-            if not mentor:
+            # User is ONLY a mentor. Check the requested organiser_type
+            # against whichever scopes they actually hold (multi-tier
+            # mentors can manage events for any tier they hold), instead of
+            # pinning them to one arbitrary tier via .first().
+            from db.user import MentorScopeGrant
+            from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+            scopes = get_mentor_scopes(user_id)
+            if not scopes:
                 return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
-                
+
+            has_campus = any(st == MentorScopeGrant.ScopeType.CAMPUS_MENTOR for st, _ in scopes)
+            has_company = any(st == MentorScopeGrant.ScopeType.COMPANY_MENTOR for st, _ in scopes)
+            has_ig = any(st == MentorScopeGrant.ScopeType.IG_MENTOR for st, _ in scopes)
+
             payload_organiser_type = payload.get('organiser_type', event.organiser_type)
-            
-            if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR:
-                if payload_organiser_type != Event.OrganiserType.CAMPUS_IG.value:
+
+            if payload_organiser_type == Event.OrganiserType.CAMPUS_IG.value:
+                if not has_campus:
                     return CustomResponse(general_message='Campus Mentors can only manage Campus IG events.').get_failure_response()
-            elif mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
-                if payload_organiser_type != Event.OrganiserType.COMPANY.value:
+            elif payload_organiser_type == Event.OrganiserType.COMPANY.value:
+                if not has_company:
                     return CustomResponse(general_message='Company Mentors can only manage Company events.').get_failure_response()
-            elif mentor.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
-                if payload_organiser_type != Event.OrganiserType.GLOBAL_IG.value:
+            elif payload_organiser_type == Event.OrganiserType.GLOBAL_IG.value:
+                if not has_ig:
                     return CustomResponse(general_message='IG Mentors can only manage Global IG events.').get_failure_response()
                 # Verify that the IG being updated/requested is one they mentor
                 payload_organiser_ig = payload.get('organiser_ig', event.organiser_ig_id)
@@ -640,27 +659,21 @@ class ManageEventPublishAPI(APIView):
         if RoleType.ADMIN.value in roles:
             new_status = Event.Status.PUBLISHED
         elif event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-            # Check if creator is an approved CAMPUS_MENTOR for this campus
-            from db.user import UserMentor
-            is_campus_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                org_id=event.scope_org_id,
-                status=UserMentor.Status.APPROVED
-            ).exists()
+            # Check if creator holds an active CAMPUS_MENTOR grant for this campus
+            from db.user import MentorScopeGrant
+            from api.dashboard.mentor.dash_mentor_helper import has_scope
+            is_campus_mentor = has_scope(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR, event.scope_org_id)
             if is_campus_mentor:
                 new_status = Event.Status.PENDING_CAMPUS_APPROVAL
             else:
                 new_status = Event.Status.PENDING_MENTOR_APPROVAL
         elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-            # Check if creator is an approved IG_MENTOR for this IG
-            from db.user import UserMentor
+            # Check if creator holds an active IG_MENTOR grant (any IG) and
+            # is specifically assigned (via UserIgLink) to this one.
+            from db.user import MentorScopeGrant
             from db.task import UserIgLink
-            is_mentor = UserMentor.objects.filter(
-                user_id=user_id,
-                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                status=UserMentor.Status.APPROVED
-            ).exists()
+            from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
+            is_mentor = bool(get_scope_ids(user_id, MentorScopeGrant.ScopeType.IG_MENTOR))
             is_assigned = UserIgLink.objects.filter(
                 user_id=user_id,
                 ig_id=event.organiser_ig_id,
@@ -1423,17 +1436,18 @@ class MentorEventApproveAPI(APIView):
         if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
             return CustomResponse(general_message='Event is not pending mentor approval.').get_failure_response()
 
-        from db.user import UserMentor
-        mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-        if not mentor:
+        from db.user import MentorScopeGrant
+        from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes, has_scope
+        scopes = get_mentor_scopes(user_id)
+        if not scopes:
             return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
 
         if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-            if mentor.mentor_tier != UserMentor.MentorTier.CAMPUS_MENTOR or str(mentor.org_id) != str(event.scope_org_id):
+            if not has_scope(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR, event.scope_org_id):
                 return CustomResponse(general_message='You are not authorized to approve this Campus IG event.').get_failure_response()
             new_status = Event.Status.PENDING_CAMPUS_APPROVAL
         elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-            if mentor.mentor_tier != UserMentor.MentorTier.IG_MENTOR:
+            if not any(st == MentorScopeGrant.ScopeType.IG_MENTOR for st, _ in scopes):
                 return CustomResponse(general_message='You are not authorized to approve this Global IG event.').get_failure_response()
             from db.task import UserIgLink
             is_assigned = UserIgLink.objects.filter(
@@ -1488,16 +1502,17 @@ class MentorEventRejectAPI(APIView):
         if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
             return CustomResponse(general_message='Event is not pending mentor approval.').get_failure_response()
 
-        from db.user import UserMentor
-        mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-        if not mentor:
+        from db.user import MentorScopeGrant
+        from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes, has_scope
+        scopes = get_mentor_scopes(user_id)
+        if not scopes:
             return CustomResponse(general_message='Active mentor profile not found.').get_failure_response()
 
         if event.organiser_type == Event.OrganiserType.CAMPUS_IG:
-            if mentor.mentor_tier != UserMentor.MentorTier.CAMPUS_MENTOR or str(mentor.org_id) != str(event.scope_org_id):
+            if not has_scope(user_id, MentorScopeGrant.ScopeType.CAMPUS_MENTOR, event.scope_org_id):
                 return CustomResponse(general_message='You are not authorized to reject this Campus IG event.').get_failure_response()
         elif event.organiser_type == Event.OrganiserType.GLOBAL_IG:
-            if mentor.mentor_tier != UserMentor.MentorTier.IG_MENTOR:
+            if not any(st == MentorScopeGrant.ScopeType.IG_MENTOR for st, _ in scopes):
                 return CustomResponse(general_message='You are not authorized to reject this Global IG event.').get_failure_response()
             from db.task import UserIgLink
             is_assigned = UserIgLink.objects.filter(
