@@ -1,5 +1,6 @@
 import csv
 import datetime
+import re
 import gzip
 import io
 from datetime import timedelta
@@ -16,6 +17,17 @@ from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 import string, random
+from django.utils.timezone import now
+
+def check_alumni_status(graduation_year):
+    """
+    Returns True if graduation_year is a valid 4-digit year and is in the past.
+    Mirrors the logic from mu_celery/alumni_cron.py so is_alumni is always
+    accurate at the point of creation or update — no cron lag.
+    """
+    if graduation_year and re.match(r'^[0-9]{4}$', str(graduation_year)):
+        return int(graduation_year) < now().year
+    return False
 
 
 class CommonUtils:

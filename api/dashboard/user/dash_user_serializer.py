@@ -2,7 +2,6 @@ import re
 import uuid
 
 from decouple import config as decouple_config
-from django.utils.timezone import now
 from django.db import transaction
 from rest_framework import serializers
 
@@ -12,23 +11,12 @@ from db.task import UserIgLink
 from db.user import Role, User, UserDomains, UserMentor, UserRoleLink
 from utils.permission import JWTUtils
 from utils.types import OrganizationType, RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, check_alumni_status
 from db.user import DynamicRole, DynamicUser
 
 # from db.user import UserInterests
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
-
-
-def check_alumni_status(graduation_year):
-    """
-    Returns True if graduation_year is a valid 4-digit year and is in the past.
-    Mirrors the logic from mu_celery/alumni_cron.py so is_alumni is always
-    accurate at the point of creation or update — no cron lag.
-    """
-    if graduation_year and re.match(r'^[0-9]{4}$', str(graduation_year)):
-        return int(graduation_year) < now().year
-    return False
 
 
 class UserDashboardSerializer(serializers.ModelSerializer):
