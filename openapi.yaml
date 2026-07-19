@@ -1074,7 +1074,8 @@ paths:
   /api/v1/dashboard/achievement/list/:
     get:
       operationId: dashboard_achievement_list_retrieve
-      description: Retrieve Achievement List.
+      description: Retrieve Achievement List. Pass ?user_id=<muid> to include a 'has_achievement'
+        flag per item.
       tags:
       - Achievement
       security:
@@ -1300,6 +1301,100 @@ paths:
     get:
       operationId: dashboard_achievement_rules_retrieve_2
       description: Retrieve Achievement Rule Detail.
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Achievement
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/Achievement'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    patch:
+      operationId: dashboard_achievement_rules_partial_update
+      description: Update a rule's rule_type and/or conditions. Works for both active
+        and deactivated rules. Version and achievement association are immutable.
+      parameters:
+      - in: path
+        name: rule_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Achievement
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/Achievement'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/achievement/rules/{rule_id}/activate/:
+    post:
+      operationId: dashboard_achievement_rules_activate_create
+      description: Activate an Achievement Rule.
       parameters:
       - in: path
         name: rule_id
@@ -13066,6 +13161,78 @@ paths:
       responses:
         '204':
           description: No response body
+  /api/v1/dashboard/mentor/{mentor_id}/grants/:
+    get:
+      operationId: dashboard_mentor_grants_list
+      description: List all scope grants for a mentor.
+      parameters:
+      - in: path
+        name: mentor_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/MentorScopeGrant'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/dashboard/mentor/{mentor_id}/grants/{grant_id}/:
+    delete:
+      operationId: dashboard_mentor_grants_destroy
+      description: Revoke a single mentor scope grant.
+      parameters:
+      - in: path
+        name: grant_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: mentor_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mentor
+      security:
+      - cookieAuth: []
+      - basicAuth: []
+      - jwtAuth: []
+      responses:
+        '200':
+          description: No response body
   /api/v1/dashboard/mentor/activity/:
     get:
       operationId: dashboard_mentor_activity_list
@@ -15057,7 +15224,9 @@ paths:
   /api/v1/dashboard/mentor/verify/{mentor_id}/:
     patch:
       operationId: dashboard_mentor_verify_partial_update
-      description: Verify or reject a mentor application.
+      description: Verify or reject a mentor application. Platform admins can verify
+        any application; a Company's owner can verify COMPANY_MENTOR applications
+        scoped to their own company.
       parameters:
       - in: path
         name: mentor_id
@@ -23720,7 +23889,7 @@ paths:
           description: ''
   /api/v1/leaderboard/college/:
     get:
-      operationId: leaderboard_college_retrieve
+      operationId: leaderboard_college_list
       description: Retrieve College Leaderboard.
       tags:
       - Leaderboard
@@ -23752,7 +23921,9 @@ paths:
                         items:
                           type: string
                   response:
-                    $ref: '#/components/schemas/WadhwaniCollegeLeaderboard'
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/LeaderboardCollegeItem'
                 required:
                 - hasError
                 - statusCode
@@ -24013,6 +24184,701 @@ paths:
                           type: string
                   response:
                     $ref: '#/components/schemas/WadhwaniZoneLeaderboard'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/:
+    get:
+      operationId: muComics_chapters_list
+      description: List all active (non-deleted) chapters for a comic. Supports status
+        filter and search by title.
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChapterList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: muComics_chapters_create
+      description: Create a new chapter inside a comic. Only creator or editors of
+        the comic can create.
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChapterWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChapterWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChapterWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/{chapter_id}/:
+    get:
+      operationId: muComics_chapters_retrieve
+      description: Retrieve full detail of a chapter including pages.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    patch:
+      operationId: muComics_chapters_partial_update
+      description: Update chapter details. Requires comic creator or editor permissions.
+        Archived chapters cannot be edited.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChapterWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChapterWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChapterWrite'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterDetail'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: muComics_chapters_destroy
+      description: Soft delete a chapter. Only the comic creator can delete a chapter.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterDeleteResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/{chapter_id}/archive/:
+    post:
+      operationId: muComics_chapters_archive_create
+      description: Archive a chapter. Comic creator only.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterArchiveResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/{chapter_id}/pages/:
+    get:
+      operationId: muComics_chapters_pages_list
+      description: List all active pages of a chapter, ordered by page number.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChapterPage'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: muComics_chapters_pages_create
+      description: Add a single page to a chapter. Comic creators or editors only.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ChapterPage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ChapterPage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChapterPage'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterPage'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/{chapter_id}/pages/register/:
+    post:
+      operationId: muComics_chapters_pages_register_create
+      description: Register multiple uploaded local media paths as sequential pages
+        inside a chapter. Creator/editors only.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RegisterImagesRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/RegisterImagesRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/RegisterImagesRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ChapterPage'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/{chapter_id}/pages/reorder/:
+    post:
+      operationId: muComics_chapters_pages_reorder_create
+      description: Bulk reorder page numbers in a chapter. Comic creators or editors
+        only.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PageReorderRequest'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PageReorderRequest'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PageReorderRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/PageReorderResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/{chapter_id}/publish/:
+    post:
+      operationId: muComics_chapters_publish_create
+      description: Publish a chapter. Comic creator only.
+      parameters:
+      - in: path
+        name: chapter_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterPublishResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/pages/{page_id}/:
+    patch:
+      operationId: muComics_chapters_pages_partial_update
+      description: Update page information (e.g. page_number or image_key). Comic
+        creators or editors only.
+      parameters:
+      - in: path
+        name: page_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedChapterPage'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedChapterPage'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedChapterPage'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ChapterPage'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: muComics_chapters_pages_destroy
+      description: Delete a page (soft delete). Comic creators or editors only.
+      parameters:
+      - in: path
+        name: page_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/PageDeleteResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/chapters/upload-url/:
+    post:
+      operationId: muComics_chapters_upload_url_create
+      description: Upload a media file (Image or PDF) to local storage.
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ChapterUploadRequest'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/UploadURLResponse'
                 required:
                 - hasError
                 - statusCode
@@ -24306,6 +25172,331 @@ paths:
                 - message
                 - response
           description: ''
+  /api/v1/muComics/comics/{comic_id}/contributors/:
+    get:
+      operationId: muComics_comics_contributors_list
+      description: List all contributors for a comic.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/ContributorList'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: muComics_comics_contributors_create
+      description: Add a contributor to a comic by muid and role. Only the comic creator
+        or an Admin may call this. The CREATOR role cannot be assigned via this endpoint.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ContributorWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ContributorWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ContributorWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ContributorAddResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/{comic_id}/contributors/{contributor_id}/:
+    patch:
+      operationId: muComics_comics_contributors_partial_update
+      description: Update a contributor's role. Only the comic creator or an Admin
+        may call this. The CREATOR role cannot be assigned.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: contributor_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedContributorRoleUpdate'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedContributorRoleUpdate'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedContributorRoleUpdate'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ContributorUpdateResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: muComics_comics_contributors_destroy
+      description: Remove a contributor from a comic. Only the comic creator or an
+        Admin may call this.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: contributor_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ContributorRemoveResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/{comic_id}/genres/:
+    post:
+      operationId: muComics_comics_genres_create_2
+      description: Assign a genre to a comic. Only the creator, an assigned editor,
+        or an admin might perform this action.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ComicGenreAssign'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/ComicGenreAssign'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/ComicGenreAssign'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicGenreAssignResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/{comic_id}/genres/{link_id}/:
+    delete:
+      operationId: muComics_comics_genres_destroy_2
+      description: Remove a genre from a comic. Only the creator, an assigned editor,
+        or an admin might perform this action.
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      - in: path
+        name: link_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/ComicGenreRemoveResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
   /api/v1/muComics/comics/{comic_id}/publish/:
     post:
       operationId: muComics_comics_publish_create
@@ -24347,6 +25538,291 @@ paths:
                           type: string
                   response:
                     $ref: '#/components/schemas/ComicPublishResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/genres/:
+    get:
+      operationId: muComics_comics_genres_list
+      description: List genres. Non-admins see only active genres. Admins can filter
+        with ?is_active=true|false. Supports ?search= (by name) and ?sort=name|created_at.
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/GenreRead'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    post:
+      operationId: muComics_comics_genres_create
+      description: Create a new genre. is_active defaults to true. Admin only.
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenreWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/GenreWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/GenreWrite'
+        required: true
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/GenreRead'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/genres/{genre_id}/:
+    get:
+      operationId: muComics_comics_genres_retrieve
+      description: Retrieve a genre. Non-admins only see active genres (inactive →
+        404). Admins can retrieve any genre regardless of is_active status.
+      parameters:
+      - in: path
+        name: genre_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/GenreRead'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    patch:
+      operationId: muComics_comics_genres_partial_update
+      description: Update a genre's name (slug is regenerated automatically). Admin
+        only.
+      parameters:
+      - in: path
+        name: genre_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PatchedGenreWrite'
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/PatchedGenreWrite'
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/PatchedGenreWrite'
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/GenreRead'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+    delete:
+      operationId: muComics_comics_genres_destroy
+      description: Soft-deactivate a genre (sets is_active = False). The genre row
+        and all comic_genre_link rows are preserved. Admin only.
+      parameters:
+      - in: path
+        name: genre_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/GenreDeactivateResponse'
+                required:
+                - hasError
+                - statusCode
+                - message
+                - response
+          description: ''
+  /api/v1/muComics/comics/genres/{genre_id}/reinstate/:
+    post:
+      operationId: muComics_comics_genres_reinstate_create
+      description: Reinstate (reactivate) a deactivated genre. Sets is_active = True.
+        Admin only.
+      parameters:
+      - in: path
+        name: genre_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  hasError:
+                    type: boolean
+                    default: false
+                    example: false
+                  statusCode:
+                    type: integer
+                    default: 200
+                    example: 200
+                  message:
+                    type: object
+                    properties:
+                      general:
+                        type: array
+                        items:
+                          type: string
+                  response:
+                    $ref: '#/components/schemas/GenreReinstateResponse'
                 required:
                 - hasError
                 - statusCode
@@ -24502,6 +25978,155 @@ paths:
       security:
       - cookieAuth: []
       - basicAuth: []
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/reader/comics/{comic_id}/bookmarks/:
+    post:
+      operationId: muComics_reader_comics_bookmarks_create
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: muComics_reader_comics_bookmarks_destroy
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/muComics/reader/comics/{comic_id}/interaction-status/:
+    get:
+      operationId: muComics_reader_comics_interaction_status_retrieve
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/reader/comics/{comic_id}/likes/:
+    post:
+      operationId: muComics_reader_comics_likes_create
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    delete:
+      operationId: muComics_reader_comics_likes_destroy
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '204':
+          description: No response body
+  /api/v1/muComics/reader/comics/{comic_id}/progress/:
+    get:
+      operationId: muComics_reader_comics_progress_retrieve
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+    put:
+      operationId: muComics_reader_comics_progress_update
+      parameters:
+      - in: path
+        name: comic_id
+        schema:
+          type: string
+        required: true
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/reader/me/:
+    get:
+      operationId: muComics_reader_me_retrieve
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/reader/me/bookmarks/:
+    get:
+      operationId: muComics_reader_me_bookmarks_retrieve
+      tags:
+      - Mucomics
+      security:
+      - jwtAuth: []
+      - {}
+      responses:
+        '200':
+          description: No response body
+  /api/v1/muComics/reader/me/progress/:
+    get:
+      operationId: muComics_reader_me_progress_retrieve
+      tags:
+      - Mucomics
+      security:
       - jwtAuth: []
       - {}
       responses:
@@ -27102,6 +28727,9 @@ components:
         icon_url:
           type: string
           readOnly: true
+        has_achievement:
+          type: string
+          readOnly: true
         name:
           type: string
           maxLength: 75
@@ -27140,6 +28768,7 @@ components:
       - created_at
       - created_by
       - description
+      - has_achievement
       - has_vc
       - icon_url
       - name
@@ -27241,6 +28870,8 @@ components:
           type: string
         eligible:
           type: boolean
+        claimed:
+          type: boolean
         reason:
           type: string
           nullable: true
@@ -27251,6 +28882,7 @@ components:
       required:
       - achievement_id
       - achievement_name
+      - claimed
       - eligible
       - progress
       - reason
@@ -27263,6 +28895,8 @@ components:
           type: string
         eligible:
           type: boolean
+        claimed:
+          type: boolean
         reason:
           type: string
           nullable: true
@@ -27273,6 +28907,7 @@ components:
       required:
       - achievement_id
       - achievement_name
+      - claimed
       - eligible
       - progress
       - reason
@@ -28339,6 +29974,230 @@ components:
       - name
       - updated_at
       - updated_by
+    ChapterArchiveResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - status
+    ChapterDeleteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+      - id
+    ChapterDetail:
+      type: object
+      description: Full serializer for chapter retrieval.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        comic:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        description:
+          type: string
+          readOnly: true
+          nullable: true
+        chapter_number:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+        cover_image_key:
+          type: string
+          readOnly: true
+          nullable: true
+        status:
+          enum:
+          - draft
+          - published
+          - archived
+          type: string
+          description: |-
+            * `draft` - Draft
+            * `published` - Published
+            * `archived` - Archived
+          x-spec-enum-id: 3999cf41a064d13a
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        pages:
+          type: string
+          readOnly: true
+        created_by:
+          allOf:
+          - $ref: '#/components/schemas/MinimalUser'
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+        updated_by:
+          allOf:
+          - $ref: '#/components/schemas/MinimalUser'
+          readOnly: true
+        updated_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - chapter_number
+      - comic
+      - cover_image_key
+      - created_at
+      - created_by
+      - description
+      - id
+      - pages
+      - published_at
+      - slug
+      - status
+      - title
+      - updated_at
+      - updated_by
+    ChapterList:
+      type: object
+      description: Lean serializer for listing chapters (e.g. comic chapter index).
+      properties:
+        id:
+          type: string
+          readOnly: true
+        comic:
+          type: string
+          readOnly: true
+        title:
+          type: string
+          readOnly: true
+        slug:
+          type: string
+          readOnly: true
+        chapter_number:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+          readOnly: true
+        cover_image_key:
+          type: string
+          readOnly: true
+          nullable: true
+        status:
+          enum:
+          - draft
+          - published
+          - archived
+          type: string
+          description: |-
+            * `draft` - Draft
+            * `published` - Published
+            * `archived` - Archived
+          x-spec-enum-id: 3999cf41a064d13a
+          readOnly: true
+        published_at:
+          type: string
+          format: date-time
+          readOnly: true
+          nullable: true
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - chapter_number
+      - comic
+      - cover_image_key
+      - created_at
+      - id
+      - published_at
+      - slug
+      - status
+      - title
+    ChapterPage:
+      type: object
+      description: Serializer representing individual pages in a chapter.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        chapter:
+          type: string
+        page_number:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        image_key:
+          type: string
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+      required:
+      - chapter
+      - created_at
+      - id
+      - image_key
+      - page_number
+    ChapterPublishResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+      required:
+      - id
+      - status
+    ChapterUploadRequest:
+      type: object
+      properties:
+        file:
+          type: string
+          format: uri
+      required:
+      - file
+    ChapterWrite:
+      type: object
+      description: |-
+        Input serializer for POST /chapters/ and PATCH /chapters/<id>/.
+        Caller never directly specifies slug, status, published_at, or audit fields.
+      properties:
+        comic:
+          type: string
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        chapter_number:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        cover_image_key:
+          type: string
+          nullable: true
+          maxLength: 255
+      required:
+      - chapter_number
+      - comic
+      - title
     CircleInvite:
       type: object
       description: Validates the invite request body for POST /invite/<circle_id>/.
@@ -28994,6 +30853,36 @@ components:
       - title
       - updated_at
       - updated_by
+    ComicGenreAssign:
+      type: object
+      description: |-
+        Input serializer for POST /comics/{comicId}/genres/.
+        Validates that:
+        - The genre exists.
+        - The genre is active (is_active=True).
+        - The genre is not already assigned to this comic.
+      properties:
+        genre_id:
+          type: string
+      required:
+      - genre_id
+    ComicGenreAssignResponse:
+      type: object
+      properties:
+        link_id:
+          type: string
+        genre:
+          $ref: '#/components/schemas/GenreMinimalObj'
+      required:
+      - genre
+      - link_id
+    ComicGenreRemoveResponse:
+      type: object
+      properties:
+        link_id:
+          type: string
+      required:
+      - link_id
     ComicListItem:
       type: object
       properties:
@@ -29047,9 +30936,13 @@ components:
         created_at:
           type: string
           format: date-time
+        genres:
+          type: string
+          readOnly: true
       required:
       - created_at
       - created_by
+      - genres
       - slug
       - title
     ComicPublishResponse:
@@ -30236,6 +32129,74 @@ components:
       required:
       - description
       - name
+    ContributorAddResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    ContributorList:
+      type: object
+      description: |-
+        Output shape for GET /comics/{comicId}/contributors/.
+        Flattens the ComicContributorLink → User / Comic relations.
+      properties:
+        contributor_id:
+          type: string
+        user_id:
+          type: string
+        role:
+          type: string
+        name:
+          type: string
+        comic_name:
+          type: string
+      required:
+      - comic_name
+      - contributor_id
+      - name
+      - role
+      - user_id
+    ContributorRemoveResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    ContributorUpdateResponse:
+      type: object
+      properties:
+        message:
+          type: string
+      required:
+      - message
+    ContributorWrite:
+      type: object
+      description: |-
+        Input for POST /comics/{comicId}/contributors/.
+        Resolves `muid` → User object during validation so create() receives a
+        ready-to-use User instance.
+      properties:
+        muid:
+          type: string
+        role:
+          enum:
+          - writer
+          - artist
+          - colorist
+          - editor
+          type: string
+          description: |-
+            * `writer` - Writer
+            * `artist` - Artist
+            * `colorist` - Colorist
+            * `editor` - Editor
+          x-spec-enum-id: f103fc282a981e61
+      required:
+      - muid
+      - role
     Country:
       type: object
       properties:
@@ -31539,6 +33500,76 @@ components:
       required:
       - email
       - user_type
+    GenreDeactivateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - id
+      - is_active
+    GenreMinimalObj:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        slug:
+          type: string
+      required:
+      - id
+      - name
+      - slug
+    GenreRead:
+      type: object
+      description: Output shape for genre list / detail responses.
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        name:
+          type: string
+          maxLength: 75
+        slug:
+          type: string
+          maxLength: 75
+        is_active:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+      required:
+      - created_at
+      - name
+      - slug
+      - updated_at
+    GenreReinstateResponse:
+      type: object
+      properties:
+        id:
+          type: string
+        is_active:
+          type: boolean
+      required:
+      - id
+      - is_active
+    GenreWrite:
+      type: object
+      description: |-
+        Input serializer for POST /comics/genres/ and PATCH /comics/genres/<id>/.
+        Caller only sends `name`; slug and audit fields are set internally.
+      properties:
+        name:
+          type: string
+          maxLength: 75
+      required:
+      - name
     GetUserLink:
       type: object
       properties:
@@ -32943,9 +34974,30 @@ components:
       - count
       - muid
       - name
+    LeaderboardCollegeItem:
+      type: object
+      properties:
+        id:
+          type: string
+        code:
+          type: string
+        title:
+          type: string
+        total_students:
+          type: integer
+        total_karma:
+          type: integer
+      required:
+      - code
+      - id
+      - title
+      - total_karma
+      - total_students
     LeaderboardCollegeMonthlyItem:
       type: object
       properties:
+        id:
+          type: string
         code:
           type: string
         total_karma:
@@ -32954,11 +35006,14 @@ components:
           type: integer
       required:
       - code
+      - id
       - students
       - total_karma
     LeaderboardStudentsMonthlyItem:
       type: object
       properties:
+        muid:
+          type: string
         full_name:
           type: string
         total_karma:
@@ -32972,6 +35027,7 @@ components:
       required:
       - full_name
       - institution
+      - muid
       - profile_pic
       - total_karma
     LearningCircleAttendeeReportGetResponse:
@@ -33303,6 +35359,8 @@ components:
         id:
           type: string
           maxLength: 36
+        user:
+          type: string
         user_full_name:
           type: string
           readOnly: true
@@ -33351,37 +35409,29 @@ components:
           x-spec-enum-id: 1f00471a47c591be
         preferred_ig_ids:
           nullable: true
-        verified_at:
-          type: string
-          format: date-time
-          nullable: true
-        verification_note:
-          type: string
-          nullable: true
-          maxLength: 500
-        updated_at:
-          type: string
-          format: date-time
-          nullable: true
-        created_at:
-          type: string
-          format: date-time
-          nullable: true
-        user:
-          type: string
         org:
           type: string
           nullable: true
         verified_by:
           type: string
           nullable: true
-        updated_by:
+        verified_at:
           type: string
-        created_by:
+          format: date-time
+          nullable: true
+        company:
           type: string
+          readOnly: true
+        created_at:
+          type: string
+          format: date-time
+          nullable: true
+        updated_at:
+          type: string
+          format: date-time
+          nullable: true
       required:
-      - created_by
-      - updated_by
+      - company
       - user
       - user_email
       - user_full_name
@@ -33495,6 +35545,49 @@ components:
           format: int64
         preferred_ig_ids:
           nullable: true
+    MentorScopeGrant:
+      type: object
+      properties:
+        id:
+          type: string
+          maxLength: 36
+        scope_type:
+          enum:
+          - COMPANY_MENTOR
+          - IG_MENTOR
+          - CAMPUS_MENTOR
+          - MENTOR
+          type: string
+          description: |-
+            * `COMPANY_MENTOR` - Company Mentor
+            * `IG_MENTOR` - IG Mentor
+            * `CAMPUS_MENTOR` - Campus Mentor
+            * `MENTOR` - Mentor
+          x-spec-enum-id: 332dbd6321b20f1c
+        scope_id:
+          type: string
+          nullable: true
+          maxLength: 36
+        is_active:
+          type: boolean
+        granted_by_name:
+          type: string
+          readOnly: true
+        granted_at:
+          type: string
+          format: date-time
+        revoked_by_name:
+          type: string
+          readOnly: true
+        revoked_at:
+          type: string
+          format: date-time
+          nullable: true
+      required:
+      - granted_at
+      - granted_by_name
+      - revoked_by_name
+      - scope_type
     MentorScopeMetrics:
       type: object
       properties:
@@ -34165,6 +36258,39 @@ components:
       - organiser_company
       - organiser_ig
       - organiser_type
+    PageDeleteResponse:
+      type: object
+      properties:
+        id:
+          type: string
+      required:
+      - id
+    PageOrderItem:
+      type: object
+      properties:
+        id:
+          type: string
+        page_number:
+          type: integer
+      required:
+      - id
+      - page_number
+    PageReorderRequest:
+      type: object
+      properties:
+        page_orders:
+          type: array
+          items:
+            $ref: '#/components/schemas/PageOrderItem'
+      required:
+      - page_orders
+    PageReorderResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+      required:
+      - success
     ParticipantList:
       type: object
       properties:
@@ -34368,6 +36494,49 @@ components:
           type: string
           format: date
           nullable: true
+    PatchedChapterPage:
+      type: object
+      description: Serializer representing individual pages in a chapter.
+      properties:
+        id:
+          type: string
+          readOnly: true
+        chapter:
+          type: string
+        page_number:
+          type: integer
+          maximum: 4294967295
+          minimum: 0
+          format: int64
+        image_key:
+          type: string
+          maxLength: 255
+        created_at:
+          type: string
+          format: date-time
+          readOnly: true
+    PatchedChapterWrite:
+      type: object
+      description: |-
+        Input serializer for POST /chapters/ and PATCH /chapters/<id>/.
+        Caller never directly specifies slug, status, published_at, or audit fields.
+      properties:
+        comic:
+          type: string
+        title:
+          type: string
+          maxLength: 150
+        description:
+          type: string
+          nullable: true
+        chapter_number:
+          type: string
+          format: decimal
+          pattern: ^-?\d{0,4}(?:\.\d{0,2})?$
+        cover_image_key:
+          type: string
+          nullable: true
+          maxLength: 255
     PatchedCollegeChange:
       type: object
       properties:
@@ -34524,6 +36693,23 @@ components:
           x-spec-enum-id: 3001a7a51be9bcf9
         rejection_reason:
           type: string
+    PatchedContributorRoleUpdate:
+      type: object
+      description: Input for PATCH /comics/{comicId}/contributors/{contributorId}/.
+      properties:
+        role:
+          enum:
+          - writer
+          - artist
+          - colorist
+          - editor
+          type: string
+          description: |-
+            * `writer` - Writer
+            * `artist` - Artist
+            * `colorist` - Colorist
+            * `editor` - Editor
+          x-spec-enum-id: f103fc282a981e61
     PatchedEventTaskWrite:
       type: object
       description: Write serializer for creating/updating event-linked tasks.
@@ -34557,6 +36743,15 @@ components:
           type: string
           format: date-time
           nullable: true
+    PatchedGenreWrite:
+      type: object
+      description: |-
+        Input serializer for POST /comics/genres/ and PATCH /comics/genres/<id>/.
+        Caller only sends `name`; slug and audit fields are set internally.
+      properties:
+        name:
+          type: string
+          maxLength: 75
     PatchedJobUpdate:
       type: object
       properties:
@@ -35260,6 +37455,15 @@ components:
       required:
       - id
       - title
+    RegisterImagesRequest:
+      type: object
+      properties:
+        image_keys:
+          type: array
+          items:
+            type: string
+      required:
+      - image_keys
     ResetPassword:
       type: object
       properties:
@@ -35670,6 +37874,9 @@ components:
     StudentLeaderboard:
       type: object
       properties:
+        muid:
+          type: string
+          maxLength: 100
         full_name:
           type: string
         total_karma:
@@ -35684,6 +37891,7 @@ components:
       required:
       - full_name
       - institution
+      - muid
       - profile_pic
     StudentSessionRequest:
       type: object
@@ -36113,6 +38321,16 @@ components:
       - id
       - org_type
       - title
+    UploadURLResponse:
+      type: object
+      properties:
+        upload_url:
+          type: string
+        image_key:
+          type: string
+      required:
+      - image_key
+      - upload_url
     User:
       type: object
       properties:
