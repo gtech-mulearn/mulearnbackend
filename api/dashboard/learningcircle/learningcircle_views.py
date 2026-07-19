@@ -54,6 +54,11 @@ class LearningCircleView(APIView):
         responses={200: LearningCircleDetailSerializer},
     )
     def get(self, request, circle_id: str = None):
+        user_id = (
+            JWTUtils.fetch_user_id(request)
+            if JWTUtils.is_jwt_authenticated(request)
+            else None
+        )
         if circle_id:
             learning_circle = LearningCircle.objects.get(id=circle_id)
             # circle_meetings = CircleMeetingLog.objects.filter(
@@ -83,7 +88,9 @@ class LearningCircleView(APIView):
             search_fields=["title"],
         )
         serializer = LearningCircleListMinSerializer(
-            paginated_queryset.get("queryset"), many=True
+            paginated_queryset.get("queryset"),
+            many=True,
+            context={"user_id": user_id},
         )
         return CustomResponse().paginated_response(
             data=serializer.data,
@@ -866,7 +873,7 @@ class LearningCircleMeetingPublicListView(APIView):
 class LearningCircleMeetingListAPI(APIView):
 
     @extend_schema(
-        tags=['Dashboard - Learningcircle'],
+        tags=['Dashboard - Learningcirclecicle'],
         description="Retrieve Learning Circle Meeting List.",
         responses={200: CircleMeetupMinSerializer},
     )
