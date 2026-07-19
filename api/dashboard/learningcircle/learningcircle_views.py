@@ -1,9 +1,12 @@
+import csv
+import gzip
 from datetime import timedelta
 import uuid
 
 import requests
 from django.db import transaction
 from django.db.models import Sum, Q
+from django.http import HttpResponse
 from rest_framework.views import APIView
 
 from db.learning_circle import (
@@ -714,6 +717,118 @@ class LearningCircleReportAPI(APIView):
         return CustomResponse(
             general_message="The report has been deleted successfully"
         ).get_success_response()
+
+
+class LearningCircleReportExportAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Learningcircle'],
+        description=(
+            "Export a meeting's minutes and every attendee's individual report "
+            "as a single CSV file. Accessible to the meeting creator, circle "
+            "lead, or circle creator."
+        ),
+        responses={200: OpenApiResponse(description="CSV file download.")},
+    )
+    def get(self, request, meet_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        circle_meeting, error = _get_meeting_or_response(meet_id)
+        if error:
+            return error
+        circle = circle_meeting.circle_id
+        if circle_meeting.created_by_id != user_id and not _is_lead_or_creator(
+            circle, user_id
+        ):
+            return CustomResponse(
+                general_message="You do not have permission to export the report"
+            ).get_failure_response()
+
+        attendees = (
+            CircleMeetingAttendees.objects.filter(
+                meet_id=circle_meeting, is_joined=True
+            )
+            .select_related("user_id")
+            .order_by("user_id__full_name")
+        )
+
+        meet_time = circle_meeting.meet_time
+        meet_time_str = (
+            meet_time.strftime("%Y-%m-%d %H:%M:%S") if meet_time else ""
+        )
+        safe_title = "".join(
+            ch if ch.isalnum() or ch in ("-", "_") else "_"
+            for ch in (circle_meeting.title or "meeting")
+        ).strip("_") or "meeting"
+        filename = f"meeting_report_{safe_title}_{circle_meeting.meet_code or circle_meeting.id}.csv"
+
+        buffer = HttpResponse(content_type="text/csv")
+
+        def clean(value):
+            if value is None:
+                return ""
+            text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+            if text and text[0] in ("=", "+", "-", "@"):
+                text = "'" + text
+            return text
+
+        writer = csv.writer(buffer, lineterminator="\n")
+
+        writer.writerow(["Meeting Report"])
+        writer.writerow(["Learning Circle", clean(circle.title)])
+        writer.writerow(["Interest Group", clean(getattr(circle.ig, "name", ""))])
+        writer.writerow(["Meeting Title", clean(circle_meeting.title)])
+        writer.writerow(["Description", clean(circle_meeting.description)])
+        writer.writerow(["Mode", clean(circle_meeting.mode)])
+        writer.writerow(["Meeting Time", clean(meet_time_str)])
+        writer.writerow(["Duration (hours)", clean(circle_meeting.duration)])
+        writer.writerow(["Place", clean(circle_meeting.meet_place)])
+        writer.writerow(["Meet Link", clean(circle_meeting.meet_link)])
+        writer.writerow(["Meet Code", clean(circle_meeting.meet_code)])
+        writer.writerow(
+            ["Report Submitted", "Yes" if circle_meeting.is_report_submitted else "No"]
+        )
+        writer.writerow(
+            ["LC Approved", "Yes" if circle_meeting.is_approved else "No"]
+        )
+        writer.writerow(["Total Attendees", attendees.count()])
+        writer.writerow([])
+        writer.writerow(["Minutes of Meeting"])
+        writer.writerow([clean(circle_meeting.report_text)])
+        writer.writerow([])
+        writer.writerow(["Attendee Reports"])
+        writer.writerow(
+            [
+                "MuID",
+                "Full Name",
+                "Email",
+                "Report Submitted",
+                "LC Approved",
+                "Report",
+                "Report Link",
+            ]
+        )
+        for attendee in attendees:
+            user = attendee.user_id
+            writer.writerow(
+                [
+                    clean(user.muid),
+                    clean(user.full_name),
+                    clean(user.email),
+                    "Yes" if attendee.is_report_submitted else "No",
+                    "Yes" if attendee.is_lc_approved else "No",
+                    clean(attendee.report_text),
+                    clean(attendee.report_link),
+                ]
+            )
+
+        response = HttpResponse(
+            gzip.compress(buffer.content),
+            content_type="text/csv",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Content-Encoding"] = "gzip"
+        return response
 
 
 class LearningCircleMeetingPublicListView(APIView):

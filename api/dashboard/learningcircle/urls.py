@@ -48,6 +48,10 @@ urlpatterns = [
         "meeting/report/<str:meet_id>/",
         learningcircle_views.LearningCircleReportAPI.as_view(),
     ),
+    path(
+        "meeting/report/export/<str:meet_id>/",
+        learningcircle_views.LearningCircleReportExportAPI.as_view(),
+    ),
     #  New Endpoints 
     path("user-circles/", learningcircle_views.UserCircleListAPI.as_view()),
     path("join/<str:circle_id>/", learningcircle_views.CircleJoinAPI.as_view()),
