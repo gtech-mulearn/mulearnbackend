@@ -659,6 +659,7 @@ class CircleMeetupInfoSerializer(serializers.ModelSerializer):
                     "user_id": attendee.user_id.id,
                     "full_name": attendee.user_id.full_name,
                     "is_joined": attendee.is_joined,
+                    "is_creator": attendee.user_id.id == obj.created_by_id,
                     "is_report_submitted": attendee.is_report_submitted,
                     "profile_pic": attendee.user_id.profile_pic,
                     "is_same_org": bool(cur_user_orgs & attendee_orgs),
