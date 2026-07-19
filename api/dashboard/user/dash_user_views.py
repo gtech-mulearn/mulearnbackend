@@ -628,7 +628,6 @@ class UserSearchAPI(APIView):
         queryset = (
             User.objects.all()
             .select_related("wallet_user")
-            .filter(user_settings_user__is_public=True)
             .prefetch_related("user_settings_user")
             .order_by("-wallet_user__karma")
         )
