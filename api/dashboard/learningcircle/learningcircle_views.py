@@ -1,4 +1,5 @@
 import csv
+import gzip
 from datetime import timedelta
 import uuid
 
@@ -761,15 +762,17 @@ class LearningCircleReportExportAPI(APIView):
         ).strip("_") or "meeting"
         filename = f"meeting_report_{safe_title}_{circle_meeting.meet_code or circle_meeting.id}.csv"
 
-        response = HttpResponse(content_type="text/csv")
-        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        buffer = HttpResponse(content_type="text/csv")
 
         def clean(value):
             if value is None:
                 return ""
-            return str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+            text = str(value).replace("\r\n", " ").replace("\n", " ").replace("\r", " ").strip()
+            if text and text[0] in ("=", "+", "-", "@"):
+                text = "'" + text
+            return text
 
-        writer = csv.writer(response, lineterminator="\n")
+        writer = csv.writer(buffer, lineterminator="\n")
 
         writer.writerow(["Meeting Report"])
         writer.writerow(["Learning Circle", clean(circle.title)])
@@ -818,6 +821,13 @@ class LearningCircleReportExportAPI(APIView):
                     clean(attendee.report_link),
                 ]
             )
+
+        response = HttpResponse(
+            gzip.compress(buffer.content),
+            content_type="text/csv",
+        )
+        response["Content-Disposition"] = f'attachment; filename="{filename}"'
+        response["Content-Encoding"] = "gzip"
         return response
 
 
