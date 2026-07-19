@@ -205,7 +205,10 @@ class DiscordWebhooks:
         url = config("DISCORD_WEBHOOK_LINK", default="")
         if url:
             data = {"content": content}
-            requests.post(url, json=data)
+            try:
+                requests.post(url, json=data, timeout=30)
+            except requests.exceptions.RequestException:
+                pass
 
 
 class ImportCSV:

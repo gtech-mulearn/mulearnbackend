@@ -28,7 +28,7 @@ class StudentSessionRequestAPI(APIView):
       - No duplicate REQUESTED session (same student + entity + title + starts_at).
     """
 
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Student Session Request"],
@@ -66,7 +66,7 @@ class StudentSessionRequestListAPI(APIView):
     by status (REQUESTED / APPROVED / REJECTED).
     """
 
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Student Session Request"],
@@ -123,7 +123,7 @@ class MentorStudentRequestListAPI(APIView):
         (A company/campus mentor who also mentors IGs sees those IG requests.)
     """
 
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Mentor Session Request"],
@@ -212,7 +212,7 @@ class MentorStudentRequestVerifyAPI(APIView):
       - The student can query their own requests to see the rejection.
     """
 
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Mentor Session Request"],

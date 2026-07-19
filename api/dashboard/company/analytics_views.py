@@ -8,7 +8,7 @@ from rest_framework import serializers
 from .company_views import _get_company_for_user
 
 class CompanyGigAnalyticsAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Analytics'],
@@ -109,21 +109,27 @@ def _public_learners_qs(request):
 def _talent_pool_payload(request):
     from db.user import User
     from db.task import Level, UserIgLink
-    from django.db.models import Count, Sum
+    from django.db.models import Count, Q, Sum
     from utils.types import RoleType
 
     learners = _public_learners_qs(request)
     total = learners.count()
-    level_distribution = []
-    for level in Level.objects.order_by("level_order"):
-        count = learners.filter(user_lvl_link_user__level=level).count()
-        level_distribution.append({
+    levels = Level.objects.order_by("level_order").annotate(
+        learner_count=Count(
+            "user_lvl_link_level",
+            filter=Q(user_lvl_link_level__user__in=learners),
+        )
+    )
+    level_distribution = [
+        {
             "level_id": str(level.id),
             "level_name": level.name,
             "level_order": level.level_order,
-            "count": count,
-            "percentage": round((count / total) * 100, 2) if total else 0,
-        })
+            "count": level.learner_count,
+            "percentage": round((level.learner_count / total) * 100, 2) if total else 0,
+        }
+        for level in levels
+    ]
 
     top_igs = (
         UserIgLink.objects.filter(user__in=learners, is_active=True)
@@ -151,7 +157,7 @@ def _talent_pool_payload(request):
 
 
 class CompanyDashboardSummaryAPIView(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Analytics'],
@@ -204,7 +210,7 @@ class CompanyDashboardSummaryAPIView(APIView):
 
 
 class CompanyTalentPoolAnalyticsAPIView(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Analytics'],

@@ -45,7 +45,7 @@ def get_verified_company(user_id):
 
 
 class CompanyTaskListCreateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Task"],
@@ -175,7 +175,7 @@ class CompanyTaskListCreateAPI(APIView):
 
 
 class CompanyTaskDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Company Task"],

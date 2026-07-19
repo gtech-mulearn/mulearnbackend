@@ -14,7 +14,7 @@ from .dash_mentor_helper import get_mentor_overview
 
 
 class MentorRegistrationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -83,7 +83,7 @@ class MentorRegistrationAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class MentorStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -111,7 +111,7 @@ class MentorStatusAPI(APIView):
         ).get_success_response()
 
 class MentorActivityListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -179,7 +179,7 @@ class MentorActivityListAPI(APIView):
         ).get_success_response()
 
 class MentorProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -229,7 +229,7 @@ class MentorProfileAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class MentorListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -267,7 +267,7 @@ class MentorListAPI(APIView):
         ).get_success_response()
 
 class MentorDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -304,7 +304,7 @@ def _is_company_owner_of(actor_id, mentor):
 
 
 class MentorVerifyAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -349,7 +349,7 @@ class MentorVerifyAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class MentorPublicProfileAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Public'],
@@ -368,7 +368,7 @@ class MentorPublicProfileAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 class MentorOverviewAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -418,7 +418,7 @@ class AdminAssignMentorAPI(APIView):
         Revokes mentor assignment for the given user.
         Optional query param ?mentor_tier=<tier> scopes revocation to a single tier.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
     @extend_schema(
@@ -544,7 +544,7 @@ class MentorScopeGrantListAPI(APIView):
     Admins see any mentor; a Company owner sees only their own employees'
     grants.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -579,7 +579,7 @@ class MentorScopeGrantRevokeAPI(APIView):
     grant. Only ever deactivates that grant; every other grant this mentor
     holds, and their UserOrganizationLink employment record, are untouched.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],

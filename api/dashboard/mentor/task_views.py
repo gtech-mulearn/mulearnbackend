@@ -32,7 +32,7 @@ def _save_task_skills(task_id, skill_ids, user_id):
             )
 
 class MentorIGDropdownAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Mentor Task"],
@@ -66,7 +66,7 @@ class MentorIGDropdownAPI(APIView):
         return CustomResponse(response=list(igs)).get_success_response()
 
 class MentorTaskListCreateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Mentor Task"],
@@ -187,7 +187,7 @@ class MentorTaskListCreateAPI(APIView):
 
 
 class MentorTaskDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=["Dashboard - Mentor Task"],

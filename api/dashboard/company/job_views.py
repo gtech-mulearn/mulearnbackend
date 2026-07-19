@@ -12,7 +12,7 @@ from . import job_serializers
 from .company_views import _get_company_for_user
 
 class CompanyJobAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -70,7 +70,7 @@ class CompanyJobAPI(APIView):
 
 
 class CompanyJobDetailAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -124,7 +124,7 @@ class CompanyJobDetailAPI(APIView):
         return CustomResponse(general_message="Job deleted successfully.").get_success_response()
 
 class PublicJobAPI(APIView):
-    permission_classes = [CustomizePermission]
+    permission_classes = []
 
     @extend_schema(
         tags=['Public - Jobs'],
@@ -150,7 +150,7 @@ class PublicJobAPI(APIView):
 
 
 class JobApplicationAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -205,7 +205,7 @@ class JobApplicationAPI(APIView):
         ).get_success_response()
 
 class ApplicationStatusAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -262,7 +262,7 @@ class PublicCompanyJobListAPI(APIView):
         ).get_success_response()
 
 class UserApplicationWithdrawAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -284,7 +284,7 @@ class UserApplicationWithdrawAPI(APIView):
         ).get_success_response()
 
 class UserApplicationResubmitAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -318,7 +318,7 @@ class UserApplicationResubmitAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class UserAppliedJobsAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],
@@ -388,7 +388,7 @@ class CompanyJobEngagementAnalyticsAPIView(APIView):
 
     Fetches detailed view, application, and hired statistics for a specific job posting.
     """
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company Jobs'],

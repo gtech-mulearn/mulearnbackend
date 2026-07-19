@@ -8,7 +8,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import serializers
 
 class SessionJoinAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session Participant'],
@@ -34,7 +34,7 @@ class SessionJoinAPI(APIView):
 
 
 class MentorAddParticipantAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session Participant'],
@@ -62,7 +62,7 @@ class MentorAddParticipantAPI(APIView):
 
 
 class UserSessionHistoryAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session Participant'],
@@ -93,7 +93,7 @@ class UserSessionHistoryAPI(APIView):
 
 
 class MentorParticipantListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session Participant'],
@@ -132,7 +132,7 @@ class MentorParticipantListAPI(APIView):
 
 
 class MentorParticipantUpdateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session Participant'],
@@ -170,7 +170,7 @@ class MentorParticipantUpdateAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class ParticipantFeedbackAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session Participant'],

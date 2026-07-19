@@ -10,7 +10,7 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import serializers
 
 class MentorSessionCreateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
@@ -68,7 +68,7 @@ class MentorSessionCreateAPI(APIView):
 
 
 class MentorSessionListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
@@ -110,7 +110,7 @@ class MentorSessionListAPI(APIView):
         ).get_success_response()
 
 class MentorSessionUpdateAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
@@ -167,7 +167,7 @@ class MentorSessionUpdateAPI(APIView):
         ).get_success_response()
 
 class AdminSessionListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
@@ -205,7 +205,7 @@ class AdminSessionListAPI(APIView):
         ).get_success_response()
 
 class AdminSessionVerifyAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor Session'],
@@ -264,7 +264,7 @@ class AdminSessionVerifyAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class AvailableSessionListAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Learner Session'],

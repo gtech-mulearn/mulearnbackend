@@ -11,7 +11,7 @@ from . import mulearner_serializers
 from .company_views import _get_company_for_user
 
 class CompanyMulearnerDirectoryAPI(APIView):
-    permission_classes = [CustomizePermission]
+    authentication_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Company'],
