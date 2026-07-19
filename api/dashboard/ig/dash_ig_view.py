@@ -63,6 +63,43 @@ def _validate_muids(request_data, fields=("leads", "mentors")):
     return True, None
 
 
+# " IGLead" — derived rather than hardcoded so it tracks IG_LEAD_ROLE().
+_IG_LEAD_ROLE_SUFFIX = RoleType.IG_LEAD_ROLE("")
+
+
+def _can_view_ig(roles):
+    """
+    Who may load a single Interest Group.
+
+    Deliberately broader than _can_manage_ig: any IG lead can read any IG,
+    so leads can reference how other groups are set up. Mirrors the frontend
+    middleware, which admits any role ending in " IGLead".
+    """
+    return (
+        RoleType.ADMIN.value in roles
+        or RoleType.IG_LEAD.value in roles
+        or any(role.endswith(_IG_LEAD_ROLE_SUFFIX) for role in roles)
+    )
+
+
+def _can_manage_ig(roles, ig):
+    """
+    Who may edit a single Interest Group.
+
+    Admins and the platform-wide "IG Lead" role cover every IG; the dynamic
+    "{code} IGLead" role covers only the IG it belongs to — an AI lead must
+    not be able to edit the Web Development group.
+
+    This cannot be expressed with @role_required, because the per-IG role
+    title is only known once the IG has been loaded.
+    """
+    return (
+        RoleType.ADMIN.value in roles
+        or RoleType.IG_LEAD.value in roles
+        or RoleType.IG_LEAD_ROLE(ig.code) in roles
+    )
+
+
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -332,18 +369,25 @@ class InterestGroupCSV(APIView):
 
 class InterestGroupGetAPI(APIView):
     authentication_classes = [CustomizePermission]
-    @role_required([RoleType.ADMIN.value])
+
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Interest Group Get.",
         responses={200: InterestGroupSerializer},
     )
     def get(self, request, pk):
+        """Allow Admin or any IG lead to load the IG."""
+        roles = JWTUtils.fetch_role(request)
         ig_data = InterestGroup.objects.filter(id=pk).first()
 
         if not ig_data:
             return CustomResponse(
                 general_message="Interest Group Does Not Exist"
+            ).get_failure_response()
+
+        if not _can_view_ig(roles):
+            return CustomResponse(
+                general_message="You do not have permission to view this Interest Group"
             ).get_failure_response()
 
         serializer = InterestGroupSerializer(ig_data, many=False)
@@ -352,7 +396,6 @@ class InterestGroupGetAPI(APIView):
             response={"interestGroup": serializer.data}
         ).get_success_response()
 
-    @role_required([RoleType.ADMIN.value])
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Partially update Interest Group Get.",
@@ -367,9 +410,7 @@ class InterestGroupGetAPI(APIView):
         if not ig:
             return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
 
-        # Permission: Admins or IG Lead role for this IG code
-        ig_lead_role_title = RoleType.IG_LEAD_ROLE(ig.code)
-        if (RoleType.ADMIN.value not in roles) and (ig_lead_role_title not in roles):
+        if not _can_manage_ig(roles, ig):
             return CustomResponse(general_message="You do not have permission to update this Interest Group").get_failure_response()
 
         request_data = request.data
@@ -398,6 +439,76 @@ class InterestGroupGetAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            # ── Side-effect: sync the per-IG lead role with the leads list ──────
+            # Without this the Leads field is cosmetic: the muids are stored on
+            # the IG row, but the user never receives "{code} IGLead" and so
+            # cannot edit the IG they were just made lead of.
+            #
+            # When "leads" is present it is treated as the COMPLETE set of leads
+            # for this IG — anyone dropped from it loses the role. A payload
+            # without the key leaves lead roles untouched, so unrelated partial
+            # updates are safe. The frontend only sends "leads" when it changed.
+            if "leads" in request.data:
+                raw_leads = request.data.get("leads")
+                if isinstance(raw_leads, str):
+                    try:
+                        raw_leads = json.loads(raw_leads)
+                    except Exception:
+                        raw_leads = []
+                if not isinstance(raw_leads, list):
+                    raw_leads = []
+
+                lead_role, _ = Role.objects.get_or_create(
+                    title=RoleType.IG_LEAD_ROLE(ig.code),
+                    defaults={
+                        "id": str(uuid.uuid4()),
+                        "description": f"{ig.name} Interest Group Lead",
+                        "created_by_id": user_id,
+                        "updated_by_id": user_id,
+                    },
+                )
+
+                desired_lead_muids = {
+                    (item.get("muid") if isinstance(item, dict) else item)
+                    for item in raw_leads
+                }
+                desired_lead_muids.discard(None)
+                desired_lead_muids.discard("")
+
+                # Revoke first, so a lead moved out of the list loses access even
+                # if their replacement's muid turns out to be invalid. Deleted
+                # rather than deactivated to match the role-transfer logic in
+                # dash_campus_helper.assign_ig_campus_lead().
+                UserRoleLink.objects.filter(role=lead_role).exclude(
+                    user__muid__in=desired_lead_muids
+                ).delete()
+
+                for muid in desired_lead_muids:
+                    target_user = User.objects.filter(muid=muid).first()
+                    if not target_user:
+                        continue
+
+                    _, lead_link_created = UserRoleLink.objects.get_or_create(
+                        user=target_user,
+                        role=lead_role,
+                        defaults={"verified": True, "created_by_id": user_id},
+                    )
+
+                    if lead_link_created:
+                        caller = User.objects.filter(id=user_id).first()
+                        caller_name = caller.full_name if caller else "An admin"
+                        NotificationUtils.insert_notification(
+                            user=target_user,
+                            title=f"IG Lead: {ig.name}"[:50],
+                            description=(
+                                f"{caller_name} has assigned you as a Lead for "
+                                f"{ig.name}. You can now edit this interest group."
+                            )[:200],
+                            button='View',
+                            url=f'/interest-groups/{ig.id}/',
+                            created_by=caller,
+                        )
 
             # ── Side-effect: assign Mentor role + UserIgLink for new mentors ────
             raw_mentors = request.data.get("mentors")
