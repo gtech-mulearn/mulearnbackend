@@ -3,14 +3,20 @@ from django.db.models import Count
 
 from db.task import TaskReport, KarmaActivityLog
 from utils.response import CustomResponse
-from utils.permission import CustomizePermission, JWTUtils, role_required
+from utils.permission import CustomizePermission, JWTUtils, RoleRequired
 from utils.types import RoleType
 from . import serializers
+from drf_spectacular.utils import extend_schema
 
 class TaskReportInfoView(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value])
+    @RoleRequired(roles=[RoleType.ADMIN, RoleType.FELLOW])
+    @extend_schema(
+        tags=['Dashboard - Task Report'],
+        description="Retrieve Task Report Info.",
+        responses={200: serializers.TaskReportSerializer},
+    )
     def get(self, request):
         reports = TaskReport.objects.all()
         
@@ -21,7 +27,12 @@ class TaskReportInfoView(APIView):
         serializer = serializers.TaskReportSerializer(reports, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
 
-    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value])
+    @RoleRequired(roles=[RoleType.ADMIN, RoleType.FELLOW])
+    @extend_schema(
+        tags=['Dashboard - Task Report'],
+        description="Update Task Report Info.",
+        responses={200: serializers.TaskReportUpdateSerializer},
+    )
     def put(self, request, report_id):
         report = TaskReport.objects.filter(id=report_id).first()
         if not report:
@@ -39,7 +50,10 @@ class TaskReportInfoView(APIView):
 class TaskReportTaskGroupingView(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value])
+    @RoleRequired(roles=[RoleType.ADMIN, RoleType.FELLOW])
+    @extend_schema(tags=['Dashboard - Task Report'], description="Retrieve Task Report Task Grouping.",
+        responses={200: serializers.TaskReportSerializer},
+    )
     def get(self, request):
         # 1) How many people reported to each tasks
         # Group by message_id
@@ -68,7 +82,10 @@ class TaskReportTaskGroupingView(APIView):
 class TaskReportReporterGroupingView(APIView):
     authentication_classes = [CustomizePermission]
 
-    @role_required([RoleType.ADMIN.value, RoleType.FELLOW.value])
+    @RoleRequired(roles=[RoleType.ADMIN, RoleType.FELLOW])
+    @extend_schema(tags=['Dashboard - Task Report'], description="Retrieve Task Report Reporter Grouping.",
+        responses={200: serializers.TaskReportSerializer},
+    )
     def get(self, request):
         # Request #2: "How many tasks were reported by a person" - confusing phrasing
         # It could mean "How many reports did User X make" OR "How many times was User Y reported"

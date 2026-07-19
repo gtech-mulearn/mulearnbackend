@@ -5,6 +5,7 @@ from db.achievement import Achievement, UserAchievementsLog
 
 class AchievementSerializer(serializers.ModelSerializer):
     icon_url = serializers.SerializerMethodField()
+    has_achievement = serializers.SerializerMethodField()
 
     class Meta:
         model = Achievement
@@ -22,6 +23,14 @@ class AchievementSerializer(serializers.ModelSerializer):
             # Fallback: return media path (frontend will need to prepend backend URL)
             return f"{settings.MEDIA_URL}{obj.icon}"
         return None
+
+    def get_has_achievement(self, obj):
+        """
+        Returns True if the user (passed in context as 'user_achievements')
+        already holds this achievement, otherwise False.
+        """
+        user_achievements = self.context.get('user_achievements', set())
+        return obj.id in user_achievements
 
 class AchievementBasicSerializer(serializers.ModelSerializer):
     achievement_name = serializers.CharField(source='name')

@@ -1,8 +1,9 @@
 import debug_toolbar
 from django.urls import path, include
 
-# app_name will help us do a reverse look-up latter.
+# app_name will help us do a reverse look-up  latter.
 urlpatterns = [
+    path('auth/', include('api.auth.urls')),
     path('register/', include('api.register.urls')),
     path('leaderboard/', include('api.leaderboard.urls')),
     path('dashboard/', include('api.dashboard.urls')),
@@ -15,5 +16,7 @@ urlpatterns = [
     path('top100/', include('api.top100_coders.urls')),
     path('launchpad/', include('api.launchpad.urls')),
     path('donate/', include('api.donate.urls')),
+    path('calendar/', include('api.calendar.urls')),
+    path('muComics/', include('api.muComics.urls')),
     path("__debug__/", include(debug_toolbar.urls)),
 ]

@@ -1,6 +1,7 @@
 import datetime
 from datetime import datetime
 
+# pyrefly: ignore [missing-import]
 import jwt
 from django.conf import settings
 from django.http import HttpRequest
@@ -38,6 +39,15 @@ class CustomizePermission(BasePermission):
 
     token_prefix = "Bearer"
     secret_key = SECRET_KEY
+
+    def has_permission(self, request, view):
+        try:
+            JWTUtils.is_jwt_authenticated(request)
+            return True
+        except UnauthorizedAccessException as e:
+            raise e
+        except Exception as e:
+            raise UnauthorizedAccessException(str(e))
 
     def authenticate(self, request):
         """
@@ -208,7 +218,7 @@ class RoleRequired:
     Class-based view that restricts access to views based on user roles.
 
     Usage:
-    @method_decorator(RoleRequired(['admin']))
+    @method_decorator(RoleRequired([RoleType.ADMIN.value]))
     def my_view(request, arg1, arg2):
         ...
     """

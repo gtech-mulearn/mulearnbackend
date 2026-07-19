@@ -1,0 +1,45 @@
+import uuid
+from django.db import models
+
+class Company(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    company_user = models.OneToOneField('User', on_delete=models.CASCADE, related_name='company_profile')
+    name = models.CharField(max_length=75, unique=True)
+    logo = models.TextField(null=True, blank=True)
+    description = models.TextField()
+    short_pitch = models.CharField(max_length=900, null=True, blank=True)
+    industry_sector = models.CharField(max_length=75, null=True, blank=True)
+    website_link = models.TextField(null=True, blank=True)
+    email = models.CharField(max_length=100, null=True, blank=True)
+    slug = models.CharField(max_length=100, unique=True)
+    status = models.CharField(max_length=30, default="pending")
+    location = models.CharField(max_length=150, null=True, blank=True)
+    district = models.ForeignKey('District', on_delete=models.SET_NULL, null=True, blank=True, related_name='companies')
+    state = models.ForeignKey('State', on_delete=models.SET_NULL, null=True, blank=True, related_name='companies_state')
+    country = models.ForeignKey('Country', on_delete=models.SET_NULL, null=True, blank=True, related_name='companies_country')
+    legal_name = models.CharField(max_length=150, null=True, blank=True)
+    registration_number = models.CharField(max_length=100, null=True, blank=True)
+    tax_id = models.CharField(max_length=100, null=True, blank=True)
+    company_size = models.CharField(max_length=50, null=True, blank=True)
+    linkedin_url = models.TextField(null=True, blank=True)
+    verification_document_url = models.TextField(null=True, blank=True)
+    verification_requested_at = models.DateTimeField(null=True, blank=True)
+    verified_at = models.DateTimeField(null=True, blank=True)
+    verified_by = models.CharField(max_length=36, null=True, blank=True)
+    rejection_reason = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    updated_by = models.CharField(max_length=36, null=True, blank=True)
+    deleted_by = models.CharField(max_length=36, null=True, blank=True)
+    founded_year = models.PositiveSmallIntegerField(null=True, blank=True)
+    remote_policy = models.CharField(max_length=20, null=True, blank=True)
+    culture_text = models.TextField(null=True, blank=True)
+    tech_stack = models.JSONField(null=True, blank=True)
+    perks = models.JSONField(null=True, blank=True)
+    testimonials = models.JSONField(null=True, blank=True)
+    gallery = models.JSONField(null=True, blank=True)
+
+    class Meta:
+        managed = False
+        db_table = 'company'

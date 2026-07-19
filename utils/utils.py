@@ -1,5 +1,6 @@
 import csv
 import datetime
+import re
 import gzip
 import io
 from datetime import timedelta
@@ -16,6 +17,17 @@ from django.db.models.query import QuerySet
 from django.http import HttpResponse
 from django.template.loader import render_to_string
 import string, random
+from django.utils.timezone import now
+
+def check_alumni_status(graduation_year):
+    """
+    Returns True if graduation_year is a valid 4-digit year and is in the past.
+    Mirrors the logic from mu_celery/alumni_cron.py so is_alumni is always
+    accurate at the point of creation or update — no cron lag.
+    """
+    if graduation_year and re.match(r'^[0-9]{4}$', str(graduation_year)):
+        return int(graduation_year) < now().year
+    return False
 
 
 class CommonUtils:
@@ -43,8 +55,15 @@ class CommonUtils:
         if sort_fields is None:
             sort_fields = {}
 
-        page = int(request.query_params.get("pageIndex", 1))
-        per_page = int(request.query_params.get("perPage", 10))
+        try:
+            page = int(request.query_params.get("pageIndex", 1))
+        except ValueError:
+            page = 1
+            
+        try:
+            per_page = int(request.query_params.get("perPage", 10))
+        except ValueError:
+            per_page = 10
         search_query = request.query_params.get("search")
         sort_by = request.query_params.get("sortBy")
 
@@ -90,10 +109,21 @@ class CommonUtils:
     def generate_csv(queryset: QuerySet, csv_name: str) -> HttpResponse:
         response = HttpResponse(content_type="text/csv")
         response["Content-Disposition"] = f'attachment; filename="{csv_name}.csv"'
-        fieldnames = list(queryset[0].keys())
-        writer = csv.DictWriter(response, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(queryset)
+
+        if not queryset:
+            fieldnames = []
+        else:
+            # Collect all unique keys across all rows
+            fieldnames = []
+            for row in queryset:
+                for key in row.keys():
+                    if key not in fieldnames:
+                        fieldnames.append(key)
+
+        writer = csv.DictWriter(response, fieldnames=fieldnames, extrasaction='ignore')
+        if fieldnames:
+            writer.writeheader()
+            writer.writerows(queryset)
 
         compressed_response = HttpResponse(
             gzip.compress(response.content),
@@ -172,9 +202,13 @@ class DiscordWebhooks:
         content = f"{category}<|=|>{action}"
         for value in values:
             content = f"{content}<|=|>{value}"
-        url = config("DISCORD_WEBHOOK_LINK")
-        data = {"content": content}
-        requests.post(url, json=data)
+        url = config("DISCORD_WEBHOOK_LINK", default="")
+        if url:
+            data = {"content": content}
+            try:
+                requests.post(url, json=data, timeout=30)
+            except requests.exceptions.RequestException:
+                pass
 
 
 class ImportCSV:

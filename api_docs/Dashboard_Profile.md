@@ -5,30 +5,42 @@ Base path: `/api/dashboard/profile/`
 
 
 ## Endpoint: `badges/<str:muid>`
-- Brief: Resource-specific endpoint (path param).
-- Path params:
-  - `str:muid`
-- Request body example (JSON):
-```json
-{
-  "muid": "<str:muid>",
-  "field1": "value1",
-  "field2": "value2"
-}
-```
-- Response example (success):
+
+### `GET badges/<str:muid>`
+Returns the badges earned by a user — each badge corresponds to a task the user completed that belongs to a tracked hashtag category. No auth required.
+
+**Path params:**
+- `muid` — the mulearn ID of the user (e.g. `MU-1234`)
+
+**Response (success):**
 ```json
 {
   "hasError": false,
   "statusCode": 200,
-  "message": {
-    "general": [
-      "Success"
-    ]
-  },
+  "message": { "general": ["Success"] },
   "response": {
-    "data": "..."
+    "full_name": "Alice",
+    "completed_tasks": [
+      "Introduction to Python",
+      "Build a REST API",
+      "Deploy with Docker"
+    ]
   }
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `full_name` | string | Display name of the user |
+| `completed_tasks` | string[] | Titles of tasks the user has completed that carry a badge hashtag |
+
+**Response (user not found):**
+```json
+{
+  "hasError": true,
+  "statusCode": 400,
+  "message": { "general": ["The given muid seems to be invalid"] },
+  "response": {}
 }
 ```
 

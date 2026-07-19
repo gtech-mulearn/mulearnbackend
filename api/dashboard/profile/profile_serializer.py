@@ -2,10 +2,10 @@ import uuid
 
 from decouple import config as decouple_config
 from django.db import transaction
-from django.db.models import F, Sum, Q
+from django.db.models import F, Sum, Q, Case, When, Value, CharField, Exists, OuterRef
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
-
+from db.task import UserIgLvlLink
 from db.organization import UserOrganizationLink, District
 from db.task import (
     InterestGroup,
@@ -15,8 +15,9 @@ from db.task import (
     Wallet,
     UserIgLink,
     UserLvlLink,
+    UserIgLvlLink,
 )
-from db.user import User, UserSettings, Socials
+from db.user import User, UserSettings, Socials, UserRoleLink
 from utils.exception import CustomException
 from utils.permission import JWTUtils
 from utils.types import (
@@ -25,6 +26,7 @@ from utils.types import (
     MainRoles,
     WebHookActions,
     WebHookCategory,
+    UnitType,
 )
 from utils.utils import DateTimeUtils, DiscordWebhooks
 
@@ -46,6 +48,12 @@ class UserShareQrcode(serializers.ModelSerializer):
         fields = ["profile_pic"]
 
 
+class UserCoverPicSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = User
+        fields = ["cover_pic"]
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
@@ -54,6 +62,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
     )
     karma = serializers.IntegerField(source="wallet_user.karma", default=None)
     roles = serializers.SerializerMethodField()
+    role_verification = serializers.SerializerMethodField()
+    lead_enabler_verified = serializers.SerializerMethodField()
     college_id = serializers.SerializerMethodField()
     college_code = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
@@ -71,6 +81,8 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "gender",
             "muid",
             "roles",
+            "role_verification",
+            "lead_enabler_verified",
             "college_id",
             "college_code",
             "org_district_id",
@@ -79,6 +91,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "karma_distribution",
             "level",
             "profile_pic",
+            "cover_pic",
             "interest_groups",
             "is_public",
             "percentile",
@@ -88,7 +101,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
         if not getattr(self, "user_org_link", None):
             self.user_org_link = obj.user_organization_link_user.filter(
                 org__org_type=org_type
-            ).first()
+            ).order_by("-created_at", "-id").first()
         return self.user_org_link
 
     def _get_org_type(self, obj):
@@ -113,9 +126,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
     def get_roles(self, obj):
         if "role_values" in self.context:
             return self.context["role_values"]
-        role_values = list({link.role.title for link in obj.user_role_link_user.all()})
+        
+        # Use explicitly prefetched roles to prevent lazy DB queries
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        role_values = list({link.role.title for link in role_links})
+        
         self.context["role_values"] = role_values
         return role_values
+
+    def get_role_verification(self, obj):
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        return [
+            {
+                "role": link.role.title,
+                "is_verified": link.verified
+            }
+            for link in role_links
+        ]
 
     def get_college_id(self, obj):
         org_type = self._get_org_type(obj)
@@ -146,13 +173,13 @@ class UserProfileSerializer(serializers.ModelSerializer):
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         else:
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
@@ -165,39 +192,113 @@ class UserProfileSerializer(serializers.ModelSerializer):
                     )
                 )
                 .order_by("-karma", "-updated_at", "created_at")
+                .distinct()
             )
         ranks = list(ranks.values_list("user_id", flat=True))
-        return ranks.index(obj.id) + 1
+        try:
+            return ranks.index(obj.id) + 1
+        except ValueError:
+            return None
 
     def get_karma_distribution(self, obj):
+        # Exists subqueries to safely check creator's roles WITHOUT joining,
+        # which would cause duplicate rows and multiply karma sums incorrectly.
+        is_mentor = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("task__created_by"),
+                role__title=RoleType.MENTOR.value
+            )
+        )
+        is_intern = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("task__created_by"),
+                role__title=RoleType.INTERN.value
+            )
+        )
+        is_ig_lead = Exists(
+            UserRoleLink.objects.filter(
+                user=OuterRef("task__created_by"),
+                role__title=RoleType.IG_LEAD.value
+            )
+        )
+
         return (
             KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
-            .values(task_type=F("task__type__title"))
+            # Annotate role flags first (Exists = no join, no duplication)
+            .annotate(
+                is_mentor=is_mentor,
+                is_intern=is_intern,
+                is_ig_lead=is_ig_lead,
+            )
+            # Then bucket using priority order:
+            # 1. Events Task  (task linked to an event)
+            # 2. IG Task      (task linked to an IG, or creator is IG Lead)
+            # 3. Mentor Task  (task created by a Mentor)
+            # 4. Intern Task  (task created by an Intern)
+            # 5. Other Task   (everything else)
+            .annotate(
+                bucket=Case(
+                    When(task__event_fk__isnull=False, then=Value("Events Task")),
+                    When(
+                        Q(task__ig__isnull=False) | Q(is_ig_lead=True),
+                        then=Value("IG Task")
+                    ),
+                    When(is_mentor=True, then=Value("Mentor Task")),
+                    When(is_intern=True, then=Value("Intern Task")),
+                    default=Value("Other Task"),
+                    output_field=CharField()
+                )
+            )
+            .values(task_type=F("bucket"))
             .annotate(karma=Sum("karma"))
-            .order_by()
+            .order_by("-karma")
         )
 
     def get_interest_groups(self, obj):
+        
+        # Get all IGs where user has a level entry (has interacted with this IG)
+        user_ig_levels = UserIgLvlLink.objects.filter(user=obj).select_related('ig', 'level')
+        
+        # Get user's currently selected IGs
+        selected_ig_ids = set(
+            UserIgLink.objects.filter(user=obj, is_active=True, assignment_type=UserIgLink.AssignmentType.LEARNER).values_list('ig_id', flat=True)
+        )
+        
         interest_groups = []
-        for ig_link in UserIgLink.objects.filter(user=obj):
+        for ig_level_link in user_ig_levels:
+            # Calculate IG-specific karma
             total_ig_karma = (
-                0
-                if KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, user=obj, appraiser_approved=True
+                KarmaActivityLog.objects.filter(
+                    task__ig=ig_level_link.ig, user=obj, appraiser_approved=True
                 )
                 .aggregate(Sum("karma"))
-                .get("karma__sum")
-                is None
-                else KarmaActivityLog.objects.filter(
-                    task__ig=ig_link.ig, user=obj, appraiser_approved=True
-                )
-                .aggregate(Sum("karma"))
-                .get("karma__sum")
+                .get("karma__sum") or 0
             )
-            interest_groups.append(
-                {"id": ig_link.ig.id, "name": ig_link.ig.name, "karma": total_ig_karma}
-            )
+            
+            interest_groups.append({
+                "id": ig_level_link.ig.id,
+                "name": ig_level_link.ig.name,
+                "karma": total_ig_karma,
+                "selected": ig_level_link.ig.id in selected_ig_ids,
+                "level": {
+                    "count": ig_level_link.level.level_order,
+                    "unit": UnitType.LEVEL.value
+                }
+            })
+        
         return interest_groups
+    
+    def get_lead_enabler_verified(self, obj):
+        role_links = getattr(obj, "prefetched_roles", obj.user_role_link_user.all())
+        for link in role_links:
+            role_title = getattr(getattr(link, "role", None), "title", None)
+            if (
+                role_title == RoleType.LEAD_ENABLER.value
+                and getattr(link, "verified", False)
+                and getattr(link, "is_active", False)
+            ):
+                return True
+        return False
 
 
 class UserLevelSerializer(serializers.ModelSerializer):
@@ -279,13 +380,13 @@ class UserRankSerializer(ModelSerializer):
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.MENTOR.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         elif RoleType.ENABLER.value in roles:
             ranks = Wallet.objects.filter(
                 user__user_role_link_user__verified=True,
                 user__user_role_link_user__role__title=RoleType.ENABLER.value,
                 karma__gte=user_karma,
-            ).order_by("-karma", "-updated_at", "created_at")
+            ).order_by("-karma", "-updated_at", "created_at").distinct()
         else:
             ranks = (
                 Wallet.objects.filter(karma__gte=user_karma)
@@ -298,10 +399,14 @@ class UserRankSerializer(ModelSerializer):
                     )
                 )
                 .order_by("-karma", "-updated_at", "created_at")
+                .distinct()
             )
 
         ranks = list(ranks.values_list("user_id", flat=True))
-        return ranks.index(obj.id) + 1
+        try:
+            return ranks.index(obj.id) + 1
+        except ValueError:
+            return None
 
     def get_karma(self, obj):
         return total_karma.karma if (total_karma := obj.wallet_user) else None
@@ -331,6 +436,13 @@ class ShareUserProfileUpdateSerializer(ModelSerializer):
 
 class UserProfileEditSerializer(serializers.ModelSerializer):
     communities = serializers.ListField(write_only=True)
+    district_id = serializers.PrimaryKeyRelatedField(
+        queryset=District.objects.all(),
+        source="district",
+        write_only=True,
+        required=False,
+        allow_null=True,
+    )
 
     def to_representation(self, instance):
         data = super().to_representation(instance)
@@ -343,9 +455,34 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
 
         district = instance.district
         if district:
-            data["district"] = district.name
+            zone = district.zone
+            state = zone.state if zone else None
+            country = state.country if state else None
+            data["district"] = {
+                "id": district.id,
+                "name": district.name,
+                "state": {
+                    "id": state.id if state else None,
+                    "name": state.name if state else None,
+                    "country": {
+                        "id": country.id if country else None,
+                        "name": country.name if country else None,
+                    },
+                },
+            }
         else:
             data["district"] = None
+
+        college_link = instance.user_organization_link_user.filter(
+            org__org_type=OrganizationType.COLLEGE.value
+        ).select_related("department").first()
+        if college_link and college_link.department:
+            data["department"] = {
+                "id": college_link.department.id,
+                "title": college_link.department.title,
+            }
+        else:
+            data["department"] = None
 
         return data
 
@@ -381,7 +518,7 @@ class UserProfileEditSerializer(serializers.ModelSerializer):
             "communities",
             "gender",
             "dob",
-            "district",
+            "district_id",
         ]
 
 
@@ -399,8 +536,13 @@ class UserIgEditSerializer(serializers.ModelSerializer):
 
     def update(self, instance, validated_data):
         with transaction.atomic():
-            instance.user_ig_link_user.all().delete()
             ig_details = set(validated_data.pop("interest_group", []))
+            if len(ig_details) > 3:
+                raise CustomException("Cannot add more than 3 interest groups")
+            # Only remove LEARNER-type links; preserve MENTOR/LEAD/MODERATOR assignments.
+            instance.user_ig_link_user.filter(
+                assignment_type=UserIgLink.AssignmentType.LEARNER
+            ).delete()
             user_ig_links = [
                 UserIgLink(
                     id=uuid.uuid4(),
@@ -408,12 +550,37 @@ class UserIgEditSerializer(serializers.ModelSerializer):
                     ig_id=ig_data,
                     created_by=instance,
                     created_at=DateTimeUtils.get_current_utc_time(),
+                    assignment_type=UserIgLink.AssignmentType.LEARNER,
+                    is_active=True,
                 )
                 for ig_data in ig_details
             ]
-            if len(user_ig_links) > 3:
-                raise CustomException("Cannot add more than 3 interest groups")
             UserIgLink.objects.bulk_create(user_ig_links)
+            
+            # Initialize IG levels for newly added IGs
+            from django.db import connection
+            for ig_id in ig_details:
+                # Get level 1 ID
+                with connection.cursor() as cursor:
+                    cursor.execute("SELECT id FROM level WHERE level_order = 1 LIMIT 1")
+                    level_1_id = cursor.fetchone()
+                    if level_1_id:
+                        # UPSERT: Insert level 1 if doesn't exist, do nothing if exists
+                        cursor.execute("""
+                            INSERT INTO user_ig_lvl_link (id, user_id, ig_id, level_id, created_by, created_at, updated_by, updated_at)
+                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                            ON DUPLICATE KEY UPDATE updated_at = updated_at
+                        """, [
+                            str(uuid.uuid4()),
+                            str(instance.id),
+                            str(ig_id),
+                            level_1_id[0],
+                            str(instance.id),
+                            DateTimeUtils.get_current_utc_time(),
+                            str(instance.id),
+                            DateTimeUtils.get_current_utc_time()
+                        ])
+            
             return super().update(instance, validated_data)
 
     class Meta:

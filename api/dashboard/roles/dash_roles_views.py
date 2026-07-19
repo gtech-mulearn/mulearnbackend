@@ -1,12 +1,12 @@
 import uuid
-from django.db import IntegrityError
+from django.db import IntegrityError, transaction
 from rest_framework.views import APIView
 
 from db.user import Role, User, UserRoleLink
 from utils.permission import CustomizePermission, role_required, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType, WebHookActions, WebHookCategory
-from utils.utils import CommonUtils, DiscordWebhooks, ImportCSV
+from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, ImportCSV
 from . import dash_roles_serializer
 
 from openpyxl import load_workbook
@@ -14,12 +14,18 @@ from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
 from django.db.models import Q
+from drf_spectacular.utils import extend_schema, OpenApiResponse
 
 
 class RoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve Role.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def get(self, request):
         roles_queryset = Role.objects.all()
 
@@ -53,6 +59,11 @@ class RoleAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Partially update Role.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def patch(self, request, roles_id):
         role = Role.objects.get(id=roles_id)
         old_name = role.title
@@ -84,6 +95,9 @@ class RoleAPI(APIView):
             ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Roles'], description="Delete Role.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def delete(self, request, roles_id):
         role = Role.objects.get(id=roles_id)
         role.delete()
@@ -96,6 +110,12 @@ class RoleAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create Role.",
+        request=dash_roles_serializer.RoleDashboardSerializer,
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def post(self, request):
         serializer = dash_roles_serializer.RoleDashboardSerializer(
             data=request.data, partial=True, context={"request": request}
@@ -121,6 +141,11 @@ class RoleManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve Role Management C S V.",
+        responses={200: dash_roles_serializer.RoleDashboardSerializer},
+    )
     def get(self, request):
         role = Role.objects.all()
 
@@ -134,6 +159,11 @@ class UserRoleSearchAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve User Role Search.",
+        responses={200: dash_roles_serializer.UserRoleSearchSerializer},
+    )
     def get(self, request, role_id):
         user = User.objects.filter(user_role_link_user__role_id=role_id).distinct()
 
@@ -166,6 +196,11 @@ class UserRoleLinkManagement(APIView):
     """
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Retrieve User Role Link Management.",
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def get(self, request, role_id):
         """
         Lists all the users with a given role
@@ -179,6 +214,11 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Update User Role Link Management.",
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def put(self, request, role_id):
         """
         Lists all the users without a given role;
@@ -195,10 +235,33 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create User Role Link Management.",
+        request=dash_roles_serializer.RoleAssignmentSerializer,
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def post(self, request, role_id):
         """
-        Assigns a large bunch of users a certain role
+        Assigns a large bunch of users a certain role.
+        Blocked for special roles (Mentor, Intern, Company) that require
+        per-user provisioning — use POST /dashboard/roles/user-role/ instead.
         """
+        # Guard: block bulk-assign for roles that require individual provisioning
+        _SPECIAL_ROLES = [
+            RoleType.MENTOR.value,
+            RoleType.INTERN.value,
+            RoleType.COMPANY.value,
+        ]
+        role_obj = Role.objects.filter(pk=role_id).first()
+        if role_obj and role_obj.title in _SPECIAL_ROLES:
+            return CustomResponse(
+                general_message=(
+                    f"The '{role_obj.title}' role cannot be bulk-assigned because it requires "
+                    f"additional provisioning. Use POST /dashboard/roles/user-role/ instead."
+                )
+            ).get_failure_response()
+
         request_data = request.data.copy()
         request_data["role"] = role_id
         request_data["created_by"] = JWTUtils.fetch_user_id(request)
@@ -213,6 +276,9 @@ class UserRoleLinkManagement(APIView):
         return CustomResponse(response=serialized_users.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Roles'], description="Partially update User Role Link Management.",
+        responses={200: dash_roles_serializer.UserRoleLinkManagementSerializer},
+    )
     def patch(self, request, role_id):
         """
         Removes a role from a large bunch of users
@@ -265,6 +331,12 @@ class UserRole(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create User Role.",
+        request=dash_roles_serializer.UserRoleCreateSerializer,
+        responses={200: dash_roles_serializer.UserRoleCreateSerializer},
+    )
     def post(self, request):
         serializer = dash_roles_serializer.UserRoleCreateSerializer(
             data=request.data, context={"request": request}
@@ -275,34 +347,101 @@ class UserRole(APIView):
                 general_message=serializer.errors
             ).get_failure_response()
 
-        serializer.save()
+        role_link = serializer.save()
 
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_ROLE.value,
             WebHookActions.UPDATE.value,
             request.data.get("user_id"),
         )
+
+        response_data = {"message": "Role Added Successfully"}
+        # If this was a Mentor role assignment, tell the admin whether
+        # the UserMentor profile was freshly created or already existed.
+        if hasattr(role_link, '_mentor_profile_created'):
+            response_data["mentor_profile_created"] = role_link._mentor_profile_created
+        # If this was an Intern role assignment, tell the admin whether
+        # the UserInternGuildLink was freshly created or an existing record was reactivated.
+        if hasattr(role_link, '_intern_guild_created'):
+            response_data["intern_guild_created"] = role_link._intern_guild_created
+        # If this was a Company role assignment, tell the admin whether
+        # the Company profile was freshly created or an existing record was verified.
+        if hasattr(role_link, '_company_created'):
+            response_data["company_created"] = role_link._company_created
+
         return CustomResponse(
-            general_message="Role Added Successfully"
+            general_message="Role Added Successfully",
+            response=response_data,
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Roles'], description="Delete User Role.",
+        responses={200: dash_roles_serializer.UserRoleCreateSerializer},
+    )
     def delete(self, request):
-        serializer = dash_roles_serializer.UserRoleCreateSerializer(
-            data=request.data, context={"request": request}
-        )
+        user_id_str = request.data.get("user_id")
+        role_id     = request.data.get("role_id")
 
-        if not serializer.is_valid():
+        try:
+            user_role_link = UserRoleLink.objects.select_related("role", "user").get(
+                role_id=role_id, user_id=user_id_str
+            )
+        except UserRoleLink.DoesNotExist:
             return CustomResponse(
-                general_message=serializer.errors
+                general_message="Role link not found."
             ).get_failure_response()
 
-        user_id = request.data.get("user_id")
-        role_id = request.data.get("role_id")
+        role_title = user_role_link.role.title
+        user       = user_role_link.user
+        admin_id   = JWTUtils.fetch_user_id(request)
+        now        = DateTimeUtils.get_current_utc_time()
 
-        user_role_link = UserRoleLink.objects.get(role_id=role_id, user_id=user_id)
+        with transaction.atomic():
+            user_role_link.delete()
 
-        user_role_link.delete()
+            # ── Mentor cleanup ──────────────────────────────────────────────
+            if role_title == RoleType.MENTOR.value:
+                from db.user import UserMentor
+                from db.task import UserIgLink
+                mentor_records = UserMentor.objects.filter(
+                    user=user, status=UserMentor.Status.APPROVED
+                )
+                for record in mentor_records:
+                    record.status        = UserMentor.Status.REJECTED
+                    record.updated_by_id = admin_id
+                    record.updated_at    = now
+                    record.save(update_fields=["status", "updated_by_id", "updated_at"])
+
+                    if record.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                        UserIgLink.objects.filter(
+                            user=user,
+                            assignment_type=UserIgLink.AssignmentType.MENTOR,
+                        ).update(is_active=False)
+
+                    if record.mentor_tier in (
+                        UserMentor.MentorTier.CAMPUS_MENTOR,
+                        UserMentor.MentorTier.COMPANY_MENTOR,
+                    ) and record.org:
+                        from db.organization import UserOrganizationLink
+                        UserOrganizationLink.objects.filter(
+                            user=user, org=record.org
+                        ).update(verified=False)
+
+            # ── Intern cleanup ──────────────────────────────────────────────
+            elif role_title == RoleType.INTERN.value:
+                from db.intern import UserInternGuildLink
+                from utils.types import InternGuildStatus
+                UserInternGuildLink.objects.filter(user=user).update(
+                    status=InternGuildStatus.INACTIVE.value,
+                    updated_by_id=admin_id,
+                )
+
+            # ── Company cleanup ──────────────────────────────────────────────
+            elif role_title == RoleType.COMPANY.value:
+                from db.company import Company
+                Company.objects.filter(
+                    company_user_id=user.id, status="verified"
+                ).update(status="suspended")
 
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_ROLE.value,
@@ -317,6 +456,9 @@ class UserRole(APIView):
 class RoleBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Roles'], description="Retrieve Role Base Template.",
+        responses={200: OpenApiResponse(description="XLSX file download")},
+    )
     def get(self, request):
         wb = load_workbook("./excel-templates/role_base_template.xlsx")
         ws = wb["Data Definitions"]
@@ -346,6 +488,12 @@ class UserRoleBulkAssignAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Roles'],
+        description="Create User Role Bulk Assign.",
+        request=dash_roles_serializer.UserRoleBulkAssignSerializer,
+        responses={200: dash_roles_serializer.UserRoleBulkAssignSerializer},
+    )
     def post(self, request):
         try:
             file_obj = request.FILES["user_roles_list"]

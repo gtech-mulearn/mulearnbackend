@@ -16,9 +16,6 @@ class LearningCircle(models.Model):
     org = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name="learning_circle_org_id", null=True, blank=True)
     description = models.CharField(max_length=500, blank=True, null=True)
     title = models.CharField(max_length=100, blank=False, null=False)
-    is_recurring = models.BooleanField(default=True, null=False)
-    recurrence_type = models.CharField(max_length=10, blank=True, null=True)
-    recurrence = models.IntegerField(blank=True, null=True)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="learning_circle_created_by")
     created_at = models.DateTimeField(auto_now=True)
@@ -34,7 +31,9 @@ class UserCircleLink(models.Model):
     circle = models.ForeignKey(LearningCircle, on_delete=models.CASCADE, related_name='user_circle_link_circle')
     lead = models.BooleanField(default=False)
     is_invited = models.BooleanField(default=False)
-    accepted = models.BooleanField()
+    invited_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True,
+                                   related_name='user_circle_link_invited_by', db_column='invited_by')
+    accepted = models.BooleanField(null=True, blank=True)
     accepted_at = models.DateTimeField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now=True)
 
@@ -53,6 +52,9 @@ class CircleMeetingLog(models.Model):
     title = models.CharField(max_length=100, blank=False, null=False)
     description = models.CharField(max_length=1000, blank=False, null=False)
     mode = models.CharField(max_length=10, blank=False, null=False, choices=MODE_CHOICES)
+    is_recurring = models.BooleanField(default=True, null=False)
+    recurrence_type = models.CharField(max_length=10, blank=True, null=True)
+    recurrence = models.IntegerField(blank=True, null=True) 
     is_report_needed = models.BooleanField(default=True, null=False)
     report_description = models.CharField(max_length=1000, blank=True, null=True)
     coord_x = models.FloatField(blank=False, null=False)

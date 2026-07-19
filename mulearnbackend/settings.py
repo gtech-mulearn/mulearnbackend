@@ -53,15 +53,16 @@ INSTALLED_APPS = [
     "api.apps.ApiConfig",
     "corsheaders",
     "db",
+    "drf_spectacular",
 ]
 
 MIDDLEWARE = [
+    "corsheaders.middleware.CorsMiddleware",  
     "django.middleware.security.SecurityMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     "debug_toolbar.middleware.DebugToolbarMiddleware",
     "django.middleware.common.CommonMiddleware",
-    "corsheaders.middleware.CorsMiddleware",
     "mulearnbackend.middlewares.UniversalErrorHandlerMiddleware",
 ]
 
@@ -69,8 +70,45 @@ ROOT_URLCONF = "mulearnbackend.urls"
 CORS_ALLOW_ALL_ORIGINS = True
 
 REST_FRAMEWORK = {
-    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",)
+    "DEFAULT_RENDERER_CLASSES": ("rest_framework.renderers.JSONRenderer",),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "muLearn API",
+    "DESCRIPTION": "API documentation for the muLearn Platform backend.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_PATCH": True,
+    "COMPONENT_SPLIT_COMMAND": True,
+    "ENUM_NAME_POSTFIX": "_Enum",
+    "SWAGGER_UI_SETTINGS": {
+        "deepLinking": True,
+        "persistAuthorization": True,
+        "displayOperationId": True,
+    },
+    "SERVE_PERMISSIONS": ["rest_framework.permissions.IsAdminUser"] if not decouple_config("ENABLE_SWAGGER", default=False, cast=bool) else ["rest_framework.permissions.AllowAny"],
+    "SECURITY": [
+        {
+            "jwtAuth": [],
+        }
+    ],
+    "APPEND_COMPONENTS": {
+        "securitySchemes": {
+            "jwtAuth": {
+                "type": "apiKey",
+                "in": "header",
+                "name": "Authorization",
+                "description": 'JWT Token Authentication. Enter **"Bearer \u003ctoken\u003e"**',
+            }
+        }
+    },
+    "SCHEMA_PATH_PREFIX": r"/api/v1/",
+    "POSTPROCESSING_HOOKS": ["utils.spectacular.custom_postprocessing_hook"],
+    "DEFAULT_FORMAT": "json",
+}
+
+
 # paginator settings
 PAGE_SIZE = 10
 TEMPLATES = [
@@ -274,3 +312,18 @@ import socket
 hostname, _, ips = socket.gethostbyname_ex(socket.gethostname())
 INTERNAL_IPS = [f"{ip[:-1]}1" for ip in ips] + ["127.0.0.1", "10.0.2.2"]
 DEFAULT_CHARSET = "utf-8"
+from celery.schedules import crontab
+CELERY_BEAT_SCHEDULE = {
+    'intern-daily-status-cron': {
+        'task': 'mu_celery.intern_cron.intern_daily_status_cron',
+        'schedule': crontab(hour=0, minute=5),
+    },
+    'intern-task-deadline-cron': {
+        'task': 'mu_celery.intern_cron.intern_task_deadline_cron',
+        'schedule': crontab(hour=0, minute=10),
+    },
+    'update-alumni-status-cron': {
+        'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
+        'schedule': crontab(hour=0, minute=15),
+    },
+}

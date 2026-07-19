@@ -10,6 +10,7 @@ from datetime import date
 
 from rest_framework import serializers
 
+from api.dashboard.media_content.image_utils import resolve_image_url
 from db.events import MediaContent
 
 
@@ -38,6 +39,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
     Exposes all Office Hours fields plus a computed ``status`` flag.
     """
     status = serializers.SerializerMethodField()
+    poster_thumbnail = serializers.SerializerMethodField()
 
     class Meta:
         model = MediaContent
@@ -58,6 +60,9 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
 
     def get_status(self, obj):
         return _compute_status(obj.date)
+
+    def get_poster_thumbnail(self, obj):
+        return resolve_image_url(obj.poster_thumbnail, self.context.get('request'))
 
 
 class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
@@ -123,13 +128,12 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
     """
     Write serializer for Office Hours sessions (POST / PATCH).
 
-    Date format accepted: YYYY-MM-DD — identical to _EpisodeWriteSerializer so
-    that a mixed bulk-import CSV can use a single date format for all rows.
+    Date format accepted: DD/MM/YYYY (matches the CMS schema).
+    It is converted to a Python ``date`` object for DB storage.
     """
     title            = serializers.CharField(max_length=300)
-    date             = serializers.DateField(
-        input_formats=['%Y-%m-%d'],
-        help_text='Format: YYYY-MM-DD'
+    date             = serializers.CharField(
+        help_text='Format: DD/MM/YYYY'
     )
     performer        = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
     designation      = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
@@ -139,6 +143,15 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
         child=serializers.CharField(), required=False, allow_null=True
     )
     poster_thumbnail = serializers.CharField(max_length=512, required=False, allow_blank=True, allow_null=True)
+
+    def validate_date(self, value):
+        from datetime import datetime
+        try:
+            return datetime.strptime(value, '%d/%m/%Y').date()
+        except ValueError:
+            raise serializers.ValidationError(
+                "Invalid date format. Expected DD/MM/YYYY (e.g. 27/06/2025)."
+            )
 
     def to_internal_value(self, data):
         value = super().to_internal_value(data)

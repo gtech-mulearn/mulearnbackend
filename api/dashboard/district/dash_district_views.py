@@ -12,16 +12,27 @@ from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
 from . import dash_district_serializer
 from .dash_district_helper import get_user_college_link
+from drf_spectacular.utils import extend_schema
 
 
 class DistrictDetailAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Detail.",
+        responses={200: dash_district_serializer.DistrictDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         serializer = dash_district_serializer.DistrictDetailsSerializer(
             user_org_link, many=False
@@ -34,10 +45,20 @@ class DistrictTopThreeCampusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Top Three Campus.",
+        responses={200: dash_district_serializer.DistrictTopThreeCampusSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         org_karma_dict = (
             UserOrganizationLink.objects.filter(
@@ -73,10 +94,20 @@ class DistrictStudentLevelStatusAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Student Level Status.",
+        responses={200: dash_district_serializer.DistrictStudentLevelStatusSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         district = user_org_link.org.district
 
@@ -92,10 +123,20 @@ class DistrictStudentDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Student Details.",
+        responses={200: dash_district_serializer.DistrictStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         rank = (
             Wallet.objects.filter(
@@ -103,7 +144,7 @@ class DistrictStudentDetailsAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma", '-update_at', "created_at")
+            .order_by("-karma", "-updated_at", "created_at")
             .values(
                 "user_id",
                 "karma",
@@ -153,10 +194,20 @@ class DistrictStudentDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve District Student Details C S V.",
+        responses={200: dash_district_serializer.DistrictStudentDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         rank = (
             Wallet.objects.filter(
@@ -164,7 +215,7 @@ class DistrictStudentDetailsCSVAPI(APIView):
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
             )
             .distinct()
-            .order_by("-karma", '-updated_at', "created_at")
+            .order_by("-karma", "-updated_at", "created_at")
             .values(
                 "user_id",
                 "karma",
@@ -196,10 +247,20 @@ class DistrictsCollageDetailsAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve Districts Collage Details.",
+        responses={200: dash_district_serializer.DistrictCollegeDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(
@@ -260,10 +321,20 @@ class DistrictsCollageDetailsCSVAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.DISTRICT_CAMPUS_LEAD.value, ])
+    @extend_schema(
+        tags=['Dashboard - District'],
+        description="Retrieve Districts Collage Details C S V.",
+        responses={200: dash_district_serializer.DistrictCollegeDetailsSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
         user_org_link = get_user_college_link(user_id)
+
+        if user_org_link is None:
+            return CustomResponse(
+                general_message="No college organization linked to this user."
+            ).get_failure_response()
 
         organizations = (
             Organization.objects.filter(

@@ -28,6 +28,9 @@ pip install -r requirements.txt
 ### Set environment variables
 Create a .env file in the project root directory by copying .env.sample and replace with your values.
 
+> [!NOTE]
+> Apply [this migration script](https://gist.github.com/e3ob/9e1116996e1daec8df8701548eeaa528) before running the project
+
 ### Run the Project
 ```commandline
 python manage.py runserver
