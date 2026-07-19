@@ -513,3 +513,13 @@ Base path: `/api/dashboard/learningcircle/`
 }
 ```
 
+
+## Endpoint: `meeting/report/export/<str:meet_id>/`
+- Method: `GET`
+- Brief: Export a meeting's minutes and every attendee's report as a single CSV file.
+- Path params:
+  - `str:meet_id` — UUID of the `CircleMeetingLog`.
+- Permissions: meeting creator, circle lead, or circle creator.
+- Response: `text/csv` file download (`Content-Disposition: attachment`).
+- See `api_docs/LC_Report_Export.md` for the full CSV layout, curl/Postman recipes, and error cases.
+
