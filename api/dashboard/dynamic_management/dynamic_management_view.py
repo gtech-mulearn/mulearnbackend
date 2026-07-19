@@ -8,12 +8,20 @@ from utils.utils import CommonUtils
 from .dynamic_management_serializer import DynamicRoleCreateSerializer, DynamicRoleListSerializer, \
     DynamicRoleUpdateSerializer, RoleDropDownSerializer, DynamicUserCreateSerializer, DynamicUserListSerializer, \
     DynamicUserUpdateSerializer
+from drf_spectacular.utils import extend_schema, inline_serializer
+from rest_framework import serializers as s
 
 
 class DynamicRoleAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Create Dynamic Role.",
+        request=DynamicRoleCreateSerializer,
+        responses={200: DynamicRoleCreateSerializer},
+    )
     def post(self, request):  # create
         serializer = DynamicRoleCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -23,6 +31,11 @@ class DynamicRoleAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Retrieve Dynamic Role.",
+        responses={200: DynamicRoleListSerializer},
+    )
     def get(self, request):  # list
         dynamic_roles = DynamicRole.objects.values('type').distinct()
         data = [{'type': role['type']} for role in dynamic_roles]
@@ -38,6 +51,11 @@ class DynamicRoleAPI(APIView):
                                                    pagination=paginated_queryset.get('pagination'))
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Delete Dynamic Role.",
+        responses={200: DynamicRoleUpdateSerializer},
+    )
     def delete(self, request, type_id):  # delete
         if dynamic_role := DynamicRole.objects.filter(id=type_id).first():
             DynamicRoleUpdateSerializer().destroy(dynamic_role)
@@ -49,6 +67,9 @@ class DynamicRoleAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Dynamic Management'], description="Partially update Dynamic Role.",
+        responses={200: DynamicRoleCreateSerializer},
+    )
     def patch(self, request, type_id):
         user_id = JWTUtils.fetch_user_id(request)
         context = {'user_id': user_id}
@@ -64,6 +85,12 @@ class DynamicUserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Create Dynamic User.",
+        request=DynamicUserCreateSerializer,
+        responses={200: DynamicUserCreateSerializer},
+    )
     def post(self, request):
         serializer = DynamicUserCreateSerializer(data=request.data, context={'request': request})
         if serializer.is_valid():
@@ -73,6 +100,11 @@ class DynamicUserAPI(APIView):
         return CustomResponse(message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Retrieve Dynamic User.",
+        responses={200: DynamicUserListSerializer},
+    )
     def get(self, request):
         dynamic_users = DynamicUser.objects.values('type').distinct()
         data = [{'type': user['type']} for user in dynamic_users]
@@ -88,6 +120,11 @@ class DynamicUserAPI(APIView):
                                                    pagination=paginated_queryset.get('pagination'))
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Delete Dynamic User.",
+        responses={200: DynamicUserUpdateSerializer},
+    )
     def delete(self, request, type_id):
         if dynamic_user := DynamicUser.objects.filter(id=type_id).first():
             DynamicUserUpdateSerializer().destroy(dynamic_user)
@@ -99,6 +136,9 @@ class DynamicUserAPI(APIView):
         ).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Dynamic Management'], description="Partially update Dynamic User.",
+        responses={200: DynamicUserCreateSerializer},
+    )
     def patch(self, request, type_id):  # update
         user_id = JWTUtils.fetch_user_id(request)
         context = {'user_id': user_id}
@@ -113,6 +153,12 @@ class DynamicUserAPI(APIView):
 class DynamicTypeDropDownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Dynamic Management'], description="Retrieve Dynamic Type Drop Down.",
+        responses={200: inline_serializer(
+            name='DynamicTypeDropDownResponse',
+            fields={'types': s.ListField(child=s.CharField())},
+        )},
+    )
     def get(self, request):
         dynamic_types = ManagementType.get_all_values()
         return CustomResponse(response=dynamic_types).get_success_response()
@@ -121,6 +167,11 @@ class DynamicTypeDropDownAPI(APIView):
 class RoleDropDownAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Dynamic Management'],
+        description="Retrieve Role Drop Down.",
+        responses={200: RoleDropDownSerializer},
+    )
     def get(self, request):
         roles = Role.objects.all()
         serializer = RoleDropDownSerializer(roles, many=True)

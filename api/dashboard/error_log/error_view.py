@@ -10,6 +10,8 @@ from utils.response import CustomResponse
 from utils.types import RoleType
 
 from .log_helper import ManageURLPatterns, logHandler
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class DownloadErrorLogAPI(APIView):
@@ -17,6 +19,9 @@ class DownloadErrorLogAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Download Error Log.",
+        responses={200: OpenApiResponse(description="Binary log file download (application/octet-stream)")},
     )
     def get(self, request, log_name):
         error_log = f"{settings.LOG_PATH}/{log_name}.log"
@@ -36,6 +41,14 @@ class ViewErrorLogAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve View Error Log.",
+        responses={200: inline_serializer("ErrorLogViewResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.CharField(help_text="Raw log file contents as a string"),
+        })},
     )
     def get(self, request, log_name):
         error_log = f"{settings.LOG_PATH}/{log_name}.log"
@@ -59,6 +72,9 @@ class ClearErrorLogAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Create Clear Error Log.",
+        responses={200: OpenApiResponse(description="Log file cleared successfully")},
     )
     def post(self, request, log_name):
         error_log = f"{settings.LOG_PATH}/{log_name}.log"
@@ -103,6 +119,17 @@ class LoggerAPI(APIView):
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
     )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Logger.",
+        responses={200: inline_serializer("ErrorLogLoggerResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=s.DictField(),
+                help_text="Parsed list of structured error log entries",
+            ),
+        })},
+    )
     def get(self, request):
         """
         Get the error logs.
@@ -133,6 +160,17 @@ class LoggerAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Partially update Logger.",
+        responses={200: inline_serializer("ErrorLogPatchResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.CharField(
+                default="Updated patch list",
+                help_text="Confirmation string indicating the patch list was updated",
+            ),
+        })},
     )
     def patch(self, request, error_id):
         """
@@ -169,6 +207,21 @@ class ErrorGraphAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Error Graph.",
+        responses={200: inline_serializer("ErrorLogGraphResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": inline_serializer("ErrorLogGraphData", fields={
+                "heatmap": s.DictField(help_text="URL hit frequency map keyed by endpoint"),
+                "incident_info": s.DictField(help_text="Summary counts of incidents"),
+                "affected_users": s.ListField(
+                    child=s.CharField(),
+                    help_text="List of user identifiers affected by logged errors",
+                ),
+            }),
+        })},
     )
     def get(self, request):
         """
@@ -216,6 +269,17 @@ class ErrorTabAPI(APIView):
 
     @role_required(
         [RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.TECH_TEAM.value]
+    )
+    @extend_schema(tags=['Dashboard - Error Log'], description="Retrieve Error Tab.",
+        responses={200: inline_serializer("ErrorLogTabResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=s.DictField(),
+                help_text="Parsed list of structured error log entries",
+            ),
+        })},
     )
     def get(self, request):
         """

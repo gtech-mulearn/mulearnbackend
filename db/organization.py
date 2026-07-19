@@ -72,7 +72,7 @@ class District(models.Model):
 
 
 class OrgAffiliation(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=75)
     updated_by = models.ForeignKey(
         User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='org_affiliation_updated_by')
@@ -87,7 +87,7 @@ class OrgAffiliation(models.Model):
 
 
 class Organization(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=100)
     code = models.CharField(unique=True, max_length=12)
     org_type = models.CharField(max_length=25)
@@ -106,7 +106,7 @@ class Organization(models.Model):
 
 
 class Department(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=100)
     updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by',
                                    related_name='department_updated_by')
@@ -121,7 +121,7 @@ class Department(models.Model):
 
 
 class College(models.Model):
-    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id          = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     level       = models.IntegerField(default=0)
     org         = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='college_org')
     updated_by  = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='college_updated_by')
@@ -168,7 +168,7 @@ class UserOrganizationLink(models.Model):
 
 
 class OrgKarmaType(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     title = models.CharField(max_length=75)
     karma = models.IntegerField()
     description = models.CharField(max_length=200, blank=True, null=True)
@@ -185,7 +185,7 @@ class OrgKarmaType(models.Model):
 
 
 class OrgKarmaLog(models.Model):
-    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4())
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     org = models.ForeignKey(Organization, models.DO_NOTHING, related_name='org_karma_log_org')
     karma = models.IntegerField()
     type = models.ForeignKey(OrgKarmaType, models.DO_NOTHING, db_column='type', related_name='org_karma_log_type')
@@ -236,3 +236,41 @@ class UnverifiedOrganization(models.Model):
     class Meta:
         managed = False
         db_table = 'unverified_organization'
+
+
+class EnablerCampusNote(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    enabler = models.ForeignKey(User, on_delete=models.CASCADE, related_name='enabler_notes')
+    campus = models.ForeignKey(Organization, on_delete=models.CASCADE, related_name='enabler_campus_notes')
+    note = models.TextField()
+    status = models.CharField(max_length=20, default='open')
+    priority = models.CharField(max_length=20, default='medium')
+    follow_up_date = models.DateField(blank=True, null=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='enabler_note_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='enabler_note_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'enabler_campus_note'
+
+
+class CollegeShowcase(models.Model):
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+    org = models.OneToOneField(Organization, on_delete=models.CASCADE, related_name='showcase')
+    about = models.TextField(null=True, blank=True)
+    hero_image = models.CharField(max_length=255, null=True, blank=True)
+    highlights = models.JSONField(default=list)
+    gallery = models.JSONField(default=list)
+    testimonials = models.JSONField(default=list)
+    contact_email = models.CharField(max_length=255, null=True, blank=True)
+    contact_phone = models.CharField(max_length=20, null=True, blank=True)
+    updated_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='updated_by', related_name='college_showcase_updated_by')
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by', related_name='college_showcase_created_by')
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        managed = False
+        db_table = 'college_showcase'

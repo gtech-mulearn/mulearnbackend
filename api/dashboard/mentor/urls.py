@@ -1,0 +1,44 @@
+from django.urls import path
+from . import mentor_views, session_views, availability_views, participant_views, task_views, student_requests_views
+
+
+urlpatterns = [
+    path('public/profile/<str:mentor_id>/', mentor_views.MentorPublicProfileAPI.as_view(), name='mentor-public-profile'),
+    path('public/availability/<str:mentor_id>/', availability_views.MentorPublicAvailabilityAPI.as_view(), name='mentor-public-availability'),
+    path('overview/', mentor_views.MentorOverviewAPI.as_view(), name='mentor-overview'),
+    path('register/', mentor_views.MentorRegistrationAPI.as_view(), name='mentor-register'),
+    path('status/', mentor_views.MentorStatusAPI.as_view(), name='mentor-status'),
+    path('profile/', mentor_views.MentorProfileAPI.as_view(), name='mentor-profile'),
+    path('activity/', mentor_views.MentorActivityListAPI.as_view(), name='mentor-activity'),
+    path('list/', mentor_views.MentorListAPI.as_view(), name='mentor-list'),
+    path('verify/<str:mentor_id>/', mentor_views.MentorVerifyAPI.as_view(), name='mentor-verify'),
+    path('detail/<str:mentor_id>/', mentor_views.MentorDetailAPI.as_view(), name='mentor-detail'),
+    path('session/create/', session_views.MentorSessionCreateAPI.as_view(), name='mentor-session-create'),
+    path('session/list/', session_views.MentorSessionListAPI.as_view(), name='mentor-session-list'),
+    path('session/list/<str:session_id>/', session_views.MentorSessionListAPI.as_view(), name='mentor-session-detail'),
+    path('session/update/<str:session_id>/', session_views.MentorSessionUpdateAPI.as_view(), name='mentor-session-update'),
+    path('session/available/', session_views.AvailableSessionListAPI.as_view(), name='available-session-list'),
+    path('session/admin/list/', session_views.AdminSessionListAPI.as_view(), name='admin-session-list'),
+    path('session/admin/verify/<str:session_id>/', session_views.AdminSessionVerifyAPI.as_view(), name='admin-session-verify'),
+    path('availability/', availability_views.MentorAvailabilitySlotAPI.as_view(), name='mentor-availability-list-create'),
+    path('availability/<str:slot_id>/', availability_views.MentorAvailabilitySlotAPI.as_view(), name='mentor-availability-update-delete'),
+    path('session/participation/join/<str:session_id>/', participant_views.SessionJoinAPI.as_view(), name='session-join'),
+    path('session/participant/history/', participant_views.UserSessionHistoryAPI.as_view(), name='user-session-history'),
+    path('session/participant/add/<str:session_id>/', participant_views.MentorAddParticipantAPI.as_view(), name='mentor-participant-add'),
+    path('session/participant/list/<str:session_id>/', participant_views.MentorParticipantListAPI.as_view(), name='mentor-participant-list'),
+    path('session/participant/update/<str:link_id>/', participant_views.MentorParticipantUpdateAPI.as_view(), name='mentor-participant-update'),
+    path('session/participant/feedback/<str:session_id>/', participant_views.ParticipantFeedbackAPI.as_view(), name='participant-feedback'),
+    path('tasks/ig-dropdown/',   task_views.MentorIGDropdownAPI.as_view(),       name='mentor-task-ig-dropdown'),
+    path('tasks/',               task_views.MentorTaskListCreateAPI.as_view(),    name='mentor-task-list-create'),
+    path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
+    path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
+    path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
+    path('<str:mentor_id>/grants/',              mentor_views.MentorScopeGrantListAPI.as_view(), name='mentor-grant-list'),
+    path('<str:mentor_id>/grants/<str:grant_id>/', mentor_views.MentorScopeGrantRevokeAPI.as_view(), name='mentor-grant-revoke'),
+
+    # ── Student session requests ─────────────────────────────────────────────
+    path('session/student/request/',                                 student_requests_views.StudentSessionRequestAPI.as_view(),    name='student-session-request'),
+    path('session/student/my-requests/',                             student_requests_views.StudentSessionRequestListAPI.as_view(), name='student-session-request-list'),
+    path('session/student-requests/',                                student_requests_views.MentorStudentRequestListAPI.as_view(),  name='mentor-student-request-list'),
+    path('session/student-requests/<str:session_id>/verify/',        student_requests_views.MentorStudentRequestVerifyAPI.as_view(), name='mentor-student-request-verify'),
+]

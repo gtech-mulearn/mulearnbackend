@@ -3,6 +3,8 @@ import requests
 from rest_framework.views import APIView
 
 from utils.response import CustomResponse
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 AUTH_DOMAIN = decouple.config("AUTH_DOMAIN")
@@ -14,6 +16,16 @@ class GoogleMobileAuthProxyAPI(APIView):
     Forwards requests to the auth server and returns the response.
     """
 
+    @extend_schema(tags=['Auth'], description="Create Google Mobile Auth Proxy.",
+        responses={200: inline_serializer("AuthTokenResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.DictField(
+                help_text="Upstream auth payload (access_token, refresh_token, user info, etc.)"
+            ),
+        })},
+    )
     def post(self, request):
         id_token = request.data.get("id_token") or request.data.get("idToken")
 
@@ -58,6 +70,16 @@ class AppleMobileAuthProxyAPI(APIView):
     Forwards requests to the auth server and returns the response.
     """
 
+    @extend_schema(tags=['Auth'], description="Create Apple Mobile Auth Proxy.",
+        responses={200: inline_serializer("AuthAppleTokenResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.DictField(
+                help_text="Upstream auth payload (access_token, refresh_token, user info, etc.)"
+            ),
+        })},
+    )
     def post(self, request):
         identity_token = request.data.get("identity_token") or request.data.get("identityToken")
         email = request.data.get("email")
@@ -107,6 +129,16 @@ class UserAuthenticationProxyAPI(APIView):
     Forwards requests to the auth server and returns the response.
     """
 
+    @extend_schema(tags=['Auth'], description="Create User Authentication Proxy.",
+        responses={200: inline_serializer("AuthUserAuthResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.DictField(
+                help_text="Upstream auth payload (access_token, refresh_token, user info, etc.)"
+            ),
+        })},
+    )
     def post(self, request):
         email = request.data.get("emailOrMuid")
         password = request.data.get("password")
@@ -152,6 +184,16 @@ class RefreshTokenProxyAPI(APIView):
     Forwards requests to the auth server and returns fresh tokens.
     """
 
+    @extend_schema(tags=['Auth'], description="Create Refresh Token Proxy.",
+        responses={200: inline_serializer("AuthRefreshTokenResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.DictField(
+                help_text="Upstream token payload (new access_token, refresh_token, expiry, etc.)"
+            ),
+        })},
+    )
     def post(self, request):
         refresh_token = request.data.get("refreshToken") or request.data.get("refresh_token")
 

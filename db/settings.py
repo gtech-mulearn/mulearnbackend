@@ -9,7 +9,7 @@ class Device(models.Model):
     id          = models.CharField(primary_key=True, max_length=36)
     browser     = models.CharField(max_length=36, null=False)
     os          = models.CharField(max_length=36, null=False)
-    user_id     = models.ForeignKey(User, on_delete=models.CASCADE)
+    user_id     = models.ForeignKey(User, on_delete=models.CASCADE, db_column="user_id")
     last_log_in = models.DateTimeField(null=False)
 
     class Meta:

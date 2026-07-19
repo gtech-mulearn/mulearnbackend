@@ -34,7 +34,7 @@ from db.user import (
 )
 from utils.exception import CustomException
 from utils.types import OrganizationType, RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, check_alumni_status
 from . import register_helper
 
 
@@ -137,6 +137,7 @@ class UserOrgLinkSerializer(serializers.ModelSerializer):
                     verified=True,
                     department=department if is_college(org) else None,
                     graduation_year=graduation_year if is_college(org) else None,
+                    is_alumni=check_alumni_status(graduation_year) if is_college(org) else False,
                 )
                 for org in validated_data["organizations"]
             }
@@ -308,9 +309,8 @@ class UserSerializer(serializers.ModelSerializer):
             validated_data["full_name"]
         )
 
-        password = validated_data.pop("password")
-        hashed_password = make_password(password)
-        validated_data["password"] = hashed_password
+        password = validated_data.pop("password", None)
+        validated_data["password"] = make_password(password) if password else None
 
         user = super().create(validated_data)
 
@@ -366,6 +366,10 @@ class UserSerializer(serializers.ModelSerializer):
             "district",
             "area_of_interest",
         ]
+        extra_kwargs = {
+            # Google sign-ups don't supply a password — must be optional here.
+            "password": {"required": False, "allow_null": True},
+        }
 
 
 # class UserInterestSerializer(serializers.ModelSerializer):

@@ -1,13 +1,16 @@
 import uuid
+from django.db.models import Count, Q
 
+from rest_framework import status
 from rest_framework.views import APIView
 
-from db.organization import Organization
-from db.task import Channel, InterestGroup, Level, TaskList, TaskType
+from db.organization import Organization, UserOrganizationLink
+from db.task import Channel, InterestGroup, Level, TaskList, TaskType, UserIgLink
+from db.user import UserMentor
 from db.skill import Skill, TaskSkillLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import Events, RoleType
+from utils.types import Events, OrganizationType, RoleType
 from utils.utils import CommonUtils, DateTimeUtils, ImportCSV
 from .dash_task_serializer import (
     TaskImportSerializer,
@@ -22,19 +25,172 @@ from openpyxl import load_workbook
 from tempfile import NamedTemporaryFile
 from io import BytesIO
 from django.http import FileResponse
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse, OpenApiParameter
+from drf_spectacular.openapi import OpenApiTypes
+from rest_framework import serializers as s
+from utils.schema_utils import CustomResponseSerializer
 
 
 class TaskPublicListAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task Public List.",
+        parameters=[
+            OpenApiParameter(
+                "task_source",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                enum=["company", "ig_mentor", "campus_mentor", "platform"],
+                description=(
+                    "Filter tasks by creator type: "
+                    "'company' = tasks submitted by a verified company user, "
+                    "'ig_mentor' = tasks submitted by an approved IG mentor, "
+                    "'campus_mentor' = tasks submitted by an approved campus mentor, "
+                    "'platform' = tasks created by platform admins. "
+                    "Eligibility (IG/campus membership) is enforced by the existing visibility rules."
+                ),
+            ),
+        ],
+        responses={200: inline_serializer("TaskPublicListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
     def get(self, request):
+        # Local imports to avoid circular import issues
+        from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
+        from api.dashboard.events.serializers import get_live_events
+        from db.events import Event
+
+        # Change 2: include event_fk so we can access event data without extra queries
         task_queryset = TaskList.objects.select_related(
-            "channel", "type", "level", "ig", "org"
-        ).all()
+            "channel", "type", "level", "ig", "org", "event_fk", "requested_by"
+        ).filter(active=True)
+
+        # --- Visibility filtering ---
+        # Determine which orgs/IGs the current user belongs to (if authenticated).
+        # Unauthenticated users can only see global tasks and company tasks.
+        campus_org_types = [OrganizationType.COLLEGE.value, OrganizationType.SCHOOL.value]
+
+        if JWTUtils.is_logged_in(request):
+            user_id = JWTUtils.fetch_user_id(request)
+
+            learner_org_ids = list(
+                UserOrganizationLink.objects.filter(
+                    user_id=user_id,
+                    verified=True,
+                    org__org_type__in=campus_org_types,
+                ).values_list("org_id", flat=True)
+            )
+
+            learner_ig_ids = list(
+                UserIgLink.objects.filter(
+                    user_id=user_id,
+                    is_active=True,
+                ).values_list("ig_id", flat=True)
+            )
+
+            # Org visibility rule:
+            #   - No org set (global task)                → visible to all
+            #   - Org is a Company                        → visible to all
+            #   - Org is a Campus (College/School)        → only learners of that campus
+            org_filter = (
+                Q(org__isnull=True)
+                | Q(org__org_type=OrganizationType.COMPANY.value)
+                | Q(org__org_type__in=campus_org_types, org_id__in=learner_org_ids)
+            )
+
+            # IG visibility rule:
+            #   - No IG set   → visible to all
+            #   - IG is set   → only learners in that IG
+            ig_filter = Q(ig__isnull=True) | Q(ig_id__in=learner_ig_ids)
+
+        # Change 3: build the set of event IDs the caller is permitted to access,
+        # using the same scope logic as EventTaskPublicListAPI.
+        # _get_viewer_id returns None for unauthenticated callers (safe to use).
+        # _build_scope_filter returns GLOBAL-only when user_id is None.
+        viewer_id = _get_viewer_id(request)
+        scope_filter = _build_scope_filter(viewer_id)
+        accessible_event_ids = list(
+            get_live_events()
+            .filter(
+                scope_filter,
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+            )
+            .values_list("id", flat=True)
+        )
+
+        # Change 4: new query param filters + updated visibility logic
+        event_id_param = request.query_params.get("event_id")
+        is_event_task_only = (
+            request.query_params.get("is_event_task", "").lower() == "true"
+            or request.query_params.get("event_tasks_only", "").lower() == "true"
+        )
+
+        if event_id_param:
+            # Filter to a single event — only if that event is accessible to the caller.
+            # Use .exists() on the DB to avoid lazy queryset / type-mismatch issues.
+            event_accessible = get_live_events().filter(
+                scope_filter,
+                status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+                id=event_id_param,
+            ).exists()
+            if event_accessible:
+                task_queryset = task_queryset.filter(event_fk_id=event_id_param)
+            else:
+                task_queryset = task_queryset.none()
+
+        elif is_event_task_only:
+            # Return only event-linked tasks the caller can access
+            task_queryset = task_queryset.filter(
+                event_fk_id__in=accessible_event_ids
+            )
+
+        else:
+            # Default: show regular tasks (existing org/ig rules) PLUS
+            # event-linked tasks filtered by event scope visibility.
+            if JWTUtils.is_logged_in(request):
+                regular_tasks_filter = Q(event_fk__isnull=True) & org_filter & ig_filter
+            else:
+                # Unauthenticated: global + company tasks with no IG restriction
+                regular_tasks_filter = Q(
+                    event_fk__isnull=True,
+                    ig__isnull=True,
+                ) & (Q(org__isnull=True) | Q(org__org_type=OrganizationType.COMPANY.value))
+
+            event_tasks_filter = Q(
+                event_fk__isnull=False,
+                event_fk_id__in=accessible_event_ids,
+            )
+            task_queryset = task_queryset.filter(regular_tasks_filter | event_tasks_filter)
 
         ig_id = request.query_params.get("ig_id")
         if ig_id:
             task_queryset = task_queryset.filter(ig_id=ig_id)
+
+        task_source = request.query_params.get("task_source")
+        if task_source == "company":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__company_profile__isnull=False,
+            )
+        elif task_source == "ig_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "campus_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "platform":
+            task_queryset = task_queryset.filter(requested_by__isnull=True)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
@@ -53,6 +209,7 @@ class TaskPublicListAPI(APIView):
                 "org__title",
                 "ig__name",
                 "event",
+                "event_fk__title",  # Change 5: search by linked event title
             ],
             sort_fields={
                 "hashtag": "hashtag",
@@ -68,6 +225,7 @@ class TaskPublicListAPI(APIView):
                 "org": "org__title",
                 "ig": "ig__name",
                 "event": "event",
+                "event_title": "event_fk__title",  # Change 6: sort by linked event title
                 "updated_at": "updated_at",
                 "created_at": "created_at",
             },
@@ -93,10 +251,59 @@ class TaskListAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task List.",
+        parameters=[
+            OpenApiParameter(
+                "task_source",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                enum=["company", "ig_mentor", "campus_mentor", "platform"],
+                description=(
+                    "Filter tasks by creator type: "
+                    "'company' = tasks submitted by a verified company user, "
+                    "'ig_mentor' = tasks submitted by an approved IG mentor, "
+                    "'campus_mentor' = tasks submitted by an approved campus mentor, "
+                    "'platform' = tasks created by platform admins."
+                ),
+            ),
+        ],
+        responses={200: inline_serializer("TaskListResponse", fields={
+            "data": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
-            "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-        ).all()
+            "created_by", "updated_by", "channel", "type", "level", "ig", "org", "requested_by"
+        ).prefetch_related(
+            "skill_links__skill"
+        ).annotate(
+            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
+        ).filter(active=True)
+
+        task_source = request.query_params.get("task_source")
+        if task_source == "company":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__company_profile__isnull=False,
+            )
+        elif task_source == "ig_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "campus_mentor":
+            task_queryset = task_queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+            ).distinct()
+        elif task_source == "platform":
+            task_queryset = task_queryset.filter(requested_by__isnull=True)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             task_queryset,
@@ -157,6 +364,12 @@ class TaskListAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Create Task List.",
+        request=TaskModifySerializer,
+        responses={200: OpenApiResponse(description="Task Created Successfully")},
+    )
     def post(self, request):  # create
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -214,8 +427,19 @@ class TaskAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task.",
+        responses={200: TaskModifySerializer},
+    )
     def get(self, request, task_id):
-        task_queryset = TaskList.objects.get(pk=task_id)
+        try:
+            task_queryset = TaskList.objects.get(pk=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         task_serializer = TaskModifySerializer(task_queryset, many=False)
         return CustomResponse(response=task_serializer.data).get_success_response()
 
@@ -225,6 +449,9 @@ class TaskAPI(APIView):
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Update Task.",
+        responses={200: TaskModifySerializer},
     )
     def put(self, request, task_id):  # edit
 
@@ -241,7 +468,12 @@ class TaskAPI(APIView):
             except:
                 skill_ids = None
 
-        task = TaskList.objects.get(pk=task_id)
+        try:
+            task = TaskList.objects.get(pk=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
         serializer = TaskModifySerializer(task, data=mutable_data, partial=True)
 
@@ -278,8 +510,17 @@ class TaskAPI(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Delete Task.",
+        responses={200: TaskModifySerializer},
+    )
     def delete(self, request, task_id):  # delete
-        task = TaskList.objects.get(id=task_id)
+        try:
+            task = TaskList.objects.get(id=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found."
+            ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
+
         task.delete()
 
         return CustomResponse(
@@ -297,10 +538,63 @@ class TaskListCSV(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task List C S V.",
+        responses={200: OpenApiResponse(description="CSV file download of the task list")},
+    )
     def get(self, request):
         task_queryset = TaskList.objects.select_related(
             "created_by", "updated_by", "channel", "type", "level", "ig", "org"
-        ).all()
+        ).prefetch_related(
+            "skill_links__skill"
+        ).annotate(
+            total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
+        ).filter(active=True)
+
+        task_queryset = CommonUtils.get_paginated_queryset(
+            task_queryset,
+            request,
+            search_fields=[
+                "hashtag",
+                "title",
+                "description",
+                "karma",
+                "channel__name",
+                "type__title",
+                "active",
+                "variable_karma",
+                "usage_count",
+                "level__name",
+                "org__title",
+                "ig__name",
+                "event",
+                "updated_at",
+                "updated_by__full_name",
+                "created_by__full_name",
+                "created_at",
+            ],
+            sort_fields={
+                "hashtag": "hashtag",
+                "title": "title",
+                "description": "description",
+                "karma": "karma",
+                "channels": "channel__name",
+                "type": "type__title",
+                "active": "active",
+                "variable_karma": "variable_karma",
+                "usage_count": "usage_count",
+                "level": "level__name",
+                "org": "org__title",
+                "ig": "ig__name",
+                "event": "event",
+                "updated_at": "updated_at",
+                "updated_by": "updated_by__full_name",
+                "created_by": "created_by__full_name",
+                "created_at": "created_at",
+            },
+            is_pagination=False,
+        )
 
         task_serializer_data = TaskListSerializer(task_queryset, many=True).data
 
@@ -317,10 +611,15 @@ class ImportTaskListCSV(APIView):
             RoleType.ASSOCIATE.value,
         ]
     )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Create Import Task List C S V.",
+        request=TaskImportSerializer,
+        responses={200: TaskImportSerializer},
+    )
     def post(self, request):
-        try:
-            file_obj = request.FILES["task_list"]
-        except KeyError:
+        file_obj = request.FILES.get("task_list", request.FILES.get("file"))
+        if not file_obj:
             return CustomResponse(
                 general_message="File not found."
             ).get_failure_response()
@@ -357,6 +656,7 @@ class ImportTaskListCSV(APIView):
         excel_data = [row for row in excel_data if any(row.values())]
         valid_rows = []
         error_rows = []
+        rows_to_validate = []
 
         hashtags_excel = set()
         hashtags_db = TaskList.objects.values_list("hashtag", flat=True)
@@ -371,17 +671,14 @@ class ImportTaskListCSV(APIView):
             if not hashtag:
                 row["error"] = "Missing hashtag."
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             elif hashtag in hashtags_excel:
                 row["error"] = f"Duplicate hashtag in excel: {hashtag}"
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             elif hashtag in hashtags_db:
                 row["error"] = f"Duplicate hashtag in database: {hashtag}"
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
             else:
                 hashtags_excel.add(hashtag)
@@ -390,7 +687,6 @@ class ImportTaskListCSV(APIView):
             if not title:
                 row["error"] = "Missing title."
                 error_rows.append(row)
-                excel_data.remove(row)
                 continue
 
             level = row.get("level")
@@ -404,6 +700,7 @@ class ImportTaskListCSV(APIView):
             levels_to_fetch.add(level)
             igs_to_fetch.add(ig)
             orgs_to_fetch.add(org)
+            rows_to_validate.append(row)
 
         channels = Channel.objects.filter(name__in=channels_to_fetch).values(
             "id", "name"
@@ -428,7 +725,7 @@ class ImportTaskListCSV(APIView):
         orgs_dict = {org["code"]: org["id"] for org in orgs}
         events = Events.get_all_values()
 
-        for row in excel_data[1:]:
+        for row in rows_to_validate:
             level = row.pop("level")
             channel = row.pop("channel")
             task_type = row.pop("type")
@@ -473,7 +770,15 @@ class ImportTaskListCSV(APIView):
                 row["level_id"] = level_id or None
                 row["ig_id"] = ig_id or None
                 row["org_id"] = org_id or None
-                valid_rows.append(row)
+                
+                valid_fields = [
+                    "id", "hashtag", "discord_link", "title", "description", 
+                    "karma", "channel_id", "type_id", "org_id", "event", "level_id", "ig_id", 
+                    "active", "variable_karma", "usage_count", "created_by_id", 
+                    "updated_by_id", "created_at", "updated_at"
+                ]
+                clean_row = {k: v for k, v in row.items() if k in valid_fields}
+                valid_rows.append(clean_row)
 
         task_list_serializer = TaskImportSerializer(data=valid_rows, many=True)
         success_data = []
@@ -512,7 +817,15 @@ class ChannelDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Channel Dropdown.",
+        responses={200: inline_serializer("TaskChannelDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
     )
     def get(self, request):
         channels = Channel.objects.values("id", "name")
@@ -528,7 +841,15 @@ class IGDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve I G Dropdown.",
+        responses={200: inline_serializer("TaskIGDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+        })},
     )
     def get(self, request):
         igs = InterestGroup.objects.values("id", "name")
@@ -543,7 +864,15 @@ class OrganizationDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Organization Dropdown.",
+        responses={200: inline_serializer("TaskOrganizationDropdownResponse", fields={
+            "id": s.CharField(),
+            "title": s.CharField(),
+        })},
     )
     def get(self, request):
         organizations = Organization.objects.values("id", "title")
@@ -558,10 +887,23 @@ class LevelDropdownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Level Dropdown.",
+        responses={200: inline_serializer("TaskLevelDropdownResponse", fields={
+            "id": s.CharField(),
+            "name": s.CharField(),
+            "level_order": s.IntegerField(),
+        })},
+    )
     def get(self, request):
-        levels = Level.objects.values("id", "name")
+        # level_order is the numeric rank used by downstream consumers (e.g. job
+        # eligibility "Min/Max Level" rules, which compare against a user's
+        # level_order). Returning it lets clients store the order rather than an
+        # opaque id/name.
+        levels = Level.objects.values("id", "name", "level_order").order_by("level_order")
         return CustomResponse(response=levels).get_success_response()
 
 
@@ -573,7 +915,12 @@ class TaskTypesDropDownAPI(APIView):
             RoleType.ADMIN.value,
             RoleType.FELLOW.value,
             RoleType.ASSOCIATE.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
+    )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Types Drop Down.",
+        responses={200: TasktypeSerializer},
     )
     def get(self, request):
         task_types = TaskType.objects.values("id", "title")
@@ -588,6 +935,11 @@ class EventDropDownApi(APIView):
             RoleType.ADMIN.value,
         ]
     )
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Event Drop Down Api.",
+        responses={200: inline_serializer("TaskEventDropdownResponse", fields={
+            "events": s.ListField(child=s.CharField()),
+        })},
+    )
     def get(self, request):
         events = Events.get_all_values()
         return CustomResponse(response=events).get_success_response()
@@ -596,6 +948,9 @@ class EventDropDownApi(APIView):
 class TaskBaseTemplateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Task Base Template.",
+        responses={200: OpenApiResponse(description="Excel template file download (task_base_template.xlsx)")},
+    )
     def get(self, request):
         wb = load_workbook("./excel-templates/task_base_template.xlsx")
         ws = wb["Data Definitions"]
@@ -638,7 +993,14 @@ class TaskTypeCrudAPI(APIView):
     @role_required(
         [
             RoleType.ADMIN.value,
+            RoleType.COMPANY.value,
+            RoleType.MENTOR.value,
         ]
+    )
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Retrieve Task Type Crud.",
+        responses={200: TasktypeSerializer},
     )
     def get(self, request):
         taskType = TaskType.objects.all()
@@ -661,6 +1023,12 @@ class TaskTypeCrudAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Create Task Type Crud.",
+        request=TaskTypeCreateUpdateSerializer,
+        responses={200: TasktypeSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serializer = TaskTypeCreateUpdateSerializer(
@@ -675,6 +1043,9 @@ class TaskTypeCrudAPI(APIView):
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Task'], description="Delete Task Type Crud.",
+        responses={200: TasktypeSerializer},
+    )
     def delete(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
         if taskType is None:
@@ -687,6 +1058,11 @@ class TaskTypeCrudAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - Task'],
+        description="Update Task Type Crud.",
+        responses={200: TaskTypeCreateUpdateSerializer},
+    )
     def put(self, request, task_type_id):
         taskType = TaskType.objects.filter(id=task_type_id).first()
         if taskType is None:
@@ -702,3 +1078,192 @@ class TaskTypeCrudAPI(APIView):
                 general_message=f"{taskType.title} updated successfully"
             ).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
+
+
+# ---------------------------------------------------------------------------
+# Admin: Task Approval Workflow (for company-submitted tasks)
+# ---------------------------------------------------------------------------
+
+class AdminTaskApprovalAPI(APIView):
+    """
+    GET  /dashboard/task/pending/              — list all tasks awaiting admin review
+    PATCH /dashboard/task/<task_id>/approve/   — approve a pending task (goes live)
+    PATCH /dashboard/task/<task_id>/reject/    — reject with a reason
+
+    All actions require the Admin role.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Task'], description="Retrieve Admin Task Approval.",
+        responses={200: inline_serializer("TaskAdminApprovalListResponse", fields={
+            "tasks": s.ListField(child=s.DictField()),
+            "pagination": s.DictField(),
+        })},
+    )
+    def get(self, request):
+        """List tasks with filtering."""
+        from django.utils import timezone as tz
+
+        queryset = (
+            TaskList.objects
+            .select_related("ig", "type", "requested_by", "requested_by__company_profile")
+            .order_by("created_at")
+        )
+
+        approval_status = request.query_params.get("approval_status", "pending")
+        if approval_status:
+            queryset = queryset.filter(approval_status=approval_status)
+
+        source = request.query_params.get("source")
+        role = request.query_params.get("role") or source
+        
+        if role == "mentor":
+            queryset = queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
+            )
+        elif role == "company":
+            queryset = queryset.filter(
+                requested_by__isnull=False,
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+            )
+        elif role == "admin":
+            queryset = queryset.filter(requested_by__isnull=True)
+
+        company_name = request.query_params.get("company_name")
+        if company_name:
+            queryset = queryset.filter(requested_by__company_profile__name__icontains=company_name)
+
+        mentor_name = request.query_params.get("mentor_name")
+        if mentor_name:
+            queryset = queryset.filter(
+                requested_by__full_name__icontains=mentor_name,
+                requested_by__user_role_link_user__role__title=RoleType.MENTOR.value
+            )
+
+        paginated = CommonUtils.get_paginated_queryset(
+            queryset,
+            request,
+            search_fields=[
+                "title", "hashtag",
+                "requested_by__company_profile__name",
+                "requested_by__full_name",
+            ],
+            sort_fields={"createdAt": "created_at", "title": "title"},
+            is_pagination=True,
+        )
+
+        data = []
+        for task in paginated["queryset"]:
+            company_profile = getattr(task.requested_by, "company_profile", None) if task.requested_by else None
+            data.append({
+                "id":                   str(task.id),
+                "title":                task.title,
+                "hashtag":              task.hashtag,
+                "description":          task.description,
+                "karma":                task.karma,
+                "approval_status":      task.approval_status,
+                "ig":                   {"id": str(task.ig.id), "name": task.ig.name} if task.ig else None,
+                "type":                 {"id": str(task.type.id), "title": task.type.title} if task.type else None,
+                "company_name":         company_profile.name if company_profile else None,
+                "requested_by": {
+                    "id":        str(task.requested_by.id),
+                    "full_name": task.requested_by.full_name,
+                } if task.requested_by else None,
+                "requested_at": task.requested_at.isoformat() if task.requested_at else None,
+                "created_at":   task.created_at.isoformat(),
+            })
+
+        return CustomResponse(
+            general_message="Tasks fetched successfully.",
+            response={"tasks": data, "pagination": paginated["pagination"]},
+        ).get_success_response()
+
+    @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - Task'], description="Partially update Admin Task Approval.",
+        responses={200: inline_serializer("TaskAdminApprovalActionResponse", fields={
+            "task_id": s.CharField(),
+            "approval_status": s.CharField(),
+            "active": s.BooleanField(),
+            "rejection_reason": s.CharField(allow_null=True),
+            "reviewed_by": s.CharField(allow_null=True),
+            "reviewed_at": s.CharField(allow_null=True),
+        })},
+    )
+    def patch(self, request, task_id):
+        """
+        Approve or reject a pending task.
+        Body: { "action": "approve" | "reject", "reason": "<string — required for reject>" }
+        """
+        from django.utils import timezone as tz
+
+        action = request.data.get("action")
+        if action not in ("approve", "reject"):
+            return CustomResponse(
+                general_message="Invalid action. Must be 'approve' or 'reject'.",
+                message={"error_code": "INVALID_ACTION"},
+            ).get_failure_response()
+
+        try:
+            task = TaskList.objects.get(id=task_id)
+        except TaskList.DoesNotExist:
+            return CustomResponse(
+                general_message="Task not found.",
+                message={"error_code": "TASK_NOT_FOUND"},
+            ).get_failure_response()
+
+        if task.approval_status != "pending":
+            return CustomResponse(
+                general_message=f"Only pending tasks can be reviewed. Current status: '{task.approval_status}'.",
+                message={"error_code": "INVALID_STATUS_TRANSITION"},
+            ).get_failure_response()
+
+        admin_user_id = JWTUtils.fetch_user_id(request)
+        from db.user import User as UserModel
+        admin_user = UserModel.objects.filter(id=admin_user_id).first()
+
+        now = tz.now()
+
+        if action == "approve":
+            task.approval_status = "approved"
+            task.active = True
+            task.rejection_reason = None
+            task.reviewed_by_admin = admin_user
+            task.reviewed_at = now
+            task.updated_by = admin_user
+            task.save(update_fields=[
+                "approval_status", "active", "rejection_reason",
+                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+            ])
+            message = "Task approved and is now live."
+        else:
+            reason = (request.data.get("reason") or "").strip()
+            if not reason:
+                return CustomResponse(
+                    general_message="A rejection reason is required.",
+                    message={"error_code": "REASON_REQUIRED"},
+                ).get_failure_response()
+            task.approval_status = "rejected"
+            task.active = False
+            task.rejection_reason = reason
+            task.reviewed_by_admin = admin_user
+            task.reviewed_at = now
+            task.updated_by = admin_user
+            task.save(update_fields=[
+                "approval_status", "active", "rejection_reason",
+                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+            ])
+            message = "Task rejected."
+
+        return CustomResponse(
+            general_message=message,
+            response={
+                "task_id":          str(task.id),
+                "approval_status":  task.approval_status,
+                "active":           task.active,
+                "rejection_reason": task.rejection_reason,
+                "reviewed_by":      str(admin_user.id) if admin_user else None,
+                "reviewed_at":      task.reviewed_at.isoformat() if task.reviewed_at else None,
+            },
+        ).get_success_response()

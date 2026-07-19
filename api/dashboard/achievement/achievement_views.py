@@ -10,7 +10,7 @@ from django.db.models import Q
 from django.http import FileResponse
 from django.utils.timezone import now
 from rest_framework.generics import get_object_or_404
-from rest_framework.parsers import FormParser, MultiPartParser
+from rest_framework.parsers import FormParser, MultiPartParser, JSONParser
 from rest_framework.views import APIView
 
 from datetime import datetime, timedelta
@@ -22,10 +22,17 @@ from mu_celery.achievement_tasks import bulk_check_and_issue_achievements
 from utils.permission import CustomizePermission, JWTUtils, RoleRequired, BackendApiKeyPermission
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, CommonUtils
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 
 class AchievementListAPIView(APIView):
+    @extend_schema(
+        tags=['Dashboard - Achievement'],
+        description="Retrieve Achievement List. Pass ?user_id=<muid> to include a 'has_achievement' flag per item.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -41,9 +48,24 @@ class AchievementListAPIView(APIView):
                 general_message="User Not Exists"
             ).get_failure_response()
 
+        # Optional: check which achievements a specific user already has
+        target_user_id = request.query_params.get('user_id')
+        user_achievement_ids = set()
+        if target_user_id:
+            user_achievement_ids = set(
+                UserAchievementsLog.objects.filter(
+                    user_id=target_user_id
+                ).values_list('achievement_id_id', flat=True)
+            )
+
         achievements = Achievement.objects.all()
         achievements_serializer = achievement_serializer.AchievementSerializer(
-            achievements, many=True
+            achievements,
+            many=True,
+            context={
+                'request': request,
+                'user_achievements': user_achievement_ids,
+            }
         )
 
         return CustomResponse(
@@ -52,9 +74,11 @@ class AchievementListAPIView(APIView):
 
 
 class AchievementCreateAPIView(APIView):
-    from rest_framework.parsers import MultiPartParser, FormParser, JSONParser
     parser_classes = [MultiPartParser, FormParser, JSONParser]
     
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Achievement Create.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -162,8 +186,13 @@ class AchievementCreateAPIView(APIView):
 
 
 class AchievementUpdateAPIView(APIView):
-    parser_classes = [MultiPartParser, FormParser]
+    parser_classes = [MultiPartParser, FormParser, JSONParser]
 
+    @extend_schema(
+        tags=['Dashboard - Achievement'],
+        description="Update Achievement Update.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def put(self, request, achievement_id=None):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -193,8 +222,10 @@ class AchievementUpdateAPIView(APIView):
         # Convert QueryDict to regular dict to properly handle list/boolean assignments
         data = dict(request.data)
         # QueryDict wraps values in lists, so unwrap single values
+        # Exclude intentional list fields like 'tags' from unwrapping
+        list_fields = {'tags'}
         for key in data:
-            if isinstance(data[key], list) and len(data[key]) == 1:
+            if key not in list_fields and isinstance(data[key], list) and len(data[key]) == 1:
                 data[key] = data[key][0]
         data["updated_by"] = user_id
 
@@ -277,6 +308,9 @@ class AchievementUpdateAPIView(APIView):
 
 
 class AchievementDeleteAPIView(APIView):
+    @extend_schema(tags=['Dashboard - Achievement'], description="Delete Achievement Delete.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def delete(self, request, achievement_id):
         user_id = JWTUtils.fetch_user_id(request)
 
@@ -304,6 +338,11 @@ class AchievementDeleteAPIView(APIView):
 
 
 class UserAchievementsListAPIView(APIView):
+    @extend_schema(
+        tags=['Dashboard - Achievement'],
+        description="Retrieve User Achievements List.",
+        responses={200: achievement_serializer.UserAchievementsSerializer},
+    )
     def get(self, request, muid):
         try:
             user = get_object_or_404(User, muid=muid)
@@ -344,6 +383,9 @@ class UserAchievementsListAPIView(APIView):
 
 
 class UserAchievementsIssueAPIView(APIView):
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create User Achievements Issue.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -400,6 +442,9 @@ class UserAchievementsIssueAPIView(APIView):
 class EligibleAchievementsAPIView(APIView):
     """Get achievements the current user is eligible to claim"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Eligible Achievements.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -429,6 +474,9 @@ class EligibleAchievementsAPIView(APIView):
 class ClaimAchievementAPIView(APIView):
     """Claim an achievement (user action)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Claim Achievement.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request, achievement_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -458,6 +506,27 @@ class ClaimAchievementAPIView(APIView):
 class UserProgressAPIView(APIView):
     """Get progress towards all achievements"""
 
+    @extend_schema(
+        tags=['Dashboard - Achievement'], description="Retrieve User Progress.",
+        responses={200: inline_serializer("AchievementUserProgressResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("AchievementProgressItem", fields={
+                    "achievement_id": s.CharField(),
+                    "achievement_name": s.CharField(),
+                    "eligible": s.BooleanField(),
+                    "claimed": s.BooleanField(),
+                    "reason": s.CharField(allow_null=True),
+                    "progress": s.DictField(
+                        help_text="Rule-engine progress data (e.g. current vs. required counts)"
+                    ),
+                }),
+                help_text="Progress towards every achievement for the current user",
+            ),
+        })},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -475,6 +544,7 @@ class UserProgressAPIView(APIView):
                 "achievement_id": result.achievement_id,
                 "achievement_name": result.achievement_name,
                 "eligible": result.eligible,
+                "claimed": result.claimed,
                 "reason": result.reason,
                 "progress": result.progress,
             }
@@ -487,6 +557,9 @@ class UserProgressAPIView(APIView):
 class AchievementRuleListAPIView(APIView):
     """List all achievement rules (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Achievement Rule List.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -515,6 +588,9 @@ class AchievementRuleListAPIView(APIView):
 class AchievementRuleCreateAPIView(APIView):
     """Create a new achievement rule (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Achievement Rule Create.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -560,8 +636,11 @@ class AchievementRuleCreateAPIView(APIView):
 
 
 class AchievementRuleDetailAPIView(APIView):
-    """Get details of a specific rule (admin)"""
+    """Get or update details of a specific rule (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Achievement Rule Detail.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request, rule_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -589,10 +668,77 @@ class AchievementRuleDetailAPIView(APIView):
 
         return CustomResponse(response=data).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Achievement'],
+        description="Update a rule's rule_type and/or conditions. Works for both active and deactivated rules. Version and achievement association are immutable.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
+    @RoleRequired([RoleType.ADMIN.value])
+    def patch(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.select_related("achievement").get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        EDITABLE_FIELDS = {"rule_type", "conditions"}
+        data = request.data
+
+        unknown_fields = set(data.keys()) - EDITABLE_FIELDS
+        if unknown_fields:
+            return CustomResponse(
+                general_message=f"Fields not editable: {', '.join(sorted(unknown_fields))}. Only rule_type and conditions can be updated."
+            ).get_failure_response()
+
+        if not EDITABLE_FIELDS.intersection(data.keys()):
+            return CustomResponse(
+                general_message="No editable fields provided. Supply at least one of: rule_type, conditions."
+            ).get_failure_response()
+
+        if "rule_type" in data:
+            valid_rule_types = [choice[0] for choice in AchievementRule.RULE_TYPE_CHOICES]
+            if data["rule_type"] not in valid_rule_types:
+                return CustomResponse(
+                    general_message=f"Invalid rule_type '{data['rule_type']}'. Valid choices: {', '.join(valid_rule_types)}"
+                ).get_failure_response()
+            rule.rule_type = data["rule_type"]
+
+        if "conditions" in data:
+            if not isinstance(data["conditions"], dict):
+                return CustomResponse(
+                    general_message="conditions must be a JSON object."
+                ).get_failure_response()
+            rule.conditions = data["conditions"]
+
+        rule.save(update_fields=[f for f in EDITABLE_FIELDS if f in data] + ["updated_at"])
+
+        return CustomResponse(
+            general_message=f"Rule v{rule.version} updated successfully",
+            response={
+                "id": str(rule.id),
+                "achievement_id": str(rule.achievement_id),
+                "achievement_name": rule.achievement.name,
+                "version": rule.version,
+                "rule_type": rule.rule_type,
+                "conditions": rule.conditions,
+                "is_active": rule.is_active,
+            },
+        ).get_success_response()
+
 
 class AchievementRuleDeactivateAPIView(APIView):
     """Deactivate a rule (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Achievement Rule Deactivate.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request, rule_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -615,9 +761,62 @@ class AchievementRuleDeactivateAPIView(APIView):
         ).get_success_response()
 
 
+class AchievementRuleActivateAPIView(APIView):
+    """Activate a rule (admin)"""
+
+    @extend_schema(tags=['Dashboard - Achievement'], description="Activate an Achievement Rule.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
+    def post(self, request, rule_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        if not user_id:
+            return CustomResponse(
+                general_message="Invalid or missing token"
+            ).get_failure_response()
+
+        try:
+            rule = AchievementRule.objects.get(id=rule_id)
+        except AchievementRule.DoesNotExist:
+            return CustomResponse(
+                general_message="Rule not found"
+            ).get_failure_response()
+
+        if rule.is_active:
+            return CustomResponse(
+                general_message=f"Rule v{rule.version} is already active"
+            ).get_failure_response()
+
+        rule.is_active = True
+        rule.save()
+
+        return CustomResponse(
+            general_message=f"Rule v{rule.version} activated"
+        ).get_success_response()
+
+
 class SimulateRulesAPIView(APIView):
     """Simulate rule evaluation for a user (admin/debug)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Simulate Rules.",
+        responses={200: inline_serializer("AchievementSimulateRulesResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("AchievementSimulateItem", fields={
+                    "achievement_id": s.CharField(),
+                    "achievement_name": s.CharField(),
+                    "eligible": s.BooleanField(),
+                    "claimed": s.BooleanField(),
+                    "reason": s.CharField(allow_null=True),
+                    "progress": s.DictField(
+                        help_text="Rule-engine progress data for the target user"
+                    ),
+                }),
+                help_text="Simulated rule evaluation results for the given user (by muid)",
+            ),
+        })},
+    )
     def get(self, request, muid):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -642,6 +841,7 @@ class SimulateRulesAPIView(APIView):
                 "achievement_id": result.achievement_id,
                 "achievement_name": result.achievement_name,
                 "eligible": result.eligible,
+                "claimed": result.claimed,
                 "reason": result.reason,
                 "progress": result.progress,
             }
@@ -654,6 +854,9 @@ class SimulateRulesAPIView(APIView):
 class DebugAchievementAPIView(APIView):
     """Debug a specific achievement for a user (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Debug Achievement.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request, muid, achievement_id):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -717,6 +920,9 @@ class DebugAchievementAPIView(APIView):
 class ManualIssueAPIView(APIView):
     """Manually issue an achievement (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Manual Issue.",
+        responses={200: OpenApiResponse(description="Achievement manually issued to user")},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -760,6 +966,9 @@ class ManualIssueAPIView(APIView):
 class RevokeAchievementAPIView(APIView):
     """Revoke an achievement (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Revoke Achievement.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -805,6 +1014,26 @@ class RevokeAchievementAPIView(APIView):
 class AuditLogAPIView(APIView):
     """View audit logs for a user (admin)"""
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Audit Log.",
+        responses={200: inline_serializer("AchievementAuditLogResponse", fields={
+            "hasError": s.BooleanField(default=False),
+            "statusCode": s.IntegerField(default=200),
+            "message": s.DictField(default={}),
+            "response": s.ListField(
+                child=inline_serializer("AchievementAuditLogItem", fields={
+                    "id": s.CharField(),
+                    "achievement_id": s.CharField(),
+                    "achievement_name": s.CharField(),
+                    "action": s.CharField(help_text="e.g. ISSUED, REVOKED"),
+                    "rule_version": s.IntegerField(allow_null=True),
+                    "metadata": s.DictField(allow_null=True),
+                    "performed_by": s.CharField(allow_null=True),
+                    "created_at": s.DateTimeField(allow_null=True),
+                }),
+                help_text="Last 100 audit log entries for the given user's achievements",
+            ),
+        })},
+    )
     def get(self, request, muid):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -847,6 +1076,9 @@ class AchievementIssueBulkAPIView(APIView):
     from rest_framework.parsers import MultiPartParser, FormParser
     parser_classes = [MultiPartParser, FormParser]
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Achievement Issue Bulk.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -923,6 +1155,9 @@ class AchievementIssueBulkAPIView(APIView):
 
 
 class AchievementBulkImportTemplateAPIView(APIView):
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Achievement Bulk Import Template.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request):
         wb = openpyxl.Workbook()
         ws = wb.active
@@ -938,6 +1173,9 @@ class AchievementBulkImportTemplateAPIView(APIView):
 
 
 class AchievementLogListAPIView(APIView):
+    @extend_schema(tags=['Dashboard - Achievement'], description="Retrieve Achievement Log List.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         if not user_id:
@@ -945,12 +1183,12 @@ class AchievementLogListAPIView(APIView):
                 general_message="Invalid or missing token"
             ).get_failure_response()
             
-        logs = UserAchievementsLog.objects.select_related('user', 'achievement_id').order_by('-created_at')
+        logs = UserAchievementsLog.objects.select_related('user_id', 'achievement_id', 'updated_by').order_by('-created_at')
         
         paginated_queryset = CommonUtils.get_paginated_queryset(
             logs, 
             request, 
-            search_fields=['user__muid', 'user__first_name', 'achievement_id__name'],
+            search_fields=['user_id__muid', 'user_id__first_name', 'achievement_id__name'],
             sort_fields={'created_at': 'created_at'}
         )
         
@@ -958,8 +1196,8 @@ class AchievementLogListAPIView(APIView):
         for log in paginated_queryset.get('queryset'):
             data.append({
                 "id": str(log.id),
-                "muid": log.user.muid,
-                "user_name": log.user.full_name,
+                "muid": log.user_id.muid,
+                "user_name": log.user_id.full_name,
                 "achievement_name": log.achievement_id.name,
                 "is_issued": log.is_issued,
                 "created_at": log.created_at.isoformat() if log.created_at else None,
@@ -974,6 +1212,9 @@ class AchievementLogListAPIView(APIView):
 class BulkClaimTaskAchievementAPIView(APIView):
     permission_classes = [BackendApiKeyPermission]
 
+    @extend_schema(tags=['Dashboard - Achievement'], description="Create Bulk Claim Task Achievement.",
+        responses={200: achievement_serializer.AchievementSerializer},
+    )
     def post(self, request):
         try:
             today = datetime.now().date()

@@ -4,8 +4,12 @@ from . import dash_ig_view
 
 urlpatterns = [
     path('', dash_ig_view.InterestGroupAPI.as_view()),  # for get data and create new interest groups
+    path('request/', dash_ig_view.InterestGroupRequestAPI.as_view()),  # for submitting IG creation requests
+    path('request/<str:pk>/', dash_ig_view.InterestGroupRequestAPI.as_view()),  # PATCH: admin status update | DELETE: cancel request
     path('list/', dash_ig_view.InterestGroupListApi.as_view()),  # for public listing without admin permission
     path('csv/', dash_ig_view.InterestGroupCSV.as_view()),  # for IG data CSV download
     path('<str:pk>/', dash_ig_view.InterestGroupAPI.as_view()),  # for edit and delete
     path('get/<str:pk>/', dash_ig_view.InterestGroupGetAPI.as_view()),  # for edit and delete
+    path('<str:pk>/join/', dash_ig_view.InterestGroupMembershipAPI.as_view()),
+    path('<str:pk>/leave/', dash_ig_view.InterestGroupMembershipAPI.as_view()),
 ]

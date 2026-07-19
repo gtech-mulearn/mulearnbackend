@@ -55,13 +55,13 @@ class ZonalDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma(self, obj):
         return UserOrganizationLink.objects.filter(
-            org_org_type=OrganizationType.COLLEGE.value,
+            org__org_type=OrganizationType.COLLEGE.value,
             org__district__zone=obj.org.district.zone,
         ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
 
     def get_total_members(self, obj):
         return UserOrganizationLink.objects.filter(
-            org_org_type=OrganizationType.COLLEGE.value,
+            org__org_type=OrganizationType.COLLEGE.value,
             org__district__zone=obj.org.district.zone,
         ).count()
 
@@ -108,7 +108,7 @@ class ZonalStudentLevelStatusSerializer(serializers.ModelSerializer):
         zone = self.context.get("zone")
         return (
             User.objects.filter(
-                user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_organization_link_user__org__district__zone=zone,
                 user_lvl_link_user__level=obj,
             )

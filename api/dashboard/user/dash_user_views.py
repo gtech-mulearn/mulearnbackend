@@ -15,6 +15,8 @@ from utils.types import OrganizationType, RoleType, WebHookActions, WebHookCateg
 from utils.utils import CommonUtils, DateTimeUtils, DiscordWebhooks, send_template_mail
 from . import dash_user_serializer
 from django.core.cache import cache
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 
@@ -22,10 +24,14 @@ BE_DOMAIN_NAME = decouple_config("BE_DOMAIN_NAME")
 class UserInfoAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Info.",
+        responses={200: dash_user_serializer.UserSerializer},
+    )
     def get(self, request):
         user_muid = JWTUtils.fetch_muid(request)
-        # user = cache.get(f"db_user_{user_muid}")
-        # if not user:
+        user_id = JWTUtils.fetch_user_id(request)
         user = (
             User.objects.prefetch_related(
                 "user_domains", "user_endgoals", "user_role_link_user"
@@ -33,11 +39,18 @@ class UserInfoAPI(APIView):
             .filter(muid=user_muid)
             .first()
         )
-        cache.set(f"db_user_{user_muid}", user, timeout=60)
+        if user is not None:
+            cache.set(f"db_user_{user_id}", user, timeout=60)
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
             ).get_failure_response()
+
+        try:
+            cache.set(f"db_user_{user_muid}", user, timeout=60)
+        except Exception:
+            # Cache is an optimization; user info should still return when Redis is unavailable.
+            pass
 
         response = dash_user_serializer.UserSerializer(user, many=False).data
 
@@ -48,6 +61,11 @@ class UserGetPatchDeleteAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Get Patch Delete.",
+        responses={200: dash_user_serializer.UserDetailsSerializer},
+    )
     def get(self, request, user_id):
         user = User.objects.filter(id=user_id).first()
 
@@ -61,16 +79,33 @@ class UserGetPatchDeleteAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - User'], description="Delete User Get Patch Delete.",
+        responses={200: dash_user_serializer.UserDetailsSerializer},
+    )
     def delete(self, request, user_id):
+        from django.db.models import ProtectedError
+        from django.db import IntegrityError
         try:
-            user = User.objects.get(id=user_id).delete()
+            user = User.objects.get(id=user_id)
+            user.delete()
             return CustomResponse(
                 general_message="User deleted successfully"
             ).get_success_response()
         except User.DoesNotExist as e:
             return CustomResponse(general_message=str(e)).get_failure_response()
+        except (ProtectedError, IntegrityError) as e:
+            return CustomResponse(
+                general_message="Cannot delete user as they are linked to other data."
+            ).get_failure_response()
+        except Exception as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Partially update User Get Patch Delete.",
+        responses={200: dash_user_serializer.UserDetailsEditSerializer},
+    )
     def patch(self, request, user_id):
         user = User.objects.get(id=user_id)
 
@@ -81,12 +116,17 @@ class UserGetPatchDeleteAPI(APIView):
         )
         if serializer.is_valid():
             serializer.save()
+            cache.delete(f"db_user_{user_id}")
+
+            cache.delete(f"db_user_{user.muid}")
 
             DiscordWebhooks.general_updates(
                 WebHookCategory.USER.value, WebHookActions.UPDATE.value, user_id
             )
+
             return CustomResponse(
-                general_message="User Edited Successfully"
+                general_message="User Edited Successfully",
+                response=serializer.data,
             ).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
@@ -95,11 +135,73 @@ class UserGetPatchDeleteAPI(APIView):
 class UserAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    def normalize_list_param(self, values):
+        """
+        Supports:
+        - repeated params: ?x=a&x=b
+        - csv params: ?x=a,b
+        - mixed: ?x=a&x=b,c
+        """
+        result = []
+        for value in values:
+            if value:
+                result.extend(v.strip() for v in value.split(",") if v.strip())
+        return result
     @role_required([RoleType.ADMIN.value])
+
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User.",
+        responses={200: dash_user_serializer.UserDashboardSerializer},
+    )
     def get(self, request):
         user_queryset = User.objects.select_related(
             "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
         ).all()
+
+        # New Filters
+
+        # karma filter
+        minimum_karma = request.query_params.get("minKarma")
+        if minimum_karma:
+            try:
+                minimum_karma = int(minimum_karma)
+            except ValueError:
+                return CustomResponse(
+                    general_message="Invalid minKarma. It must be an integer."
+                ).get_failure_response()
+
+            user_queryset = user_queryset.filter(
+                wallet_user__karma__gte=minimum_karma
+            )
+
+        # level filter
+        level = request.query_params.get("level")
+        if level:
+            user_queryset = user_queryset.filter(
+                user_lvl_link_user__level__name=level
+            )
+
+        # skill filter
+        skills = self.normalize_list_param(request.query_params.getlist("skillIds"))
+        if skills:
+            user_queryset = user_queryset.filter(
+                skill_progress__skill_id__in=skills
+            ).distinct()
+        
+        # interest group filter
+        interest_group_ids = self.normalize_list_param(request.query_params.getlist("interestGroupIds"))
+        if interest_group_ids:
+            user_queryset = user_queryset.filter(
+                user_ig_link_user__ig_id__in=interest_group_ids
+            ).distinct()
+
+        # achievement filter
+        achievement_ids = self.normalize_list_param(request.query_params.getlist("achievementIds"))
+        if achievement_ids:
+            user_queryset = user_queryset.filter(
+                achievements__achievement_id__in=achievement_ids
+            ).distinct()
 
         queryset = CommonUtils.get_paginated_queryset(
             user_queryset,
@@ -114,6 +216,7 @@ class UserAPI(APIView):
             {
                 "full_name": "full_name",
                 "karma": "wallet_user__karma",
+                "level": "user_lvl_link_user__level__name", 
                 "created_at": "created_at",
             },
         )
@@ -130,6 +233,11 @@ class UserManagementCSV(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Management C S V.",
+        responses={200: dash_user_serializer.UserDashboardSerializer},
+    )
     def get(self, request):
         user_queryset = User.objects.select_related(
             "wallet_user", "user_lvl_link_user", "user_lvl_link_user__level"
@@ -146,8 +254,27 @@ class UserVerificationAPI(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Verification.",
+        responses={200: dash_user_serializer.UserVerificationSerializer},
+    )
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+        user_queryset = UserRoleLink.objects.select_related(
+            "user",
+            "user__district",
+            "user__district__zone",
+            "user__district__zone__state",
+            "user__district__zone__state__country",
+            "role",
+        ).prefetch_related(
+            "user__user_organization_link_user__org",
+            "user__user_organization_link_user__org__district",
+            "user__user_organization_link_user__department",
+            "user__user_ig_link_user__ig",
+            "user__user_mentor_user",
+            "user__company_profile",
+        ).filter(
             verified=False
         )
 
@@ -178,6 +305,11 @@ class UserVerificationAPI(APIView):
         )
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Partially update User Verification.",
+        responses={200: dash_user_serializer.UserVerificationSerializer},
+    )
     def patch(self, request, link_id):
         user = UserRoleLink.objects.get(id=link_id)
 
@@ -210,6 +342,9 @@ class UserVerificationAPI(APIView):
         ).get_success_response()
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(tags=['Dashboard - User'], description="Delete User Verification.",
+        responses={200: dash_user_serializer.UserVerificationSerializer},
+    )
     def delete(self, request, link_id):
         link = UserRoleLink.objects.get(id=link_id)
         link.delete()
@@ -223,8 +358,27 @@ class UserVerificationCSV(APIView):
     authentication_classes = [CustomizePermission]
 
     @role_required([RoleType.ADMIN.value])
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Verification C S V.",
+        responses={200: dash_user_serializer.UserVerificationSerializer},
+    )
     def get(self, request):
-        user_queryset = UserRoleLink.objects.select_related("user", "role").filter(
+        user_queryset = UserRoleLink.objects.select_related(
+            "user",
+            "user__district",
+            "user__district__zone",
+            "user__district__zone__state",
+            "user__district__zone__state__country",
+            "role",
+        ).prefetch_related(
+            "user__user_organization_link_user__org",
+            "user__user_organization_link_user__org__district",
+            "user__user_organization_link_user__department",
+            "user__user_ig_link_user__ig",
+            "user__user_mentor_user",
+            "user__company_profile",
+        ).filter(
             verified=False
         )
 
@@ -235,6 +389,9 @@ class UserVerificationCSV(APIView):
 
 
 class ForgotPasswordAPI(APIView):
+    @extend_schema(tags=['Dashboard - User'], description="Create Forgot Password.",
+        responses={200: OpenApiResponse(description="Forgot-password email sent")},
+    )
     def post(self, request):
         email_muid = request.data.get("emailOrMuid")
 
@@ -273,6 +430,12 @@ class ForgotPasswordAPI(APIView):
 
 
 class ResetPasswordVerifyTokenAPI(APIView):
+    @extend_schema(tags=['Dashboard - User'], description="Create Reset Password Verify Token.",
+        responses={200: inline_serializer(
+            name='UserResetPasswordVerifyTokenResponse',
+            fields={'muid': s.CharField()},
+        )},
+    )
     def post(self, request, token):
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):
             return CustomResponse(
@@ -292,6 +455,9 @@ class ResetPasswordVerifyTokenAPI(APIView):
 
 
 class ResetPasswordConfirmAPI(APIView):
+    @extend_schema(tags=['Dashboard - User'], description="Create Reset Password Confirm.",
+        responses={200: OpenApiResponse(description="Password reset confirmation")},
+    )
     def post(self, request, token):
         if not (forget_user := ForgotPassword.objects.filter(id=token).first()):
             return CustomResponse(
@@ -336,6 +502,9 @@ class UserProfilePictureView(APIView):
     #             general_message="No Profile picture available"
     #         ).get_failure_response()
 
+    @extend_schema(tags=['Dashboard - User'], description="Partially update User Profile Picture.",
+        responses={200: dash_user_serializer.UserSerializer},
+    )
     def patch(self, request):
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_PROFILE.value,
@@ -346,6 +515,9 @@ class UserProfilePictureView(APIView):
             general_message="Successfully updated"
         ).get_success_response()
 
+    @extend_schema(tags=['Dashboard - User'], description="Create User Profile Picture.",
+        responses={200: dash_user_serializer.UserSerializer},
+    )
     def post(self, request):
         user_id = request.data.get("user_id")
         user = User.objects.filter(id=user_id).first()
@@ -382,10 +554,15 @@ class UserProfilePictureView(APIView):
 
 
 class UserAddOrgAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Create User Add Org.",
+        request=dash_user_serializer.UserOrgLinkSerializer,
+        responses={200: dash_user_serializer.UserOrgLinkSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        if not (user := cache.get(f"db_user_{user_id}")):
-            user = User.objects.filter(id=user_id).first()
+        user = User.objects.filter(id=user_id).first()
         if user is None:
             return CustomResponse(
                 general_message="No user data available"
@@ -394,12 +571,33 @@ class UserAddOrgAPI(APIView):
             data=request.data, context={"user": user}
         )
         if serializer.is_valid():
-            serializer.save()
+            org_link = serializer.save()
+            if not org_link or isinstance(org_link, str):
+                return CustomResponse(
+                    general_message="organisation linked successfully"
+                ).get_success_response()
+
+            try:
+                cache.delete(f"db_user_{user_id}")
+                cache.delete(f"db_user_{user.muid}")
+            except Exception:
+                pass
+
             return CustomResponse(
-                general_message="organisation linked successfully"
+                general_message="organisation linked successfully",
+                response={
+                    "organization_link": dash_user_serializer.GetUserLinkSerializer(
+                        org_link
+                    ).data,
+                },
             ).get_success_response()
         return CustomResponse(response=serializer.errors).get_failure_response()
 
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Add Org.",
+        responses={200: dash_user_serializer.GetUserLinkSerializer},
+    )
     def get(self, request):
         user = User.objects.filter(id=JWTUtils.fetch_user_id(request)).first()
         if user is None:
@@ -409,7 +607,7 @@ class UserAddOrgAPI(APIView):
 
         links = UserOrganizationLink.objects.filter(
             user=user, org__org_type=OrganizationType.COLLEGE.value
-        ).select_related("org", "department")
+        ).order_by("-created_at", "-id").select_related("org", "department")[:1]
         serializer = dash_user_serializer.GetUserLinkSerializer(
             instance=links, many=True
         )
@@ -417,6 +615,11 @@ class UserAddOrgAPI(APIView):
 
 
 class UserSearchAPI(APIView):
+    @extend_schema(
+        tags=['Dashboard - User'],
+        description="Retrieve User Search.",
+        responses={200: dash_user_serializer.UserBasicDetailsSerializer},
+    )
     def get(self, request):
         role = request.query_params.get("role")
         ig_id = request.query_params.get("ig_id")
@@ -464,6 +667,9 @@ class UserSearchAPI(APIView):
 class UserPreferencesAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Dashboard - User'], description="Retrieve User Preferences.",
+        responses={200: dash_user_serializer.UserSerializer},
+    )
     def get(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
 
@@ -474,6 +680,9 @@ class UserPreferencesAPI(APIView):
 
         return CustomResponse(response=response).get_success_response()
 
+    @extend_schema(tags=['Dashboard - User'], description="Partially update User Preferences.",
+        responses={200: dash_user_serializer.UserSerializer},
+    )
     def patch(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
 

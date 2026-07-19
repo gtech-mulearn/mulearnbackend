@@ -8,7 +8,7 @@ from db.user import Role, User, UserDomains, UserEndgoals
 from utils.response import CustomResponse
 from utils.types import OrganizationType
 from . import serializers
-from .register_helper import get_auth_token
+from .register_helper import get_auth_token, verify_google_temp_token, get_auth_token_by_id
 from django.views.decorators.cache import cache_page
 from django.core.cache import cache
 from mu_celery.task import send_email
@@ -16,6 +16,8 @@ from utils.permission import CustomizePermission, JWTUtils
 from decouple import config
 import requests
 from mu_celery.task import onboard_user
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from rest_framework import serializers as s
 
 DISCORD_CLIENT_ID = config("DISCORD_CLIENT_ID")
 DISCORD_CLIENT_SECRET = config("DISCORD_CLIENT_SECRET")
@@ -23,6 +25,9 @@ FR_DOMAIN_NAME = config("FR_DOMAIN_NAME")
 
 
 class ConnectDiscordAPI(APIView):
+    @extend_schema(tags=['Register'], description="Retrieve Connect Discord.",
+        responses={200: OpenApiResponse(description="Discord onboard success message")},
+    )
     def get(self, request):
         if not JWTUtils.is_jwt_authenticated(request):
             return CustomResponse(
@@ -63,6 +68,9 @@ class ConnectDiscordAPI(APIView):
 class UserDomainSelectionAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Register'], description="Create User Domain Selection.",
+        responses={200: serializers.UserSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         domains = request.data.get("domains")
@@ -88,6 +96,9 @@ class UserDomainSelectionAPI(APIView):
 class UserEndgoalSelectionAPI(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(tags=['Register'], description="Create User Endgoal Selection.",
+        responses={200: serializers.UserSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         endgoals = request.data.get("endgoals")
@@ -168,6 +179,12 @@ class UserEndgoalSelectionAPI(APIView):
 class UnverifiedOrganizationCreateView(APIView):
     permission_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Register'],
+        description="Create Unverified Organization Create.",
+        request=serializers.UnverifiedOrganizationCreateSerializer,
+        responses={200: serializers.UnverifiedOrganizationCreateSerializer},
+    )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
         serialized_org = serializers.UnverifiedOrganizationCreateSerializer(
@@ -186,6 +203,12 @@ class UnverifiedOrganizationCreateView(APIView):
 
 
 class UserRegisterValidateAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Update User Register Validate.",
+        request=serializers.RegisterSerializer,
+        responses={200: serializers.RegisterSerializer},
+    )
     def put(self, request):
         serialized_user = serializers.RegisterSerializer(data=request.data)
 
@@ -199,6 +222,9 @@ class UserRegisterValidateAPI(APIView):
 
 class RoleAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Role.",
+        responses={200: serializers.RoleSerializer},
+    )
     def get(self, request):
         roles = Role.objects.all().values("id", "title")
         return CustomResponse(response={"roles": roles}).get_success_response()
@@ -206,6 +232,15 @@ class RoleAPI(APIView):
 
 class CollegesAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Colleges.",
+        responses={200: inline_serializer(
+            name='RegisterCollegesResponse',
+            fields={'colleges': s.ListField(child=inline_serializer(
+                name='RegisterCollegeItem',
+                fields={'id': s.CharField(), 'title': s.CharField()},
+            ))},
+        )},
+    )
     def get(self, request):
         colleges = Organization.objects.filter(
             org_type=OrganizationType.COLLEGE.value
@@ -216,6 +251,9 @@ class CollegesAPI(APIView):
 
 class DepartmentAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Department.",
+        responses={200: serializers.DepartmentSerializer},
+    )
     def get(self, request):
         department_serializer = Department.objects.all().values("id", "title")
 
@@ -230,6 +268,15 @@ class DepartmentAPI(APIView):
 
 class CompanyAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(tags=['Register'], description="Retrieve Company.",
+        responses={200: inline_serializer(
+            name='RegisterCompaniesResponse',
+            fields={'companies': s.ListField(child=inline_serializer(
+                name='RegisterCompanyItem',
+                fields={'id': s.CharField(), 'title': s.CharField()},
+            ))},
+        )},
+    )
     def get(self, request):
         company_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMPANY.value
@@ -245,6 +292,11 @@ class CompanyAPI(APIView):
 
 
 class LearningCircleUserViewAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create Learning Circle User View.",
+        responses={200: serializers.LearningCircleUserSerializer},
+    )
     def post(self, request):
         muid = request.headers.get("muid")
 
@@ -271,9 +323,67 @@ class LearningCircleUserViewAPI(APIView):
 
 class RegisterDataAPI(APIView):
 
+    @extend_schema(
+        tags=['Register'],
+        description="Create Register Data.",
+        request=serializers.RegisterSerializer,
+        responses={200: serializers.UserDetailSerializer},
+    )
     def post(self, request):
-        data = request.data
+        from utils.exception import CustomException
+
+        data = request.data.copy()
         data = {key: value for key, value in data.items() if value}
+
+        is_google_signup = False
+        temp_token = data.pop("tempToken", None)
+
+        if temp_token:
+            # ── Google sign-up path ──────────────────────────────────────────
+            try:
+                google_data = verify_google_temp_token(temp_token)
+            except CustomException as e:
+                return CustomResponse(general_message=str(e)).get_failure_response()
+
+            user_data = dict(data.get("user", {}))
+
+            # Only email is forced from Google — client cannot spoof it (B5 / D1)
+            user_data["email"] = google_data["email"].strip().lower()
+
+            # full_name comes from the form (editable per D1).
+            # Fall back to the Google value if the client didn't send one.
+            if not user_data.get("full_name"):
+                user_data["full_name"] = google_data["fullName"]
+
+            user_data.pop("password", None)   # no password for Google users
+            data["user"] = user_data
+            is_google_signup = True
+
+            # B3: idempotent re-issue — if this email already has a NULL-password
+            # user it is an orphan from a prior failed attempt; just re-issue tokens.
+            # Uses User.every (not User.objects) because the default ActiveUserManager
+            # excludes suspended accounts; their emails still occupy the unique constraint
+            # and would cause a DB-level IntegrityError on save().
+            existing = User.every.filter(email=user_data["email"]).first()
+            if existing:
+                if existing.password:
+                    # Has a real password → was registered via the classic path
+                    return CustomResponse(
+                        general_message="An account with this email already exists. Please sign in normally."
+                    ).get_failure_response()
+                if existing.suspended_at:
+                    # Suspended Google user — do not re-issue tokens
+                    return CustomResponse(
+                        general_message="This account has been suspended."
+                    ).get_failure_response()
+                # Orphan NULL-password user → re-issue tokens without creating a new row
+                try:
+                    res_data = get_auth_token_by_id(existing.id)
+                except CustomException as e:
+                    return CustomResponse(general_message=str(e)).get_failure_response()
+                res_data["data"] = serializers.UserDetailSerializer(existing).data
+                return CustomResponse(response=res_data).get_success_response()
+            # ── End Google sign-up path ──────────────────────────────────────
 
         create_user = serializers.RegisterSerializer(
             data=data, context={"request": request}
@@ -281,11 +391,31 @@ class RegisterDataAPI(APIView):
         if not create_user.is_valid():
             return CustomResponse(message=create_user.errors).get_failure_response()
 
-        user = create_user.save()
-        cache.set(f"db_user_{user.muid}", user, timeout=60)
-        password = request.data["user"]["password"]
-        cache.set(f"flag_register_{user.muid}", True, timeout=5)
-        res_data = get_auth_token(user.muid, password)
+        if not is_google_signup:
+            password = request.data.get("user", {}).get("password")
+            if not password:
+                return CustomResponse(
+                    general_message="Password is required for email registration."
+                ).get_failure_response()
+
+        try:
+            # Save user first — commits to DB so the auth service can find
+            # the user when we request tokens (avoids uncommitted-row problem).
+            user = create_user.save()
+            cache.set(f"db_user_{user.muid}", user, timeout=60)
+
+            try:
+                if is_google_signup:
+                    # NULL password — use TokenVerificationAPI (no password needed)
+                    res_data = get_auth_token_by_id(user.id)
+                else:
+                    res_data = get_auth_token(user.muid, password)
+            except CustomException:
+                # Auth service failed — clean up the orphaned user
+                user.delete()
+                raise
+        except CustomException as e:
+            return CustomResponse(general_message=str(e)).get_failure_response()
 
         response_data = serializers.UserDetailSerializer(user, many=False).data
 
@@ -296,12 +426,16 @@ class RegisterDataAPI(APIView):
         )
 
         res_data["data"] = response_data
-
         return CustomResponse(response=res_data).get_success_response()
 
 
 class CountryAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Country.",
+        responses={200: serializers.CountrySerializer},
+    )
     def get(self, request):
         countries = Country.objects.all()
 
@@ -315,6 +449,11 @@ class CountryAPI(APIView):
 
 
 class StateAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create State.",
+        responses={200: serializers.StateSerializer},
+    )
     def post(self, request):
         state = State.objects.filter(country_id=request.data.get("country"))
         serializer = serializers.StateSerializer(state, many=True)
@@ -327,6 +466,11 @@ class StateAPI(APIView):
 
 
 class DistrictAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create District.",
+        responses={200: serializers.DistrictSerializer},
+    )
     def post(self, request):
         district = District.objects.filter(zone__state_id=request.data.get("state"))
 
@@ -340,11 +484,33 @@ class DistrictAPI(APIView):
 
 
 class CollegeAPI(APIView):
+    MAX_RESULTS = 20
+
+    @extend_schema(
+        tags=['Register'],
+        description="Create College.",
+        responses={200: serializers.OrgSerializer},
+    )
     def post(self, request):
+        district_id = request.data.get("district")
+        search_query = request.data.get("search", "").strip()
+
+        # Build base query for colleges in the specified district
         org_queryset = Organization.objects.filter(
-            Q(org_type=OrganizationType.COLLEGE.value),
-            Q(district_id=request.data.get("district")),
+            org_type=OrganizationType.COLLEGE.value,
         )
+
+        # Filter by district if provided
+        if district_id:
+            org_queryset = org_queryset.filter(district_id=district_id)
+
+        # Apply search filter if search query is provided
+        if search_query:
+            org_queryset = org_queryset.filter(title__icontains=search_query)
+
+        # Limit results to prevent memory issues
+        org_queryset = org_queryset[:self.MAX_RESULTS]
+
         department_queryset = Department.objects.all()
 
         college_serializer_data = serializers.OrgSerializer(
@@ -364,6 +530,11 @@ class CollegeAPI(APIView):
 
 
 class SchoolAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Create School.",
+        responses={200: serializers.OrgSerializer},
+    )
     def post(self, request):
         org_queryset = Organization.objects.filter(
             Q(org_type=OrganizationType.SCHOOL.value),
@@ -383,6 +554,11 @@ class SchoolAPI(APIView):
 
 class CommunityAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Community.",
+        responses={200: serializers.OrgSerializer},
+    )
     def get(self, request):
         community_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMMUNITY.value
@@ -399,6 +575,11 @@ class CommunityAPI(APIView):
 
 class AreaOfInterestAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Area Of Interest.",
+        responses={200: serializers.AreaOfInterestAPISerializer},
+    )
     def get(self, request):
         aoi_queryset = InterestGroup.objects.all()
 
@@ -412,6 +593,9 @@ class AreaOfInterestAPI(APIView):
 
 
 class UserEmailVerificationAPI(APIView):
+    @extend_schema(tags=['Register'], description="Create User Email Verification.",
+        responses={200: serializers.UserSerializer},
+    )
     def post(self, request):
         user_email = request.data.get("email")
 
@@ -427,6 +611,11 @@ class UserEmailVerificationAPI(APIView):
 
 class UserCountryAPI(APIView):
     @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve User Country.",
+        responses={200: serializers.UserCountrySerializer},
+    )
     def get(self, request):
         country = Country.objects.all()
 
@@ -441,6 +630,11 @@ class UserCountryAPI(APIView):
 
 
 class UserStateAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve User State.",
+        responses={200: serializers.UserStateSerializer},
+    )
     def get(self, request):
         country_name = request.data.get("country")
 
@@ -464,6 +658,11 @@ class UserStateAPI(APIView):
 
 
 class UserZoneAPI(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve User Zone.",
+        responses={200: serializers.UserZoneSerializer},
+    )
     def get(self, request):
         state_name = request.data.get("state")
 
@@ -487,6 +686,11 @@ class UserZoneAPI(APIView):
 
 
 class LocationSearchView(APIView):
+    @extend_schema(
+        tags=['Register'],
+        description="Retrieve Location Search.",
+        responses={200: serializers.LocationSerializer},
+    )
     def get(self, request):
         query = request.GET.get("q")
         MAX_RESULTS = 7

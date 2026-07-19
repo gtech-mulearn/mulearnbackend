@@ -13,6 +13,7 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     type = serializers.CharField(source="type.title")
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
 
     class Meta:
         model = TaskList
@@ -29,6 +30,7 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "level",
             "ig",
             "event",
+            "event_id",
         ]
 
 
@@ -38,6 +40,7 @@ class TaskListSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     org = serializers.CharField(source="org.title", required=False, default=None)
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
     total_karma_gainers = serializers.SerializerMethodField()
     skills = serializers.SerializerMethodField()
 
@@ -62,6 +65,7 @@ class TaskListSerializer(serializers.ModelSerializer):
             "org",
             "ig",
             "event",
+            "event_id",
             "updated_at",
             "updated_by",
             "created_by",
@@ -72,19 +76,21 @@ class TaskListSerializer(serializers.ModelSerializer):
         ]
 
     def get_total_karma_gainers(self, obj):
+        if hasattr(obj, 'total_karma_gainers_count'):
+            return obj.total_karma_gainers_count
         return obj.karma_activity_log_task.filter(appraiser_approved=True).count()
 
     def get_skills(self, obj):
         """Get all skills linked to this task"""
-        from db.skill import TaskSkillLink
-        skill_links = TaskSkillLink.objects.filter(task_id=obj.id).select_related('skill')
         return [
             {'id': link.skill.id, 'name': link.skill.name, 'code': link.skill.code}
-            for link in skill_links
+            for link in obj.skill_links.all()
         ]
 
 
 class TaskModifySerializer(serializers.ModelSerializer):
+    event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
+
     class Meta:
         model = TaskList
         fields = (
@@ -106,6 +112,7 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "created_by",
             "bonus_karma",
             "bonus_time",
+            "event_id",
         )
 
 
@@ -198,6 +205,6 @@ class TaskTypeCreateUpdateSerializer(serializers.ModelSerializer):
         instance.title = updated_title
         user_id = JWTUtils.fetch_user_id(self.context.get("request"))
         instance.updated_by_id = user_id
-        instance.updated_at = (DateTimeUtils.get_current_utc_time(),)
+        instance.updated_at = DateTimeUtils.get_current_utc_time()
         instance.save()
         return instance
