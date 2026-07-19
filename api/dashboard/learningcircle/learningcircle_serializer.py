@@ -269,24 +269,45 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(source="ig.name", read_only=True)
     org = serializers.CharField(source="org.title", read_only=True, allow_null=True)
     total_members = serializers.IntegerField(read_only=True)
+    is_joined = serializers.SerializerMethodField()
+    is_creator = serializers.SerializerMethodField()
     # attendees = serializers.SerializerMethodField()
     class Meta:
         model = LearningCircle
         # The 'attendees' field is removed as 'total_members' is used instead.
-        fields = ["id", "ig", "title", "org", "total_members"]
+        fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator"]
     def to_representation(self, instance):
         # Override to add calculated fields that don't exist on the model
         data = super().to_representation(instance)
         data['total_members'] = self.get_total_members(instance)
-        
+
         return data
-    
+
     def get_total_members(self, obj):
         """Calculate total number of accepted members in this circle"""
         return UserCircleLink.objects.filter(
             circle=obj.id,
             accepted=True,
         ).count()
+
+    def get_is_joined(self, obj):
+        user_id = self.context.get("user_id")
+        if not user_id:
+            return False
+        joined_ids = self.context.get("joined_circle_ids")
+        if joined_ids is not None:
+            return obj.id in joined_ids
+        return UserCircleLink.objects.filter(
+            circle=obj.id,
+            user_id=user_id,
+            accepted=True,
+        ).exists()
+
+    def get_is_creator(self, obj):
+        user_id = self.context.get("user_id")
+        if not user_id:
+            return False
+        return obj.created_by_id == user_id
 
     # def get_attendees(self, obj):
         # query = (
