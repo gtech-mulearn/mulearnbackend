@@ -119,11 +119,12 @@ class ComicReadingProgressSerializer(ComicInteractionValidationMixin, serializer
                     created_at=now
                 )
         except IntegrityError:
-            progress = ComicReadingProgress.objects.get(user_id=user_id, comic_id=comic_id)
-            progress.last_chapter_id = last_chapter_id
-            progress.last_page_number = last_page_number
-            progress.updated_at = now
-            progress.save(update_fields=['last_chapter_id', 'last_page_number', 'updated_at'])
+            with transaction.atomic():
+                progress = ComicReadingProgress.objects.select_for_update().get(user_id=user_id, comic_id=comic_id)
+                progress.last_chapter_id = last_chapter_id
+                progress.last_page_number = last_page_number
+                progress.updated_at = now
+                progress.save(update_fields=['last_chapter_id', 'last_page_number', 'updated_at'])
             
         return progress
 

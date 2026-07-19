@@ -1,5 +1,6 @@
 from django.db import transaction, IntegrityError
-from django.db.models import F
+from django.db.models import F, Value
+from django.db.models.functions import Greatest
 from rest_framework.views import APIView
 from drf_spectacular.utils import extend_schema
 
@@ -44,7 +45,7 @@ class LikeComicAPI(APIView):
         with transaction.atomic():
             deleted, _ = ComicLikeLink.objects.filter(comic_id=comic_id, user_id=user_id).delete()
             if deleted > 0:
-                Comic.objects.filter(id=comic_id).update(like_count=F('like_count') - 1)
+                Comic.objects.filter(id=comic_id).update(like_count=Greatest(F('like_count') - 1, Value(0)))
                 return CustomResponse(response={"message": "Comic unliked successfully"}).get_success_response()
             else:
                 return CustomResponse(general_message="Comic like not found.").get_failure_response(status_code=404, http_status_code=404)
@@ -83,7 +84,7 @@ class BookmarkComicAPI(APIView):
         with transaction.atomic():
             deleted, _ = ComicBookmarkLink.objects.filter(comic_id=comic_id, user_id=user_id).delete()
             if deleted > 0:
-                Comic.objects.filter(id=comic_id).update(bookmark_count=F('bookmark_count') - 1)
+                Comic.objects.filter(id=comic_id).update(bookmark_count=Greatest(F('bookmark_count') - 1, Value(0)))
                 return CustomResponse(response={"message": "Comic bookmark removed successfully"}).get_success_response()
             else:
                 return CustomResponse(general_message="Comic bookmark not found.").get_failure_response(status_code=404, http_status_code=404)
