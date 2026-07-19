@@ -294,6 +294,9 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         user_id = self.context.get("user_id")
         if not user_id:
             return False
+        joined_ids = self.context.get("joined_circle_ids")
+        if joined_ids is not None:
+            return obj.id in joined_ids
         return UserCircleLink.objects.filter(
             circle=obj.id,
             user_id=user_id,
