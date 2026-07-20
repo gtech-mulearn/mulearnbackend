@@ -148,6 +148,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         campus_lead = User.objects.filter(
             user_organization_link_user__org=obj.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_user__verified=True,
             user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
         ).first()
         if campus_lead:
@@ -156,6 +157,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         enabler = User.objects.filter(
             user_organization_link_user__org=obj.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_user__verified=True,
             user_role_link_user__role__title=RoleType.LEAD_ENABLER.value,
         ).first()
         if enabler:
