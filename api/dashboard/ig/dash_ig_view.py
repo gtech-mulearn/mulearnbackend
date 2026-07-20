@@ -672,6 +672,9 @@ class InterestGroupRequestAPI(APIView):
                     general_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
                 ).get_failure_response()
             ig_queryset = ig_queryset.filter(status=status_filter)
+        else:
+            # Default ("All") view excludes cancelled requests; use ?status=cancelled to see them.
+            ig_queryset = ig_queryset.exclude(status='cancelled')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             ig_queryset,
