@@ -262,7 +262,7 @@ class CompanyVerifySerializer(serializers.Serializer):
             instance.rejection_reason = None
 
             # ── Ensure the company's Organization row exists ─────────────────
-            org = Organization.objects.filter(
+            org = instance.org or Organization.objects.filter(
                 title=instance.name,
                 org_type=OrganizationType.COMPANY.value,
             ).first()
@@ -278,6 +278,7 @@ class CompanyVerifySerializer(serializers.Serializer):
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
+            instance.org = org
 
             # ── Link the company creator to the org ──────────────────────────
             from db.organization import UserOrganizationLink
@@ -377,10 +378,7 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
             )
 
         # ── Resolve company → Organization row ──────────────────────────────
-        org = Organization.objects.filter(
-            title=company.name,
-            org_type=OrganizationType.COMPANY.value,
-        ).first()
+        org = company.org
         if not org:
             raise serializers.ValidationError(
                 "Company organization record not found. Ensure the company is verified."
