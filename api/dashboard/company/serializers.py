@@ -1,5 +1,6 @@
 import uuid
 from rest_framework import serializers
+from django.db import transaction
 from django.utils.text import slugify
 
 from db.company import Company
@@ -197,10 +198,21 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['updated_by'] = self.context.get("user_id", instance.company_user_id)
-        
+
+        new_name = validated_data.get("name")
+        rename = new_name and new_name != instance.name
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
+
+        with transaction.atomic():
+            instance.save()
+
+            if rename and instance.org:
+                instance.org.title = new_name
+                instance.org.updated_at = DateTimeUtils.get_current_utc_time()
+                instance.org.save(update_fields=["title", "updated_at"])
+
         return instance
 
 class CompanyListSerializer(serializers.ModelSerializer):
@@ -262,7 +274,7 @@ class CompanyVerifySerializer(serializers.Serializer):
             instance.rejection_reason = None
 
             # ── Ensure the company's Organization row exists ─────────────────
-            org = Organization.objects.filter(
+            org = instance.org or Organization.objects.filter(
                 title=instance.name,
                 org_type=OrganizationType.COMPANY.value,
             ).first()
@@ -278,6 +290,7 @@ class CompanyVerifySerializer(serializers.Serializer):
                     created_at=DateTimeUtils.get_current_utc_time(),
                     updated_at=DateTimeUtils.get_current_utc_time(),
                 )
+            instance.org = org
 
             # ── Link the company creator to the org ──────────────────────────
             from db.organization import UserOrganizationLink
@@ -377,10 +390,7 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
             )
 
         # ── Resolve company → Organization row ──────────────────────────────
-        org = Organization.objects.filter(
-            title=company.name,
-            org_type=OrganizationType.COMPANY.value,
-        ).first()
+        org = company.org
         if not org:
             raise serializers.ValidationError(
                 "Company organization record not found. Ensure the company is verified."
