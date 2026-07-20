@@ -976,6 +976,17 @@ class CampusKarmaByClusterAPI(APIView):
             user=OuterRef("pk")
         ).values("karma")[:1]
 
+        # Subquery: each user's single "primary" category — their earliest IG
+        # membership. A member can belong to IGs spanning several categories;
+        # without picking exactly one, their full karma would get added to
+        # every category they touch, making the bucket totals sum to several
+        # times the campus's actual total_karma.
+        primary_category_sq = (
+            UserIgLink.objects.filter(user_id=OuterRef("pk"))
+            .order_by("created_at")
+            .values("ig__category")[:1]
+        )
+
         # Single query — LEFT JOIN via isnull=False removed
         # users with NO IG will have category=None → goes to "unclustered"
         all_rows = (
@@ -984,22 +995,24 @@ class CampusKarmaByClusterAPI(APIView):
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user_organization_link_user__verified=True,
             )
-            .annotate(user_karma=Subquery(wallet_karma_sq))
-            .values("id", "user_ig_link_user__ig__category", "user_karma")
-            .distinct()   # 1 row per (user_id, category) — kills IG fan-out
+            .annotate(
+                user_karma=Subquery(wallet_karma_sq),
+                primary_category=Subquery(primary_category_sq),
+            )
+            .values("id", "primary_category", "user_karma")
+            .distinct()   # 1 row per user — each user has exactly one primary_category
         )
 
         # Aggregate in Python
         category_map = defaultdict(lambda: {"total_karma": 0, "member_count": 0, "seen_users": set()})
 
         for row in all_rows:  # streams from DB — no list() memory spike
-            category = row["user_ig_link_user__ig__category"] or "unclustered"
+            category = row["primary_category"] or "unclustered"
             user_id  = row["id"]
             karma    = row["user_karma"] or 0
 
-            # seen_users guards against edge case where
-            # a user has NO IG (category=None) but still appears multiple times
-            # due to multiple org links
+            # seen_users guards against edge case where a user appears more
+            # than once due to multiple org links
             if user_id not in category_map[category]["seen_users"]:
                 category_map[category]["seen_users"].add(user_id)
                 category_map[category]["total_karma"]  += karma
