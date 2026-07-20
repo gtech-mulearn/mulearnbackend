@@ -124,25 +124,6 @@ class TaskModifySerializer(serializers.ModelSerializer):
         except (ValueError, TypeError):
             raise serializers.ValidationError("Invalid event id.")
 
-        from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
-        from api.dashboard.events.serializers import get_live_events
-        from db.events import Event
-
-        request = self.context.get("request")
-        viewer_id = _get_viewer_id(request) if request else None
-        scope_filter = _build_scope_filter(viewer_id)
-
-        accessible = get_live_events().filter(
-            scope_filter,
-            status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
-            id=value,
-        ).exists()
-
-        if not accessible:
-            raise serializers.ValidationError(
-                "Selected event does not exist or is not accessible."
-            )
-
         return value
 
 

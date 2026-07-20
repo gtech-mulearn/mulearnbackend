@@ -66,7 +66,7 @@ class LinkableEventsAPI(APIView):
 
         events = events.order_by("-start_datetime").values(
             "id", "title", "start_datetime"
-        )
+        )[:100]
 
         return CustomResponse(response=list(events)).get_success_response()
 
