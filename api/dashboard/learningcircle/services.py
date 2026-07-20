@@ -8,7 +8,7 @@ def get_campus_learning_circles(org_id: str):
     """
     return LearningCircle.objects.filter(org_id=org_id).annotate(
         member_count=Count('user_circle_link_circle__user', distinct=True, filter=Q(user_circle_link_circle__accepted=True)),
-        meeting_count=Count('circle_meeting_log_circle_id'),
+        meeting_count=Count('circle_meeting_log_circle_id', distinct=True),
         last_meeting_time=Max('circle_meeting_log_circle_id__meet_time')
     )
 

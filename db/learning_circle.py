@@ -18,7 +18,11 @@ class LearningCircle(models.Model):
     title = models.CharField(max_length=100, blank=False, null=False)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="learning_circle_created_by")
-    created_at = models.DateTimeField(auto_now=True)
+    # Was `auto_now=True` until 2026-07-20, which overwrote created_at on every save().
+    # Rows saved before that fix carry a created_at that reflects their last edit, not
+    # their actual creation time, and this cannot be recovered without a manual
+    # DB-level backfill (there is no other historical source for the true value).
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
