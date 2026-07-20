@@ -1,5 +1,6 @@
 import uuid
 from rest_framework import serializers
+from django.db import transaction
 from django.utils.text import slugify
 
 from db.company import Company
@@ -203,12 +204,14 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
-        instance.save()
 
-        if rename and instance.org:
-            instance.org.title = new_name
-            instance.org.updated_at = DateTimeUtils.get_current_utc_time()
-            instance.org.save(update_fields=["title", "updated_at"])
+        with transaction.atomic():
+            instance.save()
+
+            if rename and instance.org:
+                instance.org.title = new_name
+                instance.org.updated_at = DateTimeUtils.get_current_utc_time()
+                instance.org.save(update_fields=["title", "updated_at"])
 
         return instance
 
