@@ -220,10 +220,12 @@ class CampusStudentDetailsAPI(APIView):
         wallet_filters = Q(
             user__user_organization_link_user__org=user_org_link.org,
             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user__user_organization_link_user__verified=True,
         )
         user_filters = Q(
             user_organization_link_user__org=user_org_link.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_user__verified=True,
         )
 
         if is_alumni is not None:
@@ -321,10 +323,12 @@ class CampusStudentDetailsCSVAPI(APIView):
         wallet_filters = Q(
             user__user_organization_link_user__org=user_org_link.org,
             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user__user_organization_link_user__verified=True,
         )
         user_filters = Q(
             user_organization_link_user__org=user_org_link.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_user__verified=True,
         )
 
         if is_alumni is not None:
