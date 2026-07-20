@@ -72,19 +72,23 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
 
     def get_rank(self, obj):
-        org_karma_dict = (
+        # (org, user, karma) collapsed via .distinct() so a user with more than
+        # one org-link row to the same college can't inflate that college's
+        # karma total relative to every other college in this ranking.
+        rows = (
             UserOrganizationLink.objects.filter(
                 org__org_type=OrganizationType.COLLEGE.value,
                 verified=True,
             )
-            .values("org")
-            .annotate(total_karma=Sum("user__wallet_user__karma"))
-        ).order_by("-total_karma", "org__created_at")
+            .values("org", "user", "user__wallet_user__karma")
+            .distinct()
+            .order_by("org__created_at")
+        )
 
-        rank_dict = {
-            data["org"]: data["total_karma"] if data["total_karma"] is not None else 0
-            for data in org_karma_dict
-        }
+        rank_dict = {}
+        for row in rows:
+            org_id = row["org"]
+            rank_dict[org_id] = rank_dict.get(org_id, 0) + (row["user__wallet_user__karma"] or 0)
 
         sorted_rank_dict = dict(
             sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
@@ -178,40 +182,48 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         return obj.org.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
+        from db.task import Wallet
 
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(
             weeks=26
         )  # 6months
-        return obj.org.user_organization_link_org.filter(
-            verified=True,
-            user__wallet_user__isnull=False,
-            user__wallet_user__karma_last_updated_at__gte=last_month,
+        verified_user_ids = obj.org.user_organization_link_org.filter(
+            verified=True
+        ).values_list("user_id", flat=True).distinct()
+        return Wallet.objects.filter(
+            user_id__in=verified_user_ids,
+            karma_last_updated_at__gte=last_month,
         ).count()
 
     def get_total_karma(self, obj):
-        return (
-            obj.org.user_organization_link_org.filter(
-                org__org_type=OrganizationType.COLLEGE.value,
-                verified=True,
-                user__wallet_user__isnull=False,
-            ).aggregate(total_karma=Sum("user__wallet_user__karma"))["total_karma"]
-            or 0
-        )
+        from db.task import Wallet
+
+        verified_user_ids = obj.org.user_organization_link_org.filter(
+            org__org_type=OrganizationType.COLLEGE.value,
+            verified=True,
+        ).values_list("user_id", flat=True).distinct()
+        return Wallet.objects.filter(
+            user_id__in=verified_user_ids
+        ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
 
     def get_rank(self, obj):
-        org_karma_dict = (
+        # (org, user, karma) collapsed via .distinct() so a user with more than
+        # one org-link row to the same college can't inflate that college's
+        # karma total relative to every other college in this ranking.
+        rows = (
             UserOrganizationLink.objects.filter(
                 org__org_type=OrganizationType.COLLEGE.value,
                 verified=True,
             )
-            .values("org")
-            .annotate(total_karma=Sum("user__wallet_user__karma"))
-        ).order_by("-total_karma", "org__created_at")
+            .values("org", "user", "user__wallet_user__karma")
+            .distinct()
+            .order_by("org__created_at")
+        )
 
-        rank_dict = {
-            data["org"]: data["total_karma"] if data["total_karma"] is not None else 0
-            for data in org_karma_dict
-        }
+        rank_dict = {}
+        for row in rows:
+            org_id = row["org"]
+            rank_dict[org_id] = rank_dict.get(org_id, 0) + (row["user__wallet_user__karma"] or 0)
 
         sorted_rank_dict = dict(
             sorted(rank_dict.items(), key=lambda x: x[1], reverse=True)
@@ -223,10 +235,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             return position + 1
     def get_karma_last_7_days(self, obj):
         seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
+        verified_user_ids = obj.org.user_organization_link_org.filter(
+            verified=True
+        ).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
-                user__user_organization_link_user__org=obj.org,
-                user__user_organization_link_user__verified=True,
+                user_id__in=verified_user_ids,
                 created_at__gte=seven_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -234,10 +248,12 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma_last_30_days(self, obj):
         thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
+        verified_user_ids = obj.org.user_organization_link_org.filter(
+            verified=True
+        ).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
-                user__user_organization_link_user__org=obj.org,
-                user__user_organization_link_user__verified=True,
+                user_id__in=verified_user_ids,
                 created_at__gte=thirty_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -316,16 +332,19 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
         today = DateTimeUtils.get_current_utc_time().date()
         date_range = [today - timedelta(days=i) for i in range(7)]
 
+        verified_user_ids = instance.user_organization_link_org.filter(
+            verified=True
+        ).values_list("user_id", flat=True).distinct()
+
         for date in date_range:
             karma_logs = KarmaActivityLog.objects.filter(
-                user__user_organization_link_user__org=instance,
-                user__user_organization_link_user__verified=True,
+                user_id__in=verified_user_ids,
                 created_at__date=date,
                 appraiser_approved=True,
             ).aggregate(
                 karma=Sum("karma"),
             )
-            response[str(date)] = karma_logs.get("karma", 0)
+            response[str(date)] = karma_logs["karma"] or 0
 
         return response
 
