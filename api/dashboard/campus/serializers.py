@@ -224,6 +224,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         return (
             KarmaActivityLog.objects.filter(
                 user__user_organization_link_user__org=obj.org,
+                user__user_organization_link_user__verified=True,
                 created_at__gte=seven_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -234,6 +235,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         return (
             KarmaActivityLog.objects.filter(
                 user__user_organization_link_user__org=obj.org,
+                user__user_organization_link_user__verified=True,
                 created_at__gte=thirty_days_ago,
                 appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -315,6 +317,7 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
         for date in date_range:
             karma_logs = KarmaActivityLog.objects.filter(
                 user__user_organization_link_user__org=instance,
+                user__user_organization_link_user__verified=True,
                 created_at__date=date,
                 appraiser_approved=True,
             ).aggregate(

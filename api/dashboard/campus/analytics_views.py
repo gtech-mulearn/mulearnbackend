@@ -57,6 +57,7 @@ class CampusKarmaTrendAPI(APIView):
         
         qs = KarmaActivityLog.objects.filter(
             user__user_organization_link_user__org=org,
+            user__user_organization_link_user__verified=True,
             created_at__gte=start_date,
             appraiser_approved=True,
         ).annotate(
