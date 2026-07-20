@@ -386,7 +386,7 @@ class TaskListAPI(APIView):
             except:
                 skill_ids = []
 
-        serializer = TaskModifySerializer(data=mutable_data)
+        serializer = TaskModifySerializer(data=mutable_data, context={"request": request})
 
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
@@ -475,7 +475,9 @@ class TaskAPI(APIView):
                 general_message="Task not found."
             ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
-        serializer = TaskModifySerializer(task, data=mutable_data, partial=True)
+        serializer = TaskModifySerializer(
+            task, data=mutable_data, partial=True, context={"request": request}
+        )
 
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()

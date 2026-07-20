@@ -9,6 +9,7 @@ urlpatterns = [
     path('meta/organizer-options/', meta_views.OrganizerOptionsAPI.as_view()),
     path('meta/collaboration-targets/', meta_views.CollaborationTargetsAPI.as_view()),
     path('meta/event-type-scope/', meta_views.EventTypesScopesAPI.as_view()),
+    path('meta/linkable-events/', meta_views.LinkableEventsAPI.as_view()),
 
     # ── Scoped Feeds ──────────────────────────────────────────
     # cluster must come BEFORE ig/<ig_id>/ to avoid being swallowed by wildcard
