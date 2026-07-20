@@ -88,8 +88,8 @@ class CollegeChangeAPI(APIView):
                     if department_id is not None:
                         current_link.department = department
                     current_link.save()
-                    current_department = current_link.department
-                    
+                    final_department = current_link.department
+
                     if department_id is not None:
                         if department:
                             message = (
@@ -102,24 +102,25 @@ class CollegeChangeAPI(APIView):
                                 f"Department removed"
                             )
                     else:
-                        if current_department:
+                        if final_department:
                             message = (
                                 f"College updated successfully to {new_organization.title}. "
-                                f"Department remains {current_department.title}"
+                                f"Department remains {final_department.title}"
                             )
                         else:
                             message = f"College updated successfully to {new_organization.title}"
-                    
+
                     action = "updated"
                 else:
-                    UserOrganizationLink.objects.create(
+                    new_link = UserOrganizationLink.objects.create(
                         user=user,
                         org=new_organization,
                         department=department,
                         verified=False,
                         created_by=user,
                     )
-                    
+                    final_department = new_link.department
+
                     if department:
                         message = (
                             f"College linked successfully to {new_organization.title}. "
@@ -127,14 +128,8 @@ class CollegeChangeAPI(APIView):
                         )
                     else:
                         message = f"College linked successfully to {new_organization.title}"
-                    
-                    action = "created"
 
-            final_link = UserOrganizationLink.objects.select_related('department').get(
-                user_id=user_id,
-                org__org_type=OrganizationType.COLLEGE.value
-            )
-            final_department = final_link.department
+                    action = "created"
 
             return CustomResponse(
                 general_message=message, 

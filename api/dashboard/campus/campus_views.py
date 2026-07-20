@@ -811,6 +811,8 @@ class CampusStudentLeaderboardAPI(APIView):
             Wallet.objects.filter(
                 user__user_organization_link_user__org=org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user__user_organization_link_user__verified=True,
+                user__user_organization_link_user__is_alumni=False,
             )
             .distinct()
             .order_by("-karma","-created_at")
@@ -818,11 +820,15 @@ class CampusStudentLeaderboardAPI(APIView):
         )
         ranks = {r["user_id"]: i + 1 for i, r in enumerate(rank_qs)}
 
-     
+
         # 2. Base queryset - all students with annotations                    #
 
         ig_count_subquery = (
-            UserIgLink.objects.filter(user_id=OuterRef("id"))
+            UserIgLink.objects.filter(
+                user_id=OuterRef("id"),
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+            )
             .values("user_id")
             .annotate(count=Count("id", distinct=True))
             .values("count")
@@ -832,6 +838,7 @@ class CampusStudentLeaderboardAPI(APIView):
             User.objects.filter(
                 user_organization_link_user__org=org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__verified=True,
             )
             .distinct()
             .annotate(
@@ -880,6 +887,9 @@ class CampusStudentLeaderboardAPI(APIView):
             qs = qs.filter(
                 user_organization_link_user__is_alumni=is_alumni_bool
             )
+        else:
+            # Default view excludes alumni; pass ?is_alumni=true to include them.
+            qs = qs.filter(user_organization_link_user__is_alumni=False)
         if search:
             qs = qs.filter(
                 Q(full_name__icontains=search) | Q(muid__icontains=search)
