@@ -104,6 +104,13 @@ class IntegrationType(Enum):
     KKEM = "DWMS"
 
 
+class InterestGroupStatus(Enum):
+    ACTIVE = "active"
+    REQUESTED = "requested"
+    CANCELLED = "cancelled"
+    REJECTED = "rejected"
+
+
 class TasksTypesHashtag(Enum):
     REFERRAL = "referral"
     MUCOIN = "mucoin"

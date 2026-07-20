@@ -878,8 +878,9 @@ class InterestGroupListApi(APIView):
         responses={200: InterestGroupSerializer},
     )
     def get(self, request):
+        from utils.types import InterestGroupStatus
         ig = (
-            InterestGroup.objects.filter(status='active')
+            InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
             .prefetch_related("user_ig_link_ig")
             .annotate(members=Count("user_ig_link_ig"))
