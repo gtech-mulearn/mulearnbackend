@@ -397,12 +397,7 @@ class CompanyMentorListAPI(APIView):
                 general_message="Verified company profile not found."
             ).get_failure_response(status_code=404)
 
-        from db.organization import Organization
-        from utils.types import OrganizationType
-        org = Organization.objects.filter(
-            title=company.name,
-            org_type=OrganizationType.COMPANY.value,
-        ).first()
+        org = company.org
 
         if not org:
             return CustomResponse(

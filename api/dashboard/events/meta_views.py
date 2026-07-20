@@ -180,15 +180,15 @@ class OrganizerOptionsAPI(APIView):
         # Company: user with Company role in a company org or UserMentor with COMPANY_MENTOR
         company_options = {}
         if RoleType.COMPANY.value in roles:
-            user_orgs = UserOrganizationLink.objects.filter(
-                user_id=user_id, verified=True
-            ).select_related('org')
-            for link in user_orgs:
-                if link.org.org_type == 'Company':
-                    company_options[link.org.id] = {
-                        'id': link.org.id,
-                        'title': link.org.title,
-                    }
+            from db.company import Company
+            company = Company.objects.filter(
+                company_user_id=user_id, status="verified"
+            ).select_related('org').first()
+            if company and company.org:
+                company_options[company.org.id] = {
+                    'id': company.org.id,
+                    'title': company.org.title,
+                }
                     
         if RoleType.MENTOR.value in roles:
             from db.user import MentorScopeGrant

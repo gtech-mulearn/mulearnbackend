@@ -4,6 +4,7 @@ from django.db import models
 class Company(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     company_user = models.OneToOneField('User', on_delete=models.CASCADE, related_name='company_profile')
+    org = models.ForeignKey('Organization', on_delete=models.SET_NULL, null=True, blank=True, related_name='companies')
     name = models.CharField(max_length=75, unique=True)
     logo = models.TextField(null=True, blank=True)
     description = models.TextField()

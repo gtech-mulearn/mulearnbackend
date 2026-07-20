@@ -83,9 +83,8 @@ class CompanyTaskListCreateAPI(APIView):
         if approval_status:
             queryset = queryset.filter(approval_status=approval_status)
         else:
-            # Exclude soft-deleted tasks (active=False after being previously approved)
-            # Only exclude tasks that are inactive AND already approved/rejected (not pending)
-            queryset = queryset.exclude(active=False, approval_status="approved")
+            # Exclude soft-deleted tasks (active=False), regardless of approval_status
+            queryset = queryset.exclude(active=False)
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
