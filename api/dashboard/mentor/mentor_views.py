@@ -101,14 +101,17 @@ class MentorStatusAPI(APIView):
         from .dash_mentor_helper import get_mentor_company
         organization = get_mentor_company(mentor)
 
-        return CustomResponse(
-            response={
-                "status": mentor.status,
-                "organization": organization,
-                "verified_by": getattr(mentor.verified_by, "full_name", None) if mentor.verified_by else None,
-                "verified_at": mentor.verified_at,
-            }
-        ).get_success_response()
+        response = {
+            "status": mentor.status,
+            "organization": organization,
+            "verified_by": getattr(mentor.verified_by, "full_name", None) if mentor.verified_by else None,
+            "verified_at": mentor.verified_at,
+        }
+
+        if mentor.status == UserMentor.Status.REJECTED:
+            response["rejection_reason"] = mentor.verification_note
+
+        return CustomResponse(response=response).get_success_response()
 
 class MentorActivityListAPI(APIView):
     authentication_classes = [CustomizePermission]

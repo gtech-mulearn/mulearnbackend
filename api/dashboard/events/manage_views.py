@@ -67,13 +67,9 @@ def _get_user_company_org_ids(user_id, roles):
 
     if RoleType.COMPANY.value in roles:
         from db.company import Company
-        from db.organization import Organization
-        from utils.types import OrganizationType
         company = Company.objects.filter(company_user_id=user_id, status="verified").first()
-        if company:
-            org = Organization.objects.filter(title=company.name, org_type=OrganizationType.COMPANY.value).first()
-            if org:
-                company_org_ids.add(org.id)
+        if company and company.org:
+            company_org_ids.add(company.org_id)
 
     if RoleType.MENTOR.value in roles:
         from db.user import MentorScopeGrant
