@@ -126,6 +126,7 @@ def _campus_stats(org, since):
     active_circles = LearningCircle.objects.filter(org=org).count()
     period_karma = KarmaActivityLog.objects.filter(
         user__user_organization_link_user__org=org,
+        user__user_organization_link_user__verified=True,
         created_at__gte=since,
         appraiser_approved=True,
     ).aggregate(total=Sum("karma")).get("total") or 0
