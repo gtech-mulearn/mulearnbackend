@@ -734,7 +734,7 @@ class ListIGAPI(APIView):
         })},
     )
     def get(self, request):
-        return CustomResponse(response=InterestGroup.objects.all().values("name")).get_success_response()
+        return CustomResponse(response=InterestGroup.objects.filter(status='active').values("name")).get_success_response()
 
 
 class IGDetailAPI(APIView):
@@ -748,7 +748,7 @@ class IGDetailAPI(APIView):
 
         ig_data = (
             InterestGroup.objects.prefetch_related("user_ig_link_ig")
-            .filter(id=pk)
+            .filter(id=pk, status='active')
             .first()
         )
 

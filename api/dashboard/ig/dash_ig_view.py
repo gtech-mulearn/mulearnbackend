@@ -879,7 +879,7 @@ class InterestGroupListApi(APIView):
     )
     def get(self, request):
         ig = (
-            InterestGroup.objects.all()
+            InterestGroup.objects.filter(status='active')
             .select_related("created_by", "updated_by")
             .prefetch_related("user_ig_link_ig")
             .annotate(members=Count("user_ig_link_ig"))
