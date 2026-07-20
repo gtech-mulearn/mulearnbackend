@@ -982,6 +982,7 @@ class CampusKarmaByClusterAPI(APIView):
             User.objects.filter(
                 user_organization_link_user__org=org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_organization_link_user__verified=True,
             )
             .annotate(user_karma=Subquery(wallet_karma_sq))
             .values("id", "user_ig_link_user__ig__category", "user_karma")
