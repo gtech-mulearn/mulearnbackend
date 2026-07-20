@@ -84,7 +84,10 @@ class CollegeChangeAPI(APIView):
                         UserOrganizationLink.objects.filter(id__in=duplicate_ids).delete()
 
                     current_link.org = new_organization
-                    current_link.verified = False
+                    # Auto-verified: there is no manual campus-transfer approval
+                    # flow, so leaving this False would strand the student
+                    # unverified at both the old and new campus indefinitely.
+                    current_link.verified = True
                     if department_id is not None:
                         current_link.department = department
                     current_link.save()
@@ -116,7 +119,7 @@ class CollegeChangeAPI(APIView):
                         user=user,
                         org=new_organization,
                         department=department,
-                        verified=False,
+                        verified=True,
                         created_by=user,
                     )
                     final_department = new_link.department

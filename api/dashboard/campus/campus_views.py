@@ -8,6 +8,7 @@ import uuid
 from db.organization import Organization, UserOrganizationLink
 from db.task import Level, Wallet, InterestGroup, UserIgLink
 from db.campus import CampusIGChapter, CampusSocialLink
+from db.learning_circle import UserCircleLink
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -183,8 +184,11 @@ class CampusStudentInEachLevelAPI(APIView):
             students=Count(
                 "user_lvl_link_level__user",
                 filter=Q(
-                    user_lvl_link_level__user__user_organization_link_user__org=org
+                    user_lvl_link_level__user__user_organization_link_user__org=org,
+                    user_lvl_link_level__user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                    user_lvl_link_level__user__user_organization_link_user__verified=True,
                 ),
+                distinct=True,
             )
         ).values(level=F("level_order"), students=F("students"))
 
@@ -249,6 +253,26 @@ class CampusStudentDetailsAPI(APIView):
         )
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
 
+        # Correlated subqueries (not joined Counts) so they can't be inflated
+        # by the ig_id/category .filter() calls applied to user_filters above,
+        # which also traverse user_ig_link_user.
+        ig_count_sq = (
+            UserIgLink.objects.filter(
+                user_id=OuterRef("pk"),
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+            )
+            .values("user_id")
+            .annotate(count=Count("id", distinct=True))
+            .values("count")
+        )
+        lc_count_sq = (
+            UserCircleLink.objects.filter(user_id=OuterRef("pk"), accepted=True)
+            .values("user_id")
+            .annotate(count=Count("id", distinct=True))
+            .values("count")
+        )
+
         user_org_links = (
             User.objects.filter(user_filters)
             .distinct()
@@ -263,6 +287,8 @@ class CampusStudentDetailsAPI(APIView):
                 department=F("user_organization_link_user__department__title"),
                 graduation_year=F("user_organization_link_user__graduation_year"),
                 is_alumni=F("user_organization_link_user__is_alumni"),
+                ig_count=Coalesce(Subquery(ig_count_sq, output_field=IntegerField()), 0),
+                lc_count=Coalesce(Subquery(lc_count_sq, output_field=IntegerField()), 0),
             )
         )
 
@@ -352,6 +378,23 @@ class CampusStudentDetailsCSVAPI(APIView):
         )
         ranks = {user["user_id"]: i + 1 for i, user in enumerate(rank)}
 
+        ig_count_sq = (
+            UserIgLink.objects.filter(
+                user_id=OuterRef("pk"),
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+            )
+            .values("user_id")
+            .annotate(count=Count("id", distinct=True))
+            .values("count")
+        )
+        lc_count_sq = (
+            UserCircleLink.objects.filter(user_id=OuterRef("pk"), accepted=True)
+            .values("user_id")
+            .annotate(count=Count("id", distinct=True))
+            .values("count")
+        )
+
         user_org_links = (
             User.objects.filter(user_filters)
             .distinct()
@@ -366,6 +409,8 @@ class CampusStudentDetailsCSVAPI(APIView):
                 department=F("user_organization_link_user__department__title"),
                 graduation_year=F("user_organization_link_user__graduation_year"),
                 is_alumni=F("user_organization_link_user__is_alumni"),
+                ig_count=Coalesce(Subquery(ig_count_sq, output_field=IntegerField()), 0),
+                lc_count=Coalesce(Subquery(lc_count_sq, output_field=IntegerField()), 0),
             )
         )
 
@@ -816,7 +861,6 @@ class CampusStudentLeaderboardAPI(APIView):
                 user__user_organization_link_user__org=org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
                 user__user_organization_link_user__verified=True,
-                user__user_organization_link_user__is_alumni=False,
             )
             .distinct()
             .order_by("-karma","-created_at")
@@ -891,9 +935,8 @@ class CampusStudentLeaderboardAPI(APIView):
             qs = qs.filter(
                 user_organization_link_user__is_alumni=is_alumni_bool
             )
-        else:
-            # Default view excludes alumni; pass ?is_alumni=true to include them.
-            qs = qs.filter(user_organization_link_user__is_alumni=False)
+        # No default is_alumni filter: every verified campus member (alumni
+        # included) appears on the leaderboard unless ?is_alumni= is passed.
         if search:
             qs = qs.filter(
                 Q(full_name__icontains=search) | Q(muid__icontains=search)
@@ -976,13 +1019,20 @@ class CampusKarmaByClusterAPI(APIView):
             user=OuterRef("pk")
         ).values("karma")[:1]
 
-        # Subquery: each user's single "primary" category — their earliest IG
-        # membership. A member can belong to IGs spanning several categories;
-        # without picking exactly one, their full karma would get added to
-        # every category they touch, making the bucket totals sum to several
-        # times the campus's actual total_karma.
+        # Subquery: each user's single "primary" category — their earliest
+        # active LEARNER IG membership (mentor/lead/moderator assignments are
+        # staff roles, not personal category membership, so they're excluded
+        # here just like every other IG-membership count in this app). A
+        # member can belong to IGs spanning several categories; without
+        # picking exactly one, their full karma would get added to every
+        # category they touch, making the bucket totals sum to several times
+        # the campus's actual total_karma.
         primary_category_sq = (
-            UserIgLink.objects.filter(user_id=OuterRef("pk"))
+            UserIgLink.objects.filter(
+                user_id=OuterRef("pk"),
+                is_active=True,
+                assignment_type=UserIgLink.AssignmentType.LEARNER,
+            )
             .order_by("created_at")
             .values("ig__category")[:1]
         )
