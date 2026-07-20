@@ -57,7 +57,8 @@ class CampusKarmaTrendAPI(APIView):
         
         qs = KarmaActivityLog.objects.filter(
             user__user_organization_link_user__org=org,
-            created_at__gte=start_date
+            created_at__gte=start_date,
+            appraiser_approved=True,
         ).annotate(
             date=TruncDate('created_at')
         ).values('date').annotate(
@@ -111,14 +112,25 @@ class CampusGrowthAPI(APIView):
         if cached_data:
             return CustomResponse(response=cached_data).get_success_response()
         
-        current_month = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        previous_month = (current_month - timedelta(days=1)).replace(day=1)
-        
-        current_members = UserOrganizationLink.objects.filter(org=org, is_alumni=False, created_at__gte=current_month).count()
-        prev_members = UserOrganizationLink.objects.filter(org=org, is_alumni=False, created_at__gte=previous_month, created_at__lt=current_month).count()
-        
-        current_lcs = lc_services.get_campus_learning_circles(org.id).filter(created_at__gte=current_month).count()
-        prev_lcs = lc_services.get_campus_learning_circles(org.id).filter(created_at__gte=previous_month, created_at__lt=current_month).count()
+        # True rolling 30-day windows so the "period: 30d" label is accurate
+        # regardless of what day of the month it is (a calendar-month-to-date
+        # window would under-report early in the month).
+        now = timezone.now()
+        current_window_start = now - timedelta(days=30)
+        previous_window_start = now - timedelta(days=60)
+
+        current_members = UserOrganizationLink.objects.filter(
+            org=org, is_alumni=False, verified=True, created_at__gte=current_window_start
+        ).count()
+        prev_members = UserOrganizationLink.objects.filter(
+            org=org, is_alumni=False, verified=True,
+            created_at__gte=previous_window_start, created_at__lt=current_window_start,
+        ).count()
+
+        current_lcs = lc_services.get_campus_learning_circles(org.id).filter(created_at__gte=current_window_start).count()
+        prev_lcs = lc_services.get_campus_learning_circles(org.id).filter(
+            created_at__gte=previous_window_start, created_at__lt=current_window_start
+        ).count()
         
         data = [
             {

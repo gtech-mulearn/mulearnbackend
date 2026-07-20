@@ -70,19 +70,24 @@ class CollegeChangeAPI(APIView):
                 existing_links = UserOrganizationLink.objects.filter(
                     user_id=user_id,
                     org__org_type=OrganizationType.COLLEGE.value
-                )
+                ).order_by('-created_at', '-id')
 
                 if existing_links.exists():
-                    update_data = {
-                        'org': new_organization,
-                        'verified': False
-                    }
-                    
-                    if department_id is not None:
-                        update_data['department'] = department
-                    
-                    existing_links.update(**update_data)
                     current_link = existing_links.select_related('department').first()
+
+                    # Dedupe: a user should only ever have one college link. Drop any
+                    # extras so the final .get() below can't raise MultipleObjectsReturned.
+                    duplicate_ids = list(
+                        existing_links.exclude(id=current_link.id).values_list('id', flat=True)
+                    )
+                    if duplicate_ids:
+                        UserOrganizationLink.objects.filter(id__in=duplicate_ids).delete()
+
+                    current_link.org = new_organization
+                    current_link.verified = False
+                    if department_id is not None:
+                        current_link.department = department
+                    current_link.save()
                     current_department = current_link.department
                     
                     if department_id is not None:

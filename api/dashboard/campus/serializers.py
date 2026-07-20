@@ -53,17 +53,20 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         return None
 
     def get_total_members(self, obj):
-        return obj.user_organization_link_org.values('user').distinct().count()
+        return obj.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
         return obj.user_organization_link_org.filter(
+            verified=True,
             user__discord_id__isnull=False,
             user__exist_in_guild=True
         ).values('user').distinct().count()
 
     def get_total_karma(self, obj):
         from db.task import Wallet
-        users_in_org = obj.user_organization_link_org.values_list('user', flat=True)
+        users_in_org = obj.user_organization_link_org.filter(
+            verified=True
+        ).values_list('user', flat=True)
         return Wallet.objects.filter(
             user__in=users_in_org
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -71,7 +74,8 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
     def get_rank(self, obj):
         org_karma_dict = (
             UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
             )
             .values("org")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
@@ -169,7 +173,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
    
 
     def get_total_members(self, obj):
-        return obj.org.user_organization_link_org.count()
+        return obj.org.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
 
@@ -195,7 +199,8 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
     def get_rank(self, obj):
         org_karma_dict = (
             UserOrganizationLink.objects.filter(
-                org__org_type=OrganizationType.COLLEGE.value
+                org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
             )
             .values("org")
             .annotate(total_karma=Sum("user__wallet_user__karma"))
@@ -220,6 +225,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             KarmaActivityLog.objects.filter(
                 user__user_organization_link_user__org=obj.org,
                 created_at__gte=seven_days_ago,
+                appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
         )
 
@@ -229,6 +235,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             KarmaActivityLog.objects.filter(
                 user__user_organization_link_user__org=obj.org,
                 created_at__gte=thirty_days_ago,
+                appraiser_approved=True,
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
         )
     def get_active_ig_count(self, obj):
@@ -309,6 +316,7 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
             karma_logs = KarmaActivityLog.objects.filter(
                 user__user_organization_link_user__org=instance,
                 created_at__date=date,
+                appraiser_approved=True,
             ).aggregate(
                 karma=Sum("karma"),
             )
@@ -498,8 +506,11 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     def get_campus_ig_member_count(self, obj):
         return UserIgLink.objects.filter(
             ig=obj.ig,
+            is_active=True,
+            assignment_type=UserIgLink.AssignmentType.LEARNER,
             user__user_organization_link_user__org=obj.org,
-        ).count()
+            user__user_organization_link_user__verified=True,
+        ).values('user').distinct().count()
 
 
 class CampusIGChapterCreateSerializer(serializers.ModelSerializer):

@@ -18,7 +18,7 @@ class LearningCircle(models.Model):
     title = models.CharField(max_length=100, blank=False, null=False)
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column="created_by",
                                    related_name="learning_circle_created_by")
-    created_at = models.DateTimeField(auto_now=True)
+    created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
     class Meta:
