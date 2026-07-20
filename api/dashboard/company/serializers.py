@@ -197,10 +197,19 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
     def update(self, instance, validated_data):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['updated_by'] = self.context.get("user_id", instance.company_user_id)
-        
+
+        new_name = validated_data.get("name")
+        rename = new_name and new_name != instance.name
+
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
+
+        if rename and instance.org:
+            instance.org.title = new_name
+            instance.org.updated_at = DateTimeUtils.get_current_utc_time()
+            instance.org.save(update_fields=["title", "updated_at"])
+
         return instance
 
 class CompanyListSerializer(serializers.ModelSerializer):
