@@ -9,14 +9,20 @@ def get_campus_igs(org_id: str):
     """
     return InterestGroup.objects.filter(
         user_ig_link_ig__user__user_organization_link_user__org_id=org_id,
-        user_ig_link_ig__user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
+        user_ig_link_ig__user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        user_ig_link_ig__user__user_organization_link_user__verified=True,
+        user_ig_link_ig__is_active=True,
+        user_ig_link_ig__assignment_type=UserIgLink.AssignmentType.LEARNER,
     ).annotate(
         campus_member_count=Count(
-            'user_ig_link_ig__user', 
+            'user_ig_link_ig__user',
             distinct=True,
             filter=Q(
                 user_ig_link_ig__user__user_organization_link_user__org_id=org_id,
-                user_ig_link_ig__user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
+                user_ig_link_ig__user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+                user_ig_link_ig__user__user_organization_link_user__verified=True,
+                user_ig_link_ig__is_active=True,
+                user_ig_link_ig__assignment_type=UserIgLink.AssignmentType.LEARNER,
             )
         )
     ).distinct()
@@ -27,6 +33,9 @@ def get_top_igs(org_id: str):
 def get_ig_members(ig_id: str, org_id: str):
     return UserIgLink.objects.filter(
         ig_id=ig_id,
+        is_active=True,
+        assignment_type=UserIgLink.AssignmentType.LEARNER,
         user__user_organization_link_user__org_id=org_id,
-        user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value
+        user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+        user__user_organization_link_user__verified=True,
     ).select_related('user', 'user__wallet_user', 'user__user_lvl_link_user__level')
