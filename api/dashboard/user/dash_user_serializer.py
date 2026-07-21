@@ -434,6 +434,13 @@ class UserDetailsEditSerializer(serializers.ModelSerializer):
             "district",
         ]
 
+    def validate_interest_groups(self, interest_group_ids):
+        if len(interest_group_ids) > 3:
+            raise serializers.ValidationError(
+                "Cannot select more than 3 interest groups"
+            )
+        return interest_group_ids
+
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
