@@ -38,15 +38,13 @@ def _period_start(request, default_days=30):
 
 def _member_funnel(org):
     registered = UserOrganizationLink.objects.filter(org=org).count()
-    onboarded = UserOrganizationLink.objects.filter(org=org, verified=True).count()
+    onboarded = registered
     active = UserOrganizationLink.objects.filter(
         org=org,
-        verified=True,
         user__wallet_user__karma_last_updated_at__gte=timezone.now() - timedelta(days=30),
     ).count()
     level_2_plus = UserOrganizationLink.objects.filter(
         org=org,
-        verified=True,
         user__user_lvl_link_user__level__level_order__gte=2,
     ).count()
     circle_leads = UserCircleLink.objects.filter(
@@ -120,13 +118,12 @@ def _recent_activity(org, limit):
 
 
 def _campus_stats(org, since):
-    members = UserOrganizationLink.objects.filter(org=org,verified=True)
+    members = UserOrganizationLink.objects.filter(org=org)
     active_members = members.filter(user__wallet_user__karma_last_updated_at__gte=since).count()
     total_karma = members.aggregate(total=Sum("user__wallet_user__karma")).get("total") or 0
     active_circles = LearningCircle.objects.filter(org=org).count()
     period_karma = KarmaActivityLog.objects.filter(
         user__user_organization_link_user__org=org,
-        user__user_organization_link_user__verified=True,
         created_at__gte=since,
         appraiser_approved=True,
     ).aggregate(total=Sum("karma")).get("total") or 0

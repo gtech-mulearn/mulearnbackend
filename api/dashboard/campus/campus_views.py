@@ -186,7 +186,6 @@ class CampusStudentInEachLevelAPI(APIView):
                 filter=Q(
                     user_lvl_link_level__user__user_organization_link_user__org=org,
                     user_lvl_link_level__user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                    user_lvl_link_level__user__user_organization_link_user__verified=True,
                 ),
                 distinct=True,
             )
@@ -224,12 +223,10 @@ class CampusStudentDetailsAPI(APIView):
         wallet_filters = Q(
             user__user_organization_link_user__org=user_org_link.org,
             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            user__user_organization_link_user__verified=True,
         )
         user_filters = Q(
             user_organization_link_user__org=user_org_link.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            user_organization_link_user__verified=True,
         )
 
         if is_alumni is not None:
@@ -349,12 +346,10 @@ class CampusStudentDetailsCSVAPI(APIView):
         wallet_filters = Q(
             user__user_organization_link_user__org=user_org_link.org,
             user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            user__user_organization_link_user__verified=True,
         )
         user_filters = Q(
             user_organization_link_user__org=user_org_link.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-            user_organization_link_user__verified=True,
         )
 
         if is_alumni is not None:
@@ -860,7 +855,6 @@ class CampusStudentLeaderboardAPI(APIView):
             Wallet.objects.filter(
                 user__user_organization_link_user__org=org,
                 user__user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user__user_organization_link_user__verified=True,
             )
             .distinct()
             .order_by("-karma","-created_at")
@@ -886,7 +880,6 @@ class CampusStudentLeaderboardAPI(APIView):
             User.objects.filter(
                 user_organization_link_user__org=org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_user__verified=True,
             )
             .distinct()
             .annotate(
@@ -935,7 +928,7 @@ class CampusStudentLeaderboardAPI(APIView):
             qs = qs.filter(
                 user_organization_link_user__is_alumni=is_alumni_bool
             )
-        # No default is_alumni filter: every verified campus member (alumni
+        # No default is_alumni filter: every campus member (alumni
         # included) appears on the leaderboard unless ?is_alumni= is passed.
         if search:
             qs = qs.filter(
@@ -1043,7 +1036,6 @@ class CampusKarmaByClusterAPI(APIView):
             User.objects.filter(
                 user_organization_link_user__org=org,
                 user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
-                user_organization_link_user__verified=True,
             )
             .annotate(
                 user_karma=Subquery(wallet_karma_sq),
