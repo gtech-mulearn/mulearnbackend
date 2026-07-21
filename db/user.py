@@ -284,6 +284,7 @@ class Role(models.Model):
     created_by = models.ForeignKey(User, on_delete=models.SET(settings.SYSTEM_ADMIN_ID), db_column='created_by',
                                    related_name='role_created_by')
     created_at = models.DateTimeField(auto_now_add=True)
+    is_execom_role = models.BooleanField(default=False)
 
     class Meta:
         managed = False
