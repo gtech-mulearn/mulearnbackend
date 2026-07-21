@@ -482,13 +482,18 @@ class CampusExecomRoleAPI(APIView):
 
         role = Role.objects.filter(title=role_title).first()
         if role:
+            if not role.is_execom_role:
+                return CustomResponse(
+                    general_message=f"'{role_title}' is already in use by another feature and cannot be created as an execom role"
+                ).get_failure_response()
             return CustomResponse(general_message="Role already exists").get_success_response()
 
         Role.objects.create(
             id=str(uuid.uuid4()),
             title=role_title,
             created_by_id=user_id,
-            updated_by_id=user_id
+            updated_by_id=user_id,
+            is_execom_role=True,
         )
 
         return CustomResponse(general_message="Role created successfully").get_success_response()
