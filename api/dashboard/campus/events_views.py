@@ -195,22 +195,9 @@ class CampusExecomAPI(APIView):
             is_alumni=False,
         ).values_list("user_id", flat=True)
 
-        # Extracted all non-execom system roles to properly support listing dynamic custom/IG roles
-        BLACKLIST_ROLES = [
-            RoleType.ADMIN.value, RoleType.FELLOW.value, RoleType.APPRAISER.value,
-            RoleType.ZONAL_CAMPUS_LEAD.value, RoleType.DISTRICT_CAMPUS_LEAD.value,
-            RoleType.MENTOR.value, RoleType.COMPANY.value, RoleType.BOT_DEV.value,
-            RoleType.TECH_TEAM.value, RoleType.CAMPUS_ACTIVATION_TEAM.value,
-            RoleType.DISCORD_MANAGER.value, RoleType.EX_OFFICIAL.value,
-            RoleType.INTERN.value, RoleType.PRE_MEMBER.value, RoleType.SUSPEND.value,
-            RoleType.MULEARNER.value, RoleType.STUDENT.value, RoleType.ASSOCIATE.value,
-            RoleType.IG_LEAD.value
-        ]
-
         execom_links = UserRoleLink.objects.filter(
-            user_id__in=campus_user_ids
-        ).exclude(
-            role__title__in=BLACKLIST_ROLES
+            user_id__in=campus_user_ids,
+            role__is_execom_role=True,
         ).select_related("user", "role")
 
         serializer = campus_serializers.ExecomMemberSerializer(
@@ -300,12 +287,17 @@ class CampusExecomAPI(APIView):
 
         # Fetch role by title
         role = Role.objects.filter(title=role_title).first()
+        if role is not None and not role.is_execom_role:
+            return CustomResponse(
+                general_message=f"'{role_title}' is already in use by another feature and cannot be assigned as an execom role"
+            ).get_failure_response()
         if role is None:
             role = Role.objects.create(
                 id=str(uuid.uuid4()),
                 title=role_title,
                 created_by_id=user_id,
-                updated_by_id=user_id
+                updated_by_id=user_id,
+                is_execom_role=True,
             )
 
         # Remove existing holder of this role in the campus

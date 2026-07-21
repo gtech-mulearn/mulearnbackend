@@ -130,14 +130,17 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
         {
             "title": ig_name,
             "description": f"{ig_name} Interest Group Member",
+            "is_execom_role": False,
         },
         {
             "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
             "description": f"{ig_name} Interest Group Campus Lead",
+            "is_execom_role": True,
         },
         {
             "title": RoleType.IG_LEAD_ROLE(ig_code),
             "description": f"{ig_name} Interest Group Lead",
+            "is_execom_role": False,
         },
     ]
 
@@ -149,6 +152,7 @@ def assign_ig_campus_lead(chapter, new_lead, acting_user_id):
                 "description": role_data["description"],
                 "created_by_id": acting_user_id,
                 "updated_by_id": acting_user_id,
+                "is_execom_role": role_data["is_execom_role"],
             }
         )
 

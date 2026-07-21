@@ -191,14 +191,17 @@ class InterestGroupAPI(APIView):
                     {
                         "title": ig_name,
                         "description": f"{ig_name} Interest Group Member",
+                        "is_execom_role": False,
                     },
                     {
                         "title": RoleType.IG_CAMPUS_LEAD_ROLE(ig_code),
                         "description": f"{ig_name} Interest Group Campus Lead",
+                        "is_execom_role": True,
                     },
                     {
                         "title": RoleType.IG_LEAD_ROLE(ig_code),
                         "description": f"{ig_name} Interest Group Lead",
+                        "is_execom_role": False,
                     },
                 ]
 
@@ -210,6 +213,7 @@ class InterestGroupAPI(APIView):
                             "description": role_data["description"],
                             "created_by_id": request_data.get("created_by"),
                             "updated_by_id": request_data.get("updated_by"),
+                            "is_execom_role": role_data["is_execom_role"],
                         }
                     )
 
