@@ -9,8 +9,66 @@ from db.organization import Organization, UserOrganizationLink
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
 from utils.types import RoleType
-from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse
+from drf_spectacular.utils import extend_schema, inline_serializer, OpenApiResponse, OpenApiParameter
+from drf_spectacular.openapi import OpenApiTypes
 from rest_framework import serializers as s
+
+
+class LinkableEventsAPI(APIView):
+    """
+    GET /events/meta/linkable-events/
+    Returns events the caller may attach a task to, for the task
+    create/edit "Linked Event" picker.
+
+    Reuses the exact predicate EventTaskPublicListAPI trusts when deciding
+    whether a task's linked event is visible to the caller (live events,
+    status PUBLISHED/ONGOING, same scope filter). Sharing the predicate is
+    load-bearing: if this picker offered an event that the task list's
+    accessible_event_ids check later rejected, an admin could create a task
+    that immediately disappeared from their own list.
+    """
+
+    @extend_schema(tags=['Dashboard - Events'], description="Retrieve Linkable Events.",
+        parameters=[
+            OpenApiParameter(
+                "search",
+                OpenApiTypes.STR,
+                OpenApiParameter.QUERY,
+                required=False,
+                description="Filter by event title (case-insensitive contains).",
+            ),
+        ],
+        responses={200: inline_serializer(
+            name='LinkableEventItem',
+            fields={
+                'id': s.CharField(),
+                'title': s.CharField(),
+                'start_datetime': s.DateTimeField(),
+            },
+            many=True,
+        )},
+    )
+    def get(self, request):
+        from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
+        from api.dashboard.events.serializers import get_live_events
+
+        viewer_id = _get_viewer_id(request)
+        scope_filter = _build_scope_filter(viewer_id)
+
+        events = get_live_events().filter(
+            scope_filter,
+            status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+        )
+
+        search = request.query_params.get("search")
+        if search:
+            events = events.filter(title__icontains=search)
+
+        events = events.order_by("-start_datetime").values(
+            "id", "title", "start_datetime"
+        )[:100]
+
+        return CustomResponse(response=list(events)).get_success_response()
 
 
 class EventCategoriesAPI(APIView):
@@ -122,15 +180,15 @@ class OrganizerOptionsAPI(APIView):
         # Company: user with Company role in a company org or UserMentor with COMPANY_MENTOR
         company_options = {}
         if RoleType.COMPANY.value in roles:
-            user_orgs = UserOrganizationLink.objects.filter(
-                user_id=user_id, verified=True
-            ).select_related('org')
-            for link in user_orgs:
-                if link.org.org_type == 'Company':
-                    company_options[link.org.id] = {
-                        'id': link.org.id,
-                        'title': link.org.title,
-                    }
+            from db.company import Company
+            company = Company.objects.filter(
+                company_user_id=user_id, status="verified"
+            ).select_related('org').first()
+            if company and company.org:
+                company_options[company.org.id] = {
+                    'id': company.org.id,
+                    'title': company.org.title,
+                }
                     
         if RoleType.MENTOR.value in roles:
             from db.user import MentorScopeGrant

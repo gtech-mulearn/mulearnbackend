@@ -4,6 +4,7 @@ from django.db.models import Q
 from rest_framework.views import APIView
 
 from db.organization import UserOrganizationLink
+from db.events import Event
 from db.user import User, Role, UserRoleLink
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
@@ -57,6 +58,9 @@ class CampusEventsAPI(APIView):
 
         if status := params.get("status"):
             events = events.filter(status=status)
+        else:
+            # Default view excludes unpublished drafts; pass ?status=draft to see them.
+            events = events.exclude(status=Event.Status.DRAFT.value)
 
         if scope := params.get("scope"):
             events = events.filter(scope=scope)
@@ -188,6 +192,7 @@ class CampusExecomAPI(APIView):
         campus_user_ids = UserOrganizationLink.objects.filter(
             org=org,
             org__org_type=OrganizationType.COLLEGE.value,
+            is_alumni=False,
         ).values_list("user_id", flat=True)
 
         # Extracted all non-execom system roles to properly support listing dynamic custom/IG roles

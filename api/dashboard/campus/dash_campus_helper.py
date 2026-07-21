@@ -7,10 +7,16 @@ from utils.types import OrganizationType, RoleType
 
 
 def get_user_college_link(user_id):
-    return UserOrganizationLink.objects.filter(
+    """
+    Return the user's college org link, preferring a verified membership.
+    A newer unverified link (e.g. a pending college-transfer request) should
+    not silently override an established verified membership.
+    """
+    links = UserOrganizationLink.objects.filter(
         user_id=user_id,
         org__org_type=OrganizationType.COLLEGE.value
-    ).order_by("-created_at", "-id").first()
+    ).order_by("-created_at", "-id")
+    return links.filter(verified=True).first() or links.first()
 
 
 def is_approved_campus_mentor(user_id, org):

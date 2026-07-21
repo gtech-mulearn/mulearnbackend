@@ -45,11 +45,14 @@ class CollegeListSerializer(serializers.ModelSerializer):
         return {'lc_count': learning_circle_count, 'no_of_lc_increased': no_of_lc_increased}
 
     def get_number_of_members(self, obj):
-        member_count = obj.org.user_organization_link_org.all().count()
+        member_count = obj.org.user_organization_link_org.filter(
+            verified=True
+        ).values('user').distinct().count()
 
         no_of_members_increased = obj.org.user_organization_link_org.filter(
+            verified=True,
             created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        ).count()
+        ).values('user').distinct().count()
         return {'member_count': member_count, 'no_of_members_increased': no_of_members_increased}
 
     def get_total_karma(self, obj):
@@ -61,6 +64,7 @@ class CollegeListSerializer(serializers.ModelSerializer):
         total_karma_gained = (
                 KarmaActivityLog.objects.filter(
                     user__in=user_org_links.values('user'),
+                    appraiser_approved=True,
                 ).aggregate(total_karma=Sum("karma"))["total_karma"]
                 or 0
         )
@@ -68,16 +72,16 @@ class CollegeListSerializer(serializers.ModelSerializer):
         total_karma_increased = (
                 KarmaActivityLog.objects.filter(
                     user__in=user_org_links.values('user'),
+                    appraiser_approved=True,
                     created_at__gte=DateTimeUtils.get_current_utc_time() - timedelta(
                         days=30),
                 ).aggregate(total_karma=Sum("karma"))["total_karma"]
                 or 0
         )
-        try:
+        if total_karma_gained:
             increased_percentage = (total_karma_increased / total_karma_gained) * 100
-        except Exception as e:
+        else:
             increased_percentage = 0
-            return increased_percentage
         return {'total_karma_gained': total_karma_gained, 'total_karma_increased': total_karma_increased,
                 'increased_percentage': increased_percentage}
 

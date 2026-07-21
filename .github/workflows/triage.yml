@@ -1,0 +1,28 @@
+# Board intake — the ONLY automation in the standard: add every new issue
+# & PR to the µLearn Delivery project (#16). Status defaults to Triage via
+# the project's "item added" built-in workflow.
+# Everything else (triage decisions, labels, QA, releases) is manual.
+#
+# Token: ADD_TO_PROJECT_TOKEN — PAT with org `Projects: read-write` scope
+# (GITHUB_TOKEN cannot write to org-level Projects).
+
+name: Add to Delivery board
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions: {}
+
+jobs:
+  add-to-project:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Add to µLearn Delivery
+        uses: actions/add-to-project@v1.0.2
+        with:
+          project-url: https://github.com/orgs/gtech-mulearn/projects/16
+          github-token: ${{ secrets.ADD_TO_PROJECT_TOKEN }}

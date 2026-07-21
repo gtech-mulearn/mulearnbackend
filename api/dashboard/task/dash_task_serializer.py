@@ -115,6 +115,17 @@ class TaskModifySerializer(serializers.ModelSerializer):
             "event_id",
         )
 
+    def validate_event_id(self, value):
+        if not value:
+            return value
+
+        try:
+            uuid.UUID(str(value))
+        except (ValueError, TypeError):
+            raise serializers.ValidationError("Invalid event id.")
+
+        return value
+
 
 class TaskImportSerializer(serializers.ModelSerializer):
     created_by_id = serializers.CharField(required=True, allow_null=False)

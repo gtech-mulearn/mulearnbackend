@@ -672,6 +672,9 @@ class InterestGroupRequestAPI(APIView):
                     general_message=f"Invalid status. Must be one of: {', '.join(valid_statuses)}"
                 ).get_failure_response()
             ig_queryset = ig_queryset.filter(status=status_filter)
+        else:
+            # Default ("All") view excludes cancelled requests; use ?status=cancelled to see them.
+            ig_queryset = ig_queryset.exclude(status='cancelled')
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
             ig_queryset,
@@ -875,8 +878,9 @@ class InterestGroupListApi(APIView):
         responses={200: InterestGroupSerializer},
     )
     def get(self, request):
+        from utils.types import InterestGroupStatus
         ig = (
-            InterestGroup.objects.all()
+            InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
             .prefetch_related("user_ig_link_ig")
             .annotate(members=Count("user_ig_link_ig"))

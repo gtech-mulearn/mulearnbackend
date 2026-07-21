@@ -386,10 +386,16 @@ class TaskListAPI(APIView):
             except:
                 skill_ids = []
 
-        serializer = TaskModifySerializer(data=mutable_data)
+        serializer = TaskModifySerializer(data=mutable_data, context={"request": request})
 
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
+
+        event_fk_id = serializer.validated_data.get("event_fk_id")
+        if event_fk_id and not _is_event_accessible(request, event_fk_id):
+            return CustomResponse(
+                message={"event_id": ["Selected event does not exist or is not accessible."]}
+            ).get_failure_response()
 
         task = serializer.save()
         
@@ -475,13 +481,22 @@ class TaskAPI(APIView):
                 general_message="Task not found."
             ).get_failure_response(status_code=404, http_status_code=status.HTTP_404_NOT_FOUND)
 
-        serializer = TaskModifySerializer(task, data=mutable_data, partial=True)
+        serializer = TaskModifySerializer(
+            task, data=mutable_data, partial=True, context={"request": request}
+        )
 
         if not serializer.is_valid():
             return CustomResponse(message=serializer.errors).get_failure_response()
 
+        if "event_fk_id" in serializer.validated_data:
+            event_fk_id = serializer.validated_data.get("event_fk_id")
+            if event_fk_id and not _is_event_accessible(request, event_fk_id):
+                return CustomResponse(
+                    message={"event_id": ["Selected event does not exist or is not accessible."]}
+                ).get_failure_response()
+
         serializer.save()
-        
+
         # Handle skill links if provided
         if skill_ids is not None:
             self._save_task_skills(task_id, skill_ids, user_id)
@@ -925,6 +940,28 @@ class TaskTypesDropDownAPI(APIView):
     def get(self, request):
         task_types = TaskType.objects.values("id", "title")
         return CustomResponse(response=task_types).get_success_response()
+
+
+def _is_event_accessible(request, event_id):
+    """
+    Authorization check: is this event live (PUBLISHED/ONGOING) and within
+    the caller's visibility scope? Lives in the view layer, not the
+    serializer, since this is a permission decision, not a data-integrity
+    one. Reuses the same predicate accessible_event_ids/linkable-events
+    trust, so a task can never link to an event the caller can't see.
+    """
+    from api.dashboard.events.public_views import _get_viewer_id, _build_scope_filter
+    from api.dashboard.events.serializers import get_live_events
+    from db.events import Event
+
+    viewer_id = _get_viewer_id(request)
+    scope_filter = _build_scope_filter(viewer_id)
+
+    return get_live_events().filter(
+        scope_filter,
+        status__in=[Event.Status.PUBLISHED, Event.Status.ONGOING],
+        id=event_id,
+    ).exists()
 
 
 class EventDropDownApi(APIView):
