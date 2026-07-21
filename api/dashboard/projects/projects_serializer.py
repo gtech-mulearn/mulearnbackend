@@ -122,6 +122,7 @@ class ProjectSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.full_name", read_only=True)
     created_by = serializers.CharField(source="created_by.full_name", read_only=True)
     created_by_id = serializers.CharField(source="created_by.id", read_only=True)
+    created_by_muid = serializers.CharField(source="created_by.muid", read_only=True)
     logo = serializers.ImageField(max_length=None, use_url=True, required=False, allow_null=True)
     images = ProjectImageSerializer(many=True, read_only=True)
     links = ProjectLinkSerializer(many=True, read_only=True)
@@ -136,7 +137,7 @@ class ProjectSerializer(serializers.ModelSerializer):
             "id", "title", "description", "status",
             "logo", "images", "links", "skills",
             "members", "votes", "comments",
-            "created_by", "created_by_id", "updated_by",
+            "created_by", "created_by_id", "created_by_muid", "updated_by",
             "created_at", "updated_at",
         ]
 

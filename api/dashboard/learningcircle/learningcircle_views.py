@@ -1440,9 +1440,18 @@ class CircleInviteStatusAPI(APIView):
     @extend_schema(tags=['Dashboard - Learningcircle'], description="Create Circle Invite Status.",
         responses={200: CircleInviteStatusSerializer},
     )
-    def post(self, request, link_id: str):
+    def post(self, request, link_id: str = None):
         """Accept or reject an invitation by its link_id."""
         user_id = JWTUtils.fetch_user_id(request)
+
+        if link_id is None:
+            link_id = request.data.get('link_id')
+        
+        if not link_id:
+            return CustomResponse(
+                general_message="link_id is required"
+            ).get_failure_response()
+
 
         try:
             link = UserCircleLink.objects.get(id=link_id, user_id=user_id, is_invited=True)
