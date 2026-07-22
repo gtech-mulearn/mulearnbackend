@@ -150,6 +150,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         campus_lead = User.objects.filter(
             user_organization_link_user__org=obj.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_user__verified=True,
             user_role_link_user__role__title=RoleType.CAMPUS_LEAD.value,
         ).first()
         if campus_lead:
@@ -158,6 +159,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         enabler = User.objects.filter(
             user_organization_link_user__org=obj.org,
             user_organization_link_user__org__org_type=OrganizationType.COLLEGE.value,
+            user_organization_link_user__verified=True,
             user_role_link_user__role__title=RoleType.LEAD_ENABLER.value,
         ).first()
         if enabler:
@@ -252,6 +254,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         return (
             InterestGroup.objects.filter(
                 user_ig_link_ig__user__user_organization_link_user__org=obj.org,
+                user_ig_link_ig__user__user_organization_link_user__verified=True,
                 status="active",
             )
             .distinct()
@@ -321,7 +324,7 @@ class WeeklyKarmaSerializer(serializers.ModelSerializer):
         today = DateTimeUtils.get_current_utc_time().date()
         date_range = [today - timedelta(days=i) for i in range(7)]
 
-        member_user_ids = instance.user_organization_link_org.values_list("user_id", flat=True).distinct()
+        member_user_ids = instance.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
 
         for date in date_range:
             karma_logs = KarmaActivityLog.objects.filter(
