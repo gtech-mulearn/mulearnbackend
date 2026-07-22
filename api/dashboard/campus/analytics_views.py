@@ -57,6 +57,7 @@ class CampusKarmaTrendAPI(APIView):
         
         qs = KarmaActivityLog.objects.filter(
             user__user_organization_link_user__org=org,
+            user__user_organization_link_user__verified=True,
             created_at__gte=start_date,
             appraiser_approved=True,
         ).annotate(
@@ -120,10 +121,10 @@ class CampusGrowthAPI(APIView):
         previous_window_start = now - timedelta(days=60)
 
         current_members = UserOrganizationLink.objects.filter(
-            org=org, is_alumni=False, created_at__gte=current_window_start
+            org=org, is_alumni=False, verified=True, created_at__gte=current_window_start
         ).count()
         prev_members = UserOrganizationLink.objects.filter(
-            org=org, is_alumni=False,
+            org=org, is_alumni=False, verified=True,
             created_at__gte=previous_window_start, created_at__lt=current_window_start,
         ).count()
 

@@ -53,17 +53,18 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         return None
 
     def get_total_members(self, obj):
-        return obj.user_organization_link_org.values('user').distinct().count()
+        return obj.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
         return obj.user_organization_link_org.filter(
+            verified=True,
             user__discord_id__isnull=False,
             user__exist_in_guild=True
         ).values('user').distinct().count()
 
     def get_total_karma(self, obj):
         from db.task import Wallet
-        users_in_org = obj.user_organization_link_org.values_list('user', flat=True)
+        users_in_org = obj.user_organization_link_org.filter(verified=True).values_list('user', flat=True)
         return Wallet.objects.filter(
             user__in=users_in_org
         ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
@@ -75,6 +76,7 @@ class CampusDetailsPublicSerializer(serializers.ModelSerializer):
         rows = (
             UserOrganizationLink.objects.filter(
                 org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
             )
             .values("org", "user", "user__wallet_user__karma")
             .distinct()
@@ -173,7 +175,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
    
 
     def get_total_members(self, obj):
-        return obj.org.user_organization_link_org.values('user').distinct().count()
+        return obj.org.user_organization_link_org.filter(verified=True).values('user').distinct().count()
 
     def get_active_members(self, obj):
         from db.task import Wallet
@@ -181,7 +183,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         last_month = DateTimeUtils.get_current_utc_time() - timedelta(
             weeks=26
         )  # 6months
-        member_user_ids = obj.org.user_organization_link_org.values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return Wallet.objects.filter(
             user_id__in=member_user_ids,
             karma_last_updated_at__gte=last_month,
@@ -192,6 +194,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
         member_user_ids = obj.org.user_organization_link_org.filter(
             org__org_type=OrganizationType.COLLEGE.value,
+            verified=True,
         ).values_list("user_id", flat=True).distinct()
         return Wallet.objects.filter(
             user_id__in=member_user_ids
@@ -204,6 +207,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
         rows = (
             UserOrganizationLink.objects.filter(
                 org__org_type=OrganizationType.COLLEGE.value,
+                verified=True,
             )
             .values("org", "user", "user__wallet_user__karma")
             .distinct()
@@ -225,7 +229,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             return position + 1
     def get_karma_last_7_days(self, obj):
         seven_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=7)
-        member_user_ids = obj.org.user_organization_link_org.values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
                 user_id__in=member_user_ids,
@@ -236,7 +240,7 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
 
     def get_karma_last_30_days(self, obj):
         thirty_days_ago = DateTimeUtils.get_current_utc_time() - timedelta(days=30)
-        member_user_ids = obj.org.user_organization_link_org.values_list("user_id", flat=True).distinct()
+        member_user_ids = obj.org.user_organization_link_org.filter(verified=True).values_list("user_id", flat=True).distinct()
         return (
             KarmaActivityLog.objects.filter(
                 user_id__in=member_user_ids,
@@ -516,6 +520,7 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             is_active=True,
             assignment_type=UserIgLink.AssignmentType.LEARNER,
             user__user_organization_link_user__org=obj.org,
+            user__user_organization_link_user__verified=True,
         ).values('user').distinct().count()
 
 
