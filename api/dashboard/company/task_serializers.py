@@ -32,8 +32,8 @@ class CompanyTaskCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_hashtag(self, value):
-        """Global hashtag uniqueness."""
-        qs = TaskList.objects.filter(hashtag=value)
+        """Global hashtag uniqueness among non-deleted tasks."""
+        qs = TaskList.objects.filter(hashtag=value, is_deleted=False)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -66,7 +66,7 @@ class CompanyTaskUpdateSerializer(serializers.ModelSerializer):
 
     def validate_hashtag(self, value):
         """Exclude current instance from uniqueness check on edit."""
-        qs = TaskList.objects.filter(hashtag=value)
+        qs = TaskList.objects.filter(hashtag=value, is_deleted=False)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
         if qs.exists():
@@ -157,7 +157,7 @@ class CompanyTaskPatchSerializer(serializers.Serializer):
         # Unique validation excluding the current task instance
         task_id = self.context.get("task_id")
         from db.task import TaskList
-        qs = TaskList.objects.filter(hashtag__iexact=value)
+        qs = TaskList.objects.filter(hashtag__iexact=value, is_deleted=False)
         if task_id:
             qs = qs.exclude(id=task_id)
         if qs.exists():

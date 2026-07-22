@@ -299,7 +299,8 @@ class CompanyAdminSummaryAPI(APIView):
             "rejected_companies": companies.filter(status="rejected").count(),
             "total_jobs": CompanyJob.objects.count(),
             "total_company_tasks": TaskList.objects.filter(
-                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value,
+                is_deleted=False,
             ).count()
         }
         
