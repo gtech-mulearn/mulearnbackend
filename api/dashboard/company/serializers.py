@@ -8,6 +8,9 @@ from db.organization import Organization, District, State, Country
 from db.user import UserRoleLink, Role
 from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
+from django.db import transaction
+from db.user import MentorScopeGrant
+from db.organization import UserOrganizationLink
 
 def generate_unique_code():
     """Generate a 12-char hex code guaranteed to be unique in Organization.code."""
@@ -424,22 +427,56 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         reason = self.validated_data.get("reason", "")
         org = self.validated_data["_org"]
 
-        from utils.utils import DateTimeUtils
         current_time = DateTimeUtils.get_current_utc_time()
 
-        mentor = UserMentor.objects.create(
-            id=str(uuid.uuid4()),
-            user=user,
-            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-            org=org,
-            reason=reason,
-            status=UserMentor.Status.APPROVED,
-            verified_at=current_time,  
-            created_by_id=nominator_id,
-            updated_by_id=nominator_id,
-            created_at=current_time,
-            updated_at=current_time,
-        )
+        with transaction.atomic():
+            # 1️⃣ Create UserMentor
+            mentor = UserMentor.objects.create(
+                id=str(uuid.uuid4()),
+                user=user,
+                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+                org=org,
+                reason=reason,
+                status=UserMentor.Status.APPROVED,
+                verified_by_id=nominator_id,
+                verified_at=current_time,
+                created_by_id=nominator_id,
+                updated_by_id=nominator_id,
+                created_at=current_time,
+                updated_at=current_time,
+            )
+
+            # 2️⃣ Grant the MENTOR role
+            mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+            if not mentor_role:
+                raise serializers.ValidationError("MENTOR role not found in database.")
+
+            UserRoleLink.objects.get_or_create(
+                user=user,
+                role=mentor_role,
+                defaults={
+                    "verified": True,
+                    "created_by_id": nominator_id,
+                    "created_at": current_time,
+                },
+            )
+
+            # 3️⃣ Create MentorScopeGrant
+            MentorScopeGrant.objects.create(
+                mentor=mentor,
+                scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR,
+                scope_id=str(org.id),
+                is_active=True,
+                granted_by_id=nominator_id,
+                granted_at=current_time,
+            )
+
+            # 4️⃣ Ensure org link is verified
+            # (link already exists — validated in validate() — just ensure verified=True)
+            UserOrganizationLink.objects.filter(
+                user=user, org=org
+            ).update(verified=True)
+
         return mentor
 
 
