@@ -176,11 +176,21 @@ class TaskList(models.Model):
     )
     requested_at = models.DateTimeField(null=True, blank=True)
 
+    # Soft-delete tracking, distinct from `active` (which is used for the
+    # pending-approval workflow and admin activation/deactivation toggle).
+    is_deleted = models.BooleanField(default=False)
+    deleted_at = models.DateTimeField(null=True, blank=True)
+    deleted_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='deleted_by', related_name='task_list_deleted_by'
+    )
+
     class Meta:
         managed = False
         db_table = "task_list"
         indexes = [
             models.Index(fields=['event_fk'], name='idx_task_list_event_id'),
+            models.Index(fields=['is_deleted'], name='idx_task_list_is_deleted'),
         ]
 
 

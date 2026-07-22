@@ -935,7 +935,7 @@ class CampusStudentLeaderboardAPI(APIView):
             qs = qs.filter(
                 user_organization_link_user__is_alumni=is_alumni_bool
             )
-        # No default is_alumni filter: every verified campus member (alumni
+        # No default is_alumni filter: every campus member (alumni
         # included) appears on the leaderboard unless ?is_alumni= is passed.
         if search:
             qs = qs.filter(
