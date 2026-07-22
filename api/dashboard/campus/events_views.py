@@ -453,8 +453,12 @@ class CampusExecomRoleAPI(APIView):
                 roles.add(f"{chapter.ig.code} CampusLead")
                 roles.add(f"{chapter.ig.code} IGLead")
 
-        # Custom execom roles created via POST
-        custom_execom_roles = Role.objects.filter(is_execom_role=True).values_list("title", flat=True)
+
+        custom_execom_roles = Role.objects.filter(
+            is_execom_role=True
+        ).exclude(
+            title__endswith=" CampusLead"
+        ).values_list("title", flat=True)
         for title in custom_execom_roles:
             roles.add(title)
 
