@@ -453,6 +453,18 @@ class CampusExecomRoleAPI(APIView):
                 roles.add(f"{chapter.ig.code} CampusLead")
                 roles.add(f"{chapter.ig.code} IGLead")
 
+
+        ig_campus_lead_titles = [
+            RoleType.IG_CAMPUS_LEAD_ROLE(code)
+            for code in InterestGroup.objects.values_list("code", flat=True)
+        ]
+        custom_execom_roles = Role.objects.filter(
+            is_execom_role=True
+        ).exclude(
+            title__in=ig_campus_lead_titles
+        ).values_list("title", flat=True)
+        roles.update(custom_execom_roles)
+
         return CustomResponse(response={"data": sorted(list(roles))}).get_success_response()
 
 
