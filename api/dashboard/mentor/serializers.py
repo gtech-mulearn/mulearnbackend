@@ -1,7 +1,7 @@
 import uuid
 from rest_framework import serializers
-
-from db.user import UserMentor, UserRoleLink, Role, MentorScopeGrant
+import re
+from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant
 
 
 class MentorScopeGrantSerializer(serializers.ModelSerializer):
@@ -27,6 +27,8 @@ from django.db import transaction
 from django.db.models import Q
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
     class Meta:
         model = UserMentor
         fields = [
@@ -34,7 +36,8 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             "expertise",
             "reason",
             "hours",
-            "preferred_ig_ids"
+            "preferred_ig_ids",
+            "linkedin"
         ]
 
     def validate_preferred_ig_ids(self, value):
@@ -45,8 +48,21 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
 
+    def validate_linkedin(self, value):
+        if value:
+            linkedin_pattern = r'^(https?://)?(www\.)?linkedin\.com/in/[\w\d\-._~:/?#\[\]@!$&\'()*+,;=]+/?$'
+            if not re.match(linkedin_pattern, value):
+                raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
+        return value
+
     def create(self, validated_data):
         user_id = self.context["user_id"]
+        linkedin_url = validated_data.pop('linkedin', None)
+
+        if linkedin_url:
+            reason = validated_data.get('reason', '')
+            # Append linkedin url to reason for admin verification
+            validated_data['reason'] = f"{reason}\n\n[LINKEDIN_URL_PENDING:{linkedin_url}]"
         
         mentor = UserMentor.objects.create(
             user_id=user_id,
@@ -61,6 +77,8 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
         return mentor
 
 class MentorUpdateSerializer(serializers.ModelSerializer):
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True)
+
     class Meta:
         model = UserMentor
         fields = [
@@ -68,7 +86,8 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             "expertise",
             "reason",
             "hours",
-            "preferred_ig_ids"
+            "preferred_ig_ids",
+            "linkedin"
         ]
 
     def validate_preferred_ig_ids(self, value):
@@ -78,6 +97,13 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             for ig_id in value:
                 if not InterestGroup.objects.filter(id=ig_id).exists():
                     raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
+        return value
+
+    def validate_linkedin(self, value):
+        if value:
+            linkedin_pattern = r'^(https?://)?(www\.)?linkedin\.com/in/[\w\d\-._~:/?#\[\]@!$&\'()*+,;=]+/?$'
+            if not re.match(linkedin_pattern, value):
+                raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
         return value
 
     def validate(self, data):
@@ -95,6 +121,7 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         validated_data['updated_by_id'] = self.context.get("user_id", instance.user_id)
 
         igs_in_payload = "preferred_ig_ids" in validated_data
+        validated_data.pop('linkedin', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -183,12 +210,51 @@ class MentorVerifySerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         user_id = self.context["user_id"]
         status = validated_data.get("status")
+
+        # Handle special case for LinkedIn update request from profile
+        if instance.about == "[LinkedIn URL Update Request]":
+            if status == UserMentor.Status.APPROVED:
+                linkedin_url = instance.expertise
+                socials, _ = Socials.objects.get_or_create(
+                    user=instance.user,
+                    defaults={'created_by_id': user_id, 'updated_by_id': user_id}
+                )
+                socials.linkedin = linkedin_url
+                socials.updated_by_id = user_id
+                socials.save(update_fields=['linkedin', 'updated_by_id'])
+                
+                instance.delete()
+                return instance
+            else:  
+                instance.status = UserMentor.Status.REJECTED
+                instance.verification_note = validated_data.get("verification_note", "LinkedIn URL update rejected.")
+                instance.updated_by_id = user_id
+                instance.updated_at = DateTimeUtils.get_current_utc_time()
+                instance.save()
+                return instance
         
         instance.status = status
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         
         if status == UserMentor.Status.APPROVED:
+            # Check for and process LinkedIn URL from reason field for new registrations
+            if instance.reason and "[LINKEDIN_URL_PENDING:" in instance.reason:
+                match = re.search(r'\[LINKEDIN_URL_PENDING:(.*?)\]', instance.reason, re.DOTALL)
+                if match:
+                    linkedin_url = match.group(1).strip()
+                    if linkedin_url:
+                        socials, _ = Socials.objects.get_or_create(
+                            user=instance.user,
+                            defaults={'created_by_id': user_id, 'updated_by_id': user_id}
+                        )
+                        socials.linkedin = linkedin_url
+                        socials.updated_by_id = user_id
+                        socials.save(update_fields=['linkedin', 'updated_by_id'])
+                    
+                    # Clean up the reason field
+                    instance.reason = instance.reason.replace(match.group(0), '').strip()
+
             instance.verified_by_id = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
 
