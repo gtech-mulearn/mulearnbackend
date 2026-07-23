@@ -459,7 +459,7 @@ class MentorChangeCompanyAPI(APIView):
         tier_order = Case(
             When(mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, then=0),
             When(mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR, then=1),
-            When(mentor_tier=UserMentor.MentorTier.GLOBAL_MENTOR, then=2),
+            When(mentor_tier=UserMentor.MentorTier.MENTOR, then=2),
             When(mentor_tier=UserMentor.MentorTier.IG_MENTOR, then=3),
             default=4
         )

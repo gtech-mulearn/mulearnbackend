@@ -27,7 +27,7 @@ from django.db import transaction
 from django.db.models import Q
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
-    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=200)
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
 
     class Meta:
         model = UserMentor
@@ -77,7 +77,7 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
         return mentor
 
 class MentorUpdateSerializer(serializers.ModelSerializer):
-    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=200)
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
 
     class Meta:
         model = UserMentor
