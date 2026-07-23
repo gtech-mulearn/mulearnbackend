@@ -3,6 +3,7 @@ import uuid
 from decouple import config as decouple_config
 from django.db import transaction
 from django.db.models import F, Sum, Q, Case, When, Value, CharField, Exists, OuterRef
+from django.db.models.functions import Coalesce
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 from db.task import UserIgLvlLink
@@ -54,6 +55,76 @@ class UserCoverPicSerializer(serializers.ModelSerializer):
         fields = ["cover_pic"]
 
 
+def get_karma_breakdown(user_id):
+    base_qs = KarmaActivityLog.objects.filter(user_id=user_id, appraiser_approved=True)
+
+    is_intern_creator = Exists(
+        UserRoleLink.objects.filter(
+            user=OuterRef("task__created_by"),
+            role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value],
+        )
+    )
+    base_qs = base_qs.annotate(is_intern_creator=is_intern_creator)
+
+    # Priority order: Event > IG > Intern > General enablement (catch-all).
+    # A task linked to an event is always bucketed as "event", even if the
+    # event itself is IG-run (Event.organiser_ig/scope_ig) — the organizing
+    # IG is surfaced as metadata on the event split entry instead, so karma
+    # is never double-counted across buckets.
+    bucket = Case(
+        When(task__event_fk__isnull=False, then=Value("event")),
+        When(task__ig__isnull=False, then=Value("ig")),
+        When(
+            Q(task__hashtag__startswith="#intern-") | Q(is_intern_creator=True),
+            then=Value("intern"),
+        ),
+        default=Value("general"),
+        output_field=CharField(),
+    )
+    base_qs = base_qs.annotate(bucket=bucket)
+
+    general_enablement_karma = (
+        base_qs.filter(bucket="general").aggregate(total=Sum("karma"))["total"] or 0
+    )
+    intern_karma = (
+        base_qs.filter(bucket="intern").aggregate(total=Sum("karma"))["total"] or 0
+    )
+    org_ig_karma_split = list(
+        base_qs.filter(bucket="ig")
+        .values(ig_id=F("task__ig_id"), ig_name=F("task__ig__name"), ig_code=F("task__ig__code"))
+        .annotate(karma=Sum("karma"))
+        .order_by("-karma")
+    )
+    event_karma_split = list(
+        base_qs.filter(bucket="event")
+        .values(
+            event_id=F("task__event_fk_id"),
+            event_title=F("task__event_fk__title"),
+            event_type=F("task__event_fk__event_type"),
+            # organiser_ig (who actually ran it) takes priority over
+            # scope_ig (who it was scoped/targeted at) when both are set.
+            organizing_ig_id=Coalesce(
+                F("task__event_fk__organiser_ig_id"), F("task__event_fk__scope_ig_id")
+            ),
+            organizing_ig_name=Coalesce(
+                F("task__event_fk__organiser_ig__name"), F("task__event_fk__scope_ig__name")
+            ),
+            organizing_ig_code=Coalesce(
+                F("task__event_fk__organiser_ig__code"), F("task__event_fk__scope_ig__code")
+            ),
+        )
+        .annotate(karma=Sum("karma"))
+        .order_by("-karma")
+    )
+
+    return {
+        "general_enablement_karma": general_enablement_karma,
+        "org_ig_karma_split": org_ig_karma_split,
+        "event_karma_split": event_karma_split,
+        "intern_karma": intern_karma,
+    }
+
+
 class UserProfileSerializer(serializers.ModelSerializer):
     joined = serializers.DateTimeField(source="created_at")
     level = serializers.CharField(source="user_lvl_link_user.level.name", default=None)
@@ -68,6 +139,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
     college_code = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma_distribution = serializers.SerializerMethodField()
+    general_enablement_karma = serializers.SerializerMethodField()
+    org_ig_karma_split = serializers.SerializerMethodField()
+    event_karma_split = serializers.SerializerMethodField()
+    intern_karma = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
     percentile = serializers.SerializerMethodField()
@@ -89,6 +164,10 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "karma",
             "rank",
             "karma_distribution",
+            "general_enablement_karma",
+            "org_ig_karma_split",
+            "event_karma_split",
+            "intern_karma",
             "level",
             "profile_pic",
             "cover_pic",
@@ -253,6 +332,23 @@ class UserProfileSerializer(serializers.ModelSerializer):
             .annotate(karma=Sum("karma"))
             .order_by("-karma")
         )
+
+    def _karma_breakdown(self, obj):
+        if not hasattr(self, "_karma_breakdown_cache"):
+            self._karma_breakdown_cache = get_karma_breakdown(obj.id)
+        return self._karma_breakdown_cache
+
+    def get_general_enablement_karma(self, obj):
+        return self._karma_breakdown(obj)["general_enablement_karma"]
+
+    def get_org_ig_karma_split(self, obj):
+        return self._karma_breakdown(obj)["org_ig_karma_split"]
+
+    def get_event_karma_split(self, obj):
+        return self._karma_breakdown(obj)["event_karma_split"]
+
+    def get_intern_karma(self, obj):
+        return self._karma_breakdown(obj)["intern_karma"]
 
     def get_interest_groups(self, obj):
         
