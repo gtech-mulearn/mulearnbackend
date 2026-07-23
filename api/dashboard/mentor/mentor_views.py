@@ -456,16 +456,24 @@ class MentorChangeCompanyAPI(APIView):
         if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.APPROVED).exists():
             return CustomResponse(general_message="You are already an approved mentor for this company.").get_failure_response()
 
-        tier_order = Case(
-            When(mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, then=0),
-            When(mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR, then=1),
-            When(mentor_tier=UserMentor.MentorTier.MENTOR, then=2),
-            When(mentor_tier=UserMentor.MentorTier.IG_MENTOR, then=3),
-            default=4
-        )
+
         existing_mentor_profile = UserMentor.objects.filter(
-            user_id=user_id, status=UserMentor.Status.APPROVED
-        ).order_by(tier_order, '-updated_at').first()
+            user_id=user_id,
+            status=UserMentor.Status.APPROVED,
+            mentor_tier=UserMentor.MentorTier.MENTOR
+        ).first()
+
+        if not existing_mentor_profile:
+
+            tier_order = Case(
+                When(mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, then=0),
+                When(mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR, then=1),
+                When(mentor_tier=UserMentor.MentorTier.IG_MENTOR, then=2),
+                default=3
+            )
+            existing_mentor_profile = UserMentor.objects.filter(
+                user_id=user_id, status=UserMentor.Status.APPROVED
+            ).order_by(tier_order, '-updated_at').first()
 
         if not existing_mentor_profile:
             # Fallback if no approved profile exists (e.g., only rejected/pending)
