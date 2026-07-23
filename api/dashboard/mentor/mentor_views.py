@@ -1,6 +1,6 @@
 import re
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, Case, When
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
@@ -456,11 +456,19 @@ class MentorChangeCompanyAPI(APIView):
         if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.APPROVED).exists():
             return CustomResponse(general_message="You are already an approved mentor for this company.").get_failure_response()
 
+        tier_order = Case(
+            When(mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, then=0),
+            When(mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR, then=1),
+            When(mentor_tier=UserMentor.MentorTier.GLOBAL_MENTOR, then=2),
+            When(mentor_tier=UserMentor.MentorTier.IG_MENTOR, then=3),
+            default=4
+        )
         existing_mentor_profile = UserMentor.objects.filter(
             user_id=user_id, status=UserMentor.Status.APPROVED
-        ).order_by('-updated_at').first()
+        ).order_by(tier_order, '-updated_at').first()
 
         if not existing_mentor_profile:
+            # Fallback if no approved profile exists (e.g., only rejected/pending)
             existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).order_by('-updated_at').first()
 
         new_mentor_app = UserMentor.objects.create(
