@@ -56,7 +56,7 @@ class LearningCircleView(APIView):
     def get(self, request, circle_id: str = None):
         user_id = JWTUtils.fetch_user_id(request)
         if circle_id:
-            learning_circle = LearningCircle.objects.annotate(
+            learning_circle = LearningCircle.objects.select_related("ig", "org", "created_by").annotate(
                 total_members=Count('user_circle_link_circle', filter=Q(user_circle_link_circle__accepted=True))
             ).get(id=circle_id)
             serializer = LearningCircleDetailSerializer(learning_circle)

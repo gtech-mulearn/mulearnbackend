@@ -273,12 +273,9 @@ class MentorProfileAPI(APIView):
 
             response_serializer = serializers.MentorDetailSerializer(mentor)
             response_data = response_serializer.data
-            
-            # If a new linkedin URL was submitted for verification, don't include the old one in the response.
-            # The general_message already informs the user about the pending change.
-            if not linkedin_url:
-                socials = Socials.objects.filter(user_id=user_id).first()
-                response_data['linkedin'] = socials.linkedin if socials else None
+            socials = Socials.objects.filter(user_id=user_id).first()
+            # If a new URL is pending verification, omit the stale value but keep the key present so the response shape stays consistent.
+            response_data['linkedin'] = None if linkedin_url else (socials.linkedin if socials else None)
 
             return CustomResponse(
                 general_message=general_message,
