@@ -245,16 +245,17 @@ class MentorProfileAPI(APIView):
         
         if serializer.is_valid():
             linkedin_url = serializer.validated_data.get('linkedin')
-
-            # Save other profile fields. The serializer's update method will pop 'linkedin'.
-            serializer.save()
-
-            general_message = "Mentor profile updated successfully."
+ 
             if linkedin_url:
                 # Create a verification request instead of updating directly
                 if UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.PENDING, about="[LinkedIn URL Update Request]").exists():
                     return CustomResponse(general_message="You already have a pending LinkedIn URL update request.").get_failure_response()
-
+ 
+            # Save other profile fields. The serializer's update method will pop 'linkedin'.
+            serializer.save()
+ 
+            general_message = "Mentor profile updated successfully."
+            if linkedin_url:
                 UserMentor.objects.create(
                     user_id=user_id,
                     org=mentor.org,
@@ -268,7 +269,6 @@ class MentorProfileAPI(APIView):
                     created_by_id=user_id,
                     updated_by_id=user_id,
                 )
-                
                 general_message = "Profile updated. LinkedIn URL change has been submitted for verification."
 
             response_serializer = serializers.MentorDetailSerializer(mentor)
@@ -456,7 +456,12 @@ class MentorChangeCompanyAPI(APIView):
         if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.APPROVED).exists():
             return CustomResponse(general_message="You are already an approved mentor for this company.").get_failure_response()
 
-        existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        existing_mentor_profile = UserMentor.objects.filter(
+            user_id=user_id, status=UserMentor.Status.APPROVED
+        ).order_by('-updated_at').first()
+
+        if not existing_mentor_profile:
+            existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).order_by('-updated_at').first()
 
         new_mentor_app = UserMentor.objects.create(
             user_id=user_id,
@@ -466,6 +471,7 @@ class MentorChangeCompanyAPI(APIView):
             about=existing_mentor_profile.about if existing_mentor_profile else None,
             expertise=existing_mentor_profile.expertise if existing_mentor_profile else None,
             hours=existing_mentor_profile.hours if existing_mentor_profile else None,
+            preferred_ig_ids=existing_mentor_profile.preferred_ig_ids if existing_mentor_profile else None,
             reason=reason,
             created_by_id=user_id,
             updated_by_id=user_id,
