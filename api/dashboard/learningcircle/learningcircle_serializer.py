@@ -109,6 +109,7 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
     ig = serializers.CharField(source="ig.name", read_only=True)
     org = serializers.CharField(source="org.title", read_only=True, allow_null=True)
     created_by = serializers.SerializerMethodField()
+    total_members = serializers.IntegerField(read_only=True)
 
     class Meta:
         model = LearningCircle
@@ -119,6 +120,7 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
             "description",
             "org",
             "created_by",
+            "total_members",
         ]
 
     def to_representation(self, instance):
@@ -126,7 +128,6 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
         data = super().to_representation(instance)
         data['rank'] = self.get_rank(instance)
         data['total_karma'] = self.get_total_karma(instance)
-        data['total_members'] = self.get_total_members(instance)
         data['next_meetup'] = self.get_next_meetup(instance)
         return data
 
@@ -139,13 +140,6 @@ class LearningCircleDetailSerializer(serializers.ModelSerializer):
             "profile_pic": obj.created_by.profile_pic,
             "muid": obj.created_by.muid,
         }
-
-    def get_total_members(self, obj):
-        """Calculate total number of accepted members in this circle"""
-        return UserCircleLink.objects.filter(
-            circle=obj.id,
-            accepted=True,
-        ).count()
 
     @property
     def _all_circle_rankings_data(self):
@@ -296,40 +290,6 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
             return False
         return obj.created_by_id == user_id
 
-    # def get_attendees(self, obj):
-        # query = (
-        #     obj.circle_meeting_log_circle_id.prefetch_related(
-        #         "circle_meeting_attendance_meet_id"
-        #     )
-        #     .all()
-        #     .only("circle_meeting_attendance_meet_id__user_id")
-        # )
-        # data = []
-        # user_id = self.context.get("user_id")
-        # cur_user_org = None
-        # if user_id:
-        #     try:
-        #         cur_user = (
-        #             User.objects.prefetch_related("user_organization_link_user")
-        #             .only("user_organization_link_user__org_id")
-        #             .get(id=user_id)
-        #         )
-        #         cur_user_org = cur_user.user_organization_link_user__org_id
-        #     except:
-        #         pass
-        # for attendee in query.:
-        #     data.append(
-        #         {
-        #             "full_name": attendee.user_id.full_name,
-        #             "is_same_org": cur_user_org
-        #             in attendee.user_id.user_organization_link_user.all().values_list(
-        #                 "org_id", flat=True
-        #             ),
-        #         }
-        #     )
-        # return data
-        # return []
-
 
 class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
     ONLINE_PLATFORM_CHOICES = ("Zoom", "Google Meet", "Microsoft Teams","Discord", "Other")
@@ -390,7 +350,7 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
         validated_data.pop("platform", None)  # platform is not a DB field; used only in validate()
         meet = CircleMeetingLog.objects.create(**validated_data)
         CircleMeetingAttendees.objects.create(
-            meet_id=meet, user_id_id=user_id, is_joined=True, joined_at=datetime.now()
+            meet_id=meet, user_id_id=user_id, is_joined=True, joined_at=DateTimeUtils.get_current_utc_time()
         )
         return meet
 
@@ -480,15 +440,6 @@ class CircleMeetingLogCreateEditSerializer(serializers.ModelSerializer):
                     )
 
         return super().validate(attrs)
-
-    # def validate_circle_id(self, value):
-    #     if CircleMeetingLog.objects.filter(
-    #         circle_id=value, is_report_submitted=False
-    #     ).exists():
-    #         raise serializers.ValidationError(
-    #             "There is already an ongoing meeting for this learning circle"
-    #         )
-    #     return value
 
     class Meta:
         model = CircleMeetingLog
@@ -723,7 +674,6 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
     coord_y = serializers.FloatField(read_only=True)
     meet_place = serializers.CharField(read_only=True)
     meet_time = serializers.DateTimeField(read_only=True)
-    # meet_code = serializers.CharField(read_only=True)
     circle_id = serializers.CharField(read_only=True, source="circle_id.id")
     is_started = serializers.SerializerMethodField()
     is_ended = serializers.SerializerMethodField()
@@ -775,7 +725,6 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "recurrence",
             "meet_place",
             "is_rsvp",
-            # "meet_code",
             "circle_id",
             "coord_x",
             "coord_y",
@@ -788,56 +737,6 @@ class CircleMeetupMinSerializer(serializers.ModelSerializer):
             "created_by",
             "created_by_id",
         ]
-
-
-# # class LearningCircleKarmaSerializer(serializers.ModelSerializer):
-#     total_karma = serializers.SerializerMethodField()
-#     rank = serializers.SerializerMethodField()
-#     member_count = serializers.SerializerMethodField()
-    
-#     class Meta:
-#         model = LearningCircle
-#         fields = ['id', 'title', 'ig', 'total_karma', 'rank', 'member_count']
-    
-#     def get_total_karma(self, obj):
-#         # Get all members (attendees) of this circle's meetings
-#         members = CircleMeetingAttendees.objects.filter(
-#             meet_id__circle_id=obj,
-#             is_joined=True
-#         ).values_list('user_id', flat=True).distinct()
-        
-#         # Sum karma points for these members related to this circle's interest group
-#         total_karma = 0
-#         for member_id in members:
-#             # Filter KarmaActivityLog for the member and tasks related to the specific IG
-#             user_karma = KarmaActivityLog.objects.filter(
-#             user_id=member_id,  # Filter by user
-#             task__ig=obj.ig,    # Filter by the IG related to the task
-#             ).aggregate(total=models.Sum('karma'))['total'] or 0
-#             total_karma += user_karma
-            
-#         return total_karma
-        
-#     def get_rank(self, obj):
-#         # Get all circles and sort by karma
-#         all_circles = LearningCircle.objects.all()
-#         ranked_circles = sorted(
-#             all_circles, 
-#             key=lambda circle: self.get_total_karma(circle),
-#             reverse=True
-#         )
-        
-#         # Find position of current circle
-#         for index, circle in enumerate(ranked_circles):
-#             if circle.id == obj.id:
-#                 return index + 1  # 1-based ranking
-#         return None
-    
-#     def get_member_count(self, obj):
-#         return CircleMeetingAttendees.objects.filter(
-#             meet_id__circle_id=obj,
-#             is_joined=True
-#         ).values('user_id').distinct().count()
 
 # --- New Serializers ---
 
