@@ -276,19 +276,6 @@ class LearningCircleListMinSerializer(serializers.ModelSerializer):
         model = LearningCircle
         # The 'attendees' field is removed as 'total_members' is used instead.
         fields = ["id", "ig", "title", "org", "total_members", "is_joined", "is_creator"]
-    def to_representation(self, instance):
-        # Override to add calculated fields that don't exist on the model
-        data = super().to_representation(instance)
-        data['total_members'] = self.get_total_members(instance)
-
-        return data
-
-    def get_total_members(self, obj):
-        """Calculate total number of accepted members in this circle"""
-        return UserCircleLink.objects.filter(
-            circle=obj.id,
-            accepted=True,
-        ).count()
 
     def get_is_joined(self, obj):
         user_id = self.context.get("user_id")

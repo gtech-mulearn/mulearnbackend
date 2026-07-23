@@ -299,7 +299,8 @@ class CompanyAdminSummaryAPI(APIView):
             "rejected_companies": companies.filter(status="rejected").count(),
             "total_jobs": CompanyJob.objects.count(),
             "total_company_tasks": TaskList.objects.filter(
-                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value,
+                is_deleted=False,
             ).count()
         }
         
@@ -363,10 +364,9 @@ class CompanyMentorNominateAPI(APIView):
         nominator = User.objects.filter(id=user_id).first()
         NotificationUtils.insert_notification(
             user=mentor.user,
-            title=f"Company Mentor nomination: {company.name}"[:50],
+            title=f"Company Mentor Approved: {company.name}"[:50],
             description=(
-                f"{nominator.full_name if nominator else 'Your company'} nominated you as a "
-                f"Company Mentor for {company.name}. Your application is pending approval."
+                f"You have been approved as a Company Mentor for {company.name}."
             )[:200],
             button='View',
             url='/mentor/status/',
@@ -374,7 +374,7 @@ class CompanyMentorNominateAPI(APIView):
         )
 
         return CustomResponse(
-            general_message="User nominated as Company Mentor. Pending approval.",
+            general_message="User approved as Company Mentor successfully.",
             response=serializers.CompanyMentorListSerializer(mentor).data,
         ).get_success_response()
 

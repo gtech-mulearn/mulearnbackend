@@ -282,7 +282,7 @@ class TaskListAPI(APIView):
             "skill_links__skill"
         ).annotate(
             total_karma_gainers_count=Count("karma_activity_log_task", filter=Q(karma_activity_log_task__appraiser_approved=True))
-        ).filter(active=True)
+        )
 
         task_source = request.query_params.get("task_source")
         if task_source == "company":
