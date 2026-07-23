@@ -62,6 +62,7 @@ def get_karma_breakdown(user_id):
         UserRoleLink.objects.filter(
             user=OuterRef("task__created_by"),
             role__title__in=[RoleType.INTERN.value, RoleType.INTERN_LEAD.value],
+            is_active=True,
         )
     )
     base_qs = base_qs.annotate(is_intern_creator=is_intern_creator)
