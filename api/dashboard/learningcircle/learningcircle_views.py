@@ -5,7 +5,7 @@ import uuid
 
 import requests
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Count, Sum, Q
 from django.http import HttpResponse
 from rest_framework.views import APIView
 
@@ -70,6 +70,9 @@ class LearningCircleView(APIView):
             ).get_success_response()
         learning_circles = (
             LearningCircle.objects.all()
+            .annotate(
+                total_members=Count('user_circle_link_circle', filter=Q(user_circle_link_circle__accepted=True))
+            )
             .order_by("-created_at", "-updated_at")
             .select_related("ig", "org", "created_by")
         )
