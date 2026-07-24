@@ -252,9 +252,12 @@ class MentorProfileAPI(APIView):
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
-            
+
+        data = request.data.copy()
+        data.pop('org', None)
+
         serializer = serializers.MentorUpdateSerializer(
-            mentor, data=request.data, partial=True, context={"user_id": user_id}
+            mentor, data=data, partial=True, context={"user_id": user_id}
         )
         
         if serializer.is_valid():

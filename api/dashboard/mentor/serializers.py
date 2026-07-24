@@ -195,6 +195,9 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         igs_in_payload = "preferred_ig_ids" in validated_data
         validated_data.pop('linkedin', None)
 
+        if instance.status == UserMentor.Status.APPROVED:
+            validated_data.pop('org', None)
+
         # If org is part of the update, adjust the mentor_tier accordingly.
         # This only affects PENDING/REJECTED applications via MentorRegistrationAPI.
         if 'org' in validated_data:
