@@ -7,6 +7,7 @@ module is fully self-contained and does not depend on the events app.
 from __future__ import annotations
 
 import ipaddress
+import json
 import os
 import socket
 import threading
@@ -413,12 +414,42 @@ def resolve_image_url(value: str | None, request=None) -> str | None:
     return rel_url
 
 
+_LIST_FIELDS = ('interest_groups',)
+
+
 def _querydict_to_plain_dict(data) -> dict:
-    """Single-value snapshot of QueryDict / dict for serializer input."""
+    """
+    Single-value snapshot of QueryDict / dict for serializer input.
+
+    Multipart/form-data bodies (used whenever a file is uploaded alongside
+    the other fields) arrive as a QueryDict, where plain `.get(k)` only ever
+    returns the last value for a key. For fields that the write serializers
+    expect as a list (e.g. `interest_groups`), that collapses a repeated
+    field or a JSON-encoded array string down to a single string, which then
+    fails serializer validation with "Expected a list of items but got type
+    str.". Use `getlist` for those fields, falling back to JSON-decoding a
+    single string value if it looks like an encoded list.
+    """
     out = {}
     try:
         keys = getattr(data, 'keys', lambda: [])()
+        getlist = getattr(data, 'getlist', None)
         for k in keys:
+            if getlist and k in _LIST_FIELDS:
+                values = getlist(k)
+                if len(values) > 1:
+                    out[k] = values
+                    continue
+                if len(values) == 1 and isinstance(values[0], str):
+                    stripped = values[0].strip()
+                    if stripped.startswith('['):
+                        try:
+                            out[k] = json.loads(stripped)
+                            continue
+                        except ValueError:
+                            pass
+                out[k] = values[0] if values else data.get(k)
+                continue
             out[k] = data.get(k)
     except Exception:
         out = dict(data) if hasattr(data, 'items') else {}
