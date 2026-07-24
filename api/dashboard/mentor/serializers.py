@@ -528,19 +528,19 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
                         "created_at": now,
                     },
                 )
-
-            # 4. Notify Admins
-            owner = User.objects.filter(id=owner_id).first()
-            admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
-            for admin_link in admin_roles:
-                NotificationUtils.insert_notification(
-                    user=admin_link.user,
-                    title="Company Mentor Nominated",
-                    description=f"{owner.full_name} (owner of {company.name}) has directly nominated {user_to_nominate.full_name} as a mentor.",
-                    button="View Profile",
-                    url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{mentor_record.id}/",
-                    created_by=owner,
-                )
+        
+        # 4. Notify Admins
+        owner = User.objects.filter(id=owner_id).first()
+        admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+        for admin_link in admin_roles:
+            NotificationUtils.insert_notification(
+                user=admin_link.user,
+                title="Company Mentor Nominated",
+                description=f"{owner.full_name} (owner of {company.name}) has directly nominated {user_to_nominate.full_name} as a mentor.",
+                button="View Profile",
+                url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{mentor_record.id}/",
+                created_by=owner,
+            )
         
         return mentor_record
 

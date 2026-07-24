@@ -506,7 +506,7 @@ class MentorChangeCompanyAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
-        description="Directly nominate and approve a user as a Company Mentor. (Company Owner only)",
+        description="Request to change the company affiliation for a mentor. This will create a new pending mentor application for the selected company.",
         request=inline_serializer(
             name='MentorChangeCompanySerializer',
             fields={
