@@ -21,6 +21,7 @@ from db import (  # noqa: F401
     donor,
     events,
     hackathon,
+    impact_project,
     integrations,
     launchpad,
     learning_circle,
