@@ -447,41 +447,6 @@ class MentorVerifyAPI(APIView):
             
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-class CompanyMentorNominateAPI(APIView):
-    permission_classes = [CustomizePermission]
-
-    @extend_schema(
-        tags=['Dashboard - Mentor'],
-        description="Directly nominate and approve a user as a Company Mentor. (Company Owner only)",
-        request=serializers.CompanyMentorNominateSerializer,
-        responses={200: serializers.MentorDetailSerializer},
-    )
-    @role_required([RoleType.COMPANY.value])
-    def post(self, request):
-        owner_id = JWTUtils.fetch_user_id(request)
-        
-        from db.company import Company
-        company = Company.objects.filter(company_user_id=owner_id, status="verified").first()
-        if not company:
-            return CustomResponse(
-                general_message="You must have a verified company profile to nominate mentors."
-            ).get_failure_response(status_code=403)
-
-        serializer = serializers.CompanyMentorNominateSerializer(
-            data=request.data, 
-            context={"user_id": owner_id, "company": company}
-        )
-
-        if serializer.is_valid():
-            mentor_record = serializer.save()
-            response_serializer = serializers.MentorDetailSerializer(mentor_record)
-            return CustomResponse(
-                general_message="User has been successfully nominated and approved as a company mentor.",
-                response=response_serializer.data
-            ).get_success_response()
-        
-        return CustomResponse(message=serializer.errors).get_failure_response()
-
 class MentorPublicProfileAPI(APIView):
     permission_classes = [CustomizePermission]
 

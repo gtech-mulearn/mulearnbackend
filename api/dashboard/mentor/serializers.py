@@ -88,49 +88,56 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             **validated_data
         )
 
-        from api.notification.notifications_utils import NotificationUtils
-        from db.user import User, UserRoleLink
-        from utils.types import RoleType
-        from db.company import Company
-        from django.conf import settings
+        # Wrap notification sending in a try-except block to prevent failures
+        # from rolling back the user request and locking them out.
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User, UserRoleLink
+            from utils.types import RoleType
+            from db.company import Company
+            from django.conf import settings
 
-        requester = User.objects.filter(id=user_id).first()
-        admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+            requester = User.objects.filter(id=user_id).first()
+            admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
 
-        if org:
-            try:
-                company = Company.objects.get(org=org, status="verified")
-                owner_user = company.company_user
-                NotificationUtils.insert_notification(
-                    user=owner_user,
-                    title="New Mentor Application",
-                    description=f"{requester.full_name} has applied to be a mentor for your company.",
-                    button="View Application",
-                    url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/mentor/list/",
-                    created_by=requester,
-                )
-            except Company.DoesNotExist:
-                pass
+            if org:
+                try:
+                    company = Company.objects.get(org=org, status="verified")
+                    owner_user = company.company_user
+                    NotificationUtils.insert_notification(
+                        user=owner_user,
+                        title="New Mentor Application",
+                        description=f"{requester.full_name} has applied to be a mentor for your company.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/mentor/list/",
+                        created_by=requester,
+                    )
+                except Company.DoesNotExist:
+                    pass
 
-            for admin_link in admin_roles:
-                NotificationUtils.insert_notification(
-                    user=admin_link.user,
-                    title="New Company Mentor Application",
-                    description=f"{requester.full_name} has applied to be a mentor for {org.title}.",
-                    button="View Application",
-                    url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
-                    created_by=requester,
-                )
-        else:
-            for admin_link in admin_roles:
-                NotificationUtils.insert_notification(
-                    user=admin_link.user,
-                    title="New IG Mentor Application",
-                    description=f"{requester.full_name} has applied to be an IG mentor.",
-                    button="View Application",
-                    url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
-                    created_by=requester,
-                )
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="New Company Mentor Application",
+                        description=f"{requester.full_name} has applied to be a mentor for {org.title}.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+            else:
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="New IG Mentor Application",
+                        description=f"{requester.full_name} has applied to be an IG mentor.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+        except Exception:
+            # Silently fail notification errors to prevent user lockout.
+            # A proper logging/monitoring mechanism should be here.
+            pass
 
         return mentor
 
@@ -454,95 +461,6 @@ class MentorVerifySerializer(serializers.Serializer):
                     )
 
         return instance
-
-class CompanyMentorNominateSerializer(serializers.Serializer):
-    muid = serializers.CharField(required=True)
-    reason = serializers.CharField(required=False, allow_blank=True, max_length=1000)
-
-    def validate_muid(self, muid):
-        from db.user import User
-        from db.organization import UserOrganizationLink
-
-        user = User.objects.filter(muid=muid, suspended_at__isnull=True).first()
-        if not user:
-            raise serializers.ValidationError("User with this muid not found or is suspended.")
-        
-        company = self.context.get('company')
-        if not UserOrganizationLink.objects.filter(user=user, org=company.org).exists():
-             raise serializers.ValidationError("User is not a member of this company's organization.")
-
-        if UserMentor.objects.filter(user=user, org=company.org, status__in=[UserMentor.Status.PENDING, UserMentor.Status.APPROVED]).exists():
-            raise serializers.ValidationError("User already has an active or pending mentor application for this company.")
-
-        return user
-
-    def create(self, validated_data):
-        from db.user import User, UserRoleLink, Role, MentorScopeGrant
-        from db.organization import UserOrganizationLink
-        from api.notification.notifications_utils import NotificationUtils
-        from django.conf import settings
-
-        owner_id = self.context.get("user_id")
-        company = self.context.get("company")
-        user_to_nominate = validated_data.get('muid')
-        reason = validated_data.get('reason')
-        now = DateTimeUtils.get_current_utc_time()
-
-        with transaction.atomic():
-            # 1. Create UserMentor record
-            mentor_record = UserMentor.objects.create(
-                user=user_to_nominate,
-                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-                org=company.org,
-                status=UserMentor.Status.APPROVED,
-                about=f"Nominated by {company.name}.",
-                expertise="Company Nominated",
-                reason=reason,
-                verified_by_id=owner_id,
-                verified_at=now,
-                created_by_id=owner_id,
-                updated_by_id=owner_id,
-                created_at=now,
-                updated_at=now,
-            )
-
-            # 2. Grant scope
-            MentorScopeGrant.objects.create(
-                mentor=mentor_record,
-                scope_type=UserMentor.MentorTier.COMPANY_MENTOR,
-                scope_id=str(company.org.id),
-                is_active=True,
-                granted_by_id=owner_id,
-                granted_at=now,
-            )
-
-            # 3. Grant Mentor role
-            mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
-            if mentor_role:
-                UserRoleLink.objects.update_or_create(
-                    user=user_to_nominate,
-                    role=mentor_role,
-                    defaults={
-                        "verified": True,
-                        "created_by_id": owner_id,
-                        "created_at": now,
-                    },
-                )
-        
-        # 4. Notify Admins
-        owner = User.objects.filter(id=owner_id).first()
-        admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
-        for admin_link in admin_roles:
-            NotificationUtils.insert_notification(
-                user=admin_link.user,
-                title="Company Mentor Nominated",
-                description=f"{owner.full_name} (owner of {company.name}) has directly nominated {user_to_nominate.full_name} as a mentor.",
-                button="View Profile",
-                url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{mentor_record.id}/",
-                created_by=owner,
-            )
-        
-        return mentor_record
 
 from db.mentor import MentorshipSession
 from db.organization import Organization
