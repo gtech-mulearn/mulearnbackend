@@ -1,3 +1,4 @@
+from PIL import Image
 from django.core.files.storage import FileSystemStorage
 from django.db.models import Count
 from rest_framework.views import APIView
@@ -149,8 +150,21 @@ class InterestGroupImageAPI(APIView):
         if image.size > self.MAX_IMAGE_SIZE_BYTES:
             return CustomResponse(general_message="Image must be under 5 MB").get_failure_response()
 
+        # content_type is a client-supplied header and trivially spoofable
+        # (e.g. an HTML/SVG payload sent as "image/png"). Decode the actual
+        # bytes with Pillow so only genuine image data ever reaches disk.
+        try:
+            Image.open(image).verify()
+        except Exception:
+            return CustomResponse(general_message="Invalid or corrupted image file").get_failure_response()
+        image.seek(0)
+
         fs = FileSystemStorage()
         filename = self._path(image_type, ig.id)
+        # Must delete before save: FileSystemStorage.save() renames on
+        # collision (e.g. "<id>_abc123.png") instead of overwriting, which
+        # would desync the fixed path the cover_image/icon_image properties
+        # reconstruct — they'd keep resolving to the old (or no) file.
         if fs.exists(filename):
             fs.delete(filename)
         fs.save(filename, image)
