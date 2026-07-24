@@ -65,6 +65,43 @@ def _validate_muids(request_data, fields=("leads", "mentors")):
     return True, None
 
 
+IG_IMAGE_MAX_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+
+def _ig_image_path(image_type, ig_id):
+    return f"interest_group/{image_type}/{ig_id}.png"
+
+
+def _validate_ig_image(image):
+    """Returns an error message string if `image` isn't an acceptable upload,
+    else None. content_type is client-supplied and spoofable, so the actual
+    bytes are decoded with Pillow rather than trusted at face value."""
+    if not image.content_type.startswith("image/"):
+        return "Expected an image file"
+
+    if image.size > IG_IMAGE_MAX_SIZE_BYTES:
+        return "Image must be under 5 MB"
+
+    try:
+        Image.open(image).verify()
+    except Exception:
+        return "Invalid or corrupted image file"
+    image.seek(0)
+
+    return None
+
+
+def _save_ig_image(image_type, ig_id, image):
+    fs = FileSystemStorage()
+    filename = _ig_image_path(image_type, ig_id)
+    # Must delete before save: FileSystemStorage.save() renames on collision
+    # (e.g. "<id>_abc123.png") instead of overwriting, which would desync the
+    # fixed path the cover_image/icon_image properties reconstruct.
+    if fs.exists(filename):
+        fs.delete(filename)
+    fs.save(filename, image)
+
+
 # " IGLead" — derived rather than hardcoded so it tracks IG_LEAD_ROLE().
 _IG_LEAD_ROLE_SUFFIX = RoleType.IG_LEAD_ROLE("")
 
@@ -116,11 +153,6 @@ class InterestGroupImageAPI(APIView):
     """
     authentication_classes = [CustomizePermission]
 
-    MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
-
-    def _path(self, image_type, pk):
-        return f"interest_group/{image_type}/{pk}.png"
-
     def _field_name(self, image_type):
         return "cover_image" if image_type == "cover" else "icon_image"
 
@@ -144,30 +176,11 @@ class InterestGroupImageAPI(APIView):
         if image is None:
             return CustomResponse(general_message="No image provided").get_failure_response()
 
-        if not image.content_type.startswith("image/"):
-            return CustomResponse(general_message="Expected an image file").get_failure_response()
+        error = _validate_ig_image(image)
+        if error:
+            return CustomResponse(general_message=error).get_failure_response()
 
-        if image.size > self.MAX_IMAGE_SIZE_BYTES:
-            return CustomResponse(general_message="Image must be under 5 MB").get_failure_response()
-
-        # content_type is a client-supplied header and trivially spoofable
-        # (e.g. an HTML/SVG payload sent as "image/png"). Decode the actual
-        # bytes with Pillow so only genuine image data ever reaches disk.
-        try:
-            Image.open(image).verify()
-        except Exception:
-            return CustomResponse(general_message="Invalid or corrupted image file").get_failure_response()
-        image.seek(0)
-
-        fs = FileSystemStorage()
-        filename = self._path(image_type, ig.id)
-        # Must delete before save: FileSystemStorage.save() renames on
-        # collision (e.g. "<id>_abc123.png") instead of overwriting, which
-        # would desync the fixed path the cover_image/icon_image properties
-        # reconstruct — they'd keep resolving to the old (or no) file.
-        if fs.exists(filename):
-            fs.delete(filename)
-        fs.save(filename, image)
+        _save_ig_image(image_type, ig.id, image)
 
         return CustomResponse(
             response={self._field_name(image_type): getattr(ig, self._field_name(image_type))}
@@ -190,7 +203,7 @@ class InterestGroupImageAPI(APIView):
             ).get_failure_response()
 
         fs = FileSystemStorage()
-        filename = self._path(image_type, ig.id)
+        filename = _ig_image_path(image_type, ig.id)
         if not fs.exists(filename):
             return CustomResponse(general_message="No image found").get_failure_response()
 
@@ -244,19 +257,33 @@ class InterestGroupAPI(APIView):
     @role_required([RoleType.ADMIN.value])
     @extend_schema(
         tags=['Dashboard - Ig'],
-        description="Create Interest Group.",
+        description=(
+            "Create Interest Group. Accepts multipart/form-data with optional "
+            "'cover_image'/'icon_image' file fields to set both images in the "
+            "same request; JSON (no images) still works."
+        ),
         request=InterestGroupCreateUpdateSerializer,
         responses={200: RoleDashboardSerializer},
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        request_data = request.data
+        request_data = request.data.copy()
 
         # Validate MUIDs for leads/mentors before serializing
         is_valid, error_msg = _validate_muids(request_data)
         if not is_valid:
             return CustomResponse(general_message=error_msg).get_failure_response()
+
+        # Validate any inline images up front, before creating anything —
+        # a bad file must not leave a half-created IG behind.
+        cover_file = request.FILES.get("cover_image")
+        icon_file = request.FILES.get("icon_image")
+        for image in (cover_file, icon_file):
+            if image is not None:
+                error = _validate_ig_image(image)
+                if error:
+                    return CustomResponse(general_message=error).get_failure_response()
 
         # serialize JSON-able fields to strings for DB storage
         for fld in [
@@ -281,7 +308,12 @@ class InterestGroupAPI(APIView):
 
         if serializer.is_valid():
             with transaction.atomic():
-                serializer.save()
+                ig_instance = serializer.save()
+
+                if cover_file is not None:
+                    _save_ig_image("cover", ig_instance.id, cover_file)
+                if icon_file is not None:
+                    _save_ig_image("icon", ig_instance.id, icon_file)
 
                 ig_name = request_data.get("name")
                 ig_code = request_data.get("code")
@@ -323,8 +355,14 @@ class InterestGroupAPI(APIView):
                 request_data.get("code"),
             )
 
+            response_data = dict(serializer.data)
+            if cover_file is not None:
+                response_data["cover_image"] = ig_instance.cover_image
+            if icon_file is not None:
+                response_data["icon_image"] = ig_instance.icon_image
+
             return CustomResponse(
-                response={"interestGroup": serializer.data}
+                response={"interestGroup": response_data}
             ).get_success_response()
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
@@ -806,7 +844,11 @@ class InterestGroupRequestAPI(APIView):
     @role_required([RoleType.ADMIN.value, RoleType.COMPANY.value])
     @extend_schema(
         tags=['Dashboard - Ig'],
-        description="Create Interest Group Request.",
+        description=(
+            "Create Interest Group Request. Accepts multipart/form-data with "
+            "optional 'cover_image'/'icon_image' file fields; JSON (no images) "
+            "still works."
+        ),
         request=InterestGroupRequestSerializer,
         responses={200: InterestGroupSerializer},
     )
@@ -820,6 +862,16 @@ class InterestGroupRequestAPI(APIView):
         is_valid, error_msg = _validate_muids(request_data)
         if not is_valid:
             return CustomResponse(general_message=error_msg).get_failure_response()
+
+        # Validate any inline images up front, before creating anything —
+        # a bad file must not leave a half-created request behind.
+        cover_file = request.FILES.get("cover_image")
+        icon_file = request.FILES.get("icon_image")
+        for image in (cover_file, icon_file):
+            if image is not None:
+                error = _validate_ig_image(image)
+                if error:
+                    return CustomResponse(general_message=error).get_failure_response()
 
         for fld in [
             "prerequisites",
@@ -843,6 +895,12 @@ class InterestGroupRequestAPI(APIView):
                 updated_by_id=user_id,
                 status="requested"
             )
+
+            if cover_file is not None:
+                _save_ig_image("cover", ig_instance.id, cover_file)
+            if icon_file is not None:
+                _save_ig_image("icon", ig_instance.id, icon_file)
+
             response_serializer = InterestGroupSerializer(ig_instance)
             
             return CustomResponse(
