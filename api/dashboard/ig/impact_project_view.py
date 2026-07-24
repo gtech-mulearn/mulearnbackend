@@ -2,6 +2,7 @@ from django.core.exceptions import ValidationError as DjangoValidationError
 from django.core.files.storage import FileSystemStorage
 from django.core.validators import URLValidator
 from django.db import transaction
+from drf_spectacular.utils import extend_schema
 from rest_framework.views import APIView
 
 from db.impact_project import ImpactProject, ImpactProjectLink, ImpactProjectUserLink
@@ -9,6 +10,7 @@ from db.task import InterestGroup
 from db.user import User
 from utils.permission import CustomizePermission, JWTUtils
 from utils.response import CustomResponse
+from utils.utils import CommonUtils
 
 from .dash_ig_view import _can_manage_ig
 from .impact_project_serializer import (
@@ -62,15 +64,37 @@ def _sync_links(project, links_data):
 class ImpactProjectListCreateAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="List Impact Projects for an Interest Group.",
+        responses={200: ImpactProjectSerializer},
+    )
     def get(self, request, ig_id):
         ig = InterestGroup.objects.filter(id=ig_id).first()
         if not ig:
             return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
 
-        projects = ImpactProject.objects.filter(ig=ig).select_related("created_by", "updated_by")
-        serializer = ImpactProjectSerializer(projects, many=True)
-        return CustomResponse(response={"impactProjects": serializer.data}).get_success_response()
+        projects = (
+            ImpactProject.objects.filter(ig=ig)
+            .select_related("created_by", "updated_by")
+            .prefetch_related("impact_project_user_link_project__user", "impact_project_link_project")
+            .order_by("-created_at")
+        )
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            projects, request, ["title", "description"],
+            {"title": "title", "created_on": "created_at", "updated_on": "updated_at"},
+        )
+        serializer = ImpactProjectSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data, pagination=paginated_queryset.get("pagination")
+        )
 
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Create an Impact Project scoped to an Interest Group.",
+        request=ImpactProjectCreateUpdateSerializer,
+        responses={200: ImpactProjectSerializer},
+    )
     @transaction.atomic
     def post(self, request, ig_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -116,6 +140,12 @@ class ImpactProjectDetailAPI(APIView):
     def _get_project(self, ig_id, project_id):
         return ImpactProject.objects.filter(id=project_id, ig_id=ig_id).first()
 
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Update an Impact Project.",
+        request=ImpactProjectCreateUpdateSerializer,
+        responses={200: ImpactProjectSerializer},
+    )
     @transaction.atomic
     def patch(self, request, ig_id, project_id):
         user_id = JWTUtils.fetch_user_id(request)
@@ -167,6 +197,10 @@ class ImpactProjectDetailAPI(APIView):
             response={"impactProject": ImpactProjectSerializer(project).data}
         ).get_success_response()
 
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Delete an Impact Project.",
+    )
     def delete(self, request, ig_id, project_id):
         roles = JWTUtils.fetch_role(request)
 
@@ -195,6 +229,10 @@ class ImpactProjectDetailAPI(APIView):
 class ImpactProjectImageAPI(APIView):
     authentication_classes = [CustomizePermission]
 
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Upload or replace an Impact Project's image.",
+    )
     def post(self, request, ig_id, project_id):
         roles = JWTUtils.fetch_role(request)
 
