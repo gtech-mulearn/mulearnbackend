@@ -415,50 +415,53 @@ class MentorVerifySerializer(serializers.Serializer):
             instance.verification_note = validated_data.get("verification_note")
             
         instance.save()
-        
-        if status == UserMentor.Status.REJECTED:
-            from db.company import Company
-            from db.user import User
-            from api.notification.notifications_utils import NotificationUtils
-            from django.conf import settings
 
-            actor = User.objects.filter(id=user_id).first()
-            is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
-            is_owner_actor = False
-            
-            if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
-                is_owner_actor = Company.objects.filter(
-                    company_user=actor,
-                    org=instance.org,
-                    status="verified"
-                ).exists()
+        try:
+            if status == UserMentor.Status.REJECTED:
+                from db.company import Company
+                from db.user import User
+                from api.notification.notifications_utils import NotificationUtils
+                from django.conf import settings
 
-            all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+                actor = User.objects.filter(id=user_id).first()
+                is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
+                is_owner_actor = False
+                
+                if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
+                    is_owner_actor = Company.objects.filter(
+                        company_user=actor,
+                        org=instance.org,
+                        status="verified"
+                    ).exists()
 
-            if is_owner_actor:
-                for admin_link in all_admins:
-                    NotificationUtils.insert_notification(
-                        user=admin_link.user,
-                        title="Mentor Application Rejected by Company",
-                        description=f"{actor.full_name} (owner of {instance.org.title}) has rejected the mentor application for {instance.user.full_name}.",
-                        button="View Details",
-                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
-                        created_by=actor,
-                    )
-            elif is_admin_actor:
-                tier_name = "IG" if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR else "Company"
-                for admin_link in all_admins:
-                    if admin_link.user == actor:
-                        continue
-                    
-                    NotificationUtils.insert_notification(
-                        user=admin_link.user,
-                        title=f"{tier_name} Mentor Application Rejected",
-                        description=f"Admin {actor.full_name} has rejected the {tier_name.lower()} mentor application for {instance.user.full_name}.",
-                        button="View Details",
-                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
-                        created_by=actor,
-                    )
+                all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+
+                if is_owner_actor:
+                    for admin_link in all_admins:
+                        NotificationUtils.insert_notification(
+                            user=admin_link.user,
+                            title="Mentor Application Rejected by Company",
+                            description=f"{actor.full_name} (owner of {instance.org.title}) has rejected the mentor application for {instance.user.full_name}.",
+                            button="View Details",
+                            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
+                            created_by=actor,
+                        )
+                elif is_admin_actor:
+                    tier_name = "IG" if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR else "Company"
+                    for admin_link in all_admins:
+                        if admin_link.user == actor:
+                            continue
+                        
+                        NotificationUtils.insert_notification(
+                            user=admin_link.user,
+                            title=f"{tier_name} Mentor Application Rejected",
+                            description=f"Admin {actor.full_name} has rejected the {tier_name.lower()} mentor application for {instance.user.full_name}.",
+                            button="View Details",
+                            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
+                            created_by=actor,
+                        )
+        except Exception:
+            pass
 
         return instance
 
