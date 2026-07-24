@@ -27,7 +27,7 @@ from drf_spectacular.utils import extend_schema
 from api.notification.notifications_utils import NotificationUtils
 
 
-def _validate_muids(request_data, fields=("leads", "mentors")):
+def _validate_muids(request_data, fields=("leads", "mentors", "thinktank")):
     """
     Validate that every muid in the given fields actually exists in the User table.
     Returns (is_valid, error_message).
@@ -167,6 +167,7 @@ class InterestGroupAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
@@ -258,6 +259,7 @@ class InterestGroupAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
@@ -431,6 +433,7 @@ class InterestGroupGetAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
@@ -729,6 +732,7 @@ class InterestGroupRequestAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:

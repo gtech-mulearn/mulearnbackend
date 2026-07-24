@@ -198,7 +198,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                     pass  # leave as-is (plain string)
 
         # MUID fields — parse + enrich with user details
-        for field in ["leads"]:
+        for field in ["leads", "thinktank"]:
             val = data.get(field)
             if isinstance(val, str) and val:
                 try:
