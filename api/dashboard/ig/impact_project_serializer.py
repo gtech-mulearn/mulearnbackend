@@ -57,11 +57,7 @@ class ImpactProjectCreateUpdateSerializer(serializers.ModelSerializer):
     def validate(self, attrs):
         attrs.pop("team", None)
         attrs.pop("links", None)
-        team = self.initial_data.get("team", [])
-        if isinstance(team, list) and team:
-            leads = [member for member in team if member.get("is_lead")]
-            if len(leads) != 1:
-                raise serializers.ValidationError(
-                    "Exactly one team member must be marked as lead."
-                )
+        # A project may now have zero, one, or multiple leads — no count restriction.
+        # Actual muid resolution (including rejecting entries missing a muid) is
+        # enforced in the view via _resolve_team, since it needs a DB lookup.
         return attrs

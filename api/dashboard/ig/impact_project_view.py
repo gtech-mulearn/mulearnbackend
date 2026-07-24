@@ -22,16 +22,22 @@ MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
 
 
 def _resolve_team(team_data):
-    """Resolve muids to users, deduping repeats. Raises ValueError on any unknown muid
-    so the caller can 400 instead of silently saving a team missing its lead."""
+    """Resolve muids to users, deduping repeats. Raises ValueError on any missing or
+    unknown muid so the caller 400s instead of silently dropping a team member (which
+    previously let an entry pass "has a lead" validation and then vanish on save)."""
     seen_muids = set()
     resolved = []
     for member in team_data:
         muid = member.get("muid")
-        if not muid or muid in seen_muids:
+        if not muid:
+            raise ValueError("Each team member requires a 'muid'.")
+        if muid in seen_muids:
             continue
         seen_muids.add(muid)
-        user = User.objects.filter(muid=muid).first()
+        # User.objects is ActiveUserManager and excludes suspended users — a team that
+        # already includes a suspended member must still resolve here on PATCH, else an
+        # unrelated edit to the same project would spuriously 400.
+        user = User.every.filter(muid=muid).first()
         if not user:
             raise ValueError(f"No user found with muid '{muid}'")
         resolved.append((user, bool(member.get("is_lead"))))
