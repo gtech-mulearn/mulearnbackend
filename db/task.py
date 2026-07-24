@@ -1,6 +1,8 @@
 import uuid
 
+from django.core.files.storage import FileSystemStorage
 from django.db import models
+from decouple import config as decouple_config
 
 from db.organization import Organization
 
@@ -39,7 +41,9 @@ class InterestGroup(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     name = models.CharField(max_length=75, unique=True)
     code = models.CharField(max_length=10, unique=True)
-    icon = models.CharField(max_length=10)
+    # Legacy short emoji/code icon, superseded by the icon_image file upload
+    # below. Kept nullable for backward compatibility with existing rows.
+    icon = models.CharField(max_length=10, blank=True, null=True)
     category =models.CharField(max_length=20,default="others",blank=False,null=False)
     status = models.CharField(
         max_length=20,
@@ -73,6 +77,20 @@ class InterestGroup(models.Model):
     class Meta:
         managed = False
         db_table = "interest_group"
+
+    @property
+    def cover_image(self):
+        fs = FileSystemStorage()
+        path = f"interest_group/cover/{self.id}.png"
+        if fs.exists(path):
+            return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
+
+    @property
+    def icon_image(self):
+        fs = FileSystemStorage()
+        path = f"interest_group/icon/{self.id}.png"
+        if fs.exists(path):
+            return f"{decouple_config('BE_DOMAIN_NAME')}{fs.url(path)}"
 
 
 class Level(models.Model):

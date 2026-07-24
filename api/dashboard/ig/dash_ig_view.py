@@ -1,3 +1,5 @@
+from PIL import Image
+from django.core.files.storage import FileSystemStorage
 from django.db.models import Count
 from rest_framework.views import APIView
 from django.db import transaction
@@ -27,7 +29,7 @@ from drf_spectacular.utils import extend_schema
 from api.notification.notifications_utils import NotificationUtils
 
 
-def _validate_muids(request_data, fields=("leads", "mentors")):
+def _validate_muids(request_data, fields=("leads", "mentors", "thinktank")):
     """
     Validate that every muid in the given fields actually exists in the User table.
     Returns (is_valid, error_message).
@@ -100,6 +102,103 @@ def _can_manage_ig(roles, ig):
     )
 
 
+class InterestGroupImageAPI(APIView):
+    """
+    Upload/replace/remove an Interest Group's cover image or icon image.
+
+    Mirrors the FileSystemStorage convention used for user profile cover
+    pics (profile_view.UserProfileCoverView) and impact project images
+    (impact_project_view.ImpactProjectImageAPI) — files live under
+    MEDIA_ROOT, not as a DB column, keyed by the IG's id.
+
+    `image_type` ("cover" or "icon") is bound per-URL via urls.py so the
+    same view backs both <pk>/cover-image/ and <pk>/icon-image/.
+    """
+    authentication_classes = [CustomizePermission]
+
+    MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024  # 5 MB
+
+    def _path(self, image_type, pk):
+        return f"interest_group/{image_type}/{pk}.png"
+
+    def _field_name(self, image_type):
+        return "cover_image" if image_type == "cover" else "icon_image"
+
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Upload or replace an Interest Group's cover/icon image.",
+    )
+    def post(self, request, pk, image_type):
+        roles = JWTUtils.fetch_role(request)
+
+        ig = InterestGroup.objects.filter(id=pk).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
+
+        if not _can_manage_ig(roles, ig):
+            return CustomResponse(
+                general_message="You do not have permission to manage this Interest Group"
+            ).get_failure_response()
+
+        image = request.FILES.get("image")
+        if image is None:
+            return CustomResponse(general_message="No image provided").get_failure_response()
+
+        if not image.content_type.startswith("image/"):
+            return CustomResponse(general_message="Expected an image file").get_failure_response()
+
+        if image.size > self.MAX_IMAGE_SIZE_BYTES:
+            return CustomResponse(general_message="Image must be under 5 MB").get_failure_response()
+
+        # content_type is a client-supplied header and trivially spoofable
+        # (e.g. an HTML/SVG payload sent as "image/png"). Decode the actual
+        # bytes with Pillow so only genuine image data ever reaches disk.
+        try:
+            Image.open(image).verify()
+        except Exception:
+            return CustomResponse(general_message="Invalid or corrupted image file").get_failure_response()
+        image.seek(0)
+
+        fs = FileSystemStorage()
+        filename = self._path(image_type, ig.id)
+        # Must delete before save: FileSystemStorage.save() renames on
+        # collision (e.g. "<id>_abc123.png") instead of overwriting, which
+        # would desync the fixed path the cover_image/icon_image properties
+        # reconstruct — they'd keep resolving to the old (or no) file.
+        if fs.exists(filename):
+            fs.delete(filename)
+        fs.save(filename, image)
+
+        return CustomResponse(
+            response={self._field_name(image_type): getattr(ig, self._field_name(image_type))}
+        ).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Remove an Interest Group's cover/icon image.",
+    )
+    def delete(self, request, pk, image_type):
+        roles = JWTUtils.fetch_role(request)
+
+        ig = InterestGroup.objects.filter(id=pk).first()
+        if not ig:
+            return CustomResponse(general_message="Interest Group Does Not Exist").get_failure_response()
+
+        if not _can_manage_ig(roles, ig):
+            return CustomResponse(
+                general_message="You do not have permission to manage this Interest Group"
+            ).get_failure_response()
+
+        fs = FileSystemStorage()
+        filename = self._path(image_type, ig.id)
+        if not fs.exists(filename):
+            return CustomResponse(general_message="No image found").get_failure_response()
+
+        fs.delete(filename)
+
+        return CustomResponse(general_message="Image removed successfully").get_success_response()
+
+
 class InterestGroupAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -167,6 +266,7 @@ class InterestGroupAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
@@ -258,6 +358,7 @@ class InterestGroupAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
@@ -431,6 +532,7 @@ class InterestGroupGetAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
@@ -729,6 +831,7 @@ class InterestGroupRequestAPI(APIView):
             "people_to_follow",
             "leads",
             "mentors",
+            "thinktank",
         ]:
             if fld in request_data and not isinstance(request_data.get(fld), str):
                 try:
