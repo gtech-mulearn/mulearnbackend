@@ -230,7 +230,7 @@ class InterestGroupAPI(APIView):
 
         return CustomResponse(general_message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value,RoleType.IG_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Update Interest Group.",
