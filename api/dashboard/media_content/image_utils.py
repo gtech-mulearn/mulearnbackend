@@ -437,8 +437,8 @@ def _querydict_to_plain_dict(data) -> dict:
         for k in keys:
             if getlist and k in _LIST_FIELDS:
                 values = getlist(k)
-                if len(values) > 1:
-                    out[k] = values
+                if not values:
+                    out[k] = data.get(k)
                     continue
                 if len(values) == 1 and isinstance(values[0], str):
                     stripped = values[0].strip()
@@ -448,7 +448,9 @@ def _querydict_to_plain_dict(data) -> dict:
                             continue
                         except ValueError:
                             pass
-                out[k] = values[0] if values else data.get(k)
+                    out[k] = [stripped] if stripped else []
+                    continue
+                out[k] = values
                 continue
             out[k] = data.get(k)
     except Exception:
