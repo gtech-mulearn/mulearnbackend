@@ -274,7 +274,8 @@ class MentorProfileAPI(APIView):
             response_serializer = serializers.MentorDetailSerializer(mentor)
             response_data = response_serializer.data
             socials = Socials.objects.filter(user_id=user_id).first()
-            response_data['linkedin'] = socials.linkedin if socials else None
+            # If a new URL is pending verification, omit the stale value but keep the key present so the response shape stays consistent.
+            response_data['linkedin'] = None if linkedin_url else (socials.linkedin if socials else None)
 
             return CustomResponse(
                 general_message=general_message,
@@ -456,27 +457,14 @@ class MentorChangeCompanyAPI(APIView):
         if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.APPROVED).exists():
             return CustomResponse(general_message="You are already an approved mentor for this company.").get_failure_response()
 
-
+        # Prioritize the most recently updated approved profile as the source for user's data.
         existing_mentor_profile = UserMentor.objects.filter(
             user_id=user_id,
-            status=UserMentor.Status.APPROVED,
-            mentor_tier=UserMentor.MentorTier.MENTOR
-        ).first()
-
+            status=UserMentor.Status.APPROVED
+        ).order_by('-updated_at').first()
+        
         if not existing_mentor_profile:
-
-            tier_order = Case(
-                When(mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR, then=0),
-                When(mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR, then=1),
-                When(mentor_tier=UserMentor.MentorTier.IG_MENTOR, then=2),
-                default=3
-            )
-            existing_mentor_profile = UserMentor.objects.filter(
-                user_id=user_id, status=UserMentor.Status.APPROVED
-            ).order_by(tier_order, '-updated_at').first()
-
-        if not existing_mentor_profile:
-            # Fallback if no approved profile exists (e.g., only rejected/pending)
+            # Fallback to any profile if no approved one exists (e.g., only rejected/pending applications).
             existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).order_by('-updated_at').first()
 
         new_mentor_app = UserMentor.objects.create(
