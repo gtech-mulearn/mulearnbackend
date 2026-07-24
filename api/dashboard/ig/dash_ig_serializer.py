@@ -140,6 +140,8 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     updated_by = serializers.CharField(source="updated_by.full_name")
     created_by = serializers.CharField(source="created_by.full_name")
     members = serializers.SerializerMethodField()
+    cover_image = serializers.CharField(read_only=True, allow_null=True)
+    icon_image = serializers.CharField(read_only=True, allow_null=True)
     category = serializers.ChoiceField(
         choices=["maker", "coder", "creative", "manager", "others"]
     )
@@ -163,6 +165,8 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "thinktank",
             "office_hours",
             "icon",
+            "icon_image",
+            "cover_image",
             "code",
             "category",
             "status",
@@ -198,7 +202,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                     pass  # leave as-is (plain string)
 
         # MUID fields — parse + enrich with user details
-        for field in ["leads"]:
+        for field in ["leads", "thinktank"]:
             val = data.get(field)
             if isinstance(val, str) and val:
                 try:
@@ -216,6 +220,8 @@ class InterestGroupSerializer(serializers.ModelSerializer):
 
 
 class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
+    # icon is no longer settable here — it's uploaded as a file via the
+    # dedicated <pk>/icon-image/ endpoint, same as cover_image.
 
     class Meta:
         model = InterestGroup
@@ -224,7 +230,6 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
             "code",
             "category",
             "status",
-            "icon",
             "about",
             "prerequisites",
             "career_opportunities",
@@ -242,6 +247,9 @@ class InterestGroupCreateUpdateSerializer(serializers.ModelSerializer):
 
 class InterestGroupRequestSerializer(serializers.ModelSerializer):
     """Serializer for user-submitted IG creation requests."""
+    # icon is no longer accepted here — it's uploaded as a file via the
+    # dedicated <pk>/icon-image/ endpoint once the IG exists, same as
+    # cover_image.
 
     class Meta:
         model = InterestGroup
@@ -249,7 +257,6 @@ class InterestGroupRequestSerializer(serializers.ModelSerializer):
             "name",
             "code",
             "category",
-            "icon",
             "about",
             "prerequisites",
             "career_opportunities",
@@ -265,7 +272,6 @@ class InterestGroupRequestSerializer(serializers.ModelSerializer):
             "name": {"required": True},
             "code": {"required": True},
             "category": {"required": True},
-            "icon": {"required": True},
         }
 
 class InterestGroupRequestGetSerializer(InterestGroupSerializer):

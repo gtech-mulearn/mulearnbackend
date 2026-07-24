@@ -27,9 +27,12 @@ class MinimalUserSerializer(serializers.ModelSerializer):
 
 
 class MinimalIGSerializer(serializers.ModelSerializer):
+    cover_image = serializers.ReadOnlyField()
+    icon_image = serializers.ReadOnlyField()
+
     class Meta:
         model = InterestGroup
-        fields = ['id', 'name', 'icon']
+        fields = ['id', 'name', 'icon', 'cover_image', 'icon_image']
 
 
 class MinimalCampusSerializer(serializers.ModelSerializer):
