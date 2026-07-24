@@ -97,7 +97,7 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             from db.company import Company
             from django.conf import settings
 
-            requester = User.objects.filter(id=user_id).first()
+            requester = User.every.filter(id=user_id).first()
             admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
 
             if org:
@@ -426,7 +426,7 @@ class MentorVerifySerializer(serializers.Serializer):
                 from api.notification.notifications_utils import NotificationUtils
                 from django.conf import settings
 
-                actor = User.objects.filter(id=user_id).first()
+                actor = User.every.filter(id=user_id).first()
                 is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
                 is_owner_actor = False
                 

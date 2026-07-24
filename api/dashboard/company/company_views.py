@@ -364,7 +364,7 @@ class CompanyMentorNominateAPI(APIView):
             from db.user import User, UserRoleLink
             from utils.types import RoleType
             from django.conf import settings
-            nominator = User.objects.filter(id=user_id).first()
+            nominator = User.every.filter(id=user_id).first()
             
             # Notify the nominated user
             NotificationUtils.insert_notification(
