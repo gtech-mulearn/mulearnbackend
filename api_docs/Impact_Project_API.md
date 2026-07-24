@@ -29,8 +29,8 @@ No body. Supports the standard pagination query params: `pageIndex` (default 1),
         "image": "https://<BE_DOMAIN_NAME>/muback-media/impact_project/image/b1f2c3d4-....png",
         "description": "An online learning platform built for students and mentors.",
         "team": [
-          { "muid": "alvin-dennis@mulearn", "name": "Alvin Dennis", "is_lead": true },
-          { "muid": "akhil-raj@mulearn", "name": "Akhil Raj", "is_lead": false }
+          { "muid": "alvin-dennis@mulearn", "name": "Alvin Dennis", "avatar": "https://<BE_DOMAIN_NAME>/muback-media/user/profile/<user_id>.png", "is_lead": true },
+          { "muid": "akhil-raj@mulearn", "name": "Akhil Raj", "avatar": null, "is_lead": false }
         ],
         "links": [
           { "label": "github", "url": "https://github.com/example/community-lms" },
@@ -70,7 +70,7 @@ No body. Supports the standard pagination query params: `pageIndex` (default 1),
 `POST /api/v1/dashboard/ig/{ig_id}/impact-projects/`
 `Content-Type: application/json`
 
-`team[].muid` is required for every team member and must match an existing user's `muid`. `is_lead` may be `true` for zero, one, or multiple members — there is no restriction on lead count. `links` is optional and open-ended — any `label` is allowed, not just github/live/figma.
+`team[].muid` is required for every team member and must match an existing user's `muid`. `is_lead` may be `true` for zero, one, or multiple members — there is no restriction on lead count. `links` is optional and open-ended — any `label` is allowed, not just github/live/figma. In responses, each team member also carries a read-only `avatar` (the user's profile pic URL, same convention as cover pic — `null` if none uploaded); it's derived from the user record and can't be set through this endpoint.
 
 **Request body**
 ```json
