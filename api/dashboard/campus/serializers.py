@@ -487,6 +487,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
     ig_name = serializers.ReadOnlyField(source="ig.name")
     ig_code = serializers.ReadOnlyField(source="ig.code")
     ig_icon = serializers.ReadOnlyField(source="ig.icon")
+    ig_cover_image = serializers.ReadOnlyField(source="ig.cover_image")
+    ig_icon_image = serializers.ReadOnlyField(source="ig.icon_image")
     lead_id = serializers.ReadOnlyField(source="lead.id")
     lead_name = serializers.SerializerMethodField()
     campus_ig_member_count = serializers.SerializerMethodField()
@@ -499,6 +501,8 @@ class CampusIGChapterListSerializer(serializers.ModelSerializer):
             "ig_name",
             "ig_code",
             "ig_icon",
+            "ig_cover_image",
+            "ig_icon_image",
             "lead_id",
             "lead_name",
             "description",
@@ -714,10 +718,12 @@ class CampusLCMemberSerializer(serializers.ModelSerializer):
 
 class CampusIGListSerializer(serializers.ModelSerializer):
     campus_member_count = serializers.IntegerField(default=0)
+    cover_image = serializers.ReadOnlyField()
+    icon_image = serializers.ReadOnlyField()
 
     class Meta:
         model = InterestGroup
-        fields = ["id", "name", "code", "campus_member_count"]
+        fields = ["id", "name", "code", "campus_member_count", "cover_image", "icon_image"]
 
 class CampusIGMemberSerializer(serializers.ModelSerializer):
     user_id = serializers.CharField(source="user.id")
