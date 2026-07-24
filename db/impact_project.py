@@ -46,10 +46,6 @@ class ImpactProjectUserLink(models.Model):
     class Meta:
         managed = False
         db_table = "impact_project_user_link"
-        # Actual index (idx_ipul_project) lives in the raw DDL — see
-        # alter-scripts/alter-1.64.sql. Django never applies Meta.indexes for
-        # managed=False models, so it is intentionally not declared here.
-
 
 class ImpactProjectLink(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
@@ -62,6 +58,3 @@ class ImpactProjectLink(models.Model):
     class Meta:
         managed = False
         db_table = "impact_project_link"
-        # Actual index (idx_ipl_project) lives in the raw DDL — see
-        # alter-scripts/alter-1.64.sql. Django never applies Meta.indexes for
-        # managed=False models, so it is intentionally not declared here.
