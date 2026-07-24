@@ -6,10 +6,11 @@ from db.impact_project import ImpactProject, ImpactProjectLink, ImpactProjectUse
 class ImpactProjectTeamMemberSerializer(serializers.ModelSerializer):
     muid = serializers.CharField(source="user.muid")
     name = serializers.CharField(source="user.full_name")
+    avatar = serializers.CharField(source="user.profile_pic", read_only=True, allow_null=True)
 
     class Meta:
         model = ImpactProjectUserLink
-        fields = ["muid", "name", "is_lead"]
+        fields = ["muid", "name", "avatar", "is_lead"]
 
 
 class ImpactProjectLinkSerializer(serializers.ModelSerializer):
