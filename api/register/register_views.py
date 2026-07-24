@@ -485,6 +485,10 @@ class DistrictAPI(APIView):
 
 class CollegeAPI(APIView):
     MAX_RESULTS = 20
+    # Large districts (e.g. Bengaluru, Mumbai, Ernakulam) can have 100-200+
+    # affiliated colleges, so a district-scoped browse needs a higher cap
+    # than the typeahead search, not an unbounded queryset.
+    DISTRICT_MAX_RESULTS = 500
 
     @extend_schema(
         tags=['Register'],
@@ -510,12 +514,14 @@ class CollegeAPI(APIView):
 
         org_queryset = org_queryset.order_by("title")
 
-        # Cap results for a free-text search (typeahead) or a fully unfiltered browse
-        # (memory safety, since that spans every college nationwide). A district-scoped
-        # browse must return every college in that district uncapped — otherwise any
-        # district with more than MAX_RESULTS colleges silently loses the rest.
+        # Cap results for a free-text search (typeahead) or a fully unfiltered
+        # browse (memory safety, since that spans every college nationwide).
+        # A district-scoped browse gets a much higher cap instead of no cap at
+        # all, since some districts have 100-200+ affiliated colleges.
         if search_query or not district_id:
             org_queryset = org_queryset[:self.MAX_RESULTS]
+        else:
+            org_queryset = org_queryset[:self.DISTRICT_MAX_RESULTS]
 
         department_queryset = Department.objects.all()
 
