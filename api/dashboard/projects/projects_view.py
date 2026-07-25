@@ -1,6 +1,6 @@
 from django.db.models import Q
 from rest_framework.views import APIView
-from utils.utils import CommonUtils
+from utils.utils import CommonUtils, ImageUploadUtils
 from utils.response import CustomResponse
 from utils.permission import CustomizePermission, JWTUtils
 from db.projects import (
@@ -56,6 +56,10 @@ class ProjectDetailAPIView(APIView):
             ).get_failure_response()
         project = Project.objects.get(id=pk)
         images_data = request.FILES.getlist('images')
+        if images_data:
+            error = _validate_project_images(images_data)
+            if error:
+                return CustomResponse(general_message=error).get_failure_response()
         serializer = ProjectUpdateSerializer(project, data=request.data, partial=True)
         if serializer.is_valid():
             serializer.save(updated_by = user)
@@ -94,6 +98,15 @@ class ProjectDetailAPIView(APIView):
             return CustomResponse(
                 general_message="no Project id provided"
             ).get_failure_response()
+
+
+def _validate_project_images(images_data):
+    """Returns an error message string if any image is invalid, else None."""
+    for image_data in images_data:
+        error = ImageUploadUtils.validate(image_data)
+        if error:
+            return error
+    return None
 
 
 def _replace_links(project, links):
@@ -194,6 +207,10 @@ class ProjectsAPIView(APIView):
     def post(self, request):
         user = User.objects.get(id=JWTUtils.fetch_user_id(request))
         images_data = request.FILES.getlist('images')
+        if images_data:
+            error = _validate_project_images(images_data)
+            if error:
+                return CustomResponse(general_message=error).get_failure_response()
         data = request.data.copy()
         if 'images' in data:
             del data['images']
