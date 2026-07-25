@@ -29,8 +29,15 @@ from db.organization import Organization
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
+    mentor_tier = serializers.ChoiceField(choices=[
+        UserMentor.MentorTier.IG_MENTOR.value,
+        UserMentor.MentorTier.COMPANY_MENTOR.value,
+        UserMentor.MentorTier.CAMPUS_MENTOR.value,
+    ])
     org = serializers.PrimaryKeyRelatedField(
-        queryset=Organization.objects.filter(org_type=OrganizationType.COMPANY.value),
+        queryset=Organization.objects.filter(
+            org_type__in=[OrganizationType.COMPANY.value, OrganizationType.COLLEGE.value]
+        ),
         required=False,
         allow_null=True,
     )
@@ -44,6 +51,7 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             "hours",
             "preferred_ig_ids",
             "linkedin",
+            "mentor_tier",
             "org",
         ]
 
@@ -62,25 +70,37 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
         return value
 
+    def validate(self, data):
+        mentor_tier = data.get('mentor_tier')
+        org = data.get('org')
+
+        if mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR.value:
+            if not org:
+                raise serializers.ValidationError({'org': 'Organization is required for a Company Mentor application.'})
+            if org.org_type != OrganizationType.COMPANY.value:
+                raise serializers.ValidationError({'org': 'A valid company organization is required.'})
+        elif mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR.value:
+            if not org:
+                raise serializers.ValidationError({'org': 'Organization is required for a Campus Mentor application.'})
+            if org.org_type != OrganizationType.COLLEGE.value:
+                raise serializers.ValidationError({'org': 'A valid college organization is required.'})
+        # For IG_MENTOR, an organization is optional. If provided, the
+        # PrimaryKeyRelatedField has already validated its existence.
+        
+        return data
+
     def create(self, validated_data):
         user_id = self.context["user_id"]
         linkedin_url = validated_data.pop('linkedin', None)
-        org = validated_data.get('org')
 
         if linkedin_url:
             reason = validated_data.get('reason', '')
             # Append linkedin url to reason for admin verification
             validated_data['reason'] = f"{reason}\n\n[LINKEDIN_URL_PENDING:{linkedin_url}]"
         
-        if org:
-            mentor_tier = UserMentor.MentorTier.COMPANY_MENTOR
-        else:
-            mentor_tier = UserMentor.MentorTier.IG_MENTOR
-
         mentor = UserMentor.objects.create(
             user_id=user_id,
             status=UserMentor.Status.PENDING,
-            mentor_tier=mentor_tier,
             created_by_id=user_id,
             updated_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time(),
@@ -100,7 +120,10 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             requester = User.every.filter(id=user_id).first()
             admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
 
-            if org:
+            mentor_tier = validated_data.get('mentor_tier')
+            org = validated_data.get('org')
+
+            if mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR.value:
                 try:
                     company = Company.objects.get(org=org, status="verified")
                     owner_user = company.company_user
@@ -124,7 +147,17 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                         url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
                         created_by=requester,
                     )
-            else:
+            elif mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR.value:
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="New Campus Mentor Application",
+                        description=f"{requester.full_name} has applied to be a mentor for {org.title}.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+            else: # IG_MENTOR
                 for admin_link in admin_roles:
                     NotificationUtils.insert_notification(
                         user=admin_link.user,
@@ -143,8 +176,15 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
 
 class MentorUpdateSerializer(serializers.ModelSerializer):
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
+    mentor_tier = serializers.ChoiceField(choices=[
+        UserMentor.MentorTier.IG_MENTOR.value,
+        UserMentor.MentorTier.COMPANY_MENTOR.value,
+        UserMentor.MentorTier.CAMPUS_MENTOR.value,
+    ], required=False)
     org = serializers.PrimaryKeyRelatedField(
-        queryset=Organization.objects.filter(org_type=OrganizationType.COMPANY.value),
+        queryset=Organization.objects.filter(
+            org_type__in=[OrganizationType.COMPANY.value, OrganizationType.COLLEGE.value]
+        ),
         required=False,
         allow_null=True,
     )
@@ -159,6 +199,7 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             "hours",
             "preferred_ig_ids",
             "linkedin",
+            "mentor_tier",
             "org",
         ]
 
@@ -186,6 +227,30 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             raise serializers.ValidationError(
                 {"preferred_ig_ids": "You must mentor at least one Interest Group."}
             )
+
+        # If neither is in payload, nothing to validate
+        if 'mentor_tier' not in data and 'org' not in data:
+            return data
+
+        mentor_tier = data.get('mentor_tier', instance.mentor_tier if instance else None)
+        
+        # Handle case where 'org' is explicitly passed as null
+        if 'org' in data and data['org'] is None:
+            org = None
+        else:
+            org = data.get('org', instance.org if instance else None)
+
+        if mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR.value:
+            if not org:
+                raise serializers.ValidationError({'org': 'Organization is required for a Company Mentor application.'})
+            if org.org_type != OrganizationType.COMPANY.value:
+                raise serializers.ValidationError({'org': 'A valid company organization is required.'})
+        elif mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR.value:
+            if not org:
+                raise serializers.ValidationError({'org': 'Organization is required for a Campus Mentor application.'})
+            if org.org_type != OrganizationType.COLLEGE.value:
+                raise serializers.ValidationError({'org': 'A valid college organization is required.'})
+        # For IG_MENTOR, an organization is optional, so no specific validation is needed.
         return data
 
     def update(self, instance, validated_data):
@@ -197,15 +262,7 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
 
         if instance.status == UserMentor.Status.APPROVED:
             validated_data.pop('org', None)
-
-        # If org is part of the update, adjust the mentor_tier accordingly.
-        # This only affects PENDING/REJECTED applications via MentorRegistrationAPI.
-        if 'org' in validated_data:
-            org = validated_data.get('org')
-            if org:
-                validated_data['mentor_tier'] = UserMentor.MentorTier.COMPANY_MENTOR
-            else:
-                validated_data['mentor_tier'] = UserMentor.MentorTier.IG_MENTOR
+            validated_data.pop('mentor_tier', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)

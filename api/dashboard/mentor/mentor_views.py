@@ -27,24 +27,32 @@ class MentorRegistrationAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
+        mentor_tier = request.data.get('mentor_tier')
         org_id = request.data.get('org')
 
-        # Prevent duplicate PENDING or APPROVED applications for the same scope.
+        # Prevent duplicate PENDING or APPROVED applications for the same scope (user, tier, org).
+        duplicate_filter = Q(
+            user_id=user_id,
+            mentor_tier=mentor_tier,
+        )
         if org_id:
-            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.PENDING).exists():
-                return CustomResponse(
-                    general_message="You already have a pending mentor application for this company."
-                ).get_failure_response()
-            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.APPROVED).exists():
-                return CustomResponse(
-                    general_message="You are already an approved mentor for this company."
-                ).get_failure_response()
+            duplicate_filter &= Q(org_id=org_id)
         else:
-            # A user can only have one pending/approved IG mentor application at a time.
-            if UserMentor.objects.filter(user_id=user_id, mentor_tier=UserMentor.MentorTier.IG_MENTOR, status__in=[UserMentor.Status.PENDING, UserMentor.Status.APPROVED]).exists():
-                return CustomResponse(
-                    general_message="You already have an active or pending IG mentor application. You can edit your preferred IGs from your profile."
-                ).get_failure_response()
+            duplicate_filter &= Q(org__isnull=True)
+
+        if UserMentor.objects.filter(duplicate_filter & Q(status=UserMentor.Status.PENDING)).exists():
+            org_msg = f" for this organization" if org_id else ""
+            tier_name = str(mentor_tier).replace('_', ' ').lower() if mentor_tier else "mentor"
+            return CustomResponse(
+                general_message=f"You already have a pending {tier_name} application{org_msg}."
+            ).get_failure_response()
+
+        if UserMentor.objects.filter(duplicate_filter & Q(status=UserMentor.Status.APPROVED)).exists():
+            org_msg = f" for this organization" if org_id else ""
+            tier_name = str(mentor_tier).replace('_', ' ').lower() if mentor_tier else "mentor"
+            return CustomResponse(
+                general_message=f"You are already an approved {tier_name}{org_msg}."
+            ).get_failure_response()
 
         serializer = serializers.MentorRegisterSerializer(
             data=request.data, context={"user_id": user_id}
