@@ -3,6 +3,8 @@ import datetime
 import re
 import gzip
 import io
+import os
+import uuid
 from datetime import timedelta
 
 import openpyxl
@@ -15,9 +17,11 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Q
 from django.db.models.query import QuerySet
 from django.http import HttpResponse
+from django.core.files.storage import FileSystemStorage
 from django.template.loader import render_to_string
 import string, random
 from django.utils.timezone import now
+from PIL import Image
 
 def check_alumni_status(graduation_year):
     """
@@ -135,6 +139,185 @@ class CommonUtils:
         compressed_response["Content-Encoding"] = "gzip"
 
         return compressed_response
+
+
+class ImageUploadUtils:
+    """
+    Centralized image upload system: validate, store, resolve, and delete
+    image files. Use this instead of duplicating size/type checks and
+    FileSystemStorage boilerplate across views.
+
+    Two storage modes are supported:
+      - `save(filename, image)`: a caller-chosen fixed path that gets
+        overwritten on every upload (e.g. a user's single profile cover).
+      - `save_unique(directory, image)`: a generated UUID filename under a
+        directory, using the extension detected from the actual image
+        bytes (e.g. a gallery of project images).
+    """
+
+    MIN_SIZE_BYTES = 1 * 1024          # 1 KB
+    MAX_SIZE_BYTES = 5 * 1024 * 1024   # 5 MB
+
+    # Client-supplied content_type/filename extensions are spoofable, so the
+    # canonical extension is always derived from Pillow's decoded format.
+    ALLOWED_FORMATS = {
+        "PNG": "png",
+        "JPEG": "jpg",
+        "GIF": "gif",
+        "WEBP": "webp",
+    }
+
+    @classmethod
+    def validate(cls, image, min_size: int = None, max_size: int = None) -> str | None:
+        """
+        Validates an uploaded image file's type, size bounds, and integrity.
+
+        Args:
+            image: An UploadedFile (e.g. request.FILES.get('image')).
+            min_size: Minimum allowed size in bytes. Defaults to MIN_SIZE_BYTES.
+            max_size: Maximum allowed size in bytes. Defaults to MAX_SIZE_BYTES.
+
+        Returns:
+            str | None: An error message if the image is invalid, else None.
+        """
+        min_size = cls.MIN_SIZE_BYTES if min_size is None else min_size
+        max_size = cls.MAX_SIZE_BYTES if max_size is None else max_size
+
+        if not image:
+            return "No image file provided"
+
+        if image.size < min_size:
+            return f"Image must be at least {min_size // 1024} KB"
+
+        if image.size > max_size:
+            return f"Image must be under {max_size // (1024 * 1024)} MB"
+
+        if cls._detect_format(image) is None:
+            return f"Unsupported image format. Allowed: {', '.join(sorted(cls.ALLOWED_FORMATS.values()))}"
+
+        return None
+
+    @classmethod
+    def _detect_format(cls, image) -> str | None:
+        """
+        Decodes the actual image bytes with Pillow and returns the
+        canonical extension (e.g. "png"), or None if the file is corrupt,
+        unreadable, or not one of ALLOWED_FORMATS. Leaves `image` seeked
+        back to 0 so it remains usable for further reads (e.g. `.save()`).
+        """
+        image.seek(0)
+        try:
+            with Image.open(image) as img:
+                img.verify()
+        except Exception:
+            image.seek(0)
+            return None
+
+        # verify() invalidates the Image object for further use, so the
+        # format must be read from a freshly reopened handle.
+        image.seek(0)
+        try:
+            with Image.open(image) as img:
+                fmt = (img.format or "").upper()
+        except Exception:
+            image.seek(0)
+            return None
+        image.seek(0)
+
+        return cls.ALLOWED_FORMATS.get(fmt)
+
+    @staticmethod
+    def _safe_relative_path(path: str) -> str:
+        """
+        Normalizes a storage-relative path and rejects any attempt to
+        escape the storage root (e.g. "../../etc/passwd") or use an
+        absolute path.
+        """
+        normalized = os.path.normpath(path).replace(os.sep, "/")
+        if normalized.startswith("../") or normalized == ".." or normalized.startswith("/"):
+            raise ValueError(f"Invalid storage path: {path!r}")
+        return normalized
+
+    @classmethod
+    def save(cls, filename: str, image) -> str:
+        """
+        Saves an image to a fixed path, overwriting any existing file there.
+        Callers are expected to have already run `validate()`.
+
+        Args:
+            filename: Storage-relative path, e.g. "user/cover/<user_id>.png".
+            image: An UploadedFile (e.g. request.FILES.get('image')).
+
+        Returns:
+            str: The saved filename (same as the `filename` argument).
+        """
+        filename = cls._safe_relative_path(filename)
+        fs = FileSystemStorage()
+        # Must delete before save: FileSystemStorage.save() renames on
+        # collision (e.g. "<name>_abc123.png") instead of overwriting, which
+        # would desync any fixed path callers reconstruct from `filename`.
+        if fs.exists(filename):
+            fs.delete(filename)
+        image.seek(0)
+        fs.save(filename, image)
+        return filename
+
+    @classmethod
+    def save_unique(cls, directory: str, image, min_size: int = None, max_size: int = None) -> tuple[str | None, str | None]:
+        """
+        Validates and saves an image under `directory/` with a generated
+        UUID filename, using the extension detected from the actual image
+        bytes. Use this for galleries/multi-image fields where each upload
+        needs its own filename rather than a fixed overwritten path.
+
+        Returns:
+            tuple[str | None, str | None]: (relative_path, error_message) —
+            exactly one of the two is None.
+        """
+        error = cls.validate(image, min_size=min_size, max_size=max_size)
+        if error:
+            return None, error
+
+        ext = cls._detect_format(image)
+        directory = cls._safe_relative_path(directory).strip("/")
+        filename = f"{directory}/{uuid.uuid4()}.{ext}"
+
+        fs = FileSystemStorage()
+        image.seek(0)
+        saved_name = fs.save(filename, image)
+        return saved_name, None
+
+    @classmethod
+    def delete(cls, filename: str) -> bool:
+        """
+        Deletes an image at the given storage-relative path if it exists.
+
+        Returns:
+            bool: True if a file was deleted, False if none existed.
+        """
+        filename = cls._safe_relative_path(filename)
+        fs = FileSystemStorage()
+        if not fs.exists(filename):
+            return False
+        fs.delete(filename)
+        return True
+
+    @classmethod
+    def get_url(cls, filename: str) -> str | None:
+        """
+        Builds the public URL for a previously saved image.
+
+        Args:
+            filename: Storage-relative path, e.g. "user/cover/<user_id>.png".
+
+        Returns:
+            str | None: The absolute URL, or None if no file exists there.
+        """
+        filename = cls._safe_relative_path(filename)
+        fs = FileSystemStorage()
+        if not fs.exists(filename):
+            return None
+        return f"{config('BE_DOMAIN_NAME')}{fs.url(filename)}"
 
 
 class DateTimeUtils:

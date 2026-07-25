@@ -27,11 +27,25 @@ class MentorRegistrationAPI(APIView):
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        if UserMentor.objects.filter(user_id=user_id).exists():
-            return CustomResponse(
-                general_message="A mentor request already exists for your account."
-            ).get_failure_response()
-        
+        org_id = request.data.get('org')
+
+        # Prevent duplicate PENDING or APPROVED applications for the same scope.
+        if org_id:
+            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.PENDING).exists():
+                return CustomResponse(
+                    general_message="You already have a pending mentor application for this company."
+                ).get_failure_response()
+            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.APPROVED).exists():
+                return CustomResponse(
+                    general_message="You are already an approved mentor for this company."
+                ).get_failure_response()
+        else:
+            # A user can only have one pending/approved IG mentor application at a time.
+            if UserMentor.objects.filter(user_id=user_id, mentor_tier=UserMentor.MentorTier.IG_MENTOR, status__in=[UserMentor.Status.PENDING, UserMentor.Status.APPROVED]).exists():
+                return CustomResponse(
+                    general_message="You already have an active or pending IG mentor application. You can edit your preferred IGs from your profile."
+                ).get_failure_response()
+
         serializer = serializers.MentorRegisterSerializer(
             data=request.data, context={"user_id": user_id}
         )
@@ -238,44 +252,55 @@ class MentorProfileAPI(APIView):
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
-            
+
+        data = request.data.copy()
+        data.pop('org', None)
+
         serializer = serializers.MentorUpdateSerializer(
-            mentor, data=request.data, partial=True, context={"user_id": user_id}
+            mentor, data=data, partial=True, context={"user_id": user_id}
         )
         
         if serializer.is_valid():
-            linkedin_url = serializer.validated_data.get('linkedin')
+            general_message = "Mentor profile updated successfully."
+            new_url_pending = False
+
+            if 'linkedin' in serializer.validated_data:
+                linkedin_url = serializer.validated_data.get('linkedin')
+                
+                if linkedin_url:
+                    if UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.PENDING, about="[LinkedIn URL Update Request]").exists():
+                        return CustomResponse(general_message="You already have a pending LinkedIn URL update request.").get_failure_response()
+                    
+                    UserMentor.objects.create(
+                        user_id=user_id,
+                        org=mentor.org,
+                        mentor_tier=mentor.mentor_tier,
+                        status=UserMentor.Status.PENDING,
+                        about="[LinkedIn URL Update Request]",
+                        expertise=linkedin_url,
+                        reason="User requested LinkedIn URL update from profile.",
+                        hours=mentor.hours,
+                        preferred_ig_ids=mentor.preferred_ig_ids,
+                        created_by_id=user_id,
+                        updated_by_id=user_id,
+                    )
+                    general_message = "Profile updated. LinkedIn URL change has been submitted for verification."
+                    new_url_pending = True
+                else:
+                    socials, _ = Socials.objects.get_or_create(user_id=user_id)
+                    socials.linkedin = None
+                    socials.save(update_fields=['linkedin'])
  
-            if linkedin_url:
-                # Create a verification request instead of updating directly
-                if UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.PENDING, about="[LinkedIn URL Update Request]").exists():
-                    return CustomResponse(general_message="You already have a pending LinkedIn URL update request.").get_failure_response()
- 
-            # Save other profile fields. The serializer's update method will pop 'linkedin'.
             serializer.save()
  
-            general_message = "Mentor profile updated successfully."
-            if linkedin_url:
-                UserMentor.objects.create(
-                    user_id=user_id,
-                    org=mentor.org,
-                    mentor_tier=mentor.mentor_tier,
-                    status=UserMentor.Status.PENDING,
-                    about="[LinkedIn URL Update Request]",
-                    expertise=linkedin_url,  # Store new URL here
-                    reason="User requested LinkedIn URL update from profile.", # Note for admin
-                    hours=mentor.hours,
-                    preferred_ig_ids=mentor.preferred_ig_ids,
-                    created_by_id=user_id,
-                    updated_by_id=user_id,
-                )
-                general_message = "Profile updated. LinkedIn URL change has been submitted for verification."
-
             response_serializer = serializers.MentorDetailSerializer(mentor)
             response_data = response_serializer.data
             socials = Socials.objects.filter(user_id=user_id).first()
-            # If a new URL is pending verification, omit the stale value but keep the key present so the response shape stays consistent.
-            response_data['linkedin'] = None if linkedin_url else (socials.linkedin if socials else None)
+            
+            if new_url_pending:
+                response_data['linkedin'] = None
+            else:
+                response_data['linkedin'] = socials.linkedin if socials else None
 
             return CustomResponse(
                 general_message=general_message,
@@ -373,7 +398,7 @@ class MentorVerifyAPI(APIView):
     )
     def patch(self, request, mentor_id):
         user_id = JWTUtils.fetch_user_id(request)
-        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        mentor = UserMentor.objects.select_related('verified_by', 'updated_by', 'org').filter(id=mentor_id).first()
 
         if not mentor:
             return CustomResponse(
@@ -382,14 +407,35 @@ class MentorVerifyAPI(APIView):
 
         roles = JWTUtils.fetch_role(request)
         is_admin = RoleType.ADMIN.value in roles
-        if not is_admin and not _is_company_owner_of(user_id, mentor):
+        is_owner = _is_company_owner_of(user_id, mentor)
+
+        # Authorization check
+        can_verify = False
+        if mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
+            # For company mentors, both admin and owner can verify
+            if is_admin or is_owner:
+                can_verify = True
+        else:
+            # For other tiers (like IG_MENTOR), only admin can verify
+            if is_admin:
+                can_verify = True
+        
+        if not can_verify:
             return CustomResponse(
                 general_message="You are not authorized to verify this mentor application."
             ).get_failure_response(status_code=403)
 
-        if mentor.status == UserMentor.Status.APPROVED:
+        if mentor.status in [UserMentor.Status.APPROVED, UserMentor.Status.REJECTED]:
+            actor = mentor.verified_by or mentor.updated_by
+            actor_name = "an administrator"
+            if actor:
+                if _is_company_owner_of(actor.id, mentor):
+                    actor_name = f"the company owner, {actor.full_name}"
+                else:
+                    actor_name = actor.full_name
+
             return CustomResponse(
-                general_message="Mentor is already approved."
+                general_message=f"This mentor application has already been {mentor.status.lower()} by {actor_name}."
             ).get_failure_response()
 
         serializer = serializers.MentorVerifySerializer(
