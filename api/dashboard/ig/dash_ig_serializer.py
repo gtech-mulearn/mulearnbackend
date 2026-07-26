@@ -5,7 +5,7 @@ from db.task import InterestGroup
 from db.user import User, Socials
 
 
-def _resolve_muid_list(muid_list):
+def _resolve_muid_list(muid_list, user_map=None, socials_map=None):
     """
     Given a list like [{"muid": "foo@mulearn"}, ...], fetch each user's
     details (including socials) from the DB and return an enriched list:
@@ -33,17 +33,19 @@ def _resolve_muid_list(muid_list):
     if not muids:
         return muid_list
 
-    # Batch-fetch users
-    user_objs = User.objects.filter(muid__in=muids)
-    user_map = {u.muid: u for u in user_objs}
+    if user_map is None:
+        # Batch-fetch users
+        user_objs = User.objects.filter(muid__in=muids)
+        user_map = {u.muid: u for u in user_objs}
 
-    # Batch-fetch socials keyed by user_id
-    user_ids = [u.id for u in user_objs]
-    socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
-        "user_id", "github", "facebook", "instagram", "linkedin",
-        "dribble", "behance", "stackoverflow", "medium", "hackerrank"
-    )
-    socials_map = {s["user_id"]: s for s in socials_qs}
+    if socials_map is None:
+        # Batch-fetch socials keyed by user_id
+        user_ids = [u.id for u in user_map.values() if u]
+        socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
+            "user_id", "github", "facebook", "instagram", "linkedin",
+            "dribble", "behance", "stackoverflow", "medium", "hackerrank"
+        )
+        socials_map = {s["user_id"]: s for s in socials_qs}
 
     enriched = []
     for item in muid_list:
@@ -87,7 +89,7 @@ def _resolve_muid_list(muid_list):
     return enriched
 
 
-def _resolve_ig_mentors(ig):
+def _resolve_ig_mentors(ig, mentor_links=None, mentor_socials_map=None, mentor_profiles_map=None):
     """
     Active IG mentors for this IG, read from UserIgLink (authoritative)
     rather than the legacy InterestGroup.mentors JSON column, enriched with
@@ -97,27 +99,36 @@ def _resolve_ig_mentors(ig):
     from api.dashboard.mentor.dash_mentor_helper import get_mentor_company
     from db.user import UserMentor
 
-    links = UserIgLink.objects.filter(
-        ig=ig,
-        assignment_type=UserIgLink.AssignmentType.MENTOR,
-        is_active=True,
-    ).select_related("user")
+    if mentor_links is None:
+        links = UserIgLink.objects.filter(
+            ig=ig,
+            assignment_type=UserIgLink.AssignmentType.MENTOR,
+            is_active=True,
+        ).select_related("user")
+    else:
+        links = mentor_links
 
     user_ids = [link.user_id for link in links]
-    socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
-        "user_id", "github", "facebook", "instagram", "linkedin",
-        "dribble", "behance", "stackoverflow", "medium", "hackerrank"
-    )
-    socials_map = {s["user_id"]: s for s in socials_qs}
-    mentor_profiles = {
-        m.user_id: m
-        for m in UserMentor.objects.filter(user_id__in=user_ids).select_related("org")
-    }
+
+    if mentor_socials_map is None:
+        socials_qs = Socials.objects.filter(user_id__in=user_ids).values(
+            "user_id", "github", "facebook", "instagram", "linkedin",
+            "dribble", "behance", "stackoverflow", "medium", "hackerrank"
+        )
+        mentor_socials_map = {s["user_id"]: s for s in socials_qs}
+
+    if mentor_profiles_map is None:
+        mentor_profiles = {
+            m.user_id: m
+            for m in UserMentor.objects.filter(user_id__in=user_ids).select_related("org")
+        }
+    else:
+        mentor_profiles = mentor_profiles_map
 
     mentors = []
     for link in links:
         user = link.user
-        raw_socials = socials_map.get(user.id)
+        raw_socials = mentor_socials_map.get(user.id)
         socials = {
             key: (raw_socials.get(key) if raw_socials else None)
             for key in ["github", "facebook", "instagram", "linkedin",
@@ -183,6 +194,8 @@ class InterestGroupSerializer(serializers.ModelSerializer):
         ]
 
     def get_members(self, obj):
+        if hasattr(obj, "members"):
+            return obj.members
         return obj.user_ig_link_ig.all().count()
 
     def to_representation(self, instance):
@@ -206,20 +219,40 @@ class InterestGroupSerializer(serializers.ModelSerializer):
                 except Exception:
                     pass  # leave as-is (plain string)
 
+        # Look up maps from context
+        user_map = self.context.get("user_map")
+        socials_map = self.context.get("socials_map")
+        mentor_profiles_map = self.context.get("mentor_profiles_map")
+        mentor_socials_map = self.context.get("mentor_socials_map")
+
         # MUID fields — parse + enrich with user details
         for field in ["leads", "thinktank"]:
             val = data.get(field)
             if isinstance(val, str) and val:
                 try:
                     parsed = json.loads(val)
-                    data[field] = _resolve_muid_list(parsed)
+                    data[field] = _resolve_muid_list(parsed, user_map=user_map, socials_map=socials_map)
                 except Exception:
                     pass  # leave as-is if parsing fails
 
         # 'mentors' is served from UserIgLink (the authoritative IG-permission
         # table), not the legacy InterestGroup.mentors JSON column, so the IG
         # detail page always reflects actual mentor authority.
-        data["mentors"] = _resolve_ig_mentors(instance)
+        from db.task import UserIgLink
+        if hasattr(instance, "_prefetched_objects_cache") and "user_ig_link_ig" in instance._prefetched_objects_cache:
+            mentor_links = [
+                link for link in instance.user_ig_link_ig.all()
+                if link.assignment_type == UserIgLink.AssignmentType.MENTOR and link.is_active
+            ]
+        else:
+            mentor_links = None
+
+        data["mentors"] = _resolve_ig_mentors(
+            instance,
+            mentor_links=mentor_links,
+            mentor_socials_map=mentor_socials_map,
+            mentor_profiles_map=mentor_profiles_map
+        )
 
         return data
 
@@ -321,16 +354,36 @@ class PublicInterestGroupSerializer(serializers.ModelSerializer):
     def to_representation(self, instance):
         data = super().to_representation(instance)
 
+        # Look up maps from context
+        user_map = self.context.get("user_map")
+        socials_map = self.context.get("socials_map")
+        mentor_profiles_map = self.context.get("mentor_profiles_map")
+        mentor_socials_map = self.context.get("mentor_socials_map")
+
         for field in ["leads", "thinktank"]:
             val = data.get(field)
             if isinstance(val, str) and val:
                 try:
                     parsed = json.loads(val)
-                    data[field] = _resolve_muid_list(parsed)
+                    data[field] = _resolve_muid_list(parsed, user_map=user_map, socials_map=socials_map)
                 except Exception:
                     pass
 
-        data["mentors"] = _resolve_ig_mentors(instance)
+        from db.task import UserIgLink
+        if hasattr(instance, "_prefetched_objects_cache") and "user_ig_link_ig" in instance._prefetched_objects_cache:
+            mentor_links = [
+                link for link in instance.user_ig_link_ig.all()
+                if link.assignment_type == UserIgLink.AssignmentType.MENTOR and link.is_active
+            ]
+        else:
+            mentor_links = None
+
+        data["mentors"] = _resolve_ig_mentors(
+            instance,
+            mentor_links=mentor_links,
+            mentor_socials_map=mentor_socials_map,
+            mentor_profiles_map=mentor_profiles_map
+        )
 
         return data
 

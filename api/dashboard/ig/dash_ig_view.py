@@ -1036,6 +1036,77 @@ class InterestGroupRequestAPI(APIView):
         ).get_success_response()
 
 
+def get_ig_list_context(ig_queryset):
+    import json
+    from db.user import User, Socials, UserMentor
+    from db.task import UserIgLink
+
+    # 1. Collect all MUIDs from leads and thinktank columns across all IGs
+    all_muids = set()
+    for ig in ig_queryset:
+        for field in ["leads", "thinktank"]:
+            val = getattr(ig, field, None)
+            if isinstance(val, str) and val:
+                try:
+                    parsed = json.loads(val)
+                    if isinstance(parsed, list):
+                        for item in parsed:
+                            if isinstance(item, dict):
+                                muid = item.get("muid")
+                                if muid:
+                                    all_muids.add(muid)
+                except Exception:
+                    pass
+
+    # 2. Batch-fetch users by these MUIDs
+    user_map = {}
+    if all_muids:
+        users = User.objects.filter(muid__in=all_muids)
+        user_map = {u.muid: u for u in users}
+
+    # 3. Collect all user IDs (leads + thinktank users + prefetched mentors)
+    all_user_ids = set()
+    for u in user_map.values():
+        all_user_ids.add(u.id)
+
+    # For mentors, we retrieve them from the prefetched user_ig_link_ig
+    for ig in ig_queryset:
+        if hasattr(ig, "_prefetched_objects_cache") and "user_ig_link_ig" in ig._prefetched_objects_cache:
+            links = [
+                link for link in ig.user_ig_link_ig.all()
+                if link.assignment_type == UserIgLink.AssignmentType.MENTOR and link.is_active
+            ]
+        else:
+            links = UserIgLink.objects.filter(
+                ig=ig,
+                assignment_type=UserIgLink.AssignmentType.MENTOR,
+                is_active=True,
+            ).select_related("user")
+        
+        for link in links:
+            all_user_ids.add(link.user_id)
+
+    # 4. Batch-fetch socials and mentor profiles for all these users
+    socials_map = {}
+    mentor_profiles_map = {}
+    if all_user_ids:
+        socials_qs = Socials.objects.filter(user_id__in=all_user_ids).values(
+            "user_id", "github", "facebook", "instagram", "linkedin",
+            "dribble", "behance", "stackoverflow", "medium", "hackerrank"
+        )
+        socials_map = {s["user_id"]: s for s in socials_qs}
+
+        mentor_profiles = UserMentor.objects.filter(user_id__in=all_user_ids).select_related("org")
+        mentor_profiles_map = {m.user_id: m for m in mentor_profiles}
+
+    return {
+        "user_map": user_map,
+        "socials_map": socials_map,
+        "mentor_profiles_map": mentor_profiles_map,
+        "mentor_socials_map": socials_map,
+    }
+
+
 class InterestGroupListApi(APIView):
     @method_decorator(cache_page(60 * 10))
     @extend_schema(
@@ -1045,14 +1116,15 @@ class InterestGroupListApi(APIView):
     )
     def get(self, request):
         from utils.types import InterestGroupStatus
-        ig = (
+        ig = list(
             InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
+            .prefetch_related("user_ig_link_ig__user")
             .annotate(members=Count("user_ig_link_ig"))
         )
 
-        serializer = InterestGroupSerializer(ig, many=True)
+        context = get_ig_list_context(ig)
+        serializer = InterestGroupSerializer(ig, many=True, context=context)
 
         return CustomResponse(
             response={"interestGroup": serializer.data}
@@ -1071,11 +1143,11 @@ class PublicInterestGroupListApi(APIView):
         from django.db.models import Prefetch
         from db.impact_project import ImpactProject, ImpactProjectUserLink
 
-        ig = (
+        ig = list(
             InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
             .prefetch_related(
-                "user_ig_link_ig",
+                "user_ig_link_ig__user",
                 Prefetch(
                     "impact_project_ig",
                     queryset=ImpactProject.objects.select_related("created_by", "updated_by").prefetch_related(
@@ -1090,7 +1162,8 @@ class PublicInterestGroupListApi(APIView):
             .annotate(members=Count("user_ig_link_ig"))
         )
 
-        serializer = PublicInterestGroupSerializer(ig, many=True)
+        context = get_ig_list_context(ig)
+        serializer = PublicInterestGroupSerializer(ig, many=True, context=context)
 
         return CustomResponse(
             response={"interestGroups": serializer.data}
