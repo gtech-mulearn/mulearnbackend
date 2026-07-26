@@ -254,7 +254,7 @@ class InterestGroupAPI(APIView):
             data=ig_serializer_data, pagination=paginated_queryset.get("pagination")
         )
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.IG_LEAD.value])
     @extend_schema(
         tags=['Dashboard - Ig'],
         description=(
@@ -455,7 +455,7 @@ class InterestGroupAPI(APIView):
 
         return CustomResponse(message=serializer.errors).get_failure_response()
 
-    @role_required([RoleType.ADMIN.value])
+    @role_required([RoleType.ADMIN.value, RoleType.IG_LEAD.value])
     @extend_schema(tags=['Dashboard - Ig'], description="Delete Interest Group.",
         responses={200: InterestGroupSerializer},
     )
