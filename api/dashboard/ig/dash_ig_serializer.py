@@ -147,6 +147,9 @@ def _resolve_ig_mentors(ig):
     return mentors
 
 
+from api.dashboard.ig.impact_project_serializer import ImpactProjectSerializer
+
+
 class InterestGroupSerializer(serializers.ModelSerializer):
 
     updated_by = serializers.CharField(source="updated_by.full_name")
@@ -165,6 +168,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
     sponsor_company_name = serializers.SerializerMethodField()
     sponsor_company_logo = serializers.SerializerMethodField()
     community_partners = serializers.SerializerMethodField()
+    impact_projects = ImpactProjectSerializer(source="impact_project_ig", many=True, read_only=True)
 
     class Meta:
         model = InterestGroup
@@ -197,6 +201,7 @@ class InterestGroupSerializer(serializers.ModelSerializer):
             "updated_at",
             "created_by",
             "created_at",
+            "impact_projects",
         ]
 
     def get_members(self, obj):
@@ -372,3 +377,35 @@ class InterestGroupRequestGetSerializer(InterestGroupSerializer):
                 if company_link:
                     return company_link.org.title
         return None
+
+
+class PublicInterestGroupSerializer(serializers.ModelSerializer):
+    impact_projects = ImpactProjectSerializer(source="impact_project_ig", many=True, read_only=True)
+
+    class Meta:
+        model = InterestGroup
+        fields = [
+            "id",
+            "name",
+            "leads",
+            "mentors",
+            "thinktank",
+            "impact_projects",
+        ]
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+
+        for field in ["leads", "thinktank"]:
+            val = data.get(field)
+            if isinstance(val, str) and val:
+                try:
+                    parsed = json.loads(val)
+                    data[field] = _resolve_muid_list(parsed)
+                except Exception:
+                    pass
+
+        data["mentors"] = _resolve_ig_mentors(instance)
+
+        return data
+
