@@ -299,7 +299,8 @@ class CompanyAdminSummaryAPI(APIView):
             "rejected_companies": companies.filter(status="rejected").count(),
             "total_jobs": CompanyJob.objects.count(),
             "total_company_tasks": TaskList.objects.filter(
-                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value
+                requested_by__user_role_link_user__role__title=RoleType.COMPANY.value,
+                is_deleted=False,
             ).count()
         }
         
@@ -358,23 +359,41 @@ class CompanyMentorNominateAPI(APIView):
 
         mentor = serializer.save()
 
-        from api.notification.notifications_utils import NotificationUtils
-        from db.user import User
-        nominator = User.objects.filter(id=user_id).first()
-        NotificationUtils.insert_notification(
-            user=mentor.user,
-            title=f"Company Mentor nomination: {company.name}"[:50],
-            description=(
-                f"{nominator.full_name if nominator else 'Your company'} nominated you as a "
-                f"Company Mentor for {company.name}. Your application is pending approval."
-            )[:200],
-            button='View',
-            url='/mentor/status/',
-            created_by=nominator,
-        )
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User, UserRoleLink
+            from utils.types import RoleType
+            from django.conf import settings
+            nominator = User.every.filter(id=user_id).first()
+            
+            # Notify the nominated user
+            NotificationUtils.insert_notification(
+                user=mentor.user,
+                title=f"Company Mentor Approved: {company.name}"[:50],
+                description=(
+                    f"You have been approved as a Company Mentor for {company.name}."
+                )[:200],
+                button='View',
+                url='/mentor/status/',
+                created_by=nominator,
+            )
+
+            # Notify Admins
+            admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+            for admin_link in admin_roles:
+                NotificationUtils.insert_notification(
+                    user=admin_link.user,
+                    title="Company Mentor Nominated",
+                    description=f"{nominator.full_name} (owner of {company.name}) has directly nominated {mentor.user.full_name} as a mentor.",
+                    button="View Profile",
+                    url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{mentor.id}/",
+                    created_by=nominator,
+                )
+        except Exception:
+            pass
 
         return CustomResponse(
-            general_message="User nominated as Company Mentor. Pending approval.",
+            general_message="User approved as Company Mentor successfully.",
             response=serializers.CompanyMentorListSerializer(mentor).data,
         ).get_success_response()
 
@@ -412,4 +431,3 @@ class CompanyMentorListAPI(APIView):
 
         serializer = serializers.CompanyMentorListSerializer(mentors, many=True)
         return CustomResponse(response=serializer.data).get_success_response()
-

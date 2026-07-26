@@ -1,7 +1,7 @@
 import uuid
 from rest_framework import serializers
-
-from db.user import UserMentor, UserRoleLink, Role, MentorScopeGrant
+import re
+from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant
 
 
 class MentorScopeGrantSerializer(serializers.ModelSerializer):
@@ -21,12 +21,20 @@ class MentorScopeGrantSerializer(serializers.ModelSerializer):
             "revoked_at",
         ]
 from db.task import InterestGroup, UserIgLink
-from utils.types import RoleType
+from utils.types import RoleType, OrganizationType
 from utils.utils import DateTimeUtils
 from django.db import transaction
 from django.db.models import Q
+from db.organization import Organization
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
+    org = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(org_type=OrganizationType.COMPANY.value),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = UserMentor
         fields = [
@@ -34,7 +42,9 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             "expertise",
             "reason",
             "hours",
-            "preferred_ig_ids"
+            "preferred_ig_ids",
+            "linkedin",
+            "org",
         ]
 
     def validate_preferred_ig_ids(self, value):
@@ -45,30 +55,111 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
         return value
 
+    def validate_linkedin(self, value):
+        if value:
+            linkedin_pattern = r'^(https?://)?(www\.)?linkedin\.com/in/[\w\d\-._~:/?#\[\]@!$&\'()*+,;=]+/?$'
+            if not re.match(linkedin_pattern, value):
+                raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
+        return value
+
     def create(self, validated_data):
         user_id = self.context["user_id"]
+        linkedin_url = validated_data.pop('linkedin', None)
+        org = validated_data.get('org')
+
+        if linkedin_url:
+            reason = validated_data.get('reason', '')
+            # Append linkedin url to reason for admin verification
+            validated_data['reason'] = f"{reason}\n\n[LINKEDIN_URL_PENDING:{linkedin_url}]"
         
+        if org:
+            mentor_tier = UserMentor.MentorTier.COMPANY_MENTOR
+        else:
+            mentor_tier = UserMentor.MentorTier.IG_MENTOR
+
         mentor = UserMentor.objects.create(
             user_id=user_id,
             status=UserMentor.Status.PENDING,
-            mentor_tier=UserMentor.MentorTier.IG_MENTOR,
+            mentor_tier=mentor_tier,
             created_by_id=user_id,
             updated_by_id=user_id,
             created_at=DateTimeUtils.get_current_utc_time(),
             updated_at=DateTimeUtils.get_current_utc_time(),
             **validated_data
         )
+
+        # Wrap notification sending in a try-except block to prevent failures
+        # from rolling back the user request and locking them out.
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User, UserRoleLink
+            from utils.types import RoleType
+            from db.company import Company
+            from django.conf import settings
+
+            requester = User.every.filter(id=user_id).first()
+            admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+
+            if org:
+                try:
+                    company = Company.objects.get(org=org, status="verified")
+                    owner_user = company.company_user
+                    NotificationUtils.insert_notification(
+                        user=owner_user,
+                        title="New Mentor Application",
+                        description=f"{requester.full_name} has applied to be a mentor for your company.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/mentor/list/",
+                        created_by=requester,
+                    )
+                except Company.DoesNotExist:
+                    pass
+
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="New Company Mentor Application",
+                        description=f"{requester.full_name} has applied to be a mentor for {org.title}.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+            else:
+                for admin_link in admin_roles:
+                    NotificationUtils.insert_notification(
+                        user=admin_link.user,
+                        title="New IG Mentor Application",
+                        description=f"{requester.full_name} has applied to be an IG mentor.",
+                        button="View Application",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
+                        created_by=requester,
+                    )
+        except Exception:
+            # Silently fail notification errors to prevent user lockout.
+            # A proper logging/monitoring mechanism should be here.
+            pass
+
         return mentor
 
 class MentorUpdateSerializer(serializers.ModelSerializer):
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
+    org = serializers.PrimaryKeyRelatedField(
+        queryset=Organization.objects.filter(org_type=OrganizationType.COMPANY.value),
+        required=False,
+        allow_null=True,
+    )
+
     class Meta:
         model = UserMentor
         fields = [
+            "id",
             "about",
             "expertise",
             "reason",
             "hours",
-            "preferred_ig_ids"
+            "preferred_ig_ids",
+            "linkedin",
+            "org",
         ]
 
     def validate_preferred_ig_ids(self, value):
@@ -78,6 +169,13 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             for ig_id in value:
                 if not InterestGroup.objects.filter(id=ig_id).exists():
                     raise serializers.ValidationError(f"Invalid IG ID: {ig_id}")
+        return value
+
+    def validate_linkedin(self, value):
+        if value:
+            linkedin_pattern = r'^(https?://)?(www\.)?linkedin\.com/in/[\w\d\-._~:/?#\[\]@!$&\'()*+,;=]+/?$'
+            if not re.match(linkedin_pattern, value):
+                raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
         return value
 
     def validate(self, data):
@@ -95,6 +193,19 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         validated_data['updated_by_id'] = self.context.get("user_id", instance.user_id)
 
         igs_in_payload = "preferred_ig_ids" in validated_data
+        validated_data.pop('linkedin', None)
+
+        if instance.status == UserMentor.Status.APPROVED:
+            validated_data.pop('org', None)
+
+        # If org is part of the update, adjust the mentor_tier accordingly.
+        # This only affects PENDING/REJECTED applications via MentorRegistrationAPI.
+        if 'org' in validated_data:
+            org = validated_data.get('org')
+            if org:
+                validated_data['mentor_tier'] = UserMentor.MentorTier.COMPANY_MENTOR
+            else:
+                validated_data['mentor_tier'] = UserMentor.MentorTier.IG_MENTOR
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
@@ -183,12 +294,51 @@ class MentorVerifySerializer(serializers.Serializer):
     def update(self, instance, validated_data):
         user_id = self.context["user_id"]
         status = validated_data.get("status")
+
+        # Handle special case for LinkedIn update request from profile
+        if instance.about == "[LinkedIn URL Update Request]":
+            if status == UserMentor.Status.APPROVED:
+                linkedin_url = instance.expertise
+                socials, _ = Socials.objects.get_or_create(
+                    user=instance.user,
+                    defaults={'created_by_id': user_id, 'updated_by_id': user_id}
+                )
+                socials.linkedin = linkedin_url
+                socials.updated_by_id = user_id
+                socials.save(update_fields=['linkedin', 'updated_by_id'])
+                
+                instance.delete()
+                return instance
+            else:  
+                instance.status = UserMentor.Status.REJECTED
+                instance.verification_note = validated_data.get("verification_note", "LinkedIn URL update rejected.")
+                instance.updated_by_id = user_id
+                instance.updated_at = DateTimeUtils.get_current_utc_time()
+                instance.save()
+                return instance
         
         instance.status = status
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         
         if status == UserMentor.Status.APPROVED:
+            # Check for and process LinkedIn URL from reason field for new registrations
+            if instance.reason and "[LINKEDIN_URL_PENDING:" in instance.reason:
+                match = re.search(r'\[LINKEDIN_URL_PENDING:(.*?)\]', instance.reason, re.DOTALL)
+                if match:
+                    linkedin_url = match.group(1).strip()
+                    if linkedin_url:
+                        socials, _ = Socials.objects.get_or_create(
+                            user=instance.user,
+                            defaults={'created_by_id': user_id, 'updated_by_id': user_id}
+                        )
+                        socials.linkedin = linkedin_url
+                        socials.updated_by_id = user_id
+                        socials.save(update_fields=['linkedin', 'updated_by_id'])
+                    
+                    # Clean up the reason field
+                    instance.reason = instance.reason.replace(match.group(0), '').strip()
+
             instance.verified_by_id = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
 
@@ -268,8 +418,55 @@ class MentorVerifySerializer(serializers.Serializer):
             instance.verification_note = validated_data.get("verification_note")
             
         instance.save()
-        return instance
 
+        try:
+            if status == UserMentor.Status.REJECTED:
+                from db.company import Company
+                from db.user import User
+                from api.notification.notifications_utils import NotificationUtils
+                from django.conf import settings
+
+                actor = User.every.filter(id=user_id).first()
+                is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
+                is_owner_actor = False
+                
+                if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
+                    is_owner_actor = Company.objects.filter(
+                        company_user=actor,
+                        org=instance.org,
+                        status="verified"
+                    ).exists()
+
+                all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+
+                if is_owner_actor:
+                    for admin_link in all_admins:
+                        NotificationUtils.insert_notification(
+                            user=admin_link.user,
+                            title="Mentor Application Rejected by Company",
+                            description=f"{actor.full_name} (owner of {instance.org.title}) has rejected the mentor application for {instance.user.full_name}.",
+                            button="View Details",
+                            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
+                            created_by=actor,
+                        )
+                elif is_admin_actor:
+                    tier_name = "IG" if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR else "Company"
+                    for admin_link in all_admins:
+                        if admin_link.user == actor:
+                            continue
+                        
+                        NotificationUtils.insert_notification(
+                            user=admin_link.user,
+                            title=f"{tier_name} Mentor Application Rejected",
+                            description=f"Admin {actor.full_name} has rejected the {tier_name.lower()} mentor application for {instance.user.full_name}.",
+                            button="View Details",
+                            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
+                            created_by=actor,
+                        )
+        except Exception:
+            pass
+
+        return instance
 
 from db.mentor import MentorshipSession
 from db.organization import Organization

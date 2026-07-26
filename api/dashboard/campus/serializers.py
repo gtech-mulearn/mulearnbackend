@@ -259,15 +259,10 @@ class CampusDetailsSerializer(serializers.ModelSerializer):
             ).aggregate(total_karma=Sum("karma"))["total_karma"] or 0
         )
     def get_active_ig_count(self, obj):
-        return (
-            InterestGroup.objects.filter(
-                user_ig_link_ig__user__user_organization_link_user__org=obj.org,
-                user_ig_link_ig__user__user_organization_link_user__verified=True,
-                status="active",
-            )
-            .distinct()
-            .count()
-        )
+        return CampusIGChapter.objects.filter(
+            org=obj.org,
+            is_active=True,
+        ).count()
 
     def get_social_links(self, obj):
         links = CampusSocialLink.objects.filter(org=obj.org)

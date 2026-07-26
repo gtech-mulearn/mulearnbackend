@@ -32,7 +32,7 @@ class CompanyTaskCreateSerializer(serializers.ModelSerializer):
         }
 
     def validate_hashtag(self, value):
-        """Global hashtag uniqueness."""
+        """Global hashtag uniqueness, including soft-deleted tasks (hashtags are never reused)."""
         qs = TaskList.objects.filter(hashtag=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -65,7 +65,7 @@ class CompanyTaskUpdateSerializer(serializers.ModelSerializer):
         }
 
     def validate_hashtag(self, value):
-        """Exclude current instance from uniqueness check on edit."""
+        """Exclude current instance from uniqueness check on edit; soft-deleted tasks still count."""
         qs = TaskList.objects.filter(hashtag=value)
         if self.instance:
             qs = qs.exclude(pk=self.instance.pk)
@@ -154,7 +154,7 @@ class CompanyTaskPatchSerializer(serializers.Serializer):
         if not value.startswith('#'):
             raise serializers.ValidationError("hashtag must start with '#'")
         
-        # Unique validation excluding the current task instance
+        # Unique validation excluding the current task instance; soft-deleted tasks still count
         task_id = self.context.get("task_id")
         from db.task import TaskList
         qs = TaskList.objects.filter(hashtag__iexact=value)

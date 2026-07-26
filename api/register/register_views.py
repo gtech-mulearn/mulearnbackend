@@ -54,11 +54,14 @@ class ConnectDiscordAPI(APIView):
             data=data,
             headers=headers,
         )
-        access_token = token_response.json().get("access_token")
         if token_response.status_code != 200:
+            # Discord can return a non-JSON error body (e.g. a gateway error page) —
+            # check the status before parsing, otherwise .json() can raise and turn
+            # a normal failure into an unhandled 500.
             return CustomResponse(
                 general_message="Failed to get access token"
             ).get_failure_response()
+        access_token = token_response.json().get("access_token")
         onboard_user.delay(access_token, user_id)
         return CustomResponse(
             general_message="You will be added to the discord server soon"
@@ -305,18 +308,15 @@ class LearningCircleUserViewAPI(APIView):
         if user is None:
             return CustomResponse(general_message="Invalid muid").get_failure_response()
 
-        serializer = serializers.LearningCircleUserSerializer(user)
-        id, muid, full_name, email, phone = serializer.data.values()
-
-        name = full_name
+        data = serializers.LearningCircleUserSerializer(user).data
 
         return CustomResponse(
             response={
-                "id": id,
-                "muid": muid,
-                "name": name,
-                "email": email,
-                "phone": phone,
+                "id": data["id"],
+                "muid": data["muid"],
+                "name": data["full_name"],
+                "email": data["email"],
+                "phone": data["mobile"],
             }
         ).get_success_response()
 
@@ -485,6 +485,10 @@ class DistrictAPI(APIView):
 
 class CollegeAPI(APIView):
     MAX_RESULTS = 20
+    # Large districts (e.g. Bengaluru, Mumbai, Ernakulam) can have 100-200+
+    # affiliated colleges, so a district-scoped browse needs a higher cap
+    # than the typeahead search, not an unbounded queryset.
+    DISTRICT_MAX_RESULTS = 500
 
     @extend_schema(
         tags=['Register'],
@@ -508,8 +512,16 @@ class CollegeAPI(APIView):
         if search_query:
             org_queryset = org_queryset.filter(title__icontains=search_query)
 
-        # Limit results to prevent memory issues
-        org_queryset = org_queryset[:self.MAX_RESULTS]
+        org_queryset = org_queryset.order_by("title")
+
+        # Cap results for a free-text search (typeahead) or a fully unfiltered
+        # browse (memory safety, since that spans every college nationwide).
+        # A district-scoped browse gets a much higher cap instead of no cap at
+        # all, since some districts have 100-200+ affiliated colleges.
+        if search_query or not district_id:
+            org_queryset = org_queryset[:self.MAX_RESULTS]
+        else:
+            org_queryset = org_queryset[:self.DISTRICT_MAX_RESULTS]
 
         department_queryset = Department.objects.all()
 
@@ -539,7 +551,7 @@ class SchoolAPI(APIView):
         org_queryset = Organization.objects.filter(
             Q(org_type=OrganizationType.SCHOOL.value),
             Q(district_id=request.data.get("district")),
-        )
+        ).order_by("title")
 
         college_serializer_data = serializers.OrgSerializer(
             org_queryset, many=True
@@ -562,7 +574,7 @@ class CommunityAPI(APIView):
     def get(self, request):
         community_queryset = Organization.objects.filter(
             org_type=OrganizationType.COMMUNITY.value
-        )
+        ).order_by("title")
 
         community_serializer_data = serializers.OrgSerializer(
             community_queryset, many=True
@@ -581,7 +593,9 @@ class AreaOfInterestAPI(APIView):
         responses={200: serializers.AreaOfInterestAPISerializer},
     )
     def get(self, request):
-        aoi_queryset = InterestGroup.objects.all()
+        # Only "active" IGs should be offered as an interest during registration —
+        # requested/rejected/cancelled ones aren't real, selectable groups yet.
+        aoi_queryset = InterestGroup.objects.filter(status="active")
 
         aoi_serializer_data = serializers.AreaOfInterestAPISerializer(
             aoi_queryset, many=True
@@ -599,7 +613,10 @@ class UserEmailVerificationAPI(APIView):
     def post(self, request):
         user_email = request.data.get("email")
 
-        if user := User.objects.filter(email=user_email).first():
+        # User.every (not User.objects/ActiveUserManager) — a suspended user's email
+        # still occupies the unique constraint, so it must count as "exists" here too,
+        # otherwise registration proceeds and fails later with a DB IntegrityError.
+        if user := User.every.filter(email=user_email).first():
             return CustomResponse(
                 general_message="This email already exists", response={"value": True}
             ).get_success_response()
@@ -636,7 +653,10 @@ class UserStateAPI(APIView):
         responses={200: serializers.UserStateSerializer},
     )
     def get(self, request):
-        country_name = request.data.get("country")
+        # GET requests carry params in the query string, not a body — request.data
+        # is empty for a normal GET call, which made this endpoint always report
+        # "No country data available" regardless of what the client sent.
+        country_name = request.query_params.get("country")
 
         country_object = Country.objects.filter(name=country_name).first()
 
@@ -664,7 +684,8 @@ class UserZoneAPI(APIView):
         responses={200: serializers.UserZoneSerializer},
     )
     def get(self, request):
-        state_name = request.data.get("state")
+        # Same GET/query-param fix as UserStateAPI — request.data is empty on GET.
+        state_name = request.query_params.get("state")
 
         state_object = State.objects.filter(name=state_name).first()
 

@@ -120,7 +120,7 @@ def _recent_activity(org, limit):
 
 
 def _campus_stats(org, since):
-    members = UserOrganizationLink.objects.filter(org=org,verified=True)
+    members = UserOrganizationLink.objects.filter(org=org, verified=True)
     active_members = members.filter(user__wallet_user__karma_last_updated_at__gte=since).count()
     total_karma = members.aggregate(total=Sum("user__wallet_user__karma")).get("total") or 0
     active_circles = LearningCircle.objects.filter(org=org).count()

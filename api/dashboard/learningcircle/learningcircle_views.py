@@ -5,7 +5,7 @@ import uuid
 
 import requests
 from django.db import transaction
-from django.db.models import Sum, Q
+from django.db.models import Count, Sum, Q
 from django.http import HttpResponse
 from rest_framework.views import APIView
 
@@ -56,20 +56,19 @@ class LearningCircleView(APIView):
     def get(self, request, circle_id: str = None):
         user_id = JWTUtils.fetch_user_id(request)
         if circle_id:
-            learning_circle = LearningCircle.objects.get(id=circle_id)
-            # circle_meetings = CircleMeetingLog.objects.filter(
-            #     circle_id=learning_circle, is_report_submitted=True
-            # )
+            learning_circle = LearningCircle.objects.select_related("ig", "org", "created_by").annotate(
+                total_members=Count('user_circle_link_circle', filter=Q(user_circle_link_circle__accepted=True))
+            ).get(id=circle_id)
             serializer = LearningCircleDetailSerializer(learning_circle)
-            # meetings_serializer = CircleMeetingLogListSerializer(
-            #     circle_meetings, many=True
-            # )
             return CustomResponse(
                 general_message="Learning Circle fetched successfully",
                 response={**serializer.data},
             ).get_success_response()
         learning_circles = (
             LearningCircle.objects.all()
+            .annotate(
+                total_members=Count('user_circle_link_circle', filter=Q(user_circle_link_circle__accepted=True))
+            )
             .order_by("-created_at", "-updated_at")
             .select_related("ig", "org", "created_by")
         )
@@ -893,9 +892,6 @@ class LearningCircleMeetingListAPI(APIView):
         participated = request_data.get("participated", "0")
         saved = str(saved).lower() in ("true", "1")
         participated = str(participated).lower() in ("true", "1")
-        # no_location = request_data.get("no_location")
-        lat = request_data.get("lat")
-        lon = request_data.get("lon")
         user_id = None
         if JWTUtils.is_jwt_authenticated(request):
             user_id = JWTUtils.fetch_user_id(request)
@@ -917,14 +913,6 @@ class LearningCircleMeetingListAPI(APIView):
 
         if category != "all" and isinstance(category, str):
             category = [category]
-        # if not no_location and not lat and not lon:
-        #     user_ip = request.META.get("REMOTE_ADDR")
-        #     ipinfo_api_url = f"http://ip-api.com/json/{user_ip}?fields=status,lat,lon"
-        #     response = requests.get(ipinfo_api_url)
-        #     location_data = response.json()
-        #     if location_data.get("status") == "success":
-        #         lat = location_data.get("lat")
-        #         lon = location_data.get("lon")
         if saved:
             filter = Q(user_id=user_id, is_joined=False)
         elif participated:
@@ -942,9 +930,6 @@ class LearningCircleMeetingListAPI(APIView):
             filter = Q(id__in=user_meetups)
         else:
             filter = Q()
-            # filter = Q(
-            #     meet_time__gte=DateTimeUtils.get_current_utc_time() - timedelta(hours=2)
-            # ) | Q(id__in=user_meetups)
         meetings = CircleMeetingLog.objects.filter(filter).order_by("meet_time")
         if category and category != "all" and isinstance(category, list):
             meetings = meetings.select_related("circle_id__ig").filter(

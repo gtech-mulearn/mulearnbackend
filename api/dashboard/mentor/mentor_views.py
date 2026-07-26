@@ -1,11 +1,13 @@
+import re
 from rest_framework.views import APIView
-from django.db.models import Q
+from django.db.models import Q, Case, When
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
-from utils.types import RoleType
+from utils.types import RoleType, OrganizationType
 from utils.utils import CommonUtils
-from db.user import UserMentor
+from db.user import UserMentor, Socials
 from db.mentor import MentorshipSession
+from db.organization import Organization
 from db.task import KarmaActivityLog
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, inline_serializer
 from rest_framework import serializers as rest_serializers
@@ -24,11 +26,25 @@ class MentorRegistrationAPI(APIView):
     )
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        if UserMentor.objects.filter(user_id=user_id).exists():
-            return CustomResponse(
-                general_message="A mentor request already exists for your account."
-            ).get_failure_response()
+
+        org_id = request.data.get('org')
+
+        # Prevent duplicate PENDING or APPROVED applications for the same scope.
+        if org_id:
+            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.PENDING).exists():
+                return CustomResponse(
+                    general_message="You already have a pending mentor application for this company."
+                ).get_failure_response()
+            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.APPROVED).exists():
+                return CustomResponse(
+                    general_message="You are already an approved mentor for this company."
+                ).get_failure_response()
+        else:
+            # A user can only have one pending/approved IG mentor application at a time.
+            if UserMentor.objects.filter(user_id=user_id, mentor_tier=UserMentor.MentorTier.IG_MENTOR, status__in=[UserMentor.Status.PENDING, UserMentor.Status.APPROVED]).exists():
+                return CustomResponse(
+                    general_message="You already have an active or pending IG mentor application. You can edit your preferred IGs from your profile."
+                ).get_failure_response()
 
         serializer = serializers.MentorRegisterSerializer(
             data=request.data, context={"user_id": user_id}
@@ -36,9 +52,11 @@ class MentorRegistrationAPI(APIView):
 
         if serializer.is_valid():
             serializer.save()
+
+            response_data = serializer.data
             return CustomResponse(
                 general_message="Mentor registration submitted successfully.",
-                response=serializer.data
+                response=response_data
             ).get_success_response()
             
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -51,6 +69,7 @@ class MentorRegistrationAPI(APIView):
     )
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         mentor = UserMentor.objects.filter(user_id=user_id).first()
 
         if not mentor:
@@ -68,6 +87,12 @@ class MentorRegistrationAPI(APIView):
         )
 
         if serializer.is_valid():
+            if 'linkedin' in serializer.validated_data:
+                linkedin_url = serializer.validated_data.get('linkedin')
+                socials, created = Socials.objects.get_or_create(user_id=user_id)
+                socials.linkedin = linkedin_url or None
+                socials.save(update_fields=['linkedin'])
+
             if mentor.status == UserMentor.Status.REJECTED:
                 serializer.save(status=UserMentor.Status.PENDING, verification_note=None)
                 msg = "Mentor registration updated and resubmitted successfully."
@@ -75,9 +100,13 @@ class MentorRegistrationAPI(APIView):
                 serializer.save()
                 msg = "Mentor application updated successfully."
 
+            response_data = serializer.data
+            socials = Socials.objects.filter(user_id=user_id).first()
+            response_data['linkedin'] = socials.linkedin if socials else None
+
             return CustomResponse(
                 general_message=msg,
-                response=serializer.data
+                response=response_data
             ).get_success_response()
             
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -198,9 +227,14 @@ class MentorProfileAPI(APIView):
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
-            
+
         serializer = serializers.MentorDetailSerializer(mentor)
-        return CustomResponse(response=serializer.data).get_success_response()
+        response_data = serializer.data
+
+        socials = Socials.objects.filter(user_id=user_id).first()
+        response_data['linkedin'] = socials.linkedin if socials else None
+
+        return CustomResponse(response=response_data).get_success_response()
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
@@ -211,22 +245,66 @@ class MentorProfileAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
         mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
         
         if not mentor:
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
-            
+
+        data = request.data.copy()
+        data.pop('org', None)
+
         serializer = serializers.MentorUpdateSerializer(
-            mentor, data=request.data, partial=True, context={"user_id": user_id}
+            mentor, data=data, partial=True, context={"user_id": user_id}
         )
         
         if serializer.is_valid():
+            general_message = "Mentor profile updated successfully."
+            new_url_pending = False
+
+            if 'linkedin' in serializer.validated_data:
+                linkedin_url = serializer.validated_data.get('linkedin')
+                
+                if linkedin_url:
+                    if UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.PENDING, about="[LinkedIn URL Update Request]").exists():
+                        return CustomResponse(general_message="You already have a pending LinkedIn URL update request.").get_failure_response()
+                    
+                    UserMentor.objects.create(
+                        user_id=user_id,
+                        org=mentor.org,
+                        mentor_tier=mentor.mentor_tier,
+                        status=UserMentor.Status.PENDING,
+                        about="[LinkedIn URL Update Request]",
+                        expertise=linkedin_url,
+                        reason="User requested LinkedIn URL update from profile.",
+                        hours=mentor.hours,
+                        preferred_ig_ids=mentor.preferred_ig_ids,
+                        created_by_id=user_id,
+                        updated_by_id=user_id,
+                    )
+                    general_message = "Profile updated. LinkedIn URL change has been submitted for verification."
+                    new_url_pending = True
+                else:
+                    socials, _ = Socials.objects.get_or_create(user_id=user_id)
+                    socials.linkedin = None
+                    socials.save(update_fields=['linkedin'])
+ 
             serializer.save()
+ 
+            response_serializer = serializers.MentorDetailSerializer(mentor)
+            response_data = response_serializer.data
+            socials = Socials.objects.filter(user_id=user_id).first()
+            
+            if new_url_pending:
+                response_data['linkedin'] = None
+            else:
+                response_data['linkedin'] = socials.linkedin if socials else None
+
             return CustomResponse(
-                general_message="Mentor profile updated successfully.",
-                response=serializers.MentorDetailSerializer(mentor).data
+                general_message=general_message,
+                response=response_data
             ).get_success_response()
             
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -320,7 +398,7 @@ class MentorVerifyAPI(APIView):
     )
     def patch(self, request, mentor_id):
         user_id = JWTUtils.fetch_user_id(request)
-        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        mentor = UserMentor.objects.select_related('verified_by', 'updated_by', 'org').filter(id=mentor_id).first()
 
         if not mentor:
             return CustomResponse(
@@ -329,14 +407,35 @@ class MentorVerifyAPI(APIView):
 
         roles = JWTUtils.fetch_role(request)
         is_admin = RoleType.ADMIN.value in roles
-        if not is_admin and not _is_company_owner_of(user_id, mentor):
+        is_owner = _is_company_owner_of(user_id, mentor)
+
+        # Authorization check
+        can_verify = False
+        if mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
+            # For company mentors, both admin and owner can verify
+            if is_admin or is_owner:
+                can_verify = True
+        else:
+            # For other tiers (like IG_MENTOR), only admin can verify
+            if is_admin:
+                can_verify = True
+        
+        if not can_verify:
             return CustomResponse(
                 general_message="You are not authorized to verify this mentor application."
             ).get_failure_response(status_code=403)
 
-        if mentor.status == UserMentor.Status.APPROVED:
+        if mentor.status in [UserMentor.Status.APPROVED, UserMentor.Status.REJECTED]:
+            actor = mentor.verified_by or mentor.updated_by
+            actor_name = "an administrator"
+            if actor:
+                if _is_company_owner_of(actor.id, mentor):
+                    actor_name = f"the company owner, {actor.full_name}"
+                else:
+                    actor_name = actor.full_name
+
             return CustomResponse(
-                general_message="Mentor is already approved."
+                general_message=f"This mentor application has already been {mentor.status.lower()} by {actor_name}."
             ).get_failure_response()
 
         serializer = serializers.MentorVerifySerializer(
@@ -369,6 +468,70 @@ class MentorPublicProfileAPI(APIView):
             
         serializer = serializers.MentorDetailSerializer(mentor)
         return CustomResponse(response=serializer.data).get_success_response()
+
+class MentorChangeCompanyAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Request to change the company affiliation for a mentor. This will create a new pending mentor application for the selected company.",
+        request=inline_serializer(
+            name='MentorChangeCompanySerializer',
+            fields={
+                'company_id': rest_serializers.CharField(required=True),
+                'reason': rest_serializers.CharField(required=False, allow_blank=True)
+            }
+        ),
+        responses={200: serializers.MentorRegisterSerializer},
+    )
+    @role_required([RoleType.MENTOR.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        company_id = request.data.get('company_id')
+        reason = request.data.get('reason')
+
+        if not company_id:
+            return CustomResponse(general_message="Company ID is required.").get_failure_response()
+
+        new_company_org = Organization.objects.filter(id=company_id, org_type=OrganizationType.COMPANY.value).first()
+        if not new_company_org:
+            return CustomResponse(general_message="Invalid Company ID.").get_failure_response(status_code=404)
+
+        if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.PENDING).exists():
+            return CustomResponse(general_message="You already have a pending request for this company.").get_failure_response()
+
+        if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.APPROVED).exists():
+            return CustomResponse(general_message="You are already an approved mentor for this company.").get_failure_response()
+
+        # Prioritize the most recently updated approved profile as the source for user's data.
+        existing_mentor_profile = UserMentor.objects.filter(
+            user_id=user_id,
+            status=UserMentor.Status.APPROVED
+        ).order_by('-updated_at').first()
+        
+        if not existing_mentor_profile:
+            # Fallback to any profile if no approved one exists (e.g., only rejected/pending applications).
+            existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).order_by('-updated_at').first()
+
+        new_mentor_app = UserMentor.objects.create(
+            user_id=user_id,
+            org=new_company_org,
+            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            status=UserMentor.Status.PENDING,
+            about=existing_mentor_profile.about if existing_mentor_profile else None,
+            expertise=existing_mentor_profile.expertise if existing_mentor_profile else None,
+            hours=existing_mentor_profile.hours if existing_mentor_profile else None,
+            preferred_ig_ids=existing_mentor_profile.preferred_ig_ids if existing_mentor_profile else None,
+            reason=reason,
+            created_by_id=user_id,
+            updated_by_id=user_id,
+        )
+
+        serializer = serializers.MentorRegisterSerializer(new_mentor_app)
+        return CustomResponse(
+            general_message="Request to change company submitted successfully. It is pending approval.",
+            response=serializer.data
+        ).get_success_response()
 
 class MentorOverviewAPI(APIView):
     authentication_classes = [CustomizePermission]

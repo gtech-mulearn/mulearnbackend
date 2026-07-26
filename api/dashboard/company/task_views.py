@@ -77,14 +77,11 @@ class CompanyTaskListCreateAPI(APIView):
 
         queryset = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(requested_by_id=user_id)
+        ).filter(requested_by_id=user_id, is_deleted=False)
 
         approval_status = request.query_params.get("approval_status")
         if approval_status:
             queryset = queryset.filter(approval_status=approval_status)
-        else:
-            # Exclude soft-deleted tasks (active=False), regardless of approval_status
-            queryset = queryset.exclude(active=False)
 
         paginated = CommonUtils.get_paginated_queryset(
             queryset,
@@ -191,7 +188,7 @@ class CompanyTaskDetailAPI(APIView):
 
         task = TaskList.objects.select_related(
             "channel", "type", "level", "ig", "org", "requested_by"
-        ).filter(id=task_id, requested_by_id=user_id).first()
+        ).filter(id=task_id, requested_by_id=user_id, is_deleted=False).first()
 
         if not task:
             return CustomResponse(
@@ -220,7 +217,7 @@ class CompanyTaskDetailAPI(APIView):
             ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
-            id=task_id, requested_by_id=user_id
+            id=task_id, requested_by_id=user_id, is_deleted=False
         ).first()
 
         if not task:
@@ -278,7 +275,7 @@ class CompanyTaskDetailAPI(APIView):
             ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
-            id=task_id, requested_by_id=user_id
+            id=task_id, requested_by_id=user_id, is_deleted=False
         ).first()
 
         if not task:
@@ -339,7 +336,7 @@ class CompanyTaskDetailAPI(APIView):
 
     @extend_schema(
         tags=["Dashboard - Company Task"],
-        description="Soft-delete a task submitted by the company by marking it inactive.",
+        description="Soft-delete a task submitted by the company.",
         responses={200: OpenApiResponse(description="Task deleted successfully.")},
     )
     def delete(self, request, task_id):
@@ -351,7 +348,7 @@ class CompanyTaskDetailAPI(APIView):
             ).get_failure_response(status_code=403)
 
         task = TaskList.objects.filter(
-            id=task_id, requested_by_id=user_id
+            id=task_id, requested_by_id=user_id, is_deleted=False
         ).first()
 
         if not task:
@@ -362,16 +359,19 @@ class CompanyTaskDetailAPI(APIView):
         from db.user import User
         user = User.objects.get(id=user_id)
 
-        # Soft delete
-        task.active = False
+        # Soft delete: distinct from `active`, which tracks the
+        # pending-approval / admin activation state, not deletion.
+        task.is_deleted = True
+        task.deleted_at = DateTimeUtils.get_current_utc_time()
+        task.deleted_by = user
         task.updated_by = user
-        task.save(update_fields=["active", "updated_by", "updated_at"])
+        task.save(update_fields=["is_deleted", "deleted_at", "deleted_by", "updated_by", "updated_at"])
 
         return CustomResponse(
             general_message="Task deleted successfully.",
             response={
                 "task_id": str(task.id),
-                "deleted_at": task.updated_at.strftime('%Y-%m-%dT%H:%M:%SZ')
+                "deleted_at": task.deleted_at.strftime('%Y-%m-%dT%H:%M:%SZ')
             }
         ).get_success_response()
 
