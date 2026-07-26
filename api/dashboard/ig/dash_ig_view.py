@@ -15,6 +15,7 @@ from .dash_ig_serializer import (
     InterestGroupCreateUpdateSerializer,
     InterestGroupRequestSerializer,
     InterestGroupRequestGetSerializer,
+    PublicInterestGroupSerializer,
 )
 import json
 import uuid
@@ -1040,21 +1041,36 @@ class InterestGroupListApi(APIView):
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Interest Group List Api.",
-        responses={200: InterestGroupSerializer},
+        responses={200: PublicInterestGroupSerializer},
     )
     def get(self, request):
         from utils.types import InterestGroupStatus
+        from django.db.models import Prefetch
+        from db.impact_project import ImpactProject, ImpactProjectUserLink
+
         ig = (
             InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
             .select_related("created_by", "updated_by")
-            .prefetch_related("user_ig_link_ig")
+            .prefetch_related(
+                "user_ig_link_ig",
+                Prefetch(
+                    "impact_project_ig",
+                    queryset=ImpactProject.objects.select_related("created_by", "updated_by").prefetch_related(
+                        Prefetch(
+                            "impact_project_user_link_project",
+                            queryset=ImpactProjectUserLink.objects.select_related("user")
+                        ),
+                        "impact_project_link_project"
+                    )
+                )
+            )
             .annotate(members=Count("user_ig_link_ig"))
         )
 
-        serializer = InterestGroupSerializer(ig, many=True)
+        serializer = PublicInterestGroupSerializer(ig, many=True)
 
         return CustomResponse(
-            response={"interestGroup": serializer.data}
+            response={"interestGroups": serializer.data}
         ).get_success_response()
 
 class InterestGroupMembershipAPI(APIView):
