@@ -151,13 +151,17 @@ class MentorPublicAvailabilityAPI(APIView):
     )
     def get(self, request, mentor_id):
         from db.user import UserMentor
+        from db.user import MentorApplication
         
-        mentor = UserMentor.objects.filter(id=mentor_id, status=UserMentor.Status.APPROVED).first()
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
         if not mentor:
             return CustomResponse(
-                general_message="Mentor not found or not approved."
+                general_message="Mentor profile not found."
             ).get_failure_response(status_code=404)
-            
+
+        if not MentorApplication.objects.filter(user=mentor.user, status=MentorApplication.Status.APPROVED).exists():
+            return CustomResponse(general_message="This user is not an approved mentor.").get_failure_response(status_code=403)
+
         slots = MentorAvailabilitySlot.objects.filter(mentor_user_id=mentor.user_id, is_active=True)
         serializer = serializers.AvailabilitySlotSerializer(slots, many=True)
         

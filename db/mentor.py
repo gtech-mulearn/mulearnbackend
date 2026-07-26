@@ -200,6 +200,7 @@ class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
         PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
+        MENTOR_APP_SUBMITTED = 'MENTOR_APP_SUBMITTED', 'Mentor App Submitted'
         MENTOR_VERIFY    = 'MENTOR_VERIFY',    'Mentor Verify'
         TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
         EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'

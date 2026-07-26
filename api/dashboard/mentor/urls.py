@@ -11,6 +11,7 @@ urlpatterns = [
     path('profile/', mentor_views.MentorProfileAPI.as_view(), name='mentor-profile'),
     path('activity/', mentor_views.MentorActivityListAPI.as_view(), name='mentor-activity'),
     path('list/', mentor_views.MentorListAPI.as_view(), name='mentor-list'),
+    path('change-requests/', mentor_views.MentorChangeRequestListAPI.as_view(), name='mentor-change-request-list'),
     path('verify/<str:mentor_id>/', mentor_views.MentorVerifyAPI.as_view(), name='mentor-verify'),
     path('detail/<str:mentor_id>/', mentor_views.MentorDetailAPI.as_view(), name='mentor-detail'),
     path('session/create/', session_views.MentorSessionCreateAPI.as_view(), name='mentor-session-create'),

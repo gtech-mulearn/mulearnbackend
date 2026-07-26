@@ -2,7 +2,7 @@ from datetime import timedelta
 from django.db import transaction
 from django.utils import timezone
 from django.core.cache import cache
-from db.user import UserMentor, MentorScopeGrant
+from db.user import UserMentor, MentorScopeGrant, MentorApplication
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, UserIgLink, TaskList, KarmaActivityLog
 from db.mentor import MentorshipSession, IgOpportunity
@@ -13,20 +13,15 @@ from utils.utils import DateTimeUtils
 CACHE_TTL = 15 * 60  # 15 minutes
 
 
-def get_mentor_company(mentor):
+def get_mentor_company(application):
     """
-    Resolve a mentor's employer title.
-
-    A mentor's company is their identity, not a permission scope — it must
-    be visible regardless of which tier(s) they hold. Falls back from the
-    tier-scoped `UserMentor.org` (only ever set for COMPANY_MENTOR) to the
-    user's actual employment record, since IG-only mentors never get `org` set.
+    Resolve an application's organization title.
     """
-    if mentor.org:
-        return mentor.org.title
+    if application.org:
+        return application.org.title
 
     org_link = UserOrganizationLink.objects.filter(
-        user=mentor.user, org__org_type="Company"
+        user=application.user, org__org_type="Company"
     ).select_related("org").first()
     return org_link.org.title if org_link else None
 
@@ -39,38 +34,12 @@ def get_mentor_scopes(user_id):
     authorization, since a user can hold multiple tiers and grants are what
     actually govern access.
     """
-    grants = MentorScopeGrant.objects.filter(
-        mentor__user_id=user_id,
-        mentor__status=UserMentor.Status.APPROVED,
+    grants = MentorScopeGrant.objects.select_related('application').filter(
+        application__user_id=user_id,
+        application__status=MentorApplication.Status.APPROVED,
         is_active=True,
     ).values_list('scope_type', 'scope_id')
-
-    scopes = set(grants)
-    if scopes:
-        return scopes
-
-    # Legacy fallback: grants may not exist yet for this mentor (e.g. before
-    # the alter-1.63 backfill ran, or a race with grant creation).
-    fallback = set()
-    for tier, org_id in UserMentor.objects.filter(
-        user_id=user_id, status=UserMentor.Status.APPROVED
-    ).values_list('mentor_tier', 'org_id'):
-        if tier == UserMentor.MentorTier.IG_MENTOR:
-            # org_id is always NULL on IG_MENTOR rows — IG authority lives
-            # per-IG in UserIgLink, not on the UserMentor row. Emit one scope
-            # per actively-mentored IG; a bare (IG_MENTOR, None) entry would
-            # be silently discarded by any caller filtering on a non-null
-            # scope_id (e.g. get_scope_ids), making the mentor appear to
-            # have no IG authority at all during the pre-backfill window.
-            ig_ids = UserIgLink.objects.filter(
-                user_id=user_id,
-                assignment_type=UserIgLink.AssignmentType.MENTOR,
-                is_active=True,
-            ).values_list('ig_id', flat=True)
-            fallback.update((tier, str(ig_id)) for ig_id in ig_ids)
-        else:
-            fallback.add((tier, str(org_id) if org_id is not None else None))
-    return fallback
+    return set(grants)
 
 
 def has_scope(user_id, scope_type, scope_id=None):
@@ -108,7 +77,7 @@ def get_verified_company_for_mentor(user_id):
 
 
 @transaction.atomic
-def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
+def reconcile_mentor_ig_grants(application, actor_user_id):
     """
     Make the mentor's active IG_MENTOR MentorScopeGrant set exactly equal
     the (valid) preferred_ig_ids — the MentorScopeGrant counterpart to
@@ -116,6 +85,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
     Company/Campus grant this mentor holds is untouched (grants are additive
     and independent per scope).
     """
+    preferred_ig_ids = application.preferred_ig_ids
     desired = {str(i) for i in (preferred_ig_ids or []) if i}
     if desired:
         desired &= {
@@ -127,7 +97,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
 
     ig_grants = list(
         MentorScopeGrant.objects.filter(
-            mentor=mentor, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
+            application=application, scope_type=MentorScopeGrant.ScopeType.IG_MENTOR
         )
     )
     current_active = {g.scope_id for g in ig_grants if g.is_active}
@@ -145,7 +115,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
             existing.save(update_fields=["is_active", "revoked_by", "revoked_at"])
         else:
             MentorScopeGrant.objects.create(
-                mentor=mentor,
+                application=application,
                 scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
                 scope_id=ig_id,
                 is_active=True,
@@ -155,7 +125,7 @@ def reconcile_mentor_ig_grants(mentor, preferred_ig_ids, actor_user_id):
 
     if to_remove:
         MentorScopeGrant.objects.filter(
-            mentor=mentor,
+            application=application,
             scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
             scope_id__in=to_remove,
         ).update(is_active=False, revoked_by_id=actor_user_id, revoked_at=now)
@@ -231,19 +201,19 @@ def get_mentor_overview(user_id):
         active_scopes = []
 
         # 1. Campus and Company Scopes from UserMentor
-        user_mentors = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).select_related('org')
-        for mentor in user_mentors:
-            if mentor.mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR and mentor.org_id:
+        applications = MentorApplication.objects.filter(user_id=user_id, status=MentorApplication.Status.APPROVED).select_related('org')
+        for app in applications:
+            if app.mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR and app.org_id:
                 active_scopes.append({
                     "scope_type": "CAMPUS_MENTOR",
-                    "scope_id": mentor.org_id,
-                    "scope_name": mentor.org.title
+                    "scope_id": app.org_id,
+                    "scope_name": app.org.title
                 })
-            elif mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and mentor.org_id:
+            elif app.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and app.org_id:
                 active_scopes.append({
                     "scope_type": "COMPANY_MENTOR",
-                    "scope_id": mentor.org_id,
-                    "scope_name": mentor.org.title
+                    "scope_id": app.org_id,
+                    "scope_name": app.org.title
                 })
 
         # 2. IG Scopes from UserIgLink

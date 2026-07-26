@@ -1,7 +1,7 @@
 import uuid
 from rest_framework import serializers
 import re
-from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant
+from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant, MentorApplication
 
 
 class MentorScopeGrantSerializer(serializers.ModelSerializer):
@@ -28,11 +28,15 @@ from django.db.models import Q
 from db.organization import Organization
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
+    about = serializers.CharField(required=False, allow_blank=True)
+    expertise = serializers.CharField(required=False, allow_blank=True)
+    hours = serializers.IntegerField(required=False)
+
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
     mentor_tier = serializers.ChoiceField(choices=[
-        UserMentor.MentorTier.IG_MENTOR.value,
-        UserMentor.MentorTier.COMPANY_MENTOR.value,
-        UserMentor.MentorTier.CAMPUS_MENTOR.value,
+        MentorApplication.MentorTier.IG_MENTOR.value,
+        MentorApplication.MentorTier.COMPANY_MENTOR.value,
+        MentorApplication.MentorTier.CAMPUS_MENTOR.value,
     ])
     org = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.filter(
@@ -43,12 +47,12 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = UserMentor
+        model = MentorApplication
         fields = [
             "about",
             "expertise",
-            "reason",
             "hours",
+            "reason",
             "preferred_ig_ids",
             "linkedin",
             "mentor_tier",
@@ -74,12 +78,12 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
         mentor_tier = data.get('mentor_tier')
         org = data.get('org')
 
-        if mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR.value:
+        if mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR.value:
             if not org:
                 raise serializers.ValidationError({'org': 'Organization is required for a Company Mentor application.'})
             if org.org_type != OrganizationType.COMPANY.value:
                 raise serializers.ValidationError({'org': 'A valid company organization is required.'})
-        elif mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR.value:
+        elif mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR.value:
             if not org:
                 raise serializers.ValidationError({'org': 'Organization is required for a Campus Mentor application.'})
             if org.org_type != OrganizationType.COLLEGE.value:
@@ -92,38 +96,70 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
     def create(self, validated_data):
         user_id = self.context["user_id"]
         linkedin_url = validated_data.pop('linkedin', None)
+        now = DateTimeUtils.get_current_utc_time()
+        # Separate profile data from application data
+        profile_data = {
+            "about": validated_data.pop("about", None),
+            "expertise": validated_data.pop("expertise", None),
+            "hours": validated_data.pop("hours", None),
+        }
 
-        if linkedin_url:
-            reason = validated_data.get('reason', '')
-            # Append linkedin url to reason for admin verification
-            validated_data['reason'] = f"{reason}\n\n[LINKEDIN_URL_PENDING:{linkedin_url}]"
-        
-        mentor = UserMentor.objects.create(
-            user_id=user_id,
-            status=UserMentor.Status.PENDING,
-            created_by_id=user_id,
-            updated_by_id=user_id,
-            created_at=DateTimeUtils.get_current_utc_time(),
-            updated_at=DateTimeUtils.get_current_utc_time(),
-            **validated_data
-        )
+        with transaction.atomic():
+            # Save linkedin url directly to socials table
+            if linkedin_url:
+                socials, _ = Socials.objects.get_or_create(
+                    user_id=user_id,
+                    defaults={'created_by_id': user_id, 'updated_by_id': user_id}
+                )
+                socials.linkedin = linkedin_url
+                socials.updated_by_id = user_id
+                socials.save(update_fields=['linkedin', 'updated_by_id'])
 
-        # Wrap notification sending in a try-except block to prevent failures
-        # from rolling back the user request and locking them out.
+            # 1. Create or update the single UserMentor profile
+            mentor_profile, created = UserMentor.objects.get_or_create(
+                user_id=user_id,
+                defaults={
+                    "about": profile_data["about"],
+                    "expertise": profile_data["expertise"],
+                    "hours": profile_data["hours"],
+                    "created_by_id": user_id,
+                    "updated_by_id": user_id,
+                }
+            )
+            if not created:
+                for attr, value in profile_data.items():
+                    if value is not None:
+                        setattr(mentor_profile, attr, value)
+                mentor_profile.updated_by_id = user_id
+                mentor_profile.updated_at = now
+                mentor_profile.save()
+
+            # 2. Create the new MentorApplication record
+            application = MentorApplication.objects.create(
+                user_id=user_id,
+                status=MentorApplication.Status.PENDING,
+                created_by_id=user_id,
+                updated_by_id=user_id,
+                created_at=now,
+                updated_at=now,
+                **validated_data
+            )
+
         try:
             from api.notification.notifications_utils import NotificationUtils
             from db.user import User, UserRoleLink
             from utils.types import RoleType
             from db.company import Company
+            from db.mentor import SystemActionLog
             from django.conf import settings
 
             requester = User.every.filter(id=user_id).first()
             admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
 
             mentor_tier = validated_data.get('mentor_tier')
-            org = validated_data.get('org')
+            org = validated_data.get('org') # This is the application's org
 
-            if mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR.value:
+            if mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR.value:
                 try:
                     company = Company.objects.get(org=org, status="verified")
                     owner_user = company.company_user
@@ -138,31 +174,31 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                 except Company.DoesNotExist:
                     pass
 
+                # Log for admins instead of notifying them
+                SystemActionLog.objects.create(
+                    action_type=SystemActionLog.ActionType.MENTOR_APP_SUBMITTED.value,
+                    actor_user=requester,
+                    subject_user=requester,
+                    entity_name='mentor_application',
+                    entity_id=application.id,
+                    new_data={
+                        'mentor_tier': application.mentor_tier,
+                        'org_id': str(application.org.id) if application.org else None,
+                        'org_title': application.org.title if application.org else None,
+                        'reason': application.reason,
+                        'preferred_ig_ids': application.preferred_ig_ids,
+                    },
+                    remarks=f"New company mentor application from {requester.full_name} for {org.title}."
+                )
+
+            else: # For CAMPUS_MENTOR and IG_MENTOR, notify admins
+                tier_display = "Campus" if mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR.value else "IG"
+                org_display = f" for {org.title}" if org else ""
                 for admin_link in admin_roles:
                     NotificationUtils.insert_notification(
                         user=admin_link.user,
-                        title="New Company Mentor Application",
-                        description=f"{requester.full_name} has applied to be a mentor for {org.title}.",
-                        button="View Application",
-                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
-                        created_by=requester,
-                    )
-            elif mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR.value:
-                for admin_link in admin_roles:
-                    NotificationUtils.insert_notification(
-                        user=admin_link.user,
-                        title="New Campus Mentor Application",
-                        description=f"{requester.full_name} has applied to be a mentor for {org.title}.",
-                        button="View Application",
-                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
-                        created_by=requester,
-                    )
-            else: # IG_MENTOR
-                for admin_link in admin_roles:
-                    NotificationUtils.insert_notification(
-                        user=admin_link.user,
-                        title="New IG Mentor Application",
-                        description=f"{requester.full_name} has applied to be an IG mentor.",
+                        title=f"New {tier_display} Mentor Application",
+                        description=f"{requester.full_name} has applied to be a {tier_display.lower()} mentor{org_display}.",
                         button="View Application",
                         url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/list/",
                         created_by=requester,
@@ -172,14 +208,18 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             # A proper logging/monitoring mechanism should be here.
             pass
 
-        return mentor
+        return application
 
 class MentorUpdateSerializer(serializers.ModelSerializer):
+    about = serializers.CharField(required=False, allow_blank=True)
+    expertise = serializers.CharField(required=False, allow_blank=True)
+    hours = serializers.IntegerField(required=False)
+
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
     mentor_tier = serializers.ChoiceField(choices=[
-        UserMentor.MentorTier.IG_MENTOR.value,
-        UserMentor.MentorTier.COMPANY_MENTOR.value,
-        UserMentor.MentorTier.CAMPUS_MENTOR.value,
+        MentorApplication.MentorTier.IG_MENTOR.value,
+        MentorApplication.MentorTier.COMPANY_MENTOR.value,
+        MentorApplication.MentorTier.CAMPUS_MENTOR.value,
     ], required=False)
     org = serializers.PrimaryKeyRelatedField(
         queryset=Organization.objects.filter(
@@ -190,13 +230,10 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
     )
 
     class Meta:
-        model = UserMentor
+        model = MentorApplication
         fields = [
             "id",
-            "about",
-            "expertise",
             "reason",
-            "hours",
             "preferred_ig_ids",
             "linkedin",
             "mentor_tier",
@@ -240,12 +277,12 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         else:
             org = data.get('org', instance.org if instance else None)
 
-        if mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR.value:
+        if mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR.value:
             if not org:
                 raise serializers.ValidationError({'org': 'Organization is required for a Company Mentor application.'})
             if org.org_type != OrganizationType.COMPANY.value:
                 raise serializers.ValidationError({'org': 'A valid company organization is required.'})
-        elif mentor_tier == UserMentor.MentorTier.CAMPUS_MENTOR.value:
+        elif mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR.value:
             if not org:
                 raise serializers.ValidationError({'org': 'Organization is required for a Campus Mentor application.'})
             if org.org_type != OrganizationType.COLLEGE.value:
@@ -257,27 +294,30 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
         validated_data['updated_by_id'] = self.context.get("user_id", instance.user_id)
 
-        igs_in_payload = "preferred_ig_ids" in validated_data
         validated_data.pop('linkedin', None)
 
-        if instance.status == UserMentor.Status.APPROVED:
+        # Update profile details on the central UserMentor record
+        profile_data = {
+            "about": validated_data.pop("about", None),
+            "expertise": validated_data.pop("expertise", None),
+            "hours": validated_data.pop("hours", None),
+        }
+        
+        mentor_profile = UserMentor.objects.filter(user=instance.user).first()
+        if mentor_profile:
+            for attr, value in profile_data.items():
+                if value is not None:
+                    setattr(mentor_profile, attr, value)
+            mentor_profile.save()
+
+        # Application-specific fields cannot be changed on an approved application
+        if instance.status == MentorApplication.Status.APPROVED:
             validated_data.pop('org', None)
             validated_data.pop('mentor_tier', None)
 
         for attr, value in validated_data.items():
             setattr(instance, attr, value)
         instance.save()
-
-        # Self-service: any APPROVED mentor (any tier) editing their Interest
-        # Groups takes effect immediately — no admin re-approval. IG mentoring is
-        # an orthogonal scope, so company/campus/global mentors can manage IGs too.
-        # (The profile PATCH endpoint already restricts to APPROVED mentors.)
-        if igs_in_payload and instance.status == UserMentor.Status.APPROVED:
-            from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
-
-            actor_id = self.context.get("user_id", instance.user_id)
-            reconcile_mentor_ig_links(instance.user, instance.preferred_ig_ids, actor_id)
-            reconcile_mentor_ig_grants(instance, instance.preferred_ig_ids, actor_id)
 
         return instance
 
@@ -287,15 +327,15 @@ class MentorListSerializer(serializers.ModelSerializer):
     muid = serializers.CharField(source='user.muid', read_only=True)
 
     class Meta:
-        model = UserMentor
+        model = MentorApplication
         fields = [
             "id",
             "user_id",
             "user_full_name",
             "user_email",
             "muid",
-            "about",
-            "expertise",
+            "reason",
+            "preferred_ig_ids",
             "verification_note",
             "verified_at",
             "mentor_tier",
@@ -305,46 +345,59 @@ class MentorListSerializer(serializers.ModelSerializer):
         ]
 
 class MentorDetailSerializer(serializers.ModelSerializer):
+    """
+    This serializer is now for the central UserMentor profile.
+    It shows the core profile and lists all associated applications.
+    """
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
-    user_email = serializers.CharField(source='user.email', read_only=True)
-    company = serializers.SerializerMethodField()
+    muid = serializers.CharField(source='user.muid', read_only=True)
+    applications = MentorListSerializer(many=True, read_only=True, source='user.mentor_applications')
 
     class Meta:
         model = UserMentor
-        # Explicit list — this serializer is also used by
-        # MentorPublicProfileAPI, so internal/audit-only columns
-        # (verification_note, created_by, updated_by) must never appear
-        # here regardless of what gets added to UserMentor in future.
         fields = [
             "id",
-            "user",
             "user_full_name",
-            "user_email",
+            "muid",
             "about",
             "expertise",
-            "reason",
             "hours",
-            "mentor_tier",
-            "status",
-            "preferred_ig_ids",
-            "org",
-            "verified_by",
-            "verified_at",
-            "company",
+            "applications",
             "created_at",
             "updated_at",
         ]
 
-    def get_company(self, obj):
-        from .dash_mentor_helper import get_mentor_company
-        return get_mentor_company(obj)
+class MentorProfileUpdateSerializer(serializers.ModelSerializer):
+    linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
+
+    class Meta:
+        model = UserMentor
+        fields = [
+            "about",
+            "expertise",
+            "hours",
+            "linkedin",
+        ]
+
+    def update(self, instance, validated_data):
+        user_id = self.context.get("user_id")
+        instance.updated_by_id = user_id
+        
+        # linkedin is not on the model, it's handled in the view
+        validated_data.pop('linkedin', None)
+
+        for attr, value in validated_data.items():
+            setattr(instance, attr, value)
+            
+        instance.save()
+        return instance
 
 class MentorVerifySerializer(serializers.Serializer):
-    status = serializers.ChoiceField(choices=[UserMentor.Status.APPROVED, UserMentor.Status.REJECTED])
+    status = serializers.ChoiceField(choices=[MentorApplication.Status.APPROVED, MentorApplication.Status.REJECTED])
     verification_note = serializers.CharField(required=False, allow_blank=True)
 
     def validate(self, data):
-        if data.get("status") == UserMentor.Status.REJECTED and not data.get("verification_note"):
+        if data.get("status") == MentorApplication.Status.REJECTED and not data.get("verification_note"):
             raise serializers.ValidationError("Verification note is required when rejecting.")
         return data
 
@@ -352,50 +405,11 @@ class MentorVerifySerializer(serializers.Serializer):
         user_id = self.context["user_id"]
         status = validated_data.get("status")
 
-        # Handle special case for LinkedIn update request from profile
-        if instance.about == "[LinkedIn URL Update Request]":
-            if status == UserMentor.Status.APPROVED:
-                linkedin_url = instance.expertise
-                socials, _ = Socials.objects.get_or_create(
-                    user=instance.user,
-                    defaults={'created_by_id': user_id, 'updated_by_id': user_id}
-                )
-                socials.linkedin = linkedin_url
-                socials.updated_by_id = user_id
-                socials.save(update_fields=['linkedin', 'updated_by_id'])
-                
-                instance.delete()
-                return instance
-            else:  
-                instance.status = UserMentor.Status.REJECTED
-                instance.verification_note = validated_data.get("verification_note", "LinkedIn URL update rejected.")
-                instance.updated_by_id = user_id
-                instance.updated_at = DateTimeUtils.get_current_utc_time()
-                instance.save()
-                return instance
-        
         instance.status = status
         instance.updated_by_id = user_id
         instance.updated_at = DateTimeUtils.get_current_utc_time()
         
-        if status == UserMentor.Status.APPROVED:
-            # Check for and process LinkedIn URL from reason field for new registrations
-            if instance.reason and "[LINKEDIN_URL_PENDING:" in instance.reason:
-                match = re.search(r'\[LINKEDIN_URL_PENDING:(.*?)\]', instance.reason, re.DOTALL)
-                if match:
-                    linkedin_url = match.group(1).strip()
-                    if linkedin_url:
-                        socials, _ = Socials.objects.get_or_create(
-                            user=instance.user,
-                            defaults={'created_by_id': user_id, 'updated_by_id': user_id}
-                        )
-                        socials.linkedin = linkedin_url
-                        socials.updated_by_id = user_id
-                        socials.save(update_fields=['linkedin', 'updated_by_id'])
-                    
-                    # Clean up the reason field
-                    instance.reason = instance.reason.replace(match.group(0), '').strip()
-
+        if status == MentorApplication.Status.APPROVED:
             instance.verified_by_id = user_id
             instance.verified_at = DateTimeUtils.get_current_utc_time()
 
@@ -406,10 +420,10 @@ class MentorVerifySerializer(serializers.Serializer):
             # reconcile_mentor_ig_grants from preferred_ig_ids. Creating a
             # scope_id=None IG_MENTOR grant here would be a meaningless
             # "mentor for no particular IG" row alongside the real ones.
-            if instance.mentor_tier != UserMentor.MentorTier.IG_MENTOR:
+            if instance.mentor_tier != MentorApplication.MentorTier.IG_MENTOR:
                 scope_id = str(instance.org_id) if instance.org_id else None
                 grant, grant_created = MentorScopeGrant.objects.get_or_create(
-                    mentor=instance,
+                    application=instance,
                     scope_type=instance.mentor_tier,
                     scope_id=scope_id,
                     defaults={
@@ -452,11 +466,11 @@ class MentorVerifySerializer(serializers.Serializer):
                     instance.user, instance.preferred_ig_ids, user_id
                 )
                 reconcile_mentor_ig_grants(
-                    instance, instance.preferred_ig_ids, user_id
+                    instance, user_id
                 )
 
             # Auto-link COMPANY_MENTOR to the company's Organization
-            if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
+            if instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and instance.org:
                 from db.organization import UserOrganizationLink
                 org_link, created = UserOrganizationLink.objects.get_or_create(
                     user=instance.user,
@@ -471,43 +485,43 @@ class MentorVerifySerializer(serializers.Serializer):
                     org_link.verified = True
                     org_link.save(update_fields=["verified"])
 
-        elif status == UserMentor.Status.REJECTED:
+        elif status == MentorApplication.Status.REJECTED:
             instance.verification_note = validated_data.get("verification_note")
             
         instance.save()
 
+        # Log the verification action for admins if it's a company mentor
+        if instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR:
+            from db.mentor import SystemActionLog
+            from db.user import User
+            actor = User.every.filter(id=user_id).first()
+            SystemActionLog.objects.create(
+                action_type=SystemActionLog.ActionType.MENTOR_VERIFY.value,
+                actor_user=actor,
+                subject_user=instance.user,
+                entity_name='mentor_application',
+                entity_id=instance.id,
+                new_data={
+                    'status': instance.status,
+                    'verification_note': instance.verification_note,
+                    'verified_at': str(instance.verified_at) if instance.verified_at else None,
+                },
+                remarks=f"Company mentor application for {instance.user.full_name} was {instance.status.lower()} by company owner {actor.full_name}."
+            )
+
         try:
-            if status == UserMentor.Status.REJECTED:
-                from db.company import Company
-                from db.user import User
+            if status == MentorApplication.Status.REJECTED:
+                from db.user import User, UserRoleLink
                 from api.notification.notifications_utils import NotificationUtils
                 from django.conf import settings
 
                 actor = User.every.filter(id=user_id).first()
                 is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
-                is_owner_actor = False
-                
-                if instance.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
-                    is_owner_actor = Company.objects.filter(
-                        company_user=actor,
-                        org=instance.org,
-                        status="verified"
-                    ).exists()
 
-                all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
-
-                if is_owner_actor:
-                    for admin_link in all_admins:
-                        NotificationUtils.insert_notification(
-                            user=admin_link.user,
-                            title="Mentor Application Rejected by Company",
-                            description=f"{actor.full_name} (owner of {instance.org.title}) has rejected the mentor application for {instance.user.full_name}.",
-                            button="View Details",
-                            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/detail/{instance.id}/",
-                            created_by=actor,
-                        )
-                elif is_admin_actor:
-                    tier_name = "IG" if instance.mentor_tier == UserMentor.MentorTier.IG_MENTOR else "Company"
+                if is_admin_actor:
+                    # This logic now only runs for non-company-mentor rejections by an admin
+                    tier_name = "IG" if instance.mentor_tier == MentorApplication.MentorTier.IG_MENTOR else "Campus"
+                    all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
                     for admin_link in all_admins:
                         if admin_link.user == actor:
                             continue
@@ -1095,7 +1109,7 @@ class AdminAssignMentorSerializer(serializers.Serializer):
         min_length=1,
         help_text="List of user muids to assign as mentor."
     )
-    mentor_tier  = serializers.ChoiceField(choices=UserMentor.MentorTier.choices)
+    mentor_tier  = serializers.ChoiceField(choices=MentorApplication.MentorTier.choices)
     org_id       = serializers.CharField(required=False, allow_null=True, default=None)
     ig_ids       = serializers.ListField(
         child=serializers.CharField(),
@@ -1133,14 +1147,14 @@ class AdminAssignMentorSerializer(serializers.Serializer):
             )
 
         # ── Tier-specific validation ────────────────────────────────────────
-        if tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR):
+        if tier in (MentorApplication.MentorTier.CAMPUS_MENTOR, MentorApplication.MentorTier.COMPANY_MENTOR):
             org_id = data.get("org_id")
             if not org_id:
                 errors["org_id"] = f"org_id is required for {tier}."
             else:
                 expected_org_type = (
                     OrganizationType.COLLEGE.value
-                    if tier == UserMentor.MentorTier.CAMPUS_MENTOR
+                    if tier == MentorApplication.MentorTier.CAMPUS_MENTOR
                     else OrganizationType.COMPANY.value
                 )
                 org = Organization.objects.filter(id=org_id, org_type=expected_org_type).first()
@@ -1151,7 +1165,7 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                 else:
                     data["_org"] = org
 
-        if tier == UserMentor.MentorTier.IG_MENTOR:
+        if tier == MentorApplication.MentorTier.IG_MENTOR:
             ig_ids = data.get("ig_ids") or []
             if not ig_ids:
                 errors["ig_ids"] = "ig_ids (non-empty list) is required for IG_MENTOR."
@@ -1189,50 +1203,56 @@ class AdminAssignMentorSerializer(serializers.Serializer):
 
         with transaction.atomic():
             for muid, user in resolved_users.items():
-                # ── 1. Create / update UserMentor record ───────────────────
-                mentor_record, _ = UserMentor.objects.get_or_create(
+                # 1. Create/update the single UserMentor profile
+                profile_data = {
+                    "about": validated_data.get("about"),
+                    "expertise": validated_data.get("expertise"),
+                    "hours": validated_data.get("hours", 0),
+                }
+                UserMentor.objects.get_or_create(
+                    user=user,
+                    defaults={
+                        **profile_data,
+                        "created_by_id": admin_id,
+                        "updated_by_id": admin_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
+                )
+
+                # 2. Create an approved MentorApplication record
+                application, app_created = MentorApplication.objects.get_or_create(
                     user=user,
                     mentor_tier=tier,
                     org=org,
                     defaults={
-                        "status":      UserMentor.Status.APPROVED,
-                        "about":       validated_data.get("about"),
-                        "expertise":   validated_data.get("expertise"),
-                        "hours":       validated_data.get("hours", 0),
+                        "status": MentorApplication.Status.APPROVED,
                         "preferred_ig_ids": ig_ids if ig_ids else None,
-                        "verified_by_id":   admin_id,
-                        "verified_at":      now,
-                        "updated_by_id":    admin_id,
-                        "updated_at":       now,
-                        "created_by_id":    admin_id,
-                        "created_at":       now,
-                    },
+                        "verified_by_id": admin_id,
+                        "verified_at": now,
+                        "created_by_id": admin_id,
+                        "updated_by_id": admin_id,
+                        "created_at": now,
+                        "updated_at": now,
+                    }
                 )
-                # Idempotent: if it already exists, force-approve it
-                if mentor_record.status != UserMentor.Status.APPROVED:
-                    mentor_record.status       = UserMentor.Status.APPROVED
-                    mentor_record.verified_by_id = admin_id
-                    mentor_record.verified_at  = now
-                    mentor_record.updated_by_id = admin_id
-                    mentor_record.updated_at   = now
-                    mentor_record.save(update_fields=[
-                        "status", "verified_by_id", "verified_at",
-                        "updated_by_id", "updated_at",
-                    ])
+                if not app_created and application.status != MentorApplication.Status.APPROVED:
+                    application.status = MentorApplication.Status.APPROVED
+                    application.verified_by_id = admin_id
+                    application.verified_at = now
+                    application.save()
 
-                # ── 1b. Grant the tier being assigned (additive). IG_MENTOR
-                # is excluded — it has no single scope_id of its own; its
-                # grants are per-IG, created in the ig_ids loop below.
-                if tier != UserMentor.MentorTier.IG_MENTOR:
+                # 3. Grant the tier being assigned (additive).
+                if tier != MentorApplication.MentorTier.IG_MENTOR:
                     scope_id = str(org.id) if org else None
                     grant, grant_created = MentorScopeGrant.objects.get_or_create(
-                        mentor=mentor_record,
+                        application=application,
                         scope_type=tier,
                         scope_id=scope_id,
                         defaults={
-                            "is_active":     True,
+                            "is_active": True,
                             "granted_by_id": admin_id,
-                            "granted_at":    now,
+                            "granted_at": now,
                         },
                     )
                     if not grant_created and not grant.is_active:
@@ -1241,81 +1261,27 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         grant.revoked_at = None
                         grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
 
-                # ── 2. Assign global Mentor role ────────────────────────────
+                # 4. Assign global Mentor role
                 if mentor_role:
-                    role_link, created = UserRoleLink.objects.get_or_create(
+                    UserRoleLink.objects.get_or_create(
                         user=user,
                         role=mentor_role,
-                        defaults={
-                            "verified":    True,
-                            "created_by_id": admin_id,
-                            "created_at":  now,
-                        },
+                        defaults={"verified": True, "created_by_id": admin_id, "created_at": now}
                     )
-                    if not created and not role_link.verified:
-                        role_link.verified = True
-                        role_link.save(update_fields=["verified"])
 
-                # ── 3. Side-effects (IG links + org link can coexist) ───────
-                # Every mentor tier can mentor Interest Groups, so create MENTOR
-                # UserIgLink rows for ANY tier whenever ig_ids are supplied —
-                # not just IG_MENTOR. Without this, a company/campus mentor's
-                # preferred_ig_ids snapshot would be saved while the authoritative
-                # UserIgLink rows (used by session-create + the IG dropdown) stay
-                # empty, leaving them unable to create sessions for IGs they
-                # appear to mentor.
+                # 5. Side-effects (IG links + org link)
                 if ig_ids:
-                    for ig_id in ig_ids:
-                        ig = InterestGroup.objects.filter(id=ig_id).first()
-                        if ig:
-                            ig_link, created = UserIgLink.objects.get_or_create(
-                                user=user,
-                                ig=ig,
-                                defaults={
-                                    "assignment_type": UserIgLink.AssignmentType.MENTOR,
-                                    "is_active":       True,
-                                    "assigned_by_id":  admin_id,
-                                    "created_by_id":   admin_id,
-                                    "created_at":      now,
-                                },
-                            )
-                            if not created:
-                                ig_link.assignment_type = UserIgLink.AssignmentType.MENTOR
-                                ig_link.is_active       = True
-                                ig_link.assigned_by_id  = admin_id
-                                ig_link.save(update_fields=["assignment_type", "is_active", "assigned_by_id"])
+                    from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
+                    reconcile_mentor_ig_links(user, ig_ids, admin_id)
+                    reconcile_mentor_ig_grants(application, admin_id)
 
-                            ig_grant, ig_grant_created = MentorScopeGrant.objects.get_or_create(
-                                mentor=mentor_record,
-                                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
-                                scope_id=str(ig_id),
-                                defaults={
-                                    "is_active":     True,
-                                    "granted_by_id": admin_id,
-                                    "granted_at":    now,
-                                },
-                            )
-                            if not ig_grant_created and not ig_grant.is_active:
-                                ig_grant.is_active = True
-                                ig_grant.revoked_by = None
-                                ig_grant.revoked_at = None
-                                ig_grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
-
-                # Company/campus mentors also get their verified org link.
-                if tier in (UserMentor.MentorTier.CAMPUS_MENTOR, UserMentor.MentorTier.COMPANY_MENTOR) and org:
+                if tier in (MentorApplication.MentorTier.CAMPUS_MENTOR, MentorApplication.MentorTier.COMPANY_MENTOR) and org:
                     from db.organization import UserOrganizationLink
-                    org_link, created = UserOrganizationLink.objects.get_or_create(
+                    UserOrganizationLink.objects.get_or_create(
                         user=user,
                         org=org,
-                        defaults={
-                            "verified":    True,
-                            "created_by_id": admin_id,
-                            "created_at":  now,
-                        },
+                        defaults={"verified": True, "created_by_id": admin_id, "created_at": now}
                     )
-                    if not created and not org_link.verified:
-                        org_link.verified = True
-                        org_link.save(update_fields=["verified"])
 
         return list(resolved_users.keys())
 

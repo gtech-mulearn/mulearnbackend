@@ -401,31 +401,31 @@ class UserRole(APIView):
 
             # ── Mentor cleanup ──────────────────────────────────────────────
             if role_title == RoleType.MENTOR.value:
-                from db.user import UserMentor
+                from db.user import MentorApplication, MentorScopeGrant
                 from db.task import UserIgLink
-                mentor_records = UserMentor.objects.filter(
-                    user=user, status=UserMentor.Status.APPROVED
-                )
-                for record in mentor_records:
-                    record.status        = UserMentor.Status.REJECTED
-                    record.updated_by_id = admin_id
-                    record.updated_at    = now
-                    record.save(update_fields=["status", "updated_by_id", "updated_at"])
 
-                    if record.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                applications = MentorApplication.objects.filter(
+                    user=user, status=MentorApplication.Status.APPROVED
+                )
+                for app in applications:
+                    app.status = MentorApplication.Status.REJECTED
+                    app.updated_by_id = admin_id
+                    app.updated_at = now
+                    app.save(update_fields=["status", "updated_by_id", "updated_at"])
+
+                    if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
                         UserIgLink.objects.filter(
                             user=user,
                             assignment_type=UserIgLink.AssignmentType.MENTOR,
                         ).update(is_active=False)
 
-                    if record.mentor_tier in (
-                        UserMentor.MentorTier.CAMPUS_MENTOR,
-                        UserMentor.MentorTier.COMPANY_MENTOR,
-                    ) and record.org:
-                        from db.organization import UserOrganizationLink
-                        UserOrganizationLink.objects.filter(
-                            user=user, org=record.org
-                        ).update(verified=False)
+                    MentorScopeGrant.objects.filter(
+                        application=app, is_active=True
+                    ).update(
+                        is_active=False,
+                        revoked_by_id=admin_id,
+                        revoked_at=now,
+                    )
 
             # ── Intern cleanup ──────────────────────────────────────────────
             elif role_title == RoleType.INTERN.value:
