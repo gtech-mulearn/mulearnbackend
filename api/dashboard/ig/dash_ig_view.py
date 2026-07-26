@@ -1041,6 +1041,29 @@ class InterestGroupListApi(APIView):
     @extend_schema(
         tags=['Dashboard - Ig'],
         description="Retrieve Interest Group List Api.",
+        responses={200: InterestGroupSerializer},
+    )
+    def get(self, request):
+        from utils.types import InterestGroupStatus
+        ig = (
+            InterestGroup.objects.filter(status=InterestGroupStatus.ACTIVE.value)
+            .select_related("created_by", "updated_by")
+            .prefetch_related("user_ig_link_ig")
+            .annotate(members=Count("user_ig_link_ig"))
+        )
+
+        serializer = InterestGroupSerializer(ig, many=True)
+
+        return CustomResponse(
+            response={"interestGroup": serializer.data}
+        ).get_success_response()
+
+
+class PublicInterestGroupListApi(APIView):
+    @method_decorator(cache_page(60 * 10))
+    @extend_schema(
+        tags=['Dashboard - Ig'],
+        description="Retrieve Public Interest Group List Api.",
         responses={200: PublicInterestGroupSerializer},
     )
     def get(self, request):
