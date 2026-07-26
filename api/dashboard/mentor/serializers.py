@@ -277,6 +277,27 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
         else:
             org = data.get('org', instance.org if instance else None)
 
+        # Prevent duplicate PENDING or APPROVED applications on update.
+        if instance:
+            qs = MentorApplication.objects.filter(
+                user=instance.user,
+                mentor_tier=mentor_tier,
+                status__in=[MentorApplication.Status.PENDING, MentorApplication.Status.APPROVED]
+            ).exclude(pk=instance.id)
+
+            if mentor_tier == MentorApplication.MentorTier.IG_MENTOR.value:
+                if qs.exists():
+                    raise serializers.ValidationError(
+                        "You already have an active or pending IG mentor application."
+                    )
+            elif mentor_tier in [MentorApplication.MentorTier.COMPANY_MENTOR.value, MentorApplication.MentorTier.CAMPUS_MENTOR.value]:
+                qs = qs.filter(org=org)
+                if qs.exists():
+                    tier_name = str(mentor_tier).replace('_', ' ').title()
+                    raise serializers.ValidationError(
+                        f"You already have an active or pending {tier_name} application for this organization."
+                    )
+
         if mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR.value:
             if not org:
                 raise serializers.ValidationError({'org': 'Organization is required for a Company Mentor application.'})
