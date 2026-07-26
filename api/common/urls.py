@@ -42,7 +42,7 @@ urlpatterns = [
     path("list/country/", common_views.LcCountryAPI.as_view()),
     path("external/user/", ExternalUserDetailsAPI.as_view()),
     path('jobs/', job_views.PublicJobAPI.as_view(), name='public-jobs-list'),
-    path('ig/list/', dash_ig_view.InterestGroupListApi.as_view()),
+    path('ig/list/', dash_ig_view.PublicInterestGroupListApi.as_view()),
     path('ig/<str:pk>/', common_views.IGDetailAPI.as_view()),
     path('career-lab/ongoing/', career_lab_views.PublicOngoingHiringAPI.as_view(), name='public-career-lab-ongoing'),
     path('career-lab/previous/', career_lab_views.PublicPreviousHiringAPI.as_view(), name='public-career-lab-previous'),
