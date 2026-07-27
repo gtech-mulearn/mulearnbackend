@@ -12,6 +12,20 @@ class JobRuleSerializer(serializers.ModelSerializer):
         fields = ['id', 'rule_type', 'rule_value']
         read_only_fields = ['id']
 
+    def validate(self, data):
+        """
+        PRD §5.3 — structured skill tagging: a 'skill' rule must reference a
+        real, active Skill id rather than free text, so job matching/search
+        can rely on it being a valid Skill reference.
+        """
+        if data.get('rule_type') == 'skill':
+            from db.skill import Skill
+            if not Skill.objects.filter(id=data.get('rule_value'), is_active=True).exists():
+                raise serializers.ValidationError(
+                    {"rule_value": "rule_value must be an active Skill id when rule_type is 'skill'."}
+                )
+        return data
+
 class JobCreateSerializer(serializers.ModelSerializer):
     rules = JobRuleSerializer(many=True, required=False)
 
@@ -21,7 +35,7 @@ class JobCreateSerializer(serializers.ModelSerializer):
             'id', 'title', 'experience', 'job_description', 'location',
             'salary_range', 'job_type', 'duration_value',
             'duration_unit', 'hourly_rate', 'deliverables', 'stipend',
-            'certificate_provided', 'rules'
+            'certificate_provided', 'expires_at', 'rules'
         ]
         read_only_fields = ['id']
 
@@ -63,10 +77,10 @@ class JobUpdateSerializer(serializers.ModelSerializer):
     class Meta:
         model = CompanyJob
         fields = [
-            'title', 'experience', 'job_description', 'location', 
-            'salary_range', 'job_type', 'status', 'duration_value', 
-            'duration_unit', 'hourly_rate', 'deliverables', 'stipend', 
-            'certificate_provided', 'rules'
+            'title', 'experience', 'job_description', 'location',
+            'salary_range', 'job_type', 'status', 'duration_value',
+            'duration_unit', 'hourly_rate', 'deliverables', 'stipend',
+            'certificate_provided', 'expires_at', 'rules'
         ]
 
     def validate(self, data):
@@ -111,20 +125,77 @@ class JobUpdateSerializer(serializers.ModelSerializer):
                 
         return instance
 
+def check_job_eligibility(user_id, job):
+    """
+    PRD §5.3 — evaluate every eligibility rule on a job for a given learner
+    and return the full result set (not just the first failure), so it can
+    be shown to a learner *before* they apply rather than only as a
+    silent-rejection validation error at apply-time.
+    """
+    from db.skill import Skill
+    from db.achievement import UserSkillProgress
+
+    wallet = Wallet.objects.filter(user_id=user_id).first()
+    user_karma = wallet.karma if wallet else 0
+    lvl_link = UserLvlLink.objects.filter(user_id=user_id).first()
+    user_level = lvl_link.level.level_order if (lvl_link and lvl_link.level) else 0
+
+    results = []
+    for rule in CompanyJobRule.objects.filter(job=job):
+        met, message = True, None
+        if rule.rule_type == 'min_karma':
+            met = user_karma >= int(rule.rule_value)
+            message = f"Insufficient Karma. Minimum {rule.rule_value} required." if not met else None
+        elif rule.rule_type == 'max_karma':
+            met = user_karma <= int(rule.rule_value)
+            message = f"Exceeds Karma limit. Maximum {rule.rule_value} allowed." if not met else None
+        elif rule.rule_type == 'min_level':
+            met = user_level >= int(rule.rule_value)
+            message = f"Insufficient Level. Minimum Level {rule.rule_value} required." if not met else None
+        elif rule.rule_type == 'max_level':
+            met = user_level <= int(rule.rule_value)
+            message = f"Exceeds Level limit. Maximum Level {rule.rule_value} allowed." if not met else None
+        elif rule.rule_type == 'skill':
+            met = UserSkillProgress.objects.filter(user_id=user_id, skill_id=rule.rule_value).exists()
+            if not met:
+                skill = Skill.objects.filter(id=rule.rule_value).first()
+                message = f"Requires the '{skill.name if skill else rule.rule_value}' skill."
+        results.append({
+            "rule_type": rule.rule_type,
+            "rule_value": rule.rule_value,
+            "met": met,
+            "message": message,
+        })
+    return results
+
+
 class JobListSerializer(serializers.ModelSerializer):
     company_name = serializers.CharField(source='company.name', read_only=True)
     company_logo = serializers.CharField(source='company.logo', read_only=True)
     rules = JobRuleSerializer(many=True, read_only=True)
+    eligibility = serializers.SerializerMethodField()
 
     class Meta:
         model = CompanyJob
         fields = [
-            'id', 'company_name', 'company_logo', 'title', 'experience', 
-            'job_description', 'location', 'salary_range', 'job_type', 
-            'status', 'duration_value', 'duration_unit', 'hourly_rate', 
+            'id', 'company_name', 'company_logo', 'title', 'experience',
+            'job_description', 'location', 'salary_range', 'job_type',
+            'status', 'duration_value', 'duration_unit', 'hourly_rate',
             'deliverables', 'stipend', 'certificate_provided', 'rules',
-            'created_at'
+            'eligibility', 'created_at'
         ]
+
+    def get_eligibility(self, obj):
+        """
+        PRD §5.3 — only computed when a learner_id is passed via context
+        (e.g. the public job browse/apply surfaces); omitted (None) for the
+        company's own dashboard views where eligibility is not meaningful.
+        """
+        learner_id = self.context.get("learner_id")
+        if not learner_id:
+            return None
+        results = check_job_eligibility(learner_id, obj)
+        return {"eligible": all(r["met"] for r in results), "rules": results}
 
 class JobApplicationSerializer(serializers.ModelSerializer):
     class Meta:
@@ -142,27 +213,21 @@ class JobApplicationSerializer(serializers.ModelSerializer):
         if UserJobApplication.objects.filter(user_id=user_id, job=job).exists():
             raise serializers.ValidationError("You have already applied for this job.")
 
-        user = User.objects.filter(id=user_id).first()
-        wallet = Wallet.objects.filter(user_id=user_id).first()
-        user_karma = wallet.karma if wallet else 0
-        lvl_link = UserLvlLink.objects.filter(user_id=user_id).first()
-        user_level = lvl_link.level.level_order if (lvl_link and lvl_link.level) else 0
-        rules = CompanyJobRule.objects.filter(job=job)
-        
-        for rule in rules:
-            if rule.rule_type == 'min_karma':
-                if user_karma < int(rule.rule_value):
-                    raise serializers.ValidationError(f"Insufficient Karma. Minimum {rule.rule_value} required.")
-            elif rule.rule_type == 'max_karma':
-                if user_karma > int(rule.rule_value):
-                    raise serializers.ValidationError(f"Exceeds Karma limit. Maximum {rule.rule_value} allowed.")
-            elif rule.rule_type == 'min_level':
-                if user_level < int(rule.rule_value):
-                    raise serializers.ValidationError(f"Insufficient Level. Minimum Level {rule.rule_value} required.")
-            elif rule.rule_type == 'max_level':
-                if user_level > int(rule.rule_value):
-                    raise serializers.ValidationError(f"Exceeds Level limit. Maximum Level {rule.rule_value} allowed.")
-                      
+        # Conflict-of-interest (PRD §5.2/§15): a company's own owner, accepted
+        # co-admin, or active COMPANY_MENTOR cannot apply to its own postings.
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+        from db.user import MentorScopeGrant
+        is_staff = is_company_owner_or_admin(user_id, job.company)
+        if not is_staff and job.company.org_id:
+            is_staff = (MentorScopeGrant.ScopeType.COMPANY_MENTOR, str(job.company.org_id)) in get_mentor_scopes(user_id)
+        if is_staff:
+            raise serializers.ValidationError("You cannot apply to your own company's job posting.")
+
+        for rule_result in check_job_eligibility(user_id, job):
+            if not rule_result["met"]:
+                raise serializers.ValidationError(rule_result["message"])
+
         return data
 
     def create(self, validated_data):

@@ -99,3 +99,96 @@ class CompanyMulearnerDirectoryAPI(APIView):
                 "pagination": paginated_queryset.get("pagination"),
             }
         ).get_success_response()
+
+
+class CompanyTalentShortlistAPI(APIView):
+    """
+    PRD §11.3 — bookmark/tag learners of interest independent of a formal
+    job posting. Any company actor (owner, co-admin, or company mentor) can
+    add/view; matches the read-open, no-owner-gate pattern used by the rest
+    of the talent-directory surface.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="List the company's shortlisted talent.",
+        responses={200: mulearner_serializers.MulearnerDirectorySerializer(many=True)},
+    )
+    def get(self, request):
+        from db.company import CompanyTalentShortlist
+
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
+
+        shortlist_links = CompanyTalentShortlist.objects.filter(company=company).select_related(
+            "user__wallet_user", "user__user_lvl_link_user__level"
+        ).order_by("-created_at")
+
+        users = [link.user for link in shortlist_links]
+        notes = {link.user_id: link.note for link in shortlist_links}
+
+        serializer = mulearner_serializers.MulearnerDirectorySerializer(users, many=True)
+        data = serializer.data
+        for row in data:
+            row["shortlist_note"] = notes.get(row["id"])
+
+        return CustomResponse(response={"data": data}).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Add a learner to the company's talent shortlist.",
+    )
+    def post(self, request):
+        from db.company import CompanyTalentShortlist
+        from utils.utils import DateTimeUtils
+
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
+
+        candidate_id = request.data.get("user_id")
+        candidate = User.objects.filter(id=candidate_id).first() if candidate_id else None
+        if not candidate:
+            return CustomResponse(general_message="User not found.").get_failure_response(status_code=404)
+
+        link, created = CompanyTalentShortlist.objects.get_or_create(
+            company=company, user=candidate,
+            defaults={
+                "note": request.data.get("note"),
+                "created_by_id": user_id,
+                "created_at": DateTimeUtils.get_current_utc_time(),
+            },
+        )
+        if not created:
+            return CustomResponse(general_message="This learner is already on your shortlist.").get_failure_response()
+
+        return CustomResponse(general_message="Learner added to shortlist successfully.").get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Company'],
+        description="Remove a learner from the company's talent shortlist.",
+    )
+    def delete(self, request, user_id):
+        from db.company import CompanyTalentShortlist
+
+        acting_user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(acting_user_id)
+        if not company:
+            return CustomResponse(
+                general_message="Access denied. Verified company profile required."
+            ).get_failure_response(status_code=403)
+
+        link = CompanyTalentShortlist.objects.filter(company=company, user_id=user_id).first()
+        if not link:
+            return CustomResponse(general_message="Shortlist entry not found.").get_failure_response(status_code=404)
+
+        link.delete()
+        return CustomResponse(general_message="Learner removed from shortlist successfully.").get_success_response()

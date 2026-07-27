@@ -226,6 +226,7 @@ class SystemActionLog(models.Model):
         JOB_REJECT            = 'JOB_REJECT',            'Job Reject'
         COMPANY_EVENT_APPROVE = 'COMPANY_EVENT_APPROVE', 'Company Event Approve'
         IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
+        COMPANY_DEACTIVATED   = 'COMPANY_DEACTIVATED',   'Company Deactivated'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     action_type = models.CharField(max_length=25, choices=ActionType.choices)

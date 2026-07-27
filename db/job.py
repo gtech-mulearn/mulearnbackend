@@ -38,6 +38,11 @@ class CompanyJob(models.Model):
     deliverables = models.JSONField(null=True, blank=True)
     stipend = models.CharField(max_length=75, null=True, blank=True)
     certificate_provided = models.CharField(max_length=3, null=True, blank=True) # Enum: Yes, No
+    # PRD §5.2 — optional auto-expiry: if set, a daily Celery beat task
+    # (mu_celery/company_tasks.py:expire_stale_jobs) flips this posting to
+    # Expired once passed. Null means "no auto-expiry", preserving today's
+    # manual-only behavior for existing/unset postings.
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

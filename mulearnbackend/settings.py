@@ -334,4 +334,8 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.mentor_tasks.expire_stale_grants',
         'schedule': crontab(hour=0, minute=25),
     },
+    'expire-stale-company-jobs': {
+        'task': 'mu_celery.company_tasks.expire_stale_jobs',
+        'schedule': crontab(hour=0, minute=30),
+    },
 }

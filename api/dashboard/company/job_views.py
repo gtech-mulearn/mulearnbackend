@@ -177,7 +177,7 @@ class CompanyJobApproveAPI(APIView):
     @extend_schema(tags=['Dashboard - Company Jobs'], description="Approve a job posting (owner or delegate only).")
     def post(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        job = CompanyJob.objects.filter(id=job_id, is_deleted=False).first()
+        job = CompanyJob.objects.filter(id=job_id, is_deleted=False, company__status="verified").first()
         if not job:
             return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
 
@@ -222,7 +222,7 @@ class CompanyJobRejectAPI(APIView):
     @extend_schema(tags=['Dashboard - Company Jobs'], description="Reject a job posting (owner or delegate only).")
     def post(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        job = CompanyJob.objects.filter(id=job_id, is_deleted=False).first()
+        job = CompanyJob.objects.filter(id=job_id, is_deleted=False, company__status="verified").first()
         if not job:
             return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
 
@@ -269,15 +269,18 @@ class PublicJobAPI(APIView):
         responses={200: job_serializers.JobListSerializer(many=True)},
     )
     def get(self, request):
-        jobs = CompanyJob.objects.filter(status='Active', is_deleted=False)
-        
+        user_id = JWTUtils.fetch_user_id(request)
+        jobs = CompanyJob.objects.filter(status='Active', is_deleted=False, company__status="verified")
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            jobs, request, 
+            jobs, request,
             search_fields=["title", "location", "job_type", "company__name"],
             sort_fields={"title": "title", "created_at": "created_at"}
         )
-        
-        serializer = job_serializers.JobListSerializer(paginated_queryset.get("queryset"), many=True)
+
+        serializer = job_serializers.JobListSerializer(
+            paginated_queryset.get("queryset"), many=True, context={"learner_id": user_id}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -296,8 +299,8 @@ class JobApplicationAPI(APIView):
     )
     def post(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        job = CompanyJob.objects.filter(id=job_id, status='Active', is_deleted=False).first()
+
+        job = CompanyJob.objects.filter(id=job_id, status='Active', is_deleted=False, company__status="verified").first()
         if not job:
             return CustomResponse(general_message="Active job not found.").get_failure_response(status_code=404)
 

@@ -46,6 +46,9 @@ MANAGEABLE_ROLES = {
     RoleType.MENTOR.value,
 }
 
+# PRD §15 — rate/abuse limit on company event creation volume.
+MAX_OPEN_COMPANY_EVENTS = 5
+
 
 def _can_create_event(roles):
     """True if user holds at least one event-creation role."""
@@ -62,13 +65,25 @@ def _get_manageable_events():
 
 
 def _get_user_company_org_ids(user_id, roles):
-    """Returns a list of Organization IDs for companies where the user is a creator or mentor."""
-    company_org_ids = set()
+    """
+    Returns a list of Organization IDs for companies where the user is the
+    owner, an accepted co-admin delegate, or a COMPANY_MENTOR. Ownership/
+    co-admin membership is checked directly rather than gated on
+    RoleType.COMPANY, since only the true registering owner is ever granted
+    that platform role — an accepted CompanyAdminLink delegate never is.
+    """
+    from db.company import Company, CompanyAdminLink
+    from django.db.models import Q
 
-    if RoleType.COMPANY.value in roles:
-        from db.company import Company
-        company = Company.objects.filter(company_user_id=user_id, status="verified").first()
-        if company and company.org:
+    company_org_ids = set()
+    for company in Company.objects.filter(
+        Q(company_user_id=user_id) | Q(
+            admin_links__user_id=user_id,
+            admin_links__status=CompanyAdminLink.Status.ACCEPTED,
+        ),
+        status="verified",
+    ).distinct():
+        if company.org_id:
             company_org_ids.add(company.org_id)
 
     if RoleType.MENTOR.value in roles:
@@ -322,6 +337,21 @@ class ManageEventListCreateAPI(APIView):
                 valid_org_ids = set(_get_user_company_org_ids(user_id, roles))
                 if str(payload_organiser_org) not in [str(o) for o in valid_org_ids]:
                     return CustomResponse(general_message='You are not authorized to create events for this company.').get_failure_response()
+
+            # PRD §15 — rate/abuse limit: cap how many not-yet-published
+            # company events can be open at once, mirroring
+            # job_views.MAX_PENDING_JOBS_PER_MENTOR.
+            open_count = _get_manageable_events().filter(
+                organiser_type=Event.OrganiserType.COMPANY,
+                organiser_org_id=payload_organiser_org,
+                status__in=[
+                    Event.Status.DRAFT, Event.Status.PENDING_MENTOR_APPROVAL, Event.Status.PENDING_APPROVAL,
+                ],
+            ).count()
+            if open_count >= MAX_OPEN_COMPANY_EVENTS:
+                return CustomResponse(
+                    general_message=f'This company already has {MAX_OPEN_COMPANY_EVENTS} draft/pending-approval events. Resolve those before creating more.'
+                ).get_failure_response(status_code=429)
 
         # Enforce campus tenancy for Campus events
         ownership_error = _validate_campus_event_ownership(
@@ -702,9 +732,9 @@ class ManageEventPublishAPI(APIView):
             # unlike campus/IG). Owner-created events skip only their own
             # leg by starting one stage further along.
             from db.company import Company
-            is_owner = Company.objects.filter(
-                org_id=event.organiser_org_id, company_user_id=user_id, status='verified'
-            ).exists()
+            from api.dashboard.company.company_views import is_company_owner_or_admin
+            company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
+            is_owner = is_company_owner_or_admin(user_id, company)
             if is_owner:
                 new_status = Event.Status.PENDING_APPROVAL
             else:
@@ -1596,9 +1626,9 @@ class CompanyEventApproveAPI(APIView):
             return CustomResponse(general_message='You cannot approve your own event submission.').get_failure_response(status_code=403)
 
         from db.company import Company
-        is_owner = Company.objects.filter(
-            org_id=event.organiser_org_id, company_user_id=user_id, status='verified'
-        ).exists()
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
+        is_owner = is_company_owner_or_admin(user_id, company)
         if not is_owner and RoleType.ADMIN.value not in roles:
             return CustomResponse(general_message='You are not authorized to approve events for this company.').get_failure_response()
 
@@ -1643,9 +1673,9 @@ class CompanyEventRejectAPI(APIView):
             return CustomResponse(general_message='Event is not pending owner approval.').get_failure_response()
 
         from db.company import Company
-        is_owner = Company.objects.filter(
-            org_id=event.organiser_org_id, company_user_id=user_id, status='verified'
-        ).exists()
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        company = Company.objects.filter(org_id=event.organiser_org_id, status='verified').first()
+        is_owner = is_company_owner_or_admin(user_id, company)
         if not is_owner and RoleType.ADMIN.value not in roles:
             return CustomResponse(general_message='You are not authorized to reject events for this company.').get_failure_response()
 

@@ -444,9 +444,15 @@ class UserRole(APIView):
             # ── Company cleanup ──────────────────────────────────────────────
             elif role_title == RoleType.COMPANY.value:
                 from db.company import Company
-                Company.objects.filter(
-                    company_user_id=user.id, status="verified"
-                ).update(status="suspended")
+                from api.dashboard.company.company_views import _deactivate_company
+                # Reuse the same deactivation path as the dedicated company
+                # deactivation endpoints (PRD §4.2/§4.3) rather than a separate
+                # ad hoc "suspended" status, so admin-link revocation, status
+                # gating, and admin summary counts all stay consistent
+                # regardless of which surface triggered it.
+                company = Company.objects.filter(company_user_id=user.id, status="verified").first()
+                if company:
+                    _deactivate_company(company, admin_id)
 
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_ROLE.value,

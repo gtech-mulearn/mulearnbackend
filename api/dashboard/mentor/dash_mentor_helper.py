@@ -119,15 +119,24 @@ def get_scope_ids(user_id, scope_type):
 def get_verified_company_for_mentor(user_id):
     """
     Resolve the verified Company a user may act on behalf of: either they are
-    its registrant (company_user), or they hold an active COMPANY_MENTOR
-    grant scoped to its Organization. Single source of truth for the
-    previously-duplicated _get_company_for_user/get_verified_company helpers.
+    its registrant (company_user), an accepted CompanyAdminLink co-admin, or
+    they hold an active COMPANY_MENTOR grant scoped to its Organization.
+    Single source of truth for the previously-duplicated
+    _get_company_for_user/get_verified_company helpers.
     """
-    from db.company import Company
+    from db.company import Company, CompanyAdminLink
     from db.organization import Organization
     from db.user import MentorScopeGrant
 
     company = Company.objects.filter(company_user_id=user_id, status="verified").first()
+    if company:
+        return company
+
+    company = Company.objects.filter(
+        admin_links__user_id=user_id,
+        admin_links__status=CompanyAdminLink.Status.ACCEPTED,
+        status="verified",
+    ).first()
     if company:
         return company
 

@@ -438,13 +438,34 @@ class MentorProfileSerializer(serializers.ModelSerializer):
 
     def _rating_stats(self, obj):
         from django.db.models import Avg, Count
-        from db.mentor import MentorshipSessionUserLink
-        stats = MentorshipSessionUserLink.objects.filter(
+        from db.mentor import MentorshipSessionUserLink, MentorshipSession
+        session_stats = MentorshipSessionUserLink.objects.filter(
             user_id=obj.user_id,
             participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
             rating__isnull=False,
         ).aggregate(avg=Avg('rating'), count=Count('id'))
-        return stats
+
+        # PRD §9.2/§9.3 — roll the company-facing structured feedback
+        # (PRD §13, CompanyFeedback) tied to this mentor's own COMPANY_MENTOR
+        # sessions into the same quality-score average shown on their
+        # profile, so mentor quality isn't split across two invisible pools.
+        from db.company import CompanyFeedback
+        mentor_session_ids = list(MentorshipSessionUserLink.objects.filter(
+            user_id=obj.user_id,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+            session__session_type=MentorshipSession.SessionType.COMPANY_SESSION,
+        ).values_list('session_id', flat=True))
+        company_stats = CompanyFeedback.objects.filter(
+            interaction_type=CompanyFeedback.InteractionType.SESSION,
+            entity_id__in=mentor_session_ids,
+        ).aggregate(avg=Avg('rating'), count=Count('id'))
+
+        total_count = (session_stats['count'] or 0) + (company_stats['count'] or 0)
+        if not total_count:
+            return {'avg': None, 'count': 0}
+        weighted = (session_stats['avg'] or 0) * (session_stats['count'] or 0) + \
+                   (company_stats['avg'] or 0) * (company_stats['count'] or 0)
+        return {'avg': weighted / total_count, 'count': total_count}
 
     def get_average_rating(self, obj):
         avg = self._rating_stats(obj)['avg']
@@ -561,11 +582,9 @@ class MentorVerifySerializer(serializers.Serializer):
                 is_owner_actor = False
 
                 if instance.tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
-                    is_owner_actor = Company.objects.filter(
-                        company_user=actor,
-                        org=instance.org,
-                        status="verified"
-                    ).exists()
+                    from api.dashboard.company.company_views import is_company_owner_or_admin
+                    company = Company.objects.filter(org=instance.org, status="verified").first()
+                    is_owner_actor = is_company_owner_or_admin(user_id, company)
 
                 if is_owner_actor:
                     from .dash_mentor_helper import notify_admins_company_mentor_decision
@@ -587,10 +606,10 @@ class MentorVerifySerializer(serializers.Serializer):
             elif status == MentorApplication.Status.APPROVED and instance.tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
                 from db.user import User
                 from db.company import Company
+                from api.dashboard.company.company_views import is_company_owner_or_admin
                 actor = User.every.filter(id=user_id).first()
-                is_owner_actor = actor is not None and Company.objects.filter(
-                    company_user=actor, org=instance.org, status="verified"
-                ).exists()
+                company = Company.objects.filter(org=instance.org, status="verified").first()
+                is_owner_actor = actor is not None and is_company_owner_or_admin(user_id, company)
                 if is_owner_actor:
                     from .dash_mentor_helper import notify_admins_company_mentor_decision
                     notify_admins_company_mentor_decision(actor, instance, "approved")

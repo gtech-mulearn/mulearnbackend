@@ -3,7 +3,7 @@ from rest_framework import serializers
 from django.db import transaction
 from django.utils.text import slugify
 
-from db.company import Company
+from db.company import Company, CompanyAdminLink
 from db.organization import Organization, District, State, Country
 from db.user import UserRoleLink, Role
 from utils.types import RoleType, OrganizationType
@@ -23,6 +23,10 @@ class CompanyRegisterSerializer(serializers.ModelSerializer):
     district_id = serializers.PrimaryKeyRelatedField(queryset=District.objects.all(), required=False, allow_null=True, source="district")
     state_id = serializers.PrimaryKeyRelatedField(queryset=State.objects.all(), required=False, allow_null=True, source="state")
     country_id = serializers.PrimaryKeyRelatedField(queryset=Country.objects.all(), required=False, allow_null=True, source="country")
+    # PRD §15 — verification evidence is required at registration, not optional
+    # metadata; the model field itself allows null/blank so this must be
+    # overridden here to actually enforce it.
+    verification_document_url = serializers.URLField(required=True)
 
     class Meta:
         model = Company
@@ -43,6 +47,7 @@ class CompanyRegisterSerializer(serializers.ModelSerializer):
             "tax_id",
             "company_size",
             "linkedin_url",
+            "verification_document_url",
             "founded_year",
             "remote_policy",
             "culture_text",
@@ -144,6 +149,7 @@ class CompanyUpdateSerializer(serializers.ModelSerializer):
             "tax_id",
             "company_size",
             "linkedin_url",
+            "verification_document_url",
             "founded_year",
             "remote_policy",
             "culture_text",
@@ -248,10 +254,33 @@ class CompanyDetailSerializer(serializers.ModelSerializer):
     company_user_name = serializers.CharField(source='company_user.full_name', read_only=True)
     company_user_email = serializers.CharField(source='company_user.email', read_only=True)
     district_name = serializers.CharField(source='district.name', read_only=True, default=None)
+    profile_completeness = serializers.SerializerMethodField()
+    verification_sla_message = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
         fields = "__all__"
+
+    # PRD §4.3 — profile completeness scoring, shown to both the company (as
+    # a nudge) and to admin (as a signal of how genuine/complete an
+    # application is before verifying). Weighted equally across a fixed set
+    # of "worth filling in" fields rather than every column, so a bare-bones
+    # required-fields-only registration doesn't already read as 100%.
+    COMPLETENESS_FIELDS = [
+        "logo", "description", "short_pitch", "industry_sector", "website_link",
+        "location", "legal_name", "registration_number", "company_size",
+        "linkedin_url", "verification_document_url", "founded_year",
+        "remote_policy", "culture_text", "tech_stack", "perks", "testimonials", "gallery",
+    ]
+
+    def get_profile_completeness(self, obj):
+        filled = sum(1 for f in self.COMPLETENESS_FIELDS if getattr(obj, f, None))
+        return round((filled / len(self.COMPLETENESS_FIELDS)) * 100)
+
+    def get_verification_sla_message(self, obj):
+        if obj.status == "pending":
+            return "Registrations are typically reviewed within 3 business days."
+        return None
 
 class CompanyVerifySerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=["verified", "rejected"])
@@ -260,6 +289,10 @@ class CompanyVerifySerializer(serializers.Serializer):
     def validate(self, data):
         if data.get("status") == "rejected" and not data.get("rejection_reason"):
             raise serializers.ValidationError("Rejection reason is required when rejecting.")
+        if data.get("status") == "verified" and not (self.instance and self.instance.verification_document_url):
+            raise serializers.ValidationError(
+                "This company has not submitted a verification document and cannot be verified."
+            )
         return data
 
     def update(self, instance, validated_data):
@@ -330,6 +363,9 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
     district_name = serializers.CharField(source='district.name', read_only=True, default=None)
     state_name = serializers.CharField(source='district.zone.state.name', read_only=True, default=None)
     country_name = serializers.CharField(source='district.zone.state.country.name', read_only=True, default=None)
+    verified_since = serializers.DateTimeField(source='verified_at', read_only=True, default=None)
+    collaboration_summary = serializers.SerializerMethodField()
+    impact_summary = serializers.SerializerMethodField()
 
     class Meta:
         model = Company
@@ -355,8 +391,37 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
             "tech_stack",
             "perks",
             "testimonials",
-            "gallery"
+            "gallery",
+            "verified_since",
+            "collaboration_summary",
+            "impact_summary",
         ]
+
+    def get_collaboration_summary(self, obj):
+        """
+        PRD §10.3 — collaboration history as a trust signal on the public
+        profile ("partnered with 12 campuses"). Only counts ACCEPTED
+        collaborations; open/pending/declined/withdrawn are not a company's
+        earned trust signal.
+        """
+        from db.company import Collaboration
+        accepted = Collaboration.objects.filter(company=obj, status=Collaboration.Status.ACCEPTED)
+        return {
+            "total_partnerships": accepted.count(),
+            "campus_partnerships": accepted.filter(target_type=Collaboration.TargetType.CAMPUS).count(),
+            "ig_partnerships": accepted.filter(target_type=Collaboration.TargetType.IG).count(),
+        }
+
+    def get_impact_summary(self, obj):
+        """
+        PRD §13.3 — optional summarized impact report on the public profile,
+        gated on the company's own opt-in (`publish_impact_report`) so a
+        company controls whether this becomes a public marketing signal.
+        """
+        if not getattr(obj, "publish_impact_report", False):
+            return None
+        from api.dashboard.company.feedback_views import build_impact_summary
+        return build_impact_summary(obj)
 
 
 # ---------------------------------------------------------------------------
@@ -390,6 +455,12 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError(
                 {"muid": f"No platform user found with muid '{muid}'."}
+            )
+
+        # ── Conflict-of-interest: cannot nominate yourself ───────────────────
+        if user.id == self.context.get("user_id"):
+            raise serializers.ValidationError(
+                {"muid": "You cannot nominate yourself as a mentor."}
             )
 
         # ── Resolve company → Organization row ──────────────────────────────
@@ -480,6 +551,15 @@ class CompanyMentorApplySerializer(serializers.Serializer):
         if not company:
             raise serializers.ValidationError({"company_id": "Verified company not found."})
 
+        # Conflict-of-interest: the owner (or an accepted co-admin, who already
+        # holds equivalent authority) reviewing their own mentor application
+        # would be self-approval by construction — block it at apply time.
+        from api.dashboard.company.company_views import is_company_owner_or_admin
+        if is_company_owner_or_admin(user_id, company):
+            raise serializers.ValidationError(
+                {"company_id": "You cannot apply to be a mentor for a company you own or co-administer."}
+            )
+
         org = company.org
         if not org:
             raise serializers.ValidationError("Company organization record not found.")
@@ -566,4 +646,27 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
             "reason",
             "verification_note",
             "verified_at",
+        ]
+
+
+class CompanyAdminLinkSerializer(serializers.ModelSerializer):
+    """Addon §6.5 — full history of co-admin invites/acceptances/revocations for a company."""
+
+    user_muid = serializers.CharField(source="user.muid", read_only=True)
+    user_name = serializers.CharField(source="user.full_name", read_only=True)
+    invited_by_name = serializers.CharField(source="invited_by.full_name", read_only=True, default=None)
+    revoked_by_name = serializers.CharField(source="revoked_by.full_name", read_only=True, default=None)
+
+    class Meta:
+        model = CompanyAdminLink
+        fields = [
+            "id",
+            "user_muid",
+            "user_name",
+            "status",
+            "invited_by_name",
+            "invited_at",
+            "responded_at",
+            "revoked_by_name",
+            "revoked_at",
         ]

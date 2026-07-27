@@ -1252,9 +1252,9 @@ class AdminTaskApprovalAPI(APIView):
         from django.utils import timezone as tz
 
         action = request.data.get("action")
-        if action not in ("approve", "reject"):
+        if action not in ("approve", "reject", "request_changes"):
             return CustomResponse(
-                general_message="Invalid action. Must be 'approve' or 'reject'.",
+                general_message="Invalid action. Must be 'approve', 'reject', or 'request_changes'.",
                 message={"error_code": "INVALID_ACTION"},
             ).get_failure_response()
 
@@ -1290,7 +1290,7 @@ class AdminTaskApprovalAPI(APIView):
                 "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
             ])
             message = "Task approved and is now live."
-        else:
+        elif action == "reject":
             reason = (request.data.get("reason") or "").strip()
             if not reason:
                 return CustomResponse(
@@ -1308,6 +1308,29 @@ class AdminTaskApprovalAPI(APIView):
                 "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
             ])
             message = "Task rejected."
+        else:
+            # PRD §6.3 — a lightweight "request changes" state distinct from
+            # outright rejection: the submitter can amend and resubmit
+            # (task_views.py's edit endpoints already reset approval_status
+            # to 'pending' on any edit, so no further plumbing is needed
+            # there) instead of having to start over from a rejection.
+            reason = (request.data.get("reason") or "").strip()
+            if not reason:
+                return CustomResponse(
+                    general_message="A reason describing the requested changes is required.",
+                    message={"error_code": "REASON_REQUIRED"},
+                ).get_failure_response()
+            task.approval_status = "changes_requested"
+            task.active = False
+            task.rejection_reason = reason
+            task.reviewed_by_admin = admin_user
+            task.reviewed_at = now
+            task.updated_by = admin_user
+            task.save(update_fields=[
+                "approval_status", "active", "rejection_reason",
+                "reviewed_by_admin", "reviewed_at", "updated_by", "updated_at",
+            ])
+            message = "Changes requested."
 
         return CustomResponse(
             general_message=message,

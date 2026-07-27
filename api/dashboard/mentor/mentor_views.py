@@ -453,34 +453,32 @@ class MentorDetailAPI(APIView):
         return CustomResponse(response=serializer.data).get_success_response()
 
 def _is_company_owner_of_org(actor_id, org):
-    """True if `actor_id` owns the verified Company backing `org`."""
+    """True if `actor_id` owns, or is an accepted co-admin delegate of, the verified Company backing `org`."""
     if not org:
         return False
     from db.company import Company
-    return Company.objects.filter(
-        company_user_id=actor_id,
-        status="verified",
-        org_id=org.id,
-    ).exists()
+    from api.dashboard.company.company_views import is_company_owner_or_admin
+    company = Company.objects.filter(status="verified", org_id=org.id).first()
+    return is_company_owner_or_admin(actor_id, company)
 
 
 def _is_company_owner_of_mentor(actor_id, mentor):
     """
-    True if `actor_id` owns a verified Company for which `mentor` (a
-    UserMentor profile row) holds an active COMPANY_MENTOR grant. Used by
-    the scope-grant list/revoke endpoints, which operate on the profile
-    rather than a single application.
+    True if `actor_id` owns, or is an accepted co-admin delegate of, a
+    verified Company for which `mentor` (a UserMentor profile row) holds an
+    active COMPANY_MENTOR grant. Used by the scope-grant list/revoke
+    endpoints, which operate on the profile rather than a single application.
     """
     from db.company import Company
+    from api.dashboard.company.company_views import is_company_owner_or_admin
 
     org_ids = MentorScopeGrant.objects.filter(
         mentor=mentor, scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR, is_active=True,
     ).values_list('scope_id', flat=True)
     if not org_ids:
         return False
-    return Company.objects.filter(
-        company_user_id=actor_id, status="verified", org_id__in=list(org_ids),
-    ).exists()
+    company = Company.objects.filter(status="verified", org_id__in=list(org_ids)).first()
+    return is_company_owner_or_admin(actor_id, company)
 
 
 class MentorVerifyAPI(APIView):
