@@ -13,6 +13,8 @@ urlpatterns = [
     path("jobs/",                     job_views.CompanyJobAPI.as_view()),
     path("jobs/all/",                 job_views.PublicJobAPI.as_view()),
     path("jobs/<str:job_id>/",        job_views.CompanyJobDetailAPI.as_view()),
+    path("jobs/<str:job_id>/approve/", job_views.CompanyJobApproveAPI.as_view()),
+    path("jobs/<str:job_id>/reject/",  job_views.CompanyJobRejectAPI.as_view()),
     path("jobs/<str:job_id>/view/",   job_views.TrackJobViewAPIView.as_view()),
     path("jobs/<str:job_id>/analytics/", job_views.CompanyJobEngagementAnalyticsAPIView.as_view()),
     path("jobs/<str:job_id>/apply/",  job_views.JobApplicationAPI.as_view()),
@@ -26,7 +28,11 @@ urlpatterns = [
     path("talent-pool/analytics/",    analytics_views.CompanyTalentPoolAnalyticsAPIView.as_view()),
 
     # Company Mentor — Nomination
+    path("admin-link/",                       company_views.CompanyAdminLinkCreateAPI.as_view()),
+    path("admin-link/<str:link_id>/respond/", company_views.CompanyAdminLinkAcceptAPI.as_view()),
+    path("admin-link/<str:link_id>/",         company_views.CompanyAdminLinkRevokeAPI.as_view()),
     path("mentor/nominate/",          company_views.CompanyMentorNominateAPI.as_view()),
+    path("mentor/apply/",             company_views.CompanyMentorApplyAPI.as_view()),
     path("mentor/list/",              company_views.CompanyMentorListAPI.as_view()),
 
     # Task Management for Company

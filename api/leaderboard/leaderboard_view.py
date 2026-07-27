@@ -6,7 +6,7 @@ from decouple import config as decouple_config
 from . import serializers
 from db.task import TaskList, InterestGroup
 from db.organization import Organization, UserOrganizationLink
-from db.user import User, UserRoleLink, UserMentor
+from db.user import User, UserRoleLink, UserMentor, MentorScopeGrant
 from db.mentor import MentorshipSession, MentorshipSessionUserLink
 from utils.response import CustomResponse
 from utils.types import OrganizationType, RoleType
@@ -338,15 +338,21 @@ class IGMentorLeaderboard(APIView):
             .values('cnt')
         )
 
+        ig_mentor_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.IG_MENTOR,
+            scope_id=str(ig.id),
+            is_active=True,
+        ).values_list('mentor_id', flat=True)
+
         mentor_qs = (
             UserMentor.objects.filter(
-                mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                status=UserMentor.Status.APPROVED,
+                id__in=ig_mentor_ids,
+                is_active=True,
                 user__user_ig_link_user__ig=ig,
                 user__user_ig_link_user__assignment_type='MENTOR',
                 user__user_ig_link_user__is_active=True,
             )
-            .select_related('user__wallet_user', 'org')
+            .select_related('user__wallet_user')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
@@ -397,13 +403,18 @@ class CampusMentorLeaderboard(APIView):
             .values('cnt')
         )
 
+        campus_mentor_ids = MentorScopeGrant.objects.filter(
+            scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
+            scope_id=str(campus.id),
+            is_active=True,
+        ).values_list('mentor_id', flat=True)
+
         mentor_qs = (
             UserMentor.objects.filter(
-                mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                status=UserMentor.Status.APPROVED,
-                org=campus,
+                id__in=campus_mentor_ids,
+                is_active=True,
             )
-            .select_related('user__wallet_user', 'org')
+            .select_related('user__wallet_user')
             .annotate(
                 total_karma=Coalesce(F('user__wallet_user__karma'), Value(0)),
                 completed_sessions=Coalesce(
@@ -418,6 +429,6 @@ class CampusMentorLeaderboard(APIView):
         serialized = serializers.CampusMentorLeaderboardSerializer(
             mentor_qs,
             many=True,
-            context={'rankings': rankings},
+            context={'rankings': rankings, 'campus': campus},
         )
         return CustomResponse(response=serialized.data).get_success_response()

@@ -350,21 +350,23 @@ class UserVerificationSerializer(serializers.ModelSerializer):
 
         # ----- Mentor (all tiers) -----
         if RoleType.MENTOR.value in role_title or "Mentor" in role_title:
-            # Use next(iter(.all()), None) instead of .first() — .first() adds
-            # ORDER BY pk + LIMIT 1 and clears _result_cache, bypassing the
-            # prefetch set up in the view (N+1).
-            mentor = next(iter(obj.user.user_mentor_user.all()), None)
+            # UserMentor is now a OneToOneField — the reverse accessor is a
+            # single object (or raises DoesNotExist), not a related manager.
+            try:
+                mentor = obj.user.user_mentor_user
+            except Exception:
+                mentor = None
             if mentor:
+                from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
+                scopes = get_mentor_scopes(obj.user_id)
                 return {
                     "type": "mentor",
-                    "mentor_tier": mentor.mentor_tier,
+                    "tiers": sorted({scope_type for scope_type, _ in scopes}),
                     "about": mentor.about,
                     "expertise": mentor.expertise,
                     "reason": mentor.reason,
                     "hours_available": mentor.hours,
-                    "preferred_ig_ids": mentor.preferred_ig_ids,
-                    "status": mentor.status,
-                    "org_id": mentor.org_id,
+                    "is_active": mentor.is_active,
                 }
             return {"type": "mentor"}
 

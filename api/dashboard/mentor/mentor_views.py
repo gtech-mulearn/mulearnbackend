@@ -1,18 +1,21 @@
 import re
+from datetime import timedelta
 from rest_framework.views import APIView
 from django.db.models import Q, Case, When
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType, OrganizationType
-from utils.utils import CommonUtils
-from db.user import UserMentor, Socials
+from utils.utils import CommonUtils, DateTimeUtils
+from db.user import UserMentor, MentorApplication, MentorScopeGrant, Socials
 from db.mentor import MentorshipSession
 from db.organization import Organization
 from db.task import KarmaActivityLog
 from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, inline_serializer
 from rest_framework import serializers as rest_serializers
 from . import serializers
-from .dash_mentor_helper import get_mentor_overview
+from .dash_mentor_helper import get_mentor_overview, get_mentor_scopes, is_mentor_active
+
+NOMINATION_EXPIRY_DAYS = 14
 
 
 class MentorRegistrationAPI(APIView):
@@ -29,21 +32,28 @@ class MentorRegistrationAPI(APIView):
 
         org_id = request.data.get('org')
 
-        # Prevent duplicate PENDING or APPROVED applications for the same scope.
+        # Prevent duplicate PENDING applications for the same scope, and
+        # re-applying for a scope already actively granted.
         if org_id:
-            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.PENDING).exists():
+            if MentorApplication.objects.filter(user_id=user_id, org_id=org_id, status=MentorApplication.Status.PENDING).exists():
                 return CustomResponse(
                     general_message="You already have a pending mentor application for this company."
                 ).get_failure_response()
-            if UserMentor.objects.filter(user_id=user_id, org_id=org_id, status=UserMentor.Status.APPROVED).exists():
+            if MentorScopeGrant.objects.filter(
+                mentor__user_id=user_id, scope_type=UserMentor.MentorTier.COMPANY_MENTOR,
+                scope_id=org_id, is_active=True,
+            ).exists():
                 return CustomResponse(
                     general_message="You are already an approved mentor for this company."
                 ).get_failure_response()
         else:
-            # A user can only have one pending/approved IG mentor application at a time.
-            if UserMentor.objects.filter(user_id=user_id, mentor_tier=UserMentor.MentorTier.IG_MENTOR, status__in=[UserMentor.Status.PENDING, UserMentor.Status.APPROVED]).exists():
+            # A user can only have one pending IG mentor application at a time.
+            if MentorApplication.objects.filter(
+                user_id=user_id, tier=UserMentor.MentorTier.IG_MENTOR,
+                status=MentorApplication.Status.PENDING,
+            ).exists():
                 return CustomResponse(
-                    general_message="You already have an active or pending IG mentor application. You can edit your preferred IGs from your profile."
+                    general_message="You already have a pending IG mentor application. You can edit your preferred IGs from your profile once approved."
                 ).get_failure_response()
 
         serializer = serializers.MentorRegisterSerializer(
@@ -70,20 +80,17 @@ class MentorRegistrationAPI(APIView):
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        mentor = UserMentor.objects.filter(user_id=user_id).first()
+        application = MentorApplication.objects.filter(
+            user_id=user_id
+        ).exclude(status=MentorApplication.Status.APPROVED).order_by('-created_at').first()
 
-        if not mentor:
+        if not application:
             return CustomResponse(
-                general_message="No mentor registration request found for your account."
+                general_message="No pending or rejected mentor application found for your account."
             ).get_failure_response(status_code=404)
 
-        if mentor.status == UserMentor.Status.APPROVED:
-            return CustomResponse(
-                general_message="Your mentor application is already approved. Please use the profile endpoint to update your details."
-            ).get_failure_response()
-
         serializer = serializers.MentorUpdateSerializer(
-            mentor, data=request.data, partial=True, context={"user_id": user_id}
+            application, data=request.data, partial=True, context={"user_id": user_id}
         )
 
         if serializer.is_valid():
@@ -93,8 +100,12 @@ class MentorRegistrationAPI(APIView):
                 socials.linkedin = linkedin_url or None
                 socials.save(update_fields=['linkedin'])
 
-            if mentor.status == UserMentor.Status.REJECTED:
-                serializer.save(status=UserMentor.Status.PENDING, verification_note=None)
+            if application.status == MentorApplication.Status.REJECTED:
+                serializer.save(
+                    status=MentorApplication.Status.PENDING,
+                    verification_note=None,
+                    nomination_expires_at=DateTimeUtils.get_current_utc_time() + timedelta(days=NOMINATION_EXPIRY_DAYS),
+                )
                 msg = "Mentor registration updated and resubmitted successfully."
             else:
                 serializer.save()
@@ -120,25 +131,31 @@ class MentorStatusAPI(APIView):
     )
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        mentor = UserMentor.objects.filter(user_id=user_id).first()
-        if not mentor:
+
+        applications = MentorApplication.objects.filter(user_id=user_id).order_by('-created_at')
+        if not applications.exists():
             return CustomResponse(
                 general_message="No mentor request found for your account."
             ).get_failure_response(status_code=404)
 
+        latest = applications.first()
+
         from .dash_mentor_helper import get_mentor_company
-        organization = get_mentor_company(mentor)
+        mentor = UserMentor.objects.filter(user_id=user_id).first()
+        organization = get_mentor_company(mentor) if mentor else None
 
         response = {
-            "status": mentor.status,
+            "status": latest.status,
+            "tier": latest.tier,
             "organization": organization,
-            "verified_by": getattr(mentor.verified_by, "full_name", None) if mentor.verified_by else None,
-            "verified_at": mentor.verified_at,
+            "active_tiers": sorted({scope_type for scope_type, _ in get_mentor_scopes(user_id)}),
+            "verified_by": getattr(latest.verified_by, "full_name", None) if latest.verified_by else None,
+            "verified_at": latest.verified_at,
+            "applications": serializers.MentorApplicationListSerializer(applications, many=True).data,
         }
 
-        if mentor.status == UserMentor.Status.REJECTED:
-            response["rejection_reason"] = mentor.verification_note
+        if latest.status == MentorApplication.Status.REJECTED:
+            response["rejection_reason"] = latest.verification_note
 
         return CustomResponse(response=response).get_success_response()
 
@@ -221,14 +238,14 @@ class MentorProfileAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def get(self, request):
         user_id = JWTUtils.fetch_user_id(request)
-        mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-        
-        if not mentor:
+        mentor = UserMentor.objects.filter(user_id=user_id, is_active=True).first()
+
+        if not mentor or not get_mentor_scopes(user_id):
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
 
-        serializer = serializers.MentorDetailSerializer(mentor)
+        serializer = serializers.MentorProfileSerializer(mentor)
         response_data = serializer.data
 
         socials = Socials.objects.filter(user_id=user_id).first()
@@ -239,50 +256,54 @@ class MentorProfileAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Mentor'],
         description="Update the profile of a verified mentor.",
-        request=serializers.MentorUpdateSerializer,
-        responses={200: serializers.MentorUpdateSerializer},
+        request=serializers.MentorProfileSerializer,
+        responses={200: serializers.MentorProfileSerializer},
     )
     @role_required([RoleType.MENTOR.value])
     def patch(self, request):
         user_id = JWTUtils.fetch_user_id(request)
 
-        mentor = UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.APPROVED).first()
-        
-        if not mentor:
+        mentor = UserMentor.objects.filter(user_id=user_id, is_active=True).first()
+
+        if not mentor or not get_mentor_scopes(user_id):
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
 
         data = request.data.copy()
-        data.pop('org', None)
 
-        serializer = serializers.MentorUpdateSerializer(
+        serializer = serializers.MentorProfileSerializer(
             mentor, data=data, partial=True, context={"user_id": user_id}
         )
-        
+
         if serializer.is_valid():
             general_message = "Mentor profile updated successfully."
             new_url_pending = False
 
             if 'linkedin' in serializer.validated_data:
                 linkedin_url = serializer.validated_data.get('linkedin')
-                
+
                 if linkedin_url:
-                    if UserMentor.objects.filter(user_id=user_id, status=UserMentor.Status.PENDING, about="[LinkedIn URL Update Request]").exists():
+                    if MentorApplication.objects.filter(
+                        user_id=user_id, status=MentorApplication.Status.PENDING,
+                        about="[LinkedIn URL Update Request]",
+                    ).exists():
                         return CustomResponse(general_message="You already have a pending LinkedIn URL update request.").get_failure_response()
-                    
-                    UserMentor.objects.create(
+
+                    now = DateTimeUtils.get_current_utc_time()
+                    MentorApplication.objects.create(
                         user_id=user_id,
-                        org=mentor.org,
-                        mentor_tier=mentor.mentor_tier,
-                        status=UserMentor.Status.PENDING,
+                        tier=UserMentor.MentorTier.MENTOR,
+                        status=MentorApplication.Status.PENDING,
+                        source=MentorApplication.SourceType.SELF_APPLIED,
                         about="[LinkedIn URL Update Request]",
                         expertise=linkedin_url,
                         reason="User requested LinkedIn URL update from profile.",
                         hours=mentor.hours,
-                        preferred_ig_ids=mentor.preferred_ig_ids,
                         created_by_id=user_id,
                         updated_by_id=user_id,
+                        created_at=now,
+                        updated_at=now,
                     )
                     general_message = "Profile updated. LinkedIn URL change has been submitted for verification."
                     new_url_pending = True
@@ -290,13 +311,13 @@ class MentorProfileAPI(APIView):
                     socials, _ = Socials.objects.get_or_create(user_id=user_id)
                     socials.linkedin = None
                     socials.save(update_fields=['linkedin'])
- 
+
             serializer.save()
- 
-            response_serializer = serializers.MentorDetailSerializer(mentor)
+
+            response_serializer = serializers.MentorProfileSerializer(mentor)
             response_data = response_serializer.data
             socials = Socials.objects.filter(user_id=user_id).first()
-            
+
             if new_url_pending:
                 response_data['linkedin'] = None
             else:
@@ -306,40 +327,105 @@ class MentorProfileAPI(APIView):
                 general_message=general_message,
                 response=response_data
             ).get_success_response()
-            
+
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class MentorListAPI(APIView):
+    """
+    Admin review queue over MentorApplication rows — pending applications by
+    default, filterable to any status/tier. This is distinct from the
+    roster of currently-active mentors (see MentorRosterAPI), since a tier's
+    membership is no longer stored on a single reviewable row.
+    """
     permission_classes = [CustomizePermission]
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
-        description="List all mentor applications with filtering.",
+        description="List mentor applications with filtering.",
         parameters=[
             OpenApiParameter("status", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
             OpenApiParameter("mentor_tier", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
         ],
-        responses={200: serializers.MentorListSerializer(many=True)},
+        responses={200: serializers.MentorApplicationListSerializer(many=True)},
     )
     @role_required([RoleType.ADMIN.value])
     def get(self, request):
-        mentors = UserMentor.objects.all()
+        applications = MentorApplication.objects.all()
 
         status = request.query_params.get("status")
         mentor_tier = request.query_params.get("mentor_tier")
 
         if status:
-            mentors = mentors.filter(status=status)
+            applications = applications.filter(status=status)
         if mentor_tier:
-            mentors = mentors.filter(mentor_tier=mentor_tier)
+            applications = applications.filter(tier=mentor_tier)
 
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            mentors, request, 
+            applications, request,
             search_fields=["user__full_name", "user__email"],
             sort_fields={"created_at": "created_at", "status": "status", "user_full_name": "user__full_name"}
         )
-        
-        serializer = serializers.MentorListSerializer(paginated_queryset.get("queryset"), many=True)
+
+        serializer = serializers.MentorApplicationListSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+
+
+class MentorRosterAPI(APIView):
+    """
+    Admin roster of currently-active mentors, i.e. users holding at least
+    one active MentorScopeGrant, optionally filtered to a single tier.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="List active mentors (users holding at least one active tier grant).",
+        parameters=[
+            OpenApiParameter("mentor_tier", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
+            OpenApiParameter("low_rating", OpenApiTypes.BOOL, OpenApiParameter.QUERY, required=False,
+                              description="Surface mentors averaging below 3.0 across >= 5 rated sessions."),
+        ],
+        responses={200: serializers.MentorProfileSerializer(many=True)},
+    )
+    @role_required([RoleType.ADMIN.value])
+    def get(self, request):
+        mentor_tier = request.query_params.get("mentor_tier")
+        low_rating = request.query_params.get("low_rating", "").lower() == "true"
+
+        mentor_ids = MentorScopeGrant.objects.filter(is_active=True)
+        if mentor_tier:
+            mentor_ids = mentor_ids.filter(scope_type=mentor_tier)
+        mentor_ids = mentor_ids.values_list('mentor_id', flat=True).distinct()
+
+        mentors = UserMentor.objects.filter(id__in=mentor_ids, is_active=True)
+
+        if low_rating:
+            from django.db.models import Avg, Count
+            from db.mentor import MentorshipSessionUserLink
+            low_rated_user_ids = (
+                MentorshipSessionUserLink.objects.filter(
+                    participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+                    rating__isnull=False,
+                )
+                .values('user_id')
+                .annotate(avg_rating=Avg('rating'), rating_count=Count('id'))
+                .filter(avg_rating__lt=3.0, rating_count__gte=5)
+                .values_list('user_id', flat=True)
+            )
+            mentors = mentors.filter(user_id__in=list(low_rated_user_ids))
+
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            mentors, request,
+            search_fields=["user__full_name", "user__email"],
+            sort_fields={"created_at": "created_at", "user_full_name": "user__full_name"}
+        )
+
+        serializer = serializers.MentorProfileSerializer(paginated_queryset.get("queryset"), many=True)
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -352,35 +438,48 @@ class MentorDetailAPI(APIView):
 
     @extend_schema(
         tags=['Dashboard - Mentor'],
-        description="Get details of a specific mentor by ID.",
-        responses={200: serializers.MentorDetailSerializer},
+        description="Get details of a specific mentor application by ID.",
+        responses={200: serializers.MentorApplicationDetailSerializer},
     )
     @role_required([RoleType.ADMIN.value])
     def get(self, request, mentor_id):
-        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        mentor = MentorApplication.objects.filter(id=mentor_id).first()
         if not mentor:
             return CustomResponse(
-                general_message="Mentor not found."
+                general_message="Mentor application not found."
             ).get_failure_response(status_code=404)
             
         serializer = serializers.MentorDetailSerializer(mentor)
         return CustomResponse(response=serializer.data).get_success_response()
 
-def _is_company_owner_of(actor_id, mentor):
-    """
-    True if `actor_id` owns the verified Company that `mentor`'s
-    COMPANY_MENTOR application is scoped to. Verification authority for a
-    company's own mentor applications belongs to that company's owner, not
-    only platform admins.
-    """
-    if mentor.mentor_tier != UserMentor.MentorTier.COMPANY_MENTOR or not mentor.org:
+def _is_company_owner_of_org(actor_id, org):
+    """True if `actor_id` owns the verified Company backing `org`."""
+    if not org:
         return False
-
     from db.company import Company
     return Company.objects.filter(
         company_user_id=actor_id,
         status="verified",
-        name=mentor.org.title,
+        org_id=org.id,
+    ).exists()
+
+
+def _is_company_owner_of_mentor(actor_id, mentor):
+    """
+    True if `actor_id` owns a verified Company for which `mentor` (a
+    UserMentor profile row) holds an active COMPANY_MENTOR grant. Used by
+    the scope-grant list/revoke endpoints, which operate on the profile
+    rather than a single application.
+    """
+    from db.company import Company
+
+    org_ids = MentorScopeGrant.objects.filter(
+        mentor=mentor, scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR, is_active=True,
+    ).values_list('scope_id', flat=True)
+    if not org_ids:
+        return False
+    return Company.objects.filter(
+        company_user_id=actor_id, status="verified", org_id__in=list(org_ids),
     ).exists()
 
 
@@ -391,63 +490,69 @@ class MentorVerifyAPI(APIView):
         tags=['Dashboard - Mentor'],
         description=(
             "Verify or reject a mentor application. Platform admins can "
-            "verify any application; a Company's owner can verify "
-            "COMPANY_MENTOR applications scoped to their own company."
+            "verify any application EXCEPT COMPANY_MENTOR, which is verified "
+            "solely by the target company's owner."
         ),
         request=serializers.MentorVerifySerializer,
     )
     def patch(self, request, mentor_id):
         user_id = JWTUtils.fetch_user_id(request)
-        mentor = UserMentor.objects.select_related('verified_by', 'updated_by', 'org').filter(id=mentor_id).first()
+        application = MentorApplication.objects.select_related('verified_by', 'updated_by', 'org', 'user').filter(id=mentor_id).first()
 
-        if not mentor:
+        if not application:
             return CustomResponse(
-                general_message="Mentor request not found."
+                general_message="Mentor application not found."
             ).get_failure_response(status_code=404)
+
+        if application.user_id == user_id:
+            return CustomResponse(
+                general_message="You cannot verify your own mentor application."
+            ).get_failure_response(status_code=403)
 
         roles = JWTUtils.fetch_role(request)
         is_admin = RoleType.ADMIN.value in roles
-        is_owner = _is_company_owner_of(user_id, mentor)
+        is_owner = _is_company_owner_of_org(user_id, application.org)
 
-        # Authorization check
-        can_verify = False
-        if mentor.mentor_tier == UserMentor.MentorTier.COMPANY_MENTOR:
-            # For company mentors, both admin and owner can verify
-            if is_admin or is_owner:
-                can_verify = True
+        # Authorization: COMPANY_MENTOR is owner-only — admin has no
+        # approval authority over this tier (§4.5). Every other tier is
+        # admin-only.
+        if application.tier == UserMentor.MentorTier.COMPANY_MENTOR:
+            if is_admin and not is_owner:
+                return CustomResponse(
+                    general_message="Company mentor applications are verified by the company owner only."
+                ).get_failure_response(status_code=403)
+            can_verify = is_owner
         else:
-            # For other tiers (like IG_MENTOR), only admin can verify
-            if is_admin:
-                can_verify = True
-        
+            can_verify = is_admin
+
         if not can_verify:
             return CustomResponse(
                 general_message="You are not authorized to verify this mentor application."
             ).get_failure_response(status_code=403)
 
-        if mentor.status in [UserMentor.Status.APPROVED, UserMentor.Status.REJECTED]:
-            actor = mentor.verified_by or mentor.updated_by
+        if application.status in [MentorApplication.Status.APPROVED, MentorApplication.Status.REJECTED]:
+            actor = application.verified_by or application.updated_by
             actor_name = "an administrator"
             if actor:
-                if _is_company_owner_of(actor.id, mentor):
+                if _is_company_owner_of_org(actor.id, application.org):
                     actor_name = f"the company owner, {actor.full_name}"
                 else:
                     actor_name = actor.full_name
 
             return CustomResponse(
-                general_message=f"This mentor application has already been {mentor.status.lower()} by {actor_name}."
+                general_message=f"This mentor application has already been {application.status.lower()} by {actor_name}."
             ).get_failure_response()
 
         serializer = serializers.MentorVerifySerializer(
-            mentor, data=request.data, context={"user_id": user_id}
+            application, data=request.data, context={"user_id": user_id}
         )
-        
+
         if serializer.is_valid():
             serializer.save()
             return CustomResponse(
                 general_message=f"Mentor status updated to {serializer.validated_data.get('status')} successfully."
             ).get_success_response()
-            
+
         return CustomResponse(message=serializer.errors).get_failure_response()
 
 class MentorPublicProfileAPI(APIView):
@@ -456,17 +561,17 @@ class MentorPublicProfileAPI(APIView):
     @extend_schema(
         tags=['Dashboard - Mentor Public'],
         description="View a mentor's profile publicly.",
-        responses={200: serializers.MentorDetailSerializer},
+        responses={200: serializers.MentorProfileSerializer},
     )
     def get(self, request, mentor_id):
-        mentor = UserMentor.objects.filter(id=mentor_id, status=UserMentor.Status.APPROVED).first()
-        
-        if not mentor:
+        mentor = UserMentor.objects.filter(id=mentor_id, is_active=True).first()
+
+        if not mentor or not get_mentor_scopes(mentor.user_id):
             return CustomResponse(
                 general_message="Mentor profile not found or not approved."
             ).get_failure_response(status_code=404)
-            
-        serializer = serializers.MentorDetailSerializer(mentor)
+
+        serializer = serializers.MentorProfileSerializer(mentor)
         return CustomResponse(response=serializer.data).get_success_response()
 
 class MentorChangeCompanyAPI(APIView):
@@ -497,37 +602,36 @@ class MentorChangeCompanyAPI(APIView):
         if not new_company_org:
             return CustomResponse(general_message="Invalid Company ID.").get_failure_response(status_code=404)
 
-        if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.PENDING).exists():
+        if MentorApplication.objects.filter(user_id=user_id, org=new_company_org, status=MentorApplication.Status.PENDING).exists():
             return CustomResponse(general_message="You already have a pending request for this company.").get_failure_response()
 
-        if UserMentor.objects.filter(user_id=user_id, org=new_company_org, status=UserMentor.Status.APPROVED).exists():
+        if MentorScopeGrant.objects.filter(
+            mentor__user_id=user_id, scope_type=UserMentor.MentorTier.COMPANY_MENTOR,
+            scope_id=str(new_company_org.id), is_active=True,
+        ).exists():
             return CustomResponse(general_message="You are already an approved mentor for this company.").get_failure_response()
 
-        # Prioritize the most recently updated approved profile as the source for user's data.
-        existing_mentor_profile = UserMentor.objects.filter(
-            user_id=user_id,
-            status=UserMentor.Status.APPROVED
-        ).order_by('-updated_at').first()
-        
-        if not existing_mentor_profile:
-            # Fallback to any profile if no approved one exists (e.g., only rejected/pending applications).
-            existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).order_by('-updated_at').first()
+        existing_mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
 
-        new_mentor_app = UserMentor.objects.create(
+        now = DateTimeUtils.get_current_utc_time()
+        new_application = MentorApplication.objects.create(
             user_id=user_id,
             org=new_company_org,
-            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
-            status=UserMentor.Status.PENDING,
+            tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            status=MentorApplication.Status.PENDING,
+            source=MentorApplication.SourceType.SELF_APPLIED,
             about=existing_mentor_profile.about if existing_mentor_profile else None,
             expertise=existing_mentor_profile.expertise if existing_mentor_profile else None,
-            hours=existing_mentor_profile.hours if existing_mentor_profile else None,
-            preferred_ig_ids=existing_mentor_profile.preferred_ig_ids if existing_mentor_profile else None,
+            hours=existing_mentor_profile.hours if existing_mentor_profile else 0,
             reason=reason,
+            nomination_expires_at=now + timedelta(days=NOMINATION_EXPIRY_DAYS),
             created_by_id=user_id,
             updated_by_id=user_id,
+            created_at=now,
+            updated_at=now,
         )
 
-        serializer = serializers.MentorRegisterSerializer(new_mentor_app)
+        serializer = serializers.MentorRegisterSerializer(new_application)
         return CustomResponse(
             general_message="Request to change company submitted successfully. It is pending approval.",
             response=serializer.data
@@ -570,6 +674,252 @@ class MentorOverviewAPI(APIView):
             general_message="Mentor dashboard fetched successfully.",
             response={"scopes": scopes}
         ).get_success_response()
+
+
+class PersonaCurrentAPI(APIView):
+    """
+    GET persona/current/ — the caller's active persona/scope plus the list
+    of scopes they're eligible to switch into (their active grants).
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Get the caller's active persona/scope and available mentor scopes.",
+    )
+    def get(self, request):
+        from db.user import UserSettings
+
+        user_id = JWTUtils.fetch_user_id(request)
+        settings_row = UserSettings.objects.filter(user_id=user_id).first()
+
+        active_persona = settings_row.active_persona if settings_row else 'learner'
+        active_scope_type = settings_row.active_scope_type if settings_row else None
+        active_scope_id = settings_row.active_scope_id if settings_row else None
+
+        available_scopes = list(
+            MentorScopeGrant.objects.filter(
+                mentor__user_id=user_id, mentor__is_active=True, is_active=True,
+            ).values('scope_type', 'scope_id')
+        )
+
+        return CustomResponse(response={
+            "active_persona": active_persona,
+            "active_scope_type": active_scope_type,
+            "active_scope_id": active_scope_id,
+            "available_scopes": available_scopes,
+        }).get_success_response()
+
+
+class PersonaSwitchAPI(APIView):
+    """
+    POST persona/switch/ — switch between 'learner' and 'mentor' mode, and
+    while in mentor mode select which active scope (IG/campus/company) is
+    currently in effect. Writes a SystemActionLog(PERSONA_SWITCH) entry.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Switch active persona (learner/mentor) and, for mentor, the active scope.",
+        request=inline_serializer(
+            name='PersonaSwitchRequest',
+            fields={
+                'persona': rest_serializers.ChoiceField(choices=['learner', 'mentor']),
+                'scope_type': rest_serializers.CharField(required=False, allow_null=True),
+                'scope_id': rest_serializers.CharField(required=False, allow_null=True),
+            }
+        ),
+        responses={200: None},
+    )
+    def post(self, request):
+        from db.user import UserSettings
+        from db.mentor import SystemActionLog
+
+        user_id = JWTUtils.fetch_user_id(request)
+        persona = request.data.get('persona')
+        scope_type = request.data.get('scope_type')
+        scope_id = request.data.get('scope_id')
+
+        if persona not in ('learner', 'mentor'):
+            return CustomResponse(
+                general_message="persona must be 'learner' or 'mentor'."
+            ).get_failure_response()
+
+        if persona == 'mentor':
+            if not scope_type or not scope_id:
+                return CustomResponse(
+                    general_message="scope_type and scope_id are required to switch into mentor mode."
+                ).get_failure_response()
+
+            has_grant = MentorScopeGrant.objects.filter(
+                mentor__user_id=user_id, mentor__is_active=True,
+                scope_type=scope_type, scope_id=str(scope_id), is_active=True,
+            ).exists()
+            if not has_grant:
+                return CustomResponse(
+                    general_message="You do not hold an active mentor grant for that scope."
+                ).get_failure_response(status_code=403)
+        else:
+            scope_type = None
+            scope_id = None
+
+        now = DateTimeUtils.get_current_utc_time()
+        settings_row, _ = UserSettings.objects.get_or_create(
+            user_id=user_id,
+            defaults={"created_by_id": user_id, "updated_by_id": user_id},
+        )
+        old_data = {
+            "active_persona": settings_row.active_persona,
+            "active_scope_type": settings_row.active_scope_type,
+            "active_scope_id": settings_row.active_scope_id,
+        }
+
+        settings_row.active_persona = persona
+        settings_row.active_scope_type = scope_type
+        settings_row.active_scope_id = scope_id
+        settings_row.last_persona_switched_at = now
+        settings_row.updated_by_id = user_id
+        settings_row.save(update_fields=[
+            "active_persona", "active_scope_type", "active_scope_id",
+            "last_persona_switched_at", "updated_by_id",
+        ])
+
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.PERSONA_SWITCH,
+            actor_user_id=user_id,
+            subject_user_id=user_id,
+            entity_name='user_settings',
+            entity_id=settings_row.id,
+            old_data=old_data,
+            new_data={"active_persona": persona, "active_scope_type": scope_type, "active_scope_id": scope_id},
+        )
+
+        return CustomResponse(
+            general_message="Persona switched successfully.",
+            response={
+                "active_persona": persona,
+                "active_scope_type": scope_type,
+                "active_scope_id": scope_id,
+            },
+        ).get_success_response()
+
+
+class AdminMentorDeactivateAPI(APIView):
+    """
+    Admin-only mentor deactivation (addon §6.1) — freezes a mentor's whole
+    account (blocks new session/event/job/opportunity creation) without
+    touching any individual MentorScopeGrant or deleting history. Distinct
+    from revoking a scope grant, which only removes one tier's authority.
+    """
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Deactivate a mentor's account entirely (e.g. reported misconduct).",
+        request=inline_serializer(
+            name='MentorDeactivateRequest',
+            fields={'reason': rest_serializers.CharField(required=True)}
+        ),
+        responses={200: None},
+    )
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request, mentor_id):
+        admin_id = JWTUtils.fetch_user_id(request)
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return CustomResponse(general_message="A reason is required to deactivate a mentor.").get_failure_response()
+
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        if not mentor:
+            return CustomResponse(general_message="Mentor not found.").get_failure_response(status_code=404)
+
+        if not mentor.is_active:
+            return CustomResponse(general_message="This mentor is already deactivated.").get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        mentor.is_active = False
+        mentor.deactivated_by_id = admin_id
+        mentor.deactivated_at = now
+        mentor.deactivation_reason = reason
+        mentor.updated_by_id = admin_id
+        mentor.updated_at = now
+        mentor.save(update_fields=[
+            "is_active", "deactivated_by_id", "deactivated_at",
+            "deactivation_reason", "updated_by_id", "updated_at",
+        ])
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+            actor_user_id=admin_id,
+            subject_user_id=mentor.user_id,
+            entity_name='user_mentor',
+            entity_id=mentor.id,
+            old_data={'is_active': True},
+            new_data={'is_active': False},
+            remarks=reason,
+        )
+
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User
+            actor = User.every.filter(id=admin_id).first()
+            NotificationUtils.insert_notification(
+                user=mentor.user,
+                title="Mentor Account Deactivated",
+                description=f"Your mentor account has been deactivated. Reason: {reason}",
+                button=None, url=None, created_by=actor,
+            )
+        except Exception:
+            pass
+
+        return CustomResponse(general_message="Mentor deactivated successfully.").get_success_response()
+
+
+class AdminMentorReactivateAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Mentor'],
+        description="Reactivate a previously deactivated mentor's account.",
+        responses={200: None},
+    )
+    @role_required([RoleType.ADMIN.value])
+    def post(self, request, mentor_id):
+        admin_id = JWTUtils.fetch_user_id(request)
+
+        mentor = UserMentor.objects.filter(id=mentor_id).first()
+        if not mentor:
+            return CustomResponse(general_message="Mentor not found.").get_failure_response(status_code=404)
+
+        if mentor.is_active:
+            return CustomResponse(general_message="This mentor is already active.").get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        mentor.is_active = True
+        mentor.deactivated_by = None
+        mentor.deactivated_at = None
+        mentor.deactivation_reason = None
+        mentor.updated_by_id = admin_id
+        mentor.updated_at = now
+        mentor.save(update_fields=[
+            "is_active", "deactivated_by", "deactivated_at",
+            "deactivation_reason", "updated_by_id", "updated_at",
+        ])
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY,
+            actor_user_id=admin_id,
+            subject_user_id=mentor.user_id,
+            entity_name='user_mentor',
+            entity_id=mentor.id,
+            old_data={'is_active': False},
+            new_data={'is_active': True},
+        )
+
+        return CustomResponse(general_message="Mentor reactivated successfully.").get_success_response()
 
 
 class AdminAssignMentorAPI(APIView):
@@ -636,65 +986,57 @@ class AdminAssignMentorAPI(APIView):
 
         admin_id = JWTUtils.fetch_user_id(request)
 
-        # Resolve user
         user = User.objects.filter(muid=user_muid).first()
         if not user:
             return CustomResponse(
                 general_message=f"No user found with muid '{user_muid}'."
             ).get_failure_response(status_code=404)
 
-        mentor_tier = request.query_params.get("mentor_tier")
-
-        # Build the queryset of UserMentor records to revoke
-        qs = UserMentor.objects.filter(user=user, status=UserMentor.Status.APPROVED)
-        if mentor_tier:
-            qs = qs.filter(mentor_tier=mentor_tier)
-
-        records = list(qs)
-        if not records:
+        mentor = UserMentor.objects.filter(user=user).first()
+        if not mentor:
             return CustomResponse(
-                general_message="No approved mentor records found to revoke."
+                general_message="No mentor profile found for this user."
             ).get_failure_response(status_code=404)
 
-        now = None
-        try:
-            from utils.utils import DateTimeUtils as _DTU
-            now = _DTU.get_current_utc_time()
-        except Exception:
-            from django.utils import timezone
-            now = timezone.now()
+        mentor_tier = request.query_params.get("mentor_tier")
+
+        qs = MentorScopeGrant.objects.filter(mentor=mentor, is_active=True)
+        if mentor_tier:
+            qs = qs.filter(scope_type=mentor_tier)
+
+        grants = list(qs)
+        if not grants:
+            return CustomResponse(
+                general_message="No active mentor grants found to revoke."
+            ).get_failure_response(status_code=404)
+
+        now = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
-            for record in records:
-                record.status = UserMentor.Status.REJECTED
-                record.updated_by_id = admin_id
-                record.updated_at = now
-                record.save(update_fields=["status", "updated_by_id", "updated_at"])
+            # Deactivate the matching grants. NOTE: revoking mentor authority
+            # must never touch UserOrganizationLink — that's the user's
+            # employment/identity record, not a permission.
+            grant_ids = [g.id for g in grants]
+            MentorScopeGrant.objects.filter(id__in=grant_ids).update(
+                is_active=False, revoked_by_id=admin_id, revoked_at=now,
+            )
 
-                # Deactivate IG links for IG_MENTOR
-                if record.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+            # Deactivate IG links for any revoked IG_MENTOR scopes.
+            if any(g.scope_type == MentorScopeGrant.ScopeType.IG_MENTOR for g in grants):
+                revoked_ig_ids = [
+                    g.scope_id for g in grants
+                    if g.scope_type == MentorScopeGrant.ScopeType.IG_MENTOR and g.scope_id
+                ]
+                if revoked_ig_ids:
                     UserIgLink.objects.filter(
                         user=user,
+                        ig_id__in=revoked_ig_ids,
                         assignment_type=UserIgLink.AssignmentType.MENTOR,
                     ).update(is_active=False)
 
-                # Deactivate matching scope grants. NOTE: revoking mentor
-                # authority must never touch UserOrganizationLink — that's
-                # the user's employment/identity record, not a permission.
-                from db.user import MentorScopeGrant
-                MentorScopeGrant.objects.filter(
-                    mentor=record, is_active=True
-                ).update(
-                    is_active=False,
-                    revoked_by_id=admin_id,
-                    revoked_at=now,
-                )
-
-            # Strip the Mentor role only if no approved mentor records remain at all
-            remaining_approved = UserMentor.objects.filter(
-                user=user, status=UserMentor.Status.APPROVED
-            ).exists()
-            if not remaining_approved:
+            # Strip the Mentor role only if no active grants remain at all.
+            remaining_active = MentorScopeGrant.objects.filter(mentor=mentor, is_active=True).exists()
+            if not remaining_active:
                 mentor_role = Role.objects.filter(title=_RoleType.MENTOR.value).first()
                 if mentor_role:
                     UserRoleLink.objects.filter(user=user, role=mentor_role).delete()
@@ -729,7 +1071,7 @@ class MentorScopeGrantListAPI(APIView):
 
         roles = JWTUtils.fetch_role(request)
         is_admin = RoleType.ADMIN.value in roles
-        if not is_admin and not _is_company_owner_of(actor_id, mentor):
+        if not is_admin and not _is_company_owner_of_mentor(actor_id, mentor):
             return CustomResponse(
                 general_message="You are not authorized to view this mentor's grants."
             ).get_failure_response(status_code=403)
@@ -764,7 +1106,7 @@ class MentorScopeGrantRevokeAPI(APIView):
 
         roles = JWTUtils.fetch_role(request)
         is_admin = RoleType.ADMIN.value in roles
-        if not is_admin and not _is_company_owner_of(actor_id, mentor):
+        if not is_admin and not _is_company_owner_of_mentor(actor_id, mentor):
             return CustomResponse(
                 general_message="You are not authorized to revoke this mentor's grants."
             ).get_failure_response(status_code=403)

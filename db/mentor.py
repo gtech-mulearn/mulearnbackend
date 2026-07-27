@@ -102,6 +102,10 @@ class MentorshipSessionUserLink(models.Model):
     attendance_status = models.CharField(max_length=20, choices=AttendanceStatus.choices, default=AttendanceStatus.INVITED)
     progress_note = models.CharField(max_length=500, blank=True, null=True)
     feedback = models.TextField(blank=True, null=True)
+    # 1-5 rating left by a MENTEE about the MENTOR of the session — the
+    # numeric counterpart to the free-text `feedback`, rolled up into the
+    # mentor's public profile / admin review queue (addon §6.6).
+    rating = models.PositiveSmallIntegerField(blank=True, null=True)
     contributed_minutes = models.IntegerField(blank=True, null=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -215,6 +219,13 @@ class SystemActionLog(models.Model):
         INTERN_LEAVE_REVIEW = 'INTERN_LEAVE_REVIEW', 'Intern Leave Review'
         INTERN_TIMESHEET_EDIT = 'INTERN_TIMESHEET_EDIT', 'Intern Timesheet Edit'
         INTERN_GUILD_REASSIGN = 'INTERN_GUILD_REASSIGN', 'Intern Guild Reassign'
+        MENTOR_APPLY          = 'MENTOR_APPLY',          'Mentor Apply'
+        MENTOR_NOMINATE       = 'MENTOR_NOMINATE',       'Mentor Nominate'
+        COMPANY_MENTOR_VERIFY = 'COMPANY_MENTOR_VERIFY', 'Company Mentor Verify'
+        JOB_APPROVE           = 'JOB_APPROVE',           'Job Approve'
+        JOB_REJECT            = 'JOB_REJECT',            'Job Reject'
+        COMPANY_EVENT_APPROVE = 'COMPANY_EVENT_APPROVE', 'Company Event Approve'
+        IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     action_type = models.CharField(max_length=25, choices=ActionType.choices)
