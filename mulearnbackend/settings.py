@@ -326,4 +326,12 @@ CELERY_BEAT_SCHEDULE = {
         'task': 'mu_celery.alumni_cron.update_alumni_status_cron',
         'schedule': crontab(hour=0, minute=15),
     },
+    'expire-stale-mentor-applications': {
+        'task': 'mu_celery.mentor_tasks.expire_stale_applications',
+        'schedule': crontab(hour=0, minute=20),
+    },
+    'expire-stale-mentor-grants': {
+        'task': 'mu_celery.mentor_tasks.expire_stale_grants',
+        'schedule': crontab(hour=0, minute=25),
+    },
 }

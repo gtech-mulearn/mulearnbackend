@@ -105,6 +105,12 @@ class UserEndgoals(models.Model):
         
 
 class UserMentor(models.Model):
+    """
+    A user's single mentor profile row (one per user). Which tiers a mentor
+    actually holds is NOT stored here — it's derived from active
+    MentorScopeGrant rows. Pending/rejected applications live in
+    MentorApplication, not here. See MentorApplication and MentorScopeGrant.
+    """
 
     class MentorTier(models.TextChoices):
         IG_MENTOR      = 'IG_MENTOR',      'IG Mentor'       # linked to specific IG(s)
@@ -114,7 +120,7 @@ class UserMentor(models.Model):
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
 
-    user = models.ForeignKey(
+    user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,
         related_name='user_mentor_user'
@@ -128,54 +134,20 @@ class UserMentor(models.Model):
 
     hours = models.PositiveIntegerField(default=0)
 
-    mentor_tier = models.CharField(
-        max_length=14,                        # 14 chars fits 'COMPANY_MENTOR'
-        choices=MentorTier.choices,
-        default=MentorTier.MENTOR             # default changed from IG_MENTOR → MENTOR
-    )
+    is_active = models.BooleanField(default=True)
 
-    class Status(models.TextChoices):
-        PENDING = 'PENDING', 'Pending'
-        APPROVED = 'APPROVED', 'Approved'
-        REJECTED = 'REJECTED', 'Rejected'
-
-    status = models.CharField(
-        max_length=20,
-        choices=Status.choices,
-        default=Status.PENDING
-    )
-
-    # JSON list of IG UUIDs mentor expressed interest in during onboarding.
-    # On admin approval, UserIgLink rows are auto-created for each.
-    preferred_ig_ids = models.JSONField(null=True, blank=True)
-
-    # Organisation this mentor row is scoped to.
-    # NULL for IG_MENTOR and MENTOR (global) tiers.
-    # Set to a Company org for COMPANY_MENTOR, College org for CAMPUS_MENTOR.
-    org = models.ForeignKey(
-        'db.Organization',
-        on_delete=models.SET_NULL,
-        null=True, blank=True,
-        db_column='org_id',
-        related_name='org_mentors'
-    )
-
-    verified_by = models.ForeignKey(
+    deactivated_by = models.ForeignKey(
         User,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        db_column='verified_by',
-        related_name='user_mentor_verified_by_set'
+        db_column='deactivated_by',
+        related_name='user_mentor_deactivated_by_set'
     )
 
-    verified_at = models.DateTimeField(blank=True, null=True)
+    deactivated_at = models.DateTimeField(blank=True, null=True)
 
-    verification_note = models.CharField(
-        max_length=500,
-        blank=True,
-        null=True
-    )
+    deactivation_reason = models.CharField(max_length=500, blank=True, null=True)
 
     updated_by = models.ForeignKey(
         User,
@@ -200,12 +172,125 @@ class UserMentor(models.Model):
         db_table = 'user_mentor'
 
 
+class MentorApplication(models.Model):
+    """
+    A single application or nomination for a mentor tier. Pending review
+    state lives here, separate from both the mentor's profile (UserMentor)
+    and any authority it eventually grants (MentorScopeGrant). A user may
+    have many of these over time (different tiers, different companies,
+    resubmissions after rejection).
+    """
+
+    class Status(models.TextChoices):
+        PENDING = 'PENDING', 'Pending'
+        APPROVED = 'APPROVED', 'Approved'
+        REJECTED = 'REJECTED', 'Rejected'
+
+    class SourceType(models.TextChoices):
+        SELF_APPLIED     = 'SELF_APPLIED',     'Self Applied'
+        OWNER_NOMINATED  = 'OWNER_NOMINATED',  'Owner Nominated'
+        LEAD_NOMINATED   = 'LEAD_NOMINATED',   'Lead Nominated'
+        ADMIN_ASSIGNED   = 'ADMIN_ASSIGNED',   'Admin Assigned'
+
+    id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
+
+    user = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        related_name='mentor_applications'
+    )
+
+    tier = models.CharField(max_length=30, choices=UserMentor.MentorTier.choices, db_column='mentor_tier')
+
+    org = models.ForeignKey(
+        'db.Organization',
+        on_delete=models.SET_NULL,
+        null=True, blank=True,
+        db_column='org_id',
+        related_name='org_mentor_applications'
+    )
+
+    # JSON list of IG UUIDs applicant expressed interest in (IG_MENTOR tier).
+    preferred_ig_ids = models.JSONField(null=True, blank=True)
+
+    # Profile-field snapshot submitted with this specific application.
+    about = models.CharField(max_length=1000, blank=True, null=True)
+    expertise = models.TextField(blank=True, null=True)
+    reason = models.CharField(max_length=1000, blank=True, null=True)
+    hours = models.PositiveIntegerField(default=0)
+
+    source = models.CharField(max_length=20, choices=SourceType.choices)
+
+    nominated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='nominated_by',
+        related_name='mentor_applications_nominated'
+    )
+
+    status = models.CharField(
+        max_length=30,
+        choices=Status.choices,
+        default=Status.PENDING
+    )
+
+    verified_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='verified_by_id',
+        related_name='mentor_applications_verified_by_set'
+    )
+
+    verified_at = models.DateTimeField(blank=True, null=True)
+
+    verification_note = models.CharField(max_length=1000, blank=True, null=True)
+
+    nomination_expires_at = models.DateTimeField(blank=True, null=True)
+
+    resulting_grant = models.ForeignKey(
+        'MentorScopeGrant',
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='resulting_grant_id',
+        related_name='source_application'
+    )
+
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='updated_by_id',
+        related_name='mentor_applications_updated_by_set'
+    )
+
+    updated_at = models.DateTimeField(blank=True, null=True)
+
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.CASCADE,
+        db_column='created_by_id',
+        related_name='mentor_applications_created_by_set'
+    )
+
+    created_at = models.DateTimeField(blank=True, null=True)
+
+    class Meta:
+        managed = False
+        db_table = 'mentor_application'
+
+
 class MentorScopeGrant(models.Model):
     """
     A single unit of mentor authority: "this mentor may act as X within
-    scope Y". Additive and independent per (scope_type, scope_id) — granting
-    or revoking one grant never affects any other grant for the same mentor,
-    and never touches identity records like UserOrganizationLink.
+    scope Y". Holding an active grant for (scope_type, scope_id) IS what
+    makes a mentor a member of that tier — tiers are not stored on
+    UserMentor. Additive and independent per (scope_type, scope_id) —
+    granting or revoking one grant never affects any other grant for the
+    same mentor, and never touches identity records like UserOrganizationLink.
     """
 
     class ScopeType(models.TextChoices):
@@ -230,7 +315,19 @@ class MentorScopeGrant(models.Model):
     # for IG_MENTOR).
     scope_id = models.CharField(max_length=36, null=True, blank=True)
 
+    # Which application resulted in this grant, if any (traceability).
+    application = models.ForeignKey(
+        MentorApplication,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        db_column='application_id',
+        related_name='resulting_grants'
+    )
+
     is_active = models.BooleanField(default=True)
+
+    expires_at = models.DateTimeField(null=True, blank=True)
 
     granted_by = models.ForeignKey(
         User,
@@ -395,6 +492,14 @@ class UserSettings(models.Model):
         db_column='active_ig_id',
         related_name='user_settings_active_ig'
     )
+
+    # Generic active-scope pointer for persona switching, mirrors
+    # MentorScopeGrant.ScopeType/scope_id. Used instead of active_ig for
+    # non-IG mentor tiers (company/campus/global) since active_ig can only
+    # ever represent an IG.
+    active_scope_type = models.CharField(max_length=20, null=True, blank=True)
+
+    active_scope_id = models.CharField(max_length=36, null=True, blank=True)
 
     last_persona_switched_at = models.DateTimeField(
         null=True,

@@ -139,7 +139,8 @@ class CampusMentorLeaderboardSerializer(serializers.Serializer):
         return str(obj.user.profile_pic) if obj.user.profile_pic else None
 
     def get_campus_name(self, obj):
-        return obj.org.title if obj.org else None
+        campus = self.context.get('campus')
+        return campus.title if campus else None
 
     def get_rank(self, obj):
         return self.context.get('rankings', {}).get(obj.id, None)

@@ -50,7 +50,7 @@ class JobCreateSerializer(serializers.ModelSerializer):
         # Jobs are always created as Draft; status can only be changed via PATCH.
         validated_data['status'] = 'Draft'
 
-        job = CompanyJob.objects.create(company=company, **validated_data)
+        job = CompanyJob.objects.create(company=company, created_by_id=user_id, **validated_data)
 
         for rule_data in rules_data:
             CompanyJobRule.objects.create(job=job, **rule_data)

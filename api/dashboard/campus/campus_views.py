@@ -1411,36 +1411,59 @@ class AssignCampusMentorAPI(APIView):
                 general_message="Student is not a member of your campus"
             ).get_failure_response()
 
-        from db.user import UserMentor
+        from datetime import timedelta
+        from db.user import UserMentor, MentorApplication, MentorScopeGrant
         from utils.utils import DateTimeUtils
 
-        existing_campus_mentor = UserMentor.objects.filter(
+        existing_pending = MentorApplication.objects.filter(
             user=student,
-            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
+            tier=UserMentor.MentorTier.CAMPUS_MENTOR,
             org=org,
-        ).first()
-        if existing_campus_mentor:
+            status=MentorApplication.Status.PENDING,
+        ).exists()
+        already_granted = MentorScopeGrant.objects.filter(
+            mentor__user=student,
+            scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR,
+            scope_id=str(org.id),
+            is_active=True,
+        ).exists()
+        if existing_pending or already_granted:
             return CustomResponse(
                 general_message="Student is already a Campus Mentor or has a pending request"
             ).get_failure_response()
 
-        other_mentor = UserMentor.objects.filter(user=student).first()
-        if other_mentor:
-            return CustomResponse(
-                general_message=f"Student is already a mentor with tier {other_mentor.mentor_tier}"
-            ).get_failure_response()
-
         now = DateTimeUtils.get_current_utc_time()
-        UserMentor.objects.create(
+        # Lead nomination pre-approves the tier/scope but still needs admin
+        # sign-off before it's live (PRD §4 point 5 — unlike COMPANY_MENTOR,
+        # every other tier keeps the admin gate).
+        MentorApplication.objects.create(
             user=student,
-            mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-            status=UserMentor.Status.PENDING,
+            tier=UserMentor.MentorTier.CAMPUS_MENTOR,
             org=org,
+            source=MentorApplication.SourceType.LEAD_NOMINATED,
+            nominated_by_id=user_id,
+            status=MentorApplication.Status.PENDING,
+            nomination_expires_at=now + timedelta(days=14),
             created_by_id=user_id,
             updated_by_id=user_id,
             created_at=now,
             updated_at=now,
         )
+
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from django.conf import settings
+            actor = User.objects.filter(id=user_id).first()
+            NotificationUtils.insert_notification(
+                user=student,
+                title="Campus Mentor Nomination Received",
+                description=f"You have been nominated as a Campus Mentor for {org.title}. Awaiting admin approval.",
+                button="View",
+                url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/status/",
+                created_by=actor,
+            )
+        except Exception:
+            pass
 
         return CustomResponse(
             general_message="Student successfully nominated as a Campus Mentor"

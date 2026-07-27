@@ -2,16 +2,23 @@
 Mentor-specific DRF permission classes.
 
 These work in tandem with CustomizePermission (JWT auth).
-After auth, views that require IG-scoped mentor access apply one of these classes.
+After auth, views that require active-mentor-persona access apply one of
+these classes.
 
 Persona context is read fresh from user_settings on every request —
-the DB is the source of truth, not the JWT payload.
+the DB is the source of truth, not the JWT payload. Tier membership is
+validated against MentorScopeGrant, not any field on UserMentor (which
+carries no tier/status of its own — see db/user.py).
+
+Not retrofitted onto every existing `role_required([MENTOR])` view — that
+would be a bigger behavioral change than needed. New endpoints that want a
+persona-scoped check should use these explicitly.
 """
 
 from rest_framework.permissions import BasePermission
 from rest_framework.exceptions import PermissionDenied
 
-from db.user import UserRoleLink, UserMentor, UserSettings
+from db.user import UserSettings, MentorScopeGrant
 from utils.permission import JWTUtils
 
 
@@ -21,8 +28,8 @@ def _get_persona_context(request):
     Attaches result to request._mentor_persona_context to avoid duplicate DB hits
     within the same request cycle.
 
-    Returns a dict with keys: active_persona, role_link_id, ig_id, is_verified
-    or None if the user has no active mentor persona.
+    Returns a dict with keys: user_id, active_persona, scope_type, scope_id
+    or None if the user has no active mentor persona backed by a real grant.
     """
     if hasattr(request, '_mentor_persona_context'):
         return request._mentor_persona_context
@@ -33,56 +40,54 @@ def _get_persona_context(request):
         request._mentor_persona_context = None
         return None
 
-    settings_qs = (
-        UserSettings.objects
-        .select_related('active_role_link', 'active_ig')
-        .filter(user_id=user_id)
-        .first()
-    )
+    settings_row = UserSettings.objects.filter(user_id=user_id).first()
 
-    if not settings_qs or settings_qs.active_persona != 'mentor':
+    if not settings_row or settings_row.active_persona != 'mentor':
         request._mentor_persona_context = None
         return None
 
-    role_link_id = settings_qs.active_role_link_id
-    ig_id = settings_qs.active_ig_id
+    scope_type = settings_row.active_scope_type
+    scope_id = settings_row.active_scope_id
 
-    if not role_link_id or not ig_id:
+    if not scope_type:
         request._mentor_persona_context = None
         return None
 
-    # Validate that the role_link is still active (handles mid-session revocation)
-    role_link = (
-        UserRoleLink.objects
-        .filter(id=role_link_id, user_id=user_id, ig_id=ig_id, is_active=True)
-        .first()
-    )
+    # Validate the active scope is still backed by a real, active grant
+    # (handles mid-session revocation).
+    grant = MentorScopeGrant.objects.filter(
+        mentor__user_id=user_id,
+        mentor__is_active=True,
+        scope_type=scope_type,
+        scope_id=scope_id,
+        is_active=True,
+    ).first()
 
-    if not role_link:
+    if not grant:
         request._mentor_persona_context = None
         return None
 
     context = {
         'user_id': user_id,
         'active_persona': 'mentor',
-        'role_link_id': role_link_id,
-        'ig_id': ig_id,
-        'role_link': role_link,
+        'scope_type': scope_type,
+        'scope_id': scope_id,
+        'grant': grant,
     }
     request._mentor_persona_context = context
     return context
 
 
-class IsIGMentor(BasePermission):
+class HasActiveMentorPersona(BasePermission):
     """
-    Grants access if the user's active persona is 'mentor'
-    and the backing user_role_link row is still active.
+    Grants access if the user's active persona is 'mentor' and the backing
+    scope is still covered by an active MentorScopeGrant.
 
     Reads from user_settings (DB source of truth).
     Uses request._mentor_persona_context cache — zero extra DB hit if
     another permission class or middleware already populated it.
     """
-    message = "Active mentor persona required for this IG."
+    message = "Active mentor persona required for this action."
 
     def has_permission(self, request, view):
         context = _get_persona_context(request)
@@ -91,53 +96,32 @@ class IsIGMentor(BasePermission):
         return True
 
 
-class IsVerifiedIGMentor(BasePermission):
+class HasActiveScopeAccess(BasePermission):
     """
-    Extends IsIGMentor: additionally requires is_verified=True and
-    mentor_tier='VERIFIED' on the user_mentor row.
+    Validates that the scope in the URL kwargs matches the user's active
+    persona scope. Prevents cross-scope access even with a valid mentor
+    token. Tier-agnostic — works for IG/company/campus scopes alike.
 
-    Used for: session creation, boot camp creation, verified-only actions.
-    Source of verification: user_mentor table (NOT the role table).
+    Expects a URL kwarg named 'ig_id', 'org_id', or 'scope_id' (checked in
+    that order). Pure in-memory comparison beyond the initial context fetch.
     """
-    message = "Verified mentor status required for this action."
+    message = "You do not have mentor access for the requested scope."
 
     def has_permission(self, request, view):
         context = _get_persona_context(request)
         if not context:
             raise PermissionDenied(self.message)
 
-        has_verified_mentor = UserMentor.objects.filter(
-            user_id=context['user_id'],
-            is_verified=True,
-            mentor_tier=UserMentor.MentorTier.VERIFIED,
-        ).exists()
-
-        if not has_verified_mentor:
-            raise PermissionDenied(self.message)
-        
-        return True
-
-
-class HasIGAccess(BasePermission):
-    """
-    Validates that the IG in the URL kwargs matches the user's active persona IG.
-    Prevents cross-IG access even with a valid mentor token.
-
-    Expects URL kwarg named 'ig_id'. Pure in-memory comparison — zero DB hits.
-    """
-    message = "You do not have mentor access for the requested Interest Group."
-
-    def has_permission(self, request, view):
-        context = _get_persona_context(request)
-        if not context:
-            raise PermissionDenied(self.message)
-
-        url_ig_id = view.kwargs.get('ig_id')
-        if not url_ig_id:
-            # No IG in URL means not IG-restricted; allow if persona is valid
+        url_scope_id = (
+            view.kwargs.get('ig_id')
+            or view.kwargs.get('org_id')
+            or view.kwargs.get('scope_id')
+        )
+        if not url_scope_id:
+            # No scope in URL means not scope-restricted; allow if persona is valid
             return True
 
-        if context['ig_id'] != url_ig_id:
+        if str(context['scope_id']) != str(url_scope_id):
             raise PermissionDenied(self.message)
-            
+
         return True
