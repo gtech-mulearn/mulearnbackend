@@ -2,15 +2,34 @@ import uuid
 from django.db import models
 
 class CompanyJob(models.Model):
+
+    class Status(models.TextChoices):
+        DRAFT = 'Draft', 'Draft'
+        PENDING_APPROVAL = 'Pending Approval', 'Pending Approval'
+        ACTIVE = 'Active', 'Active'
+        CLOSED = 'Closed', 'Closed'
+        EXPIRED = 'Expired', 'Expired'
+        REJECTED = 'Rejected', 'Rejected'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     company = models.ForeignKey('db.Company', on_delete=models.CASCADE, related_name='jobs')
+    created_by = models.ForeignKey(
+        'db.User', on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='created_by', related_name='company_jobs_created'
+    )
     title = models.CharField(max_length=75)
     experience = models.CharField(max_length=20, null=True, blank=True)
     job_description = models.TextField(null=True, blank=True)
     location = models.CharField(max_length=75, null=True, blank=True)
     salary_range = models.CharField(max_length=36, null=True, blank=True)
     job_type = models.CharField(max_length=20) # Enum: Hybrid, Full-Time, Remote, Part-Time, Internship, Gig
-    status = models.CharField(max_length=20, default='Draft') # Enum: Draft, Active, Closed, Expired
+    status = models.CharField(max_length=20, choices=Status.choices, default=Status.DRAFT)
+    approved_by = models.ForeignKey(
+        'db.User', on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='approved_by', related_name='company_jobs_approved'
+    )
+    approved_at = models.DateTimeField(null=True, blank=True)
+    rejection_reason = models.CharField(max_length=500, null=True, blank=True)
     is_deleted = models.BooleanField(default=False)
     total_views = models.IntegerField(default=0)
     duration_value = models.PositiveSmallIntegerField(null=True, blank=True)
@@ -19,6 +38,11 @@ class CompanyJob(models.Model):
     deliverables = models.JSONField(null=True, blank=True)
     stipend = models.CharField(max_length=75, null=True, blank=True)
     certificate_provided = models.CharField(max_length=3, null=True, blank=True) # Enum: Yes, No
+    # PRD §5.2 — optional auto-expiry: if set, a daily Celery beat task
+    # (mu_celery/company_tasks.py:expire_stale_jobs) flips this posting to
+    # Expired once passed. Null means "no auto-expiry", preserving today's
+    # manual-only behavior for existing/unset postings.
+    expires_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

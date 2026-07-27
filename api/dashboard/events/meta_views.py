@@ -177,14 +177,21 @@ class OrganizerOptionsAPI(APIView):
                         'org_type': link.org.org_type,
                     })
 
-        # Company: user with Company role in a company org or UserMentor with COMPANY_MENTOR
+        # Company: user is the owner, an accepted co-admin delegate, or a
+        # UserMentor with COMPANY_MENTOR. Ownership/co-admin membership is
+        # checked directly rather than gated on RoleType.COMPANY, since only
+        # the true registering owner is ever granted that platform role.
         company_options = {}
-        if RoleType.COMPANY.value in roles:
-            from db.company import Company
-            company = Company.objects.filter(
-                company_user_id=user_id, status="verified"
-            ).select_related('org').first()
-            if company and company.org:
+        from db.company import Company, CompanyAdminLink
+        from django.db.models import Q as _Q
+        for company in Company.objects.filter(
+            _Q(company_user_id=user_id) | _Q(
+                admin_links__user_id=user_id,
+                admin_links__status=CompanyAdminLink.Status.ACCEPTED,
+            ),
+            status="verified",
+        ).select_related('org').distinct():
+            if company.org:
                 company_options[company.org.id] = {
                     'id': company.org.id,
                     'title': company.org.title,

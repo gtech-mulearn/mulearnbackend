@@ -11,6 +11,17 @@ from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
 from . import job_serializers
 from .company_views import _get_company_for_user
 
+# Addon §6.4 — rate/abuse limit: cap how many drafts-pending-approval a
+# single mentor can have open at once, so an active grant can't be used to
+# spam postings before an owner catches it.
+MAX_PENDING_JOBS_PER_MENTOR = 5
+
+
+def _is_company_owner(user_id, company):
+    from .company_views import is_company_owner_or_admin
+    return is_company_owner_or_admin(user_id, company)
+
+
 class CompanyJobAPI(APIView):
     permission_classes = [CustomizePermission]
 
@@ -19,7 +30,8 @@ class CompanyJobAPI(APIView):
         description=(
             "Post a new job/gig. "
             "Jobs are always created with status='Draft' regardless of any status value sent in the request body. "
-            "Use PATCH /jobs/{job_id}/ to change the status to 'Active' (or any other value) after creation."
+            "Use PATCH /jobs/{job_id}/ to change the status to 'Pending Approval', then the company owner "
+            "approves via /jobs/{job_id}/approve/ to make it 'Active'. Owner-created jobs may set 'Active' directly."
         ),
         request=job_serializers.JobCreateSerializer,
         responses={200: job_serializers.JobCreateSerializer},
@@ -31,6 +43,15 @@ class CompanyJobAPI(APIView):
             return CustomResponse(
                 general_message="Verified company profile not found or access denied."
             ).get_failure_response(status_code=403)
+
+        pending_count = CompanyJob.objects.filter(
+            company=company, created_by_id=user_id, is_deleted=False,
+            status__in=[CompanyJob.Status.DRAFT, CompanyJob.Status.PENDING_APPROVAL],
+        ).count()
+        if pending_count >= MAX_PENDING_JOBS_PER_MENTOR:
+            return CustomResponse(
+                general_message=f"You already have {MAX_PENDING_JOBS_PER_MENTOR} draft/pending-approval jobs. Resolve those before posting more."
+            ).get_failure_response(status_code=429)
 
         serializer = job_serializers.JobCreateSerializer(
             data=request.data, context={"user_id": user_id, "company": company}
@@ -98,11 +119,37 @@ class CompanyJobDetailAPI(APIView):
         job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
         if not job:
             return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
-        serializer = job_serializers.JobUpdateSerializer(job, data=request.data, partial=True, context={'user_id': user_id})
+
+        data = request.data.copy()
+        requested_status = data.get('status')
+        if requested_status == CompanyJob.Status.ACTIVE and not _is_company_owner(user_id, company):
+            # Job publish gate (§3.1): only the owner may flip a job straight
+            # to Active. A non-owner mentor should submit for approval
+            # instead — swap the requested transition to Pending Approval.
+            data['status'] = CompanyJob.Status.PENDING_APPROVAL
+
+        serializer = job_serializers.JobUpdateSerializer(job, data=data, partial=True, context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
+            general_message = "Job updated successfully."
+            if requested_status == CompanyJob.Status.ACTIVE and not _is_company_owner(user_id, company):
+                general_message = "Job submitted for owner approval (only the company owner can publish directly)."
+                try:
+                    from api.notification.notifications_utils import NotificationUtils
+                    from db.user import User
+                    actor = User.every.filter(id=user_id).first()
+                    NotificationUtils.insert_notification(
+                        user=company.company_user,
+                        title="Job Posting Awaiting Approval",
+                        description=f'A job "{job.title}" is awaiting your approval.',
+                        button="Review",
+                        url=None,
+                        created_by=actor,
+                    )
+                except Exception:
+                    pass
             return CustomResponse(
-                general_message="Job updated successfully.",
+                general_message=general_message,
                 response=serializer.data
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -123,6 +170,96 @@ class CompanyJobDetailAPI(APIView):
         job.save()
         return CustomResponse(general_message="Job deleted successfully.").get_success_response()
 
+class CompanyJobApproveAPI(APIView):
+    """Owner-only: approve a job pending approval, publishing it (Active)."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Company Jobs'], description="Approve a job posting (owner or delegate only).")
+    def post(self, request, job_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        job = CompanyJob.objects.filter(id=job_id, is_deleted=False, company__status="verified").first()
+        if not job:
+            return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
+
+        if not _is_company_owner(user_id, job.company):
+            return CustomResponse(general_message="You are not authorized to approve this job.").get_failure_response(status_code=403)
+
+        if job.created_by_id == user_id:
+            return CustomResponse(general_message="You cannot approve your own job posting.").get_failure_response(status_code=403)
+
+        if job.status != CompanyJob.Status.PENDING_APPROVAL:
+            return CustomResponse(general_message="Job is not pending approval.").get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        job.status = CompanyJob.Status.ACTIVE
+        job.approved_by_id = user_id
+        job.approved_at = now
+        job.updated_at = now
+        job.updated_by = user_id
+        job.save(update_fields=["status", "approved_by_id", "approved_at", "updated_at", "updated_by"])
+
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User
+            actor = User.every.filter(id=user_id).first()
+            if job.created_by and actor:
+                NotificationUtils.insert_notification(
+                    user=job.created_by,
+                    title="Job Posting Approved",
+                    description=f'Your job posting "{job.title}" has been approved and is now live.',
+                    button=None, url=None, created_by=actor,
+                )
+        except Exception:
+            pass
+
+        return CustomResponse(general_message="Job approved and published successfully.").get_success_response()
+
+
+class CompanyJobRejectAPI(APIView):
+    """Owner-only: reject a job pending approval."""
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Company Jobs'], description="Reject a job posting (owner or delegate only).")
+    def post(self, request, job_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        job = CompanyJob.objects.filter(id=job_id, is_deleted=False, company__status="verified").first()
+        if not job:
+            return CustomResponse(general_message="Job not found.").get_failure_response(status_code=404)
+
+        if not _is_company_owner(user_id, job.company):
+            return CustomResponse(general_message="You are not authorized to reject this job.").get_failure_response(status_code=403)
+
+        if job.status != CompanyJob.Status.PENDING_APPROVAL:
+            return CustomResponse(general_message="Job is not pending approval.").get_failure_response()
+
+        reason = (request.data.get('reason') or '').strip()
+        if not reason:
+            return CustomResponse(general_message="A rejection reason is required.").get_failure_response()
+
+        now = DateTimeUtils.get_current_utc_time()
+        job.status = CompanyJob.Status.REJECTED
+        job.rejection_reason = reason
+        job.updated_at = now
+        job.updated_by = user_id
+        job.save(update_fields=["status", "rejection_reason", "updated_at", "updated_by"])
+
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from db.user import User
+            actor = User.every.filter(id=user_id).first()
+            if job.created_by and actor:
+                NotificationUtils.insert_notification(
+                    user=job.created_by,
+                    title="Job Posting Rejected",
+                    description=f'Your job posting "{job.title}" was rejected. Reason: {reason}',
+                    button=None, url=None, created_by=actor,
+                )
+        except Exception:
+            pass
+
+        return CustomResponse(general_message="Job rejected successfully.").get_success_response()
+
+
 class PublicJobAPI(APIView):
     permission_classes = [CustomizePermission]
 
@@ -132,15 +269,18 @@ class PublicJobAPI(APIView):
         responses={200: job_serializers.JobListSerializer(many=True)},
     )
     def get(self, request):
-        jobs = CompanyJob.objects.filter(status='Active', is_deleted=False)
-        
+        user_id = JWTUtils.fetch_user_id(request)
+        jobs = CompanyJob.objects.filter(status='Active', is_deleted=False, company__status="verified")
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
-            jobs, request, 
+            jobs, request,
             search_fields=["title", "location", "job_type", "company__name"],
             sort_fields={"title": "title", "created_at": "created_at"}
         )
-        
-        serializer = job_serializers.JobListSerializer(paginated_queryset.get("queryset"), many=True)
+
+        serializer = job_serializers.JobListSerializer(
+            paginated_queryset.get("queryset"), many=True, context={"learner_id": user_id}
+        )
         return CustomResponse(
             response={
                 "data": serializer.data,
@@ -159,8 +299,8 @@ class JobApplicationAPI(APIView):
     )
     def post(self, request, job_id):
         user_id = JWTUtils.fetch_user_id(request)
-        
-        job = CompanyJob.objects.filter(id=job_id, status='Active', is_deleted=False).first()
+
+        job = CompanyJob.objects.filter(id=job_id, status='Active', is_deleted=False, company__status="verified").first()
         if not job:
             return CustomResponse(general_message="Active job not found.").get_failure_response(status_code=404)
 

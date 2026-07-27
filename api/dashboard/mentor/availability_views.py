@@ -151,9 +151,10 @@ class MentorPublicAvailabilityAPI(APIView):
     )
     def get(self, request, mentor_id):
         from db.user import UserMentor
-        
-        mentor = UserMentor.objects.filter(id=mentor_id, status=UserMentor.Status.APPROVED).first()
-        if not mentor:
+        from .dash_mentor_helper import get_mentor_scopes
+
+        mentor = UserMentor.objects.filter(id=mentor_id, is_active=True).first()
+        if not mentor or not get_mentor_scopes(mentor.user_id):
             return CustomResponse(
                 general_message="Mentor not found or not approved."
             ).get_failure_response(status_code=404)

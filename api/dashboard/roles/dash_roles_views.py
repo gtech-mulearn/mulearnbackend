@@ -401,30 +401,35 @@ class UserRole(APIView):
 
             # ── Mentor cleanup ──────────────────────────────────────────────
             if role_title == RoleType.MENTOR.value:
-                from db.user import UserMentor
+                from db.user import UserMentor, MentorScopeGrant
                 from db.task import UserIgLink
-                mentor_records = UserMentor.objects.filter(
-                    user=user, status=UserMentor.Status.APPROVED
-                )
-                for record in mentor_records:
-                    record.status        = UserMentor.Status.REJECTED
-                    record.updated_by_id = admin_id
-                    record.updated_at    = now
-                    record.save(update_fields=["status", "updated_by_id", "updated_at"])
 
-                    if record.mentor_tier == UserMentor.MentorTier.IG_MENTOR:
+                mentor = UserMentor.objects.filter(user=user).first()
+                if mentor:
+                    grants = list(MentorScopeGrant.objects.filter(mentor=mentor, is_active=True))
+                    MentorScopeGrant.objects.filter(id__in=[g.id for g in grants]).update(
+                        is_active=False, revoked_by_id=admin_id, revoked_at=now,
+                    )
+
+                    ig_scope_ids = [
+                        g.scope_id for g in grants
+                        if g.scope_type == MentorScopeGrant.ScopeType.IG_MENTOR and g.scope_id
+                    ]
+                    if ig_scope_ids:
                         UserIgLink.objects.filter(
-                            user=user,
+                            user=user, ig_id__in=ig_scope_ids,
                             assignment_type=UserIgLink.AssignmentType.MENTOR,
                         ).update(is_active=False)
 
-                    if record.mentor_tier in (
-                        UserMentor.MentorTier.CAMPUS_MENTOR,
-                        UserMentor.MentorTier.COMPANY_MENTOR,
-                    ) and record.org:
+                    org_scope_ids = [
+                        g.scope_id for g in grants
+                        if g.scope_type in (MentorScopeGrant.ScopeType.CAMPUS_MENTOR, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
+                        and g.scope_id
+                    ]
+                    if org_scope_ids:
                         from db.organization import UserOrganizationLink
                         UserOrganizationLink.objects.filter(
-                            user=user, org=record.org
+                            user=user, org_id__in=org_scope_ids,
                         ).update(verified=False)
 
             # ── Intern cleanup ──────────────────────────────────────────────
@@ -439,9 +444,15 @@ class UserRole(APIView):
             # ── Company cleanup ──────────────────────────────────────────────
             elif role_title == RoleType.COMPANY.value:
                 from db.company import Company
-                Company.objects.filter(
-                    company_user_id=user.id, status="verified"
-                ).update(status="suspended")
+                from api.dashboard.company.company_views import _deactivate_company
+                # Reuse the same deactivation path as the dedicated company
+                # deactivation endpoints (PRD §4.2/§4.3) rather than a separate
+                # ad hoc "suspended" status, so admin-link revocation, status
+                # gating, and admin summary counts all stay consistent
+                # regardless of which surface triggered it.
+                company = Company.objects.filter(company_user_id=user.id, status="verified").first()
+                if company:
+                    _deactivate_company(company, admin_id)
 
         DiscordWebhooks.general_updates(
             WebHookCategory.USER_ROLE.value,
