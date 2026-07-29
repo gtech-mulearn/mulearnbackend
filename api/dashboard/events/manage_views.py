@@ -237,7 +237,7 @@ class ManageEventListCreateAPI(APIView):
         paginated = CommonUtils.get_paginated_queryset(
             events.select_related('category', 'organiser_ig', 'organiser_org'), request,
             search_fields=['title', 'venue_city'],
-            sort_fields={'created_at': '-created_at', 'start_datetime': 'start_datetime'},
+            sort_fields={'created_at': 'created_at', 'start_datetime': 'start_datetime'},
         )
         serializer = EventListItemSerializer(
             paginated['queryset'], many=True,
