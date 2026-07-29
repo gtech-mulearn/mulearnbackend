@@ -77,6 +77,31 @@ class CustomizePermission(BasePermission):
         return f'{self.token_prefix} realm="api"'
 
 
+class OptionalAuthentication(authentication.BaseAuthentication):
+    """
+    Authentication class for endpoints that should serve both authenticated
+    and unauthenticated users. Unlike CustomizePermission, a missing
+    Authorization header is treated as an anonymous request instead of
+    being rejected. A token that IS present must still be valid.
+
+    Use this in `authentication_classes` (with no `permission_classes` /
+    `role_required`) on any view that wants to branch its own behavior via
+    `JWTUtils.is_logged_in(request)` rather than requiring auth outright.
+    """
+
+    token_prefix = "Bearer"
+    secret_key = SECRET_KEY
+
+    def authenticate(self, request):
+        auth_header = get_authorization_header(request).decode("utf-8")
+        if not auth_header:
+            return None
+        return JWTUtils.is_jwt_authenticated(request)
+
+    def authenticate_header(self, request):
+        return f'{self.token_prefix} realm="api"'
+
+
 class JWTUtils:
     @staticmethod
     def fetch_role(request):
