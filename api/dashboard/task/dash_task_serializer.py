@@ -14,6 +14,9 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
     level = serializers.CharField(source="level.name", required=False, default=None)
     ig = serializers.CharField(source="ig.name", required=False, default=None)
     event_id = serializers.CharField(source="event_fk_id", required=False, allow_null=True)
+    company_name = serializers.CharField(
+        source="requested_by.company_profile.name", required=False, default=None
+    )
 
     class Meta:
         model = TaskList
@@ -31,6 +34,7 @@ class TaskListPublicSerializer(serializers.ModelSerializer):
             "ig",
             "event",
             "event_id",
+            "company_name",
         ]
 
 
