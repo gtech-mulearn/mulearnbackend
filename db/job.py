@@ -17,6 +17,10 @@ class CompanyJob(models.Model):
         'db.User', on_delete=models.SET_NULL, null=True, blank=True,
         db_column='created_by', related_name='company_jobs_created'
     )
+    updated_by = models.ForeignKey(
+        'db.User', on_delete=models.SET_NULL, null=True, blank=True,
+        db_column='updated_by', related_name='company_jobs_updated'
+    )
     title = models.CharField(max_length=75)
     experience = models.CharField(max_length=20, null=True, blank=True)
     job_description = models.TextField(null=True, blank=True)

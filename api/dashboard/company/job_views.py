@@ -166,7 +166,7 @@ class CompanyJobDetailAPI(APIView):
             return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
         job.is_deleted = True
         job.updated_at = DateTimeUtils.get_current_utc_time()
-        job.updated_by = user_id
+        job.updated_by_id = user_id
         job.save()
         return CustomResponse(general_message="Job deleted successfully.").get_success_response()
 
@@ -195,8 +195,8 @@ class CompanyJobApproveAPI(APIView):
         job.approved_by_id = user_id
         job.approved_at = now
         job.updated_at = now
-        job.updated_by = user_id
-        job.save(update_fields=["status", "approved_by_id", "approved_at", "updated_at", "updated_by"])
+        job.updated_by_id = user_id
+        job.save(update_fields=["status", "approved_by_id", "approved_at", "updated_at", "updated_by_id"])
 
         try:
             from api.notification.notifications_utils import NotificationUtils
@@ -240,8 +240,8 @@ class CompanyJobRejectAPI(APIView):
         job.status = CompanyJob.Status.REJECTED
         job.rejection_reason = reason
         job.updated_at = now
-        job.updated_by = user_id
-        job.save(update_fields=["status", "rejection_reason", "updated_at", "updated_by"])
+        job.updated_by_id = user_id
+        job.save(update_fields=["status", "rejection_reason", "updated_at", "updated_by_id"])
 
         try:
             from api.notification.notifications_utils import NotificationUtils
