@@ -50,6 +50,7 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
             'designation',
             'description',
             'date',
+            'time',
             'link',
             'interest_groups',
             'poster_thumbnail',
@@ -63,6 +64,35 @@ class OfficeHoursReadSerializer(serializers.ModelSerializer):
 
     def get_poster_thumbnail(self, obj):
         return resolve_image_url(obj.poster_thumbnail, self.context.get('request'))
+
+
+class GrabYourSuperpowersReadSerializer(serializers.ModelSerializer):
+    """
+    Read-only serializer for Grab Your Superpowers sessions.
+    Session name (``title``), date, time, description, speaker details
+    (``performer``/``designation``), hosting college (``campus``), and link.
+    """
+    status = serializers.SerializerMethodField()
+
+    class Meta:
+        model = MediaContent
+        fields = [
+            'id',
+            'title',
+            'date',
+            'time',
+            'description',
+            'performer',
+            'designation',
+            'campus',
+            'link',
+            'status',
+            'created_at',
+            'updated_at',
+        ]
+
+    def get_status(self, obj):
+        return _compute_status(obj.date)
 
 
 class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
@@ -82,6 +112,7 @@ class SaltMangoTreeReadSerializer(serializers.ModelSerializer):
             'campus',
             'zone',
             'date',
+            'time',
             'description',
             'link',
             'status',
@@ -109,6 +140,7 @@ class InspirationStationReadSerializer(serializers.ModelSerializer):
             'campus',
             'zone',
             'date',
+            'time',
             'description',
             'link',
             'status',
@@ -134,6 +166,10 @@ class OfficeHoursWriteSerializer(serializers.Serializer):
     title            = serializers.CharField(max_length=300)
     date             = serializers.CharField(
         help_text='Format: DD/MM/YYYY'
+    )
+    time             = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
     )
     performer        = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
     designation      = serializers.CharField(max_length=200, required=False, allow_blank=True, allow_null=True)
@@ -173,6 +209,10 @@ class _EpisodeWriteSerializer(serializers.Serializer):
         input_formats=['%Y-%m-%d'],
         help_text='Format: YYYY-MM-DD'
     )
+    time        = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
+    )
     description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     link        = serializers.URLField(max_length=500, required=False, allow_blank=True, allow_null=True)
 
@@ -195,4 +235,35 @@ class InspirationStationWriteSerializer(_EpisodeWriteSerializer):
     def to_internal_value(self, data):
         value = super().to_internal_value(data)
         value['content_type'] = MediaContent.ContentType.INSPIRATION_STATION
+        return value
+
+
+class GrabYourSuperpowersWriteSerializer(serializers.Serializer):
+    """
+    Write serializer for Grab Your Superpowers sessions (POST / PATCH).
+
+    Date format accepted: YYYY-MM-DD. Time format accepted: HH:MM (24h).
+    """
+    title       = serializers.CharField(max_length=300)  # session name
+    date        = serializers.DateField(
+        input_formats=['%Y-%m-%d'],
+        help_text='Format: YYYY-MM-DD'
+    )
+    time        = serializers.TimeField(
+        input_formats=['%H:%M', '%H:%M:%S'],
+        help_text='Format: HH:MM (24h)'
+    )
+    description = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    performer   = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, allow_null=True
+    )  # speaker name
+    designation = serializers.CharField(
+        max_length=200, required=False, allow_blank=True, allow_null=True
+    )  # speaker designation/role
+    campus      = serializers.CharField(max_length=200)  # conducted by which college
+    link        = serializers.URLField(max_length=500, required=False, allow_blank=True, allow_null=True)  # meet link
+
+    def to_internal_value(self, data):
+        value = super().to_internal_value(data)
+        value['content_type'] = MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS
         return value

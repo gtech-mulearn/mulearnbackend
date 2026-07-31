@@ -1,12 +1,13 @@
 """
 Media Content API views.
 
-Exposes CRUD endpoints for three CMS-migrated content types backed by the
+Exposes CRUD endpoints for the content types backed by the
 single ``MediaContent`` model:
 
-  - Office Hours          → /media-content/office-hours/
-  - Salt Mango Tree       → /media-content/salt-mango-tree/
-  - Inspiration Station   → /media-content/inspiration-station/
+  - Office Hours           → /media-content/office-hours/
+  - Salt Mango Tree        → /media-content/salt-mango-tree/
+  - Inspiration Station    → /media-content/inspiration-station/
+  - Grab Your Superpowers  → /media-content/grab-your-superpowers/
 
 Read (GET) endpoints are publicly accessible.
 Write (POST / PATCH / DELETE) endpoints require the ADMIN role.
@@ -31,6 +32,8 @@ from .serializers import (
     SaltMangoTreeWriteSerializer,
     InspirationStationReadSerializer,
     InspirationStationWriteSerializer,
+    GrabYourSuperpowersReadSerializer,
+    GrabYourSuperpowersWriteSerializer,
 )
 from api.dashboard.media_content.image_utils import (
     merge_media_write_payload,
@@ -525,6 +528,139 @@ class InspirationStationDetailAPI(PublicGetMixin, APIView):
         ).get_success_response()
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# Grab Your Superpowers
+# ─────────────────────────────────────────────────────────────────────────────
+
+class GrabYourSuperpowersListCreateAPI(PublicGetMixin, APIView):
+    """
+    GET  /media-content/grab-your-superpowers/  — Public paginated list of sessions.
+    POST /media-content/grab-your-superpowers/  — Create a session (Admin only).
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Media Content - Grab Your Superpowers'])
+    def get(self, request):
+        qs = _base_qs(MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS)
+        qs = _apply_common_filters(qs, request, has_zone=False)
+
+        paginated = CommonUtils.get_paginated_queryset(
+            qs, request,
+            search_fields=['title', 'performer', 'campus', 'description'],
+            sort_fields={
+                'date': 'date',
+                'campus': 'campus',
+                'created_at': 'created_at',
+            },
+        )
+
+        serializer = GrabYourSuperpowersReadSerializer(paginated['queryset'], many=True)
+        return CustomResponse().paginated_response(
+            data=serializer.data,
+            pagination=paginated['pagination'],
+        )
+
+    @extend_schema(tags=['Media Content - Grab Your Superpowers'])
+    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        serializer = GrabYourSuperpowersWriteSerializer(data=request.data)
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message='Invalid data.',
+                message=serializer.errors,
+            ).get_failure_response()
+
+        data = serializer.validated_data
+        record = MediaContent.objects.create(
+            id=str(uuid.uuid4()),
+            created_by_id=user_id,
+            updated_by_id=user_id,
+            **data,
+        )
+
+        return CustomResponse(
+            general_message='Grab Your Superpowers session created successfully.',
+            response=GrabYourSuperpowersReadSerializer(record).data,
+        ).get_success_response()
+
+
+class GrabYourSuperpowersDetailAPI(PublicGetMixin, APIView):
+    """
+    GET    /media-content/grab-your-superpowers/<record_id>/
+    PATCH  /media-content/grab-your-superpowers/<record_id>/  (Admin)
+    DELETE /media-content/grab-your-superpowers/<record_id>/  (Admin)
+    """
+    authentication_classes = [CustomizePermission]
+
+    def _get_record(self, record_id):
+        return MediaContent.objects.filter(
+            id=record_id,
+            content_type=MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS,
+            deleted_at__isnull=True,
+        ).first()
+
+    @extend_schema(tags=['Media Content - Grab Your Superpowers'])
+    def get(self, request, record_id):
+        record = self._get_record(record_id)
+        if not record:
+            return CustomResponse(
+                general_message='Grab Your Superpowers session not found.'
+            ).get_failure_response()
+
+        return CustomResponse(
+            general_message='Grab Your Superpowers session retrieved.',
+            response=GrabYourSuperpowersReadSerializer(record).data,
+        ).get_success_response()
+
+    @extend_schema(tags=['Media Content - Grab Your Superpowers'])
+    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    def patch(self, request, record_id):
+        record = self._get_record(record_id)
+        if not record:
+            return CustomResponse(
+                general_message='Grab Your Superpowers session not found.'
+            ).get_failure_response()
+
+        serializer = GrabYourSuperpowersWriteSerializer(data=request.data, partial=True)
+        if not serializer.is_valid():
+            return CustomResponse(
+                general_message='Invalid data.',
+                message=serializer.errors,
+            ).get_failure_response()
+
+        user_id = JWTUtils.fetch_user_id(request)
+        data = serializer.validated_data
+        data.pop('content_type', None)
+
+        for attr, value in data.items():
+            setattr(record, attr, value)
+        record.updated_by_id = user_id
+        record.save()
+
+        return CustomResponse(
+            general_message='Grab Your Superpowers session updated.',
+            response=GrabYourSuperpowersReadSerializer(record).data,
+        ).get_success_response()
+
+    @extend_schema(tags=['Media Content - Grab Your Superpowers'])
+    @RoleRequired([RoleType.ADMIN.value, RoleType.ASSOCIATE.value, RoleType.IG_LEAD.value])
+    def delete(self, request, record_id):
+        record = self._get_record(record_id)
+        if not record:
+            return CustomResponse(
+                general_message='Grab Your Superpowers session not found.'
+            ).get_failure_response()
+
+        record.deleted_at = timezone.now()
+        record.updated_by_id = JWTUtils.fetch_user_id(request)
+        record.save(update_fields=['deleted_at', 'updated_by_id'])
+
+        return CustomResponse(
+            general_message='Grab Your Superpowers session deleted.'
+        ).get_success_response()
+
+
 class MediaContentBulkImportAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -592,13 +728,17 @@ class MediaContentBulkImportAPI(APIView):
                     row_data['topic'] = row_data.pop('title')
                 serializer = InspirationStationWriteSerializer(data=row_data)
 
+            elif content_type == MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS:
+                serializer = GrabYourSuperpowersWriteSerializer(data=row_data)
+
             else:
                 failed_rows.append({
                     "row": row_num,
                     "title": row.get('title') or row.get('topic', ''),
                     "reason": (
                         f"Invalid or missing content_type: '{content_type}'. "
-                        "Must be 'office_hours', 'salt_mango_tree', or 'inspiration_station'."
+                        "Must be 'office_hours', 'salt_mango_tree', 'inspiration_station', "
+                        "or 'grab_your_superpowers'."
                     ),
                 })
                 continue
@@ -653,9 +793,16 @@ class MediaContentBulkExportAPI(APIView):
                 deleted_at__isnull=True,
             )
             serializer = InspirationStationReadSerializer(queryset, many=True)
+        elif content_type == MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS:
+            queryset = MediaContent.objects.filter(
+                content_type=MediaContent.ContentType.GRAB_YOUR_SUPERPOWERS,
+                deleted_at__isnull=True,
+            )
+            serializer = GrabYourSuperpowersReadSerializer(queryset, many=True)
         else:
             return CustomResponse(
-                general_message='Invalid content type. Must be office_hours, salt_mango_tree, or inspiration_station.'
+                general_message='Invalid content type. Must be office_hours, salt_mango_tree, '
+                                 'inspiration_station, or grab_your_superpowers.'
             ).get_failure_response()
 
         return CommonUtils.generate_csv(serializer.data, f"{content_type}_export")

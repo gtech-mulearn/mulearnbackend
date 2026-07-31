@@ -3,7 +3,6 @@ import uuid
 from decouple import config as decouple_config
 from django.db import transaction
 from django.db.models import F, Sum, Q, Case, When, Value, CharField, Exists, OuterRef
-from django.db.models.functions import Coalesce
 from rest_framework import serializers
 from rest_framework.serializers import ModelSerializer
 from db.task import UserIgLvlLink
@@ -84,45 +83,46 @@ def get_karma_breakdown(user_id):
     )
     base_qs = base_qs.annotate(bucket=bucket)
 
-    general_enablement_karma = (
-        base_qs.filter(bucket="general").aggregate(total=Sum("karma"))["total"] or 0
-    )
-    intern_karma = (
-        base_qs.filter(bucket="intern").aggregate(total=Sum("karma"))["total"] or 0
-    )
-    org_ig_karma_split = list(
-        base_qs.filter(bucket="ig")
-        .values(ig_id=F("task__ig_id"), ig_name=F("task__ig__name"), ig_code=F("task__ig__code"))
-        .annotate(karma=Sum("karma"))
-        .order_by("-karma")
-    )
-    event_karma_split = list(
+    events = list(
         base_qs.filter(bucket="event")
         .values(
             event_id=F("task__event_fk_id"),
             event_title=F("task__event_fk__title"),
             event_type=F("task__event_fk__event_type"),
-            # organiser_ig (who actually ran it) takes priority over
-            # scope_ig (who it was scoped/targeted at) when both are set.
-            organizing_ig_id=Coalesce(
-                F("task__event_fk__organiser_ig_id"), F("task__event_fk__scope_ig_id")
-            ),
-            organizing_ig_name=Coalesce(
-                F("task__event_fk__organiser_ig__name"), F("task__event_fk__scope_ig__name")
-            ),
-            organizing_ig_code=Coalesce(
-                F("task__event_fk__organiser_ig__code"), F("task__event_fk__scope_ig__code")
-            ),
         )
+        .annotate(karma=Sum("karma"))
+        .order_by("-karma")
+    )
+    ig = list(
+        base_qs.filter(bucket="ig")
+        .values(ig_id=F("task__ig_id"), ig_name=F("task__ig__name"), ig_code=F("task__ig__code"))
+        .annotate(karma=Sum("karma"))
+        .order_by("-karma")
+    )
+    intern_karma = (
+        base_qs.filter(bucket="intern").aggregate(total=Sum("karma"))["total"] or 0
+    )
+    general = list(
+        base_qs.filter(bucket="general")
+        .values(category=F("task__type__title"))
+        .annotate(karma=Sum("karma"))
+        .order_by("-karma")
+    )
+    # Level breakdown cross-cuts all the buckets above — it sums karma by the
+    # difficulty level tagged on the task itself, independent of whether the
+    # task is an event/ig/intern/general task.
+    level = list(
+        base_qs.values(level_id=F("task__level_id"), level_name=F("task__level__name"))
         .annotate(karma=Sum("karma"))
         .order_by("-karma")
     )
 
     return {
-        "general_enablement_karma": general_enablement_karma,
-        "org_ig_karma_split": org_ig_karma_split,
-        "event_karma_split": event_karma_split,
-        "intern_karma": intern_karma,
+        "events": events,
+        "ig": ig,
+        "intern": {"karma": intern_karma},
+        "general": general,
+        "level": level,
     }
 
 
@@ -140,10 +140,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
     college_code = serializers.SerializerMethodField()
     rank = serializers.SerializerMethodField()
     karma_distribution = serializers.SerializerMethodField()
-    general_enablement_karma = serializers.SerializerMethodField()
-    org_ig_karma_split = serializers.SerializerMethodField()
-    event_karma_split = serializers.SerializerMethodField()
-    intern_karma = serializers.SerializerMethodField()
     interest_groups = serializers.SerializerMethodField()
     org_district_id = serializers.SerializerMethodField()
     percentile = serializers.SerializerMethodField()
@@ -165,10 +161,6 @@ class UserProfileSerializer(serializers.ModelSerializer):
             "karma",
             "rank",
             "karma_distribution",
-            "general_enablement_karma",
-            "org_ig_karma_split",
-            "event_karma_split",
-            "intern_karma",
             "level",
             "profile_pic",
             "cover_pic",
@@ -281,75 +273,7 @@ class UserProfileSerializer(serializers.ModelSerializer):
             return None
 
     def get_karma_distribution(self, obj):
-        # Exists subqueries to safely check creator's roles WITHOUT joining,
-        # which would cause duplicate rows and multiply karma sums incorrectly.
-        is_mentor = Exists(
-            UserRoleLink.objects.filter(
-                user=OuterRef("task__created_by"),
-                role__title=RoleType.MENTOR.value
-            )
-        )
-        is_intern = Exists(
-            UserRoleLink.objects.filter(
-                user=OuterRef("task__created_by"),
-                role__title=RoleType.INTERN.value
-            )
-        )
-        is_ig_lead = Exists(
-            UserRoleLink.objects.filter(
-                user=OuterRef("task__created_by"),
-                role__title=RoleType.IG_LEAD.value
-            )
-        )
-
-        return (
-            KarmaActivityLog.objects.filter(user=obj, appraiser_approved=True)
-            # Annotate role flags first (Exists = no join, no duplication)
-            .annotate(
-                is_mentor=is_mentor,
-                is_intern=is_intern,
-                is_ig_lead=is_ig_lead,
-            )
-            # Then bucket using priority order:
-            # 1. Events Task  (task linked to an event)
-            # 2. IG Task      (task linked to an IG, or creator is IG Lead)
-            # 3. Mentor Task  (task created by a Mentor)
-            # 4. Intern Task  (task created by an Intern)
-            # 5. Other Task   (everything else)
-            .annotate(
-                bucket=Case(
-                    When(task__event_fk__isnull=False, then=Value("Events Task")),
-                    When(
-                        Q(task__ig__isnull=False) | Q(is_ig_lead=True),
-                        then=Value("IG Task")
-                    ),
-                    When(is_mentor=True, then=Value("Mentor Task")),
-                    When(is_intern=True, then=Value("Intern Task")),
-                    default=Value("Other Task"),
-                    output_field=CharField()
-                )
-            )
-            .values(task_type=F("bucket"))
-            .annotate(karma=Sum("karma"))
-            .order_by("-karma")
-        )
-
-    def _karma_breakdown(self, obj):
-        if not hasattr(self, "_karma_breakdown_cache"):
-            self._karma_breakdown_cache = get_karma_breakdown(obj.id)
-        return self._karma_breakdown_cache
-
-    def get_general_enablement_karma(self, obj):
-        return self._karma_breakdown(obj)["general_enablement_karma"]
-
-    def get_org_ig_karma_split(self, obj):
-        return self._karma_breakdown(obj)["org_ig_karma_split"]
-
-    def get_event_karma_split(self, obj):
-        return self._karma_breakdown(obj)["event_karma_split"]
-
-    def get_intern_karma(self, obj):
-        return self._karma_breakdown(obj)["intern_karma"]
+        return get_karma_breakdown(obj.id)
 
     def get_interest_groups(self, obj):
         
@@ -629,13 +553,34 @@ class UserIgListSerializer(serializers.ModelSerializer):
 
 
 class UserIgEditSerializer(serializers.ModelSerializer):
-    interest_group = serializers.ListField(write_only=True)
+    interest_group = serializers.ListField(
+        child=serializers.UUIDField(), write_only=True
+    )
+
+    def validate_interest_group(self, value):
+        if len(value) > 3:
+            raise serializers.ValidationError(
+                "Cannot select more than 3 interest groups"
+            )
+
+        unique_ids = {str(ig_id) for ig_id in value}
+        if len(unique_ids) != len(value):
+            raise serializers.ValidationError(
+                "Duplicate interest groups are not allowed"
+            )
+
+        existing_count = InterestGroup.objects.filter(id__in=unique_ids).count()
+        if existing_count != len(unique_ids):
+            raise serializers.ValidationError(
+                "One or more interest groups are invalid"
+            )
+
+        return value
 
     def update(self, instance, validated_data):
         with transaction.atomic():
-            ig_details = set(validated_data.pop("interest_group", []))
-            if len(ig_details) > 3:
-                raise CustomException("Cannot add more than 3 interest groups")
+            ig_details = set(validated_data.pop("interest_group"))
+
             # Only remove LEARNER-type links; preserve MENTOR/LEAD/MODERATOR assignments.
             instance.user_ig_link_user.filter(
                 assignment_type=UserIgLink.AssignmentType.LEARNER
@@ -653,31 +598,32 @@ class UserIgEditSerializer(serializers.ModelSerializer):
                 for ig_data in ig_details
             ]
             UserIgLink.objects.bulk_create(user_ig_links)
-            
-            # Initialize IG levels for newly added IGs
-            from django.db import connection
-            for ig_id in ig_details:
-                # Get level 1 ID
-                with connection.cursor() as cursor:
-                    cursor.execute("SELECT id FROM level WHERE level_order = 1 LIMIT 1")
-                    level_1_id = cursor.fetchone()
-                    if level_1_id:
-                        # UPSERT: Insert level 1 if doesn't exist, do nothing if exists
-                        cursor.execute("""
-                            INSERT INTO user_ig_lvl_link (id, user_id, ig_id, level_id, created_by, created_at, updated_by, updated_at)
-                            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
-                            ON DUPLICATE KEY UPDATE updated_at = updated_at
-                        """, [
-                            str(uuid.uuid4()),
-                            str(instance.id),
-                            str(ig_id),
-                            level_1_id[0],
-                            str(instance.id),
-                            DateTimeUtils.get_current_utc_time(),
-                            str(instance.id),
-                            DateTimeUtils.get_current_utc_time()
-                        ])
-            
+
+            # Initialize IG levels (level 1) for the newly selected IGs, without
+            # touching levels for IGs the user already had.
+            if ig_details:
+                level_1 = Level.objects.filter(level_order=1).first()
+                if level_1:
+                    existing_ig_ids = set(
+                        UserIgLvlLink.objects.filter(
+                            user=instance, ig_id__in=ig_details
+                        ).values_list("ig_id", flat=True)
+                    )
+                    new_links = [
+                        UserIgLvlLink(
+                            id=uuid.uuid4(),
+                            user=instance,
+                            ig_id=ig_id,
+                            level=level_1,
+                            created_by=instance,
+                            updated_by=instance,
+                        )
+                        for ig_id in ig_details
+                        if str(ig_id) not in {str(i) for i in existing_ig_ids}
+                    ]
+                    if new_links:
+                        UserIgLvlLink.objects.bulk_create(new_links)
+
             return super().update(instance, validated_data)
 
     class Meta:

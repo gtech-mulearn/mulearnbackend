@@ -256,7 +256,7 @@ class UserIgEditView(APIView):
         old_role_ids = set(link.role_id for link in old_role_links)
 
         serializer = profile_serializer.UserIgEditSerializer(
-            user, data=request.data, partial=True
+            user, data=request.data
         )
 
         if not serializer.is_valid():
