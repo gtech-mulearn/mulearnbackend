@@ -47,6 +47,61 @@ def has_scope(user_id, scope_type, scope_id=None):
     return (scope_type, scope_id) in get_mentor_scopes(user_id)
 
 
+def is_mentor_active(user_id):
+    """
+    False if the user has no UserMentor profile, or has one that's been
+    admin-deactivated (§6.1) — used to block session/event/opportunity
+    creation without touching individual MentorScopeGrant rows.
+    """
+    return UserMentor.objects.filter(user_id=user_id, is_active=True).exists()
+
+
+def notify_admins_company_mentor_decision(actor, application, outcome):
+    """
+    Passive admin visibility for company-mentor approve/reject decisions
+    (§4.5) — the company owner is the sole verifier for this tier, so admin
+    gets a notification-only copy rather than approval authority.
+    """
+    from db.user import UserRoleLink
+    from api.notification.notifications_utils import NotificationUtils
+    from utils.types import RoleType
+
+    admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+    for link in admins:
+        NotificationUtils.insert_notification(
+            user=link.user,
+            title=f"Company Mentor {outcome.title()}",
+            description=f"{actor.full_name} {outcome} the company-mentor application for {application.user.full_name}.",
+            button="View",
+            url=None,
+            created_by=actor,
+        )
+
+
+def notify_ig_leads(ig, applicant, application):
+    """
+    Notify an IG's lead(s) that a learner has applied to become that IG's
+    mentor — the leads (in addition to admins) can act on this via
+    MentorVerifyAPI's IG-lead authorization branch.
+    """
+    from db.user import UserRoleLink
+    from api.notification.notifications_utils import NotificationUtils
+    from utils.types import RoleType
+    from django.conf import settings
+
+    lead_role_title = RoleType.IG_LEAD_ROLE(ig.code)
+    leads = UserRoleLink.objects.filter(role__title=lead_role_title).select_related('user')
+    for link in leads:
+        NotificationUtils.insert_notification(
+            user=link.user,
+            title="New IG Mentor Application",
+            description=f"{applicant.full_name} has applied to be a mentor for {ig.name}.",
+            button="View Application",
+            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/{application.id}/",
+            created_by=applicant,
+        )
+
+
 def get_scope_ids(user_id, scope_type):
     """All active scope_ids (org/ig ids) this user holds `scope_type` authority over."""
     return {sid for (st, sid) in get_mentor_scopes(user_id) if st == scope_type and sid}

@@ -43,7 +43,7 @@ class MentorDeactivationAPI(APIView):
 
         # Log the action
         SystemActionLog.objects.create(
-            action_type='MENTOR_DEACTIVATE',  # Assumed value
+            action_type=SystemActionLog.ActionType.MENTOR_DEACTIVATE,
             actor_user_id=admin_id,
             subject_user=mentor_profile.user,
             entity_name='user_mentor',
@@ -93,7 +93,7 @@ class MentorReactivationAPI(APIView):
 
         # Log the action
         SystemActionLog.objects.create(
-            action_type='MENTOR_REACTIVATE',  # Assumed value
+            action_type=SystemActionLog.ActionType.MENTOR_REACTIVATE,
             actor_user_id=admin_id,
             subject_user=mentor_profile.user,
             entity_name='user_mentor',

@@ -230,6 +230,11 @@ class SystemActionLog(models.Model):
         JOB_APPROVE           = 'JOB_APPROVE',           'Job Approve'
         JOB_REJECT            = 'JOB_REJECT',            'Job Reject'
         COMPANY_EVENT_APPROVE = 'COMPANY_EVENT_APPROVE', 'Company Event Approve'
+        COMPANY_EVENT_REJECT = 'COMPANY_EVENT_REJECT', 'Company Event Reject'
+        CAMPUS_EVENT_APPROVE = 'CAMPUS_EVENT_APPROVE', 'Campus Event Approve'
+        CAMPUS_EVENT_REJECT = 'CAMPUS_EVENT_REJECT', 'Campus Event Reject'
+        IG_EVENT_APPROVE = 'IG_EVENT_APPROVE', 'IG Event Approve'
+        IG_EVENT_REJECT = 'IG_EVENT_REJECT', 'IG Event Reject'
         IMPACT_PROJECT_PUBLISH = 'IMPACT_PROJECT_PUBLISH', 'Impact Project Publish'
 
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)

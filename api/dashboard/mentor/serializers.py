@@ -40,128 +40,6 @@ from django.db import transaction
 from django.db.models import Q
 from db.organization import Organization
 
-def _get_or_create_mentor_profile(user_id, actor_id, about=None, expertise=None, reason=None, hours=0):
-    """
-    Ensure the user's single UserMentor profile row exists. Never overwrites
-    an existing profile's fields — those are only ever changed via
-    MentorProfileAPI (self-service) or on application approval (see
-    _apply_application_approval), never on mere application submission.
-    """
-    now = DateTimeUtils.get_current_utc_time()
-    mentor, _ = UserMentor.objects.get_or_create(
-        user_id=user_id,
-        defaults={
-            "about": about,
-            "expertise": expertise,
-            "reason": reason,
-            "hours": hours or 0,
-            "created_by_id": actor_id,
-            "updated_by_id": actor_id,
-            "created_at": now,
-            "updated_at": now,
-        },
-    )
-    return mentor
-
-
-def _apply_application_approval(application, actor_id):
-    """
-    Shared approval side-effects for a MentorApplication, regardless of
-    which endpoint triggered it (self-apply verify, owner verify, admin
-    bulk-assign). Creates/reactivates the resulting MentorScopeGrant,
-    upserts the mentor's UserMentor profile from the application snapshot,
-    assigns the platform-wide Mentor role, reconciles IG links/grants, and
-    links COMPANY_MENTOR/CAMPUS_MENTOR org membership. Returns the grant
-    (or None for IG_MENTOR, whose authority lives entirely in per-IG grants
-    created by reconcile_mentor_ig_grants below).
-    """
-    from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
-    now = DateTimeUtils.get_current_utc_time()
-
-    # Conflict-of-interest guard (addon §6.7): a user shouldn't hold
-    # COMPANY_MENTOR scope for a company while their UserJobApplication to
-    # that same company is still open. Applies regardless of entry point
-    # (self-apply, owner nomination, admin assign) since this is a shared
-    # approval path.
-    if application.tier == UserMentor.MentorTier.COMPANY_MENTOR and application.org_id:
-        from db.job import UserJobApplication
-        open_statuses = ['Pending', 'In-Review', 'Shortlisted', 'Interview']
-        has_open_application = UserJobApplication.objects.filter(
-            user_id=application.user_id,
-            job__company__org_id=application.org_id,
-            status__in=open_statuses,
-        ).exists()
-        if has_open_application:
-            raise serializers.ValidationError(
-                "This user has an open job application to this company and cannot be granted "
-                "Company Mentor status until that application is resolved."
-            )
-
-    mentor = _get_or_create_mentor_profile(
-        application.user_id, actor_id,
-        about=application.about, expertise=application.expertise,
-        reason=application.reason, hours=application.hours,
-    )
-    # Keep the profile's snapshot fresh with whatever was submitted in this
-    # specific application — a later tier/company application can update the
-    # shared profile's about/expertise/hours.
-    mentor.about = application.about
-    mentor.expertise = application.expertise
-    mentor.reason = application.reason
-    mentor.hours = application.hours or mentor.hours
-    mentor.updated_by_id = actor_id
-    mentor.updated_at = now
-    mentor.save(update_fields=["about", "expertise", "reason", "hours", "updated_by_id", "updated_at"])
-
-    grant = None
-    if application.tier != UserMentor.MentorTier.IG_MENTOR:
-        scope_id = str(application.org_id) if application.org_id else None
-        grant, grant_created = MentorScopeGrant.objects.get_or_create(
-            mentor=mentor,
-            scope_type=application.tier,
-            scope_id=scope_id,
-            defaults={
-                "is_active": True,
-                "application": application,
-                "granted_by_id": actor_id,
-                "granted_at": now,
-            },
-        )
-        if not grant_created and not grant.is_active:
-            grant.is_active = True
-            grant.application = application
-            grant.revoked_by = None
-            grant.revoked_at = None
-            grant.save(update_fields=["is_active", "application", "revoked_by", "revoked_at"])
-
-    mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
-    if mentor_role:
-        role_link, created = UserRoleLink.objects.get_or_create(
-            user=application.user,
-            role=mentor_role,
-            defaults={"verified": True, "created_by_id": actor_id, "created_at": now},
-        )
-        if not created and not role_link.verified:
-            role_link.verified = True
-            role_link.save(update_fields=["verified"])
-
-    if application.preferred_ig_ids:
-        reconcile_mentor_ig_links(application.user, application.preferred_ig_ids, actor_id)
-        reconcile_mentor_ig_grants(mentor, application.preferred_ig_ids, actor_id)
-
-    if application.tier == UserMentor.MentorTier.COMPANY_MENTOR and application.org:
-        from db.organization import UserOrganizationLink
-        org_link, created = UserOrganizationLink.objects.get_or_create(
-            user=application.user, org=application.org,
-            defaults={"verified": True, "created_by_id": actor_id, "created_at": now},
-        )
-        if not created and not org_link.verified:
-            org_link.verified = True
-            org_link.save(update_fields=["verified"])
-
-    return grant
-
-
 class MentorRegisterSerializer(serializers.ModelSerializer):
     about = serializers.SerializerMethodField()
     expertise = serializers.SerializerMethodField()
@@ -342,6 +220,7 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             else: # For CAMPUS_MENTOR and IG_MENTOR, notify admins
                 tier_display = "Campus" if mentor_tier == MentorApplication.MentorTier.CAMPUS_MENTOR.value else "IG"
                 org_display = f" for {org.title}" if org else ""
+                admin_roles = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
                 for admin_link in admin_roles:
                     NotificationUtils.insert_notification(
                         user=admin_link.user,
@@ -351,6 +230,13 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                         url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/",
                         created_by=requester,
                     )
+
+                if mentor_tier == MentorApplication.MentorTier.IG_MENTOR.value and application.preferred_ig_ids:
+                    from db.task import InterestGroup
+                    from .dash_mentor_helper import notify_ig_leads
+                    igs = InterestGroup.objects.filter(id__in=application.preferred_ig_ids)
+                    for ig in igs:
+                        notify_ig_leads(ig, requester, application)
         except Exception:
             # Silently fail notification errors to prevent user lockout.
             # A proper logging/monitoring mechanism should be here.
@@ -510,11 +396,9 @@ class MentorApplicationListSerializer(serializers.ModelSerializer):
             "preferred_ig_ids",
             "verification_note",
             "verified_at",
-            "tier",
+            "mentor_tier",
             "org",
-            "source",
             "status",
-            "nomination_expires_at",
             "created_at",
             "updated_at"
         ]
@@ -526,7 +410,9 @@ class MentorDetailSerializer(serializers.ModelSerializer):
     """
     user_full_name = serializers.CharField(source='user.full_name', read_only=True)
     muid = serializers.CharField(source='user.muid', read_only=True)
-    applications = MentorListSerializer(many=True, read_only=True, source='user.mentor_applications')
+    applications = MentorApplicationListSerializer(many=True, read_only=True, source='user.mentor_applications')
+    avg_rating = serializers.SerializerMethodField()
+    rating_count = serializers.SerializerMethodField()
 
     class Meta:
         model = UserMentor
@@ -538,9 +424,31 @@ class MentorDetailSerializer(serializers.ModelSerializer):
             "expertise",
             "hours",
             "applications",
+            "avg_rating",
+            "rating_count",
             "created_at",
             "updated_at",
         ]
+
+    def _rating_aggregate(self, obj):
+        cached = getattr(obj, '_rating_aggregate_cache', None)
+        if cached is not None:
+            return cached
+        from django.db.models import Avg, Count
+        from db.mentor import MentorshipSessionUserLink
+        cached = MentorshipSessionUserLink.objects.filter(
+            user_id=obj.user_id,
+            participant_role=MentorshipSessionUserLink.ParticipantRole.MENTOR,
+            rating__isnull=False,
+        ).aggregate(avg_rating=Avg('rating'), rating_count=Count('id'))
+        obj._rating_aggregate_cache = cached
+        return cached
+
+    def get_avg_rating(self, obj):
+        return self._rating_aggregate(obj)['avg_rating']
+
+    def get_rating_count(self, obj):
+        return self._rating_aggregate(obj)['rating_count']
 
 class MentorProfileUpdateSerializer(serializers.ModelSerializer):
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
@@ -586,6 +494,22 @@ class MentorVerifySerializer(serializers.Serializer):
         instance.updated_at = now
         
         if status == MentorApplication.Status.APPROVED:
+            # Conflict-of-interest guard (addon §6.7): a user shouldn't hold
+            # COMPANY_MENTOR scope for a company while their UserJobApplication
+            # to that same company is still open.
+            if instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and instance.org_id:
+                from db.job import UserJobApplication
+                has_open_application = UserJobApplication.objects.filter(
+                    user_id=instance.user_id,
+                    job__company__org_id=instance.org_id,
+                    status__in=['Pending', 'In-Review', 'Shortlisted', 'Interview'],
+                ).exists()
+                if has_open_application:
+                    raise serializers.ValidationError(
+                        "This user has an open job application to this company and cannot be "
+                        "granted Company Mentor status until that application is resolved."
+                    )
+
             with transaction.atomic():
                 instance.verified_by_id = user_id
                 instance.verified_at = now
@@ -689,36 +613,42 @@ class MentorVerifySerializer(serializers.Serializer):
 
         instance.save()
 
-        # Log the verification action for admins if it's a company mentor
-        if instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR:
-            from db.mentor import SystemActionLog
-            from db.user import User
-            actor = User.every.filter(id=user_id).first()
-            SystemActionLog.objects.create(
-                action_type=SystemActionLog.ActionType.MENTOR_VERIFY.value,
-                actor_user=actor,
-                subject_user=instance.user,
-                entity_name='mentor_application',
-                entity_id=instance.id,
-                new_data={
-                    'status': instance.status,
-                    'verification_note': instance.verification_note,
-                    'verified_at': str(instance.verified_at) if instance.verified_at else None,
-                },
-                remarks=f"Company mentor application for {instance.user.full_name} was {instance.status.lower()} by company owner {actor.full_name}."
-            )
+        # Log every verify decision for the admin audit trail (addon §6.3).
+        from db.mentor import SystemActionLog
+        from db.user import User
+        actor = User.every.filter(id=user_id).first()
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY.value,
+            actor_user=actor,
+            subject_user=instance.user,
+            entity_name='mentor_application',
+            entity_id=instance.id,
+            new_data={
+                'status': instance.status,
+                'mentor_tier': instance.mentor_tier,
+                'verification_note': instance.verification_note,
+                'verified_at': str(instance.verified_at) if instance.verified_at else None,
+            },
+            remarks=f"{instance.mentor_tier} application for {instance.user.full_name} was {instance.status.lower()} by {actor.full_name}."
+        )
 
         try:
+            is_company_mentor = instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and instance.org_id
+
             if status == MentorApplication.Status.REJECTED:
-                from db.user import User
                 from api.notification.notifications_utils import NotificationUtils
                 from django.conf import settings
 
-                actor = User.every.filter(id=user_id).first()
-                is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
-
-                if is_admin_actor:
-                    # This logic now only runs for non-company-mentor rejections by an admin
+                if is_company_mentor:
+                    # Company owner is the sole verifier for this tier — admin
+                    # gets passive notification-only visibility (§4.5).
+                    from .dash_mentor_helper import notify_admins_company_mentor_decision
+                    notify_admins_company_mentor_decision(actor, instance, "rejected")
+                else:
+                    # Notify every admin except the actor themselves (a no-op
+                    # skip when the actor is an IG lead, not an admin) —
+                    # gives admins passive visibility whether an admin or an
+                    # IG lead made the call.
                     tier_name = "IG" if instance.mentor_tier == MentorApplication.MentorTier.IG_MENTOR else "Campus"
                     all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
                     for admin_link in all_admins:
@@ -727,21 +657,30 @@ class MentorVerifySerializer(serializers.Serializer):
                         NotificationUtils.insert_notification(
                             user=admin_link.user,
                             title=f"{tier_name} Mentor Application Rejected",
-                            description=f"Admin {actor.full_name} has rejected the {tier_name.lower()} mentor application for {instance.user.full_name}.",
+                            description=f"{actor.full_name} has rejected the {tier_name.lower()} mentor application for {instance.user.full_name}.",
                             button="View Details",
                             url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/{instance.id}/",
                             created_by=actor,
                         )
-            elif status == MentorApplication.Status.APPROVED and instance.tier == UserMentor.MentorTier.COMPANY_MENTOR and instance.org:
-                from db.user import User
-                from db.company import Company
-                actor = User.every.filter(id=user_id).first()
-                is_owner_actor = actor is not None and Company.objects.filter(
-                    company_user=actor, org=instance.org, status="verified"
-                ).exists()
-                if is_owner_actor:
-                    from .dash_mentor_helper import notify_admins_company_mentor_decision
-                    notify_admins_company_mentor_decision(actor, instance, "approved")
+            elif status == MentorApplication.Status.APPROVED and is_company_mentor:
+                from .dash_mentor_helper import notify_admins_company_mentor_decision
+                notify_admins_company_mentor_decision(actor, instance, "approved")
+            elif status == MentorApplication.Status.APPROVED and instance.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
+                is_admin_actor = UserRoleLink.objects.filter(user=actor, role__title=RoleType.ADMIN.value).exists()
+                if not is_admin_actor:
+                    # Approved by an IG lead, not an admin — passive visibility.
+                    from api.notification.notifications_utils import NotificationUtils
+                    from django.conf import settings
+                    all_admins = UserRoleLink.objects.filter(role__title=RoleType.ADMIN.value).select_related('user')
+                    for admin_link in all_admins:
+                        NotificationUtils.insert_notification(
+                            user=admin_link.user,
+                            title="IG Mentor Application Approved",
+                            description=f"{actor.full_name} approved the IG mentor application for {instance.user.full_name}.",
+                            button="View Details",
+                            url=f"{settings.FR_DOMAIN_NAME}/dashboard/mentor/applications/{instance.id}/",
+                            created_by=actor,
+                        )
         except Exception:
             pass
 
@@ -1285,7 +1224,7 @@ class ParticipantFeedbackSerializer(serializers.ModelSerializer):
         if not attrs.get("feedback"):
             raise serializers.ValidationError("Feedback cannot be empty.")
 
-        rating = data.get("rating")
+        rating = attrs.get("rating")
         if rating is not None and not (1 <= rating <= 5):
             raise serializers.ValidationError({"rating": "Rating must be between 1 and 5."})
 
