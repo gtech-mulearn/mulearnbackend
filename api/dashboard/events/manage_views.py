@@ -1461,69 +1461,6 @@ def _is_company_owner_or_delegate(user_id, org_id):
     ).exists()
 
 
-class CompanyEventApproveAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @extend_schema(tags=['Dashboard - Events'], description="Approve a company event (owner/delegate).")
-    def post(self, request, event_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        event = get_live_events().filter(id=event_id).first()
-        if not event:
-            return CustomResponse(general_message='Event not found.').get_failure_response()
-
-        if event.organiser_type != Event.OrganiserType.COMPANY.value:
-            return CustomResponse(general_message='This is not a company event.').get_failure_response()
-
-        if not _is_company_owner_or_delegate(user_id, event.organiser_org_id):
-            return CustomResponse(general_message='You are not authorized to approve this event.').get_failure_response(status_code=403)
-        
-        if event.created_by_id == user_id:
-            return CustomResponse(general_message='You cannot approve your own event submission.').get_failure_response(status_code=403)
-
-        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
-            return CustomResponse(general_message=f'Event is not pending approval (current: {event.status}).').get_failure_response()
-
-        old_status = event.status
-        new_status = Event.Status.PENDING_APPROVAL
-        event.status = new_status
-        event.updated_by_id = user_id
-        event.save()
-
-        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': old_status, 'to': new_status}})
-        return CustomResponse(general_message='Event approved, now pending admin review.').get_success_response()
-
-
-class CompanyEventRejectAPI(APIView):
-    authentication_classes = [CustomizePermission]
-
-    @extend_schema(tags=['Dashboard - Events'], description="Reject a company event (owner/delegate).")
-    def post(self, request, event_id):
-        user_id = JWTUtils.fetch_user_id(request)
-        event = get_live_events().filter(id=event_id).first()
-        if not event:
-            return CustomResponse(general_message='Event not found.').get_failure_response()
-
-        if event.organiser_type != Event.OrganiserType.COMPANY.value:
-            return CustomResponse(general_message='This is not a company event.').get_failure_response()
-
-        if not _is_company_owner_or_delegate(user_id, event.organiser_org_id):
-            return CustomResponse(general_message='You are not authorized to reject this event.').get_failure_response(status_code=403)
-
-        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
-            return CustomResponse(general_message=f'Event is not pending approval (current: {event.status}).').get_failure_response()
-
-        reason = request.data.get('reason', '').strip()
-        if not reason:
-            return CustomResponse(general_message='A rejection reason is required.').get_failure_response()
-
-        old_status = event.status
-        event.status = Event.Status.REJECTED
-        event.updated_by_id = user_id
-        event.save()
-
-        log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
-        return CustomResponse(general_message='Event rejected.').get_success_response()
-
 class MentorEventApproveAPI(APIView):
     authentication_classes = [CustomizePermission]
 
@@ -1575,6 +1512,17 @@ class MentorEventApproveAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.IG_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_MENTOR_APPROVAL},
+            new_data={'status': new_status},
+        )
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
@@ -1645,6 +1593,18 @@ class MentorEventRejectAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.IG_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
+
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
@@ -1706,6 +1666,17 @@ class CompanyEventApproveAPI(APIView):
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
 
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.COMPANY_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_MENTOR_APPROVAL},
+            new_data={'status': new_status},
+        )
+
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
         if creator and actor:
@@ -1756,6 +1727,18 @@ class CompanyEventRejectAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.COMPANY_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
 
         actor = User.objects.filter(id=user_id).first()
         creator = event.created_by
@@ -1818,6 +1801,17 @@ class CampusEventApproveAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_CAMPUS_APPROVAL, 'to': new_status}})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.CAMPUS_EVENT_APPROVE,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': Event.Status.PENDING_CAMPUS_APPROVAL},
+            new_data={'status': new_status},
+        )
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()
@@ -1895,6 +1889,18 @@ class CampusEventRejectAPI(APIView):
         event.save()
 
         log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+
+        from db.mentor import SystemActionLog
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.CAMPUS_EVENT_REJECT,
+            actor_user_id=user_id,
+            subject_user_id=event.created_by_id,
+            entity_name='events',
+            entity_id=event.id,
+            old_data={'status': old_status},
+            new_data={'status': Event.Status.REJECTED},
+            remarks=reason,
+        )
 
         # Notify the event creator
         actor = User.objects.filter(id=user_id).first()

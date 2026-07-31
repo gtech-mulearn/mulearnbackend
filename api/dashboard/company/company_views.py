@@ -588,7 +588,7 @@ class CompanyMentorListAPI(APIView):
             ).get_failure_response(status_code=404)
 
         from db.user import MentorApplication
-        mentors = MentorApplication.objects.filter(
+        applications = MentorApplication.objects.filter(
             mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
             org=org,
         ).select_related("user").order_by("-created_at")

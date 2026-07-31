@@ -384,6 +384,7 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
 
     def validate(self, data):
         company = self.context.get("company")
+        nominator_id = self.context.get("user_id")
         muid = data.get("muid")
 
         # ── Resolve muid → User ──────────────────────────────────────────────
@@ -391,6 +392,11 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         if not user:
             raise serializers.ValidationError(
                 {"muid": f"No platform user found with muid '{muid}'."}
+            )
+
+        if str(user.id) == str(nominator_id):
+            raise serializers.ValidationError(
+                {"muid": "You cannot nominate yourself as your company's mentor."}
             )
 
         # ── Resolve company → Organization row ──────────────────────────────
@@ -423,8 +429,6 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         return data
 
     def save(self):
-        from api.dashboard.mentor.serializers import _apply_application_approval
-
         nominator_id = self.context.get("user_id")
         user = self.validated_data["_user"]
         reason = self.validated_data.get("reason", "")
@@ -510,6 +514,119 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         return application
 
 
+class CompanyMentorApplySerializer(serializers.Serializer):
+    """Self-onboarding: an authenticated user applies to become mentor for a
+    specific company (identified by ``company_id``). Sits PENDING until the
+    company owner reviews it via MentorVerifyAPI — unlike nomination, this
+    does NOT auto-approve or grant anything immediately.
+    """
+
+    company_id = serializers.CharField(
+        help_text="ID of the company to apply to as a mentor."
+    )
+    about = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    expertise = serializers.CharField(required=False, allow_blank=True, allow_null=True)
+    reason = serializers.CharField(required=False, allow_blank=True)
+    hours = serializers.IntegerField(required=False, allow_null=True, min_value=0)
+
+    def validate(self, data):
+        user_id = self.context.get("user_id")
+        company_id = data.get("company_id")
+
+        company = Company.objects.filter(id=company_id, status="verified").first()
+        if not company:
+            raise serializers.ValidationError(
+                {"company_id": "No verified company found with this ID."}
+            )
+
+        if company.company_user_id == user_id:
+            raise serializers.ValidationError(
+                "You cannot apply to be a mentor for your own company."
+            )
+
+        org = company.org
+        if not org:
+            raise serializers.ValidationError(
+                "Company organization record not found. Ensure the company is verified."
+            )
+
+        existing = MentorApplication.objects.filter(
+            user_id=user_id,
+            mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
+            org=org,
+        ).exclude(status=MentorApplication.Status.REJECTED).first()
+        if existing:
+            raise serializers.ValidationError(
+                f"You already have a {existing.status.lower()} Company Mentor application for this company."
+            )
+
+        data["_company"] = company
+        data["_org"] = org
+        return data
+
+    def save(self):
+        user_id = self.context.get("user_id")
+        company = self.validated_data["_company"]
+        org = self.validated_data["_org"]
+        about = self.validated_data.get("about")
+        expertise = self.validated_data.get("expertise")
+        reason = self.validated_data.get("reason", "")
+        hours = self.validated_data.get("hours")
+
+        now = DateTimeUtils.get_current_utc_time()
+
+        with transaction.atomic():
+            profile, created = UserMentor.objects.get_or_create(
+                user_id=user_id,
+                defaults={
+                    "about": about,
+                    "expertise": expertise,
+                    "hours": hours or 0,
+                    "created_by_id": user_id,
+                    "updated_by_id": user_id,
+                },
+            )
+            if not created:
+                if about is not None:
+                    profile.about = about
+                if expertise is not None:
+                    profile.expertise = expertise
+                if hours is not None:
+                    profile.hours = hours
+                profile.updated_by_id = user_id
+                profile.updated_at = now
+                profile.save()
+
+            application = MentorApplication.objects.create(
+                user_id=user_id,
+                mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
+                org=org,
+                reason=reason,
+                status=MentorApplication.Status.PENDING,
+                created_by_id=user_id,
+                updated_by_id=user_id,
+                created_at=now,
+                updated_at=now,
+            )
+
+        try:
+            from api.notification.notifications_utils import NotificationUtils
+            from django.conf import settings
+
+            applicant = _User.objects.get(id=user_id)
+            NotificationUtils.insert_notification(
+                user=company.company_user,
+                title="New Mentor Application",
+                description=f"{applicant.full_name} has applied to be a mentor for your company.",
+                button="View Application",
+                url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/mentor/list/",
+                created_by=applicant,
+            )
+        except Exception:
+            pass
+
+        return application
+
 
 class CompanyMentorListSerializer(serializers.ModelSerializer):
     """Serializer for listing Company Mentor nominations/applications."""
@@ -527,8 +644,7 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
             "user_name",
             "user_email",
             "org_name",
-            "tier",
-            "source",
+            "mentor_tier",
             "status",
             "reason",
             "verification_note",
