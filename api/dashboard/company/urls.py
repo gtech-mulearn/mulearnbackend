@@ -11,10 +11,10 @@ urlpatterns = [
     path("profile/public/<str:slug>/jobs/", job_views.PublicCompanyJobListAPI.as_view()),
     path("list/",                     company_views.CompanyListAPI.as_view()),
     path("jobs/",                     job_views.CompanyJobAPI.as_view()),
+    path("jobs/pending/",             job_views.CompanyPendingJobListAPI.as_view()),
     path("jobs/all/",                 job_views.PublicJobAPI.as_view()),
     path("jobs/<str:job_id>/",        job_views.CompanyJobDetailAPI.as_view()),
-    path("jobs/<str:job_id>/approve/", job_views.CompanyJobApproveAPI.as_view()),
-    path("jobs/<str:job_id>/reject/",  job_views.CompanyJobRejectAPI.as_view()),
+    path("jobs/<str:job_id>/verify/",   job_views.CompanyJobVerifyAPI.as_view()),
     path("jobs/<str:job_id>/view/",   job_views.TrackJobViewAPIView.as_view()),
     path("jobs/<str:job_id>/analytics/", job_views.CompanyJobEngagementAnalyticsAPIView.as_view()),
     path("jobs/<str:job_id>/apply/",  job_views.JobApplicationAPI.as_view()),
@@ -39,6 +39,10 @@ urlpatterns = [
     path("tasks/",                    task_views.CompanyTaskListCreateAPI.as_view(), name='company-task-list-create'),
     path("tasks/<str:task_id>/",      task_views.CompanyTaskDetailAPI.as_view(), name='company-task-detail'),
 
+    # Company Admin Delegation
+    path("admin-link/", job_views.CompanyAdminLinkAPI.as_view()),
+    path("admin-link/<str:link_id>/respond/", job_views.CompanyAdminLinkRespondAPI.as_view()),
+    path("admin-link/<str:link_id>/revoke/", job_views.CompanyAdminLinkRevokeAPI.as_view()),
     path("<str:company_id>/",         company_views.CompanyDetailAPI.as_view()),
     path("verify/<str:company_id>/",  company_views.CompanyVerifyAPI.as_view()),
 ]

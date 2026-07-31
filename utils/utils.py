@@ -465,3 +465,10 @@ def generate_code(char_count=6):
     characters = string.ascii_uppercase + string.digits
     code = "".join(random.choices(characters, k=char_count))
     return code
+
+def get_user_mentor_profile(user_id):
+    """
+    Helper to fetch a user's UserMentor profile.
+    """
+    from db.user import UserMentor
+    return UserMentor.objects.filter(user_id=user_id).first()

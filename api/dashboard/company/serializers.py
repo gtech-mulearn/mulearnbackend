@@ -363,7 +363,8 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
 # Company Mentor serializers
 # ---------------------------------------------------------------------------
 
-from db.user import User as _User, UserMentor, MentorApplication
+from db.user import MentorApplication, User as _User, UserMentor
+from db.mentor import SystemActionLog
 
 
 class CompanyMentorNominateSerializer(serializers.Serializer):
@@ -407,17 +408,14 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
             )
 
         # ── Prevent duplicate active nominations ─────────────────────────────
-        existing_pending = MentorApplication.objects.filter(
-            user=user, tier=UserMentor.MentorTier.COMPANY_MENTOR, org=org,
-            status=MentorApplication.Status.PENDING,
-        ).exists()
-        already_granted = MentorScopeGrant.objects.filter(
-            mentor__user=user, scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR,
-            scope_id=str(org.id), is_active=True,
-        ).exists()
-        if existing_pending or already_granted:
+        existing = MentorApplication.objects.filter(
+            user=user,
+            mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
+            org=org,
+        ).exclude(status=MentorApplication.Status.REJECTED).first()
+        if existing:
             raise serializers.ValidationError(
-                f"This user already has an active or pending Company Mentor nomination for your company."
+                f"This user already has a {existing.status.lower()} Company Mentor application for your company."
             )
 
         data["_user"] = user
@@ -435,17 +433,22 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         current_time = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
-            # Nomination IS approval (§4.2) — create the application already
-            # APPROVED and apply the shared approval side-effects (profile
-            # upsert, grant, role, org link) in one step.
+            # 1. Create or update UserMentor profile (can be empty)
+            UserMentor.objects.get_or_create(
+                user=user,
+                defaults={
+                    "created_by_id": nominator_id,
+                    "updated_by_id": nominator_id,
+                }
+            )
+
+            # 2️⃣ Create an approved MentorApplication record
             application = MentorApplication.objects.create(
                 user=user,
-                tier=UserMentor.MentorTier.COMPANY_MENTOR,
+                mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
                 org=org,
                 reason=reason,
-                source=MentorApplication.SourceType.OWNER_NOMINATED,
                 status=MentorApplication.Status.APPROVED,
-                nominated_by_id=nominator_id,
                 verified_by_id=nominator_id,
                 verified_at=current_time,
                 created_by_id=nominator_id,
@@ -453,96 +456,59 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
                 created_at=current_time,
                 updated_at=current_time,
             )
-            grant = _apply_application_approval(application, nominator_id)
-            if grant:
-                application.resulting_grant = grant
-                application.save(update_fields=["resulting_grant"])
 
-        return application
+            # 2️⃣ Grant the MENTOR role
+            mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+            if not mentor_role:
+                raise serializers.ValidationError("MENTOR role not found in database.")
 
+            UserRoleLink.objects.get_or_create(
+                user=user,
+                role=mentor_role,
+                defaults={
+                    "verified": True,
+                    "created_by_id": nominator_id,
+                    "created_at": current_time,
+                },
+            )
 
-class CompanyMentorApplySerializer(serializers.Serializer):
-    """
-    Self-onboarding: a user applies to become a specific company's mentor
-    themselves (PRD §4.2), distinct from CompanyMentorNominateAPI's
-    owner-initiated path. Sits PENDING until the company owner reviews it —
-    the applicant does not receive the tier until the owner acts.
-    """
-    company_id = serializers.CharField(help_text="ID of the Company to apply to.")
-    about = serializers.CharField(required=False, allow_blank=True)
-    expertise = serializers.CharField(required=False, allow_blank=True)
-    reason = serializers.CharField(required=False, allow_blank=True)
-    hours = serializers.IntegerField(required=False, min_value=0, default=0)
+            # 3️⃣ Create MentorScopeGrant
+            MentorScopeGrant.objects.create(
+                application=application,
+                scope_type=MentorApplication.MentorTier.COMPANY_MENTOR,
+                scope_id=str(org.id),
+                is_active=True,
+                granted_by_id=nominator_id,
+                granted_at=current_time,
+            )
 
-    def validate(self, data):
-        user_id = self.context["user_id"]
-        company = Company.objects.filter(id=data["company_id"], status="verified").first()
-        if not company:
-            raise serializers.ValidationError({"company_id": "Verified company not found."})
+            # 4️⃣ Ensure org link is verified
+            # (link already exists — validated in validate() — just ensure verified=True)
+            UserOrganizationLink.objects.filter(
+                user=user, org=org
+            ).update(verified=True)
 
-        org = company.org
-        if not org:
-            raise serializers.ValidationError("Company organization record not found.")
-
-        if MentorApplication.objects.filter(
-            user_id=user_id, tier=UserMentor.MentorTier.COMPANY_MENTOR, org=org,
-            status=MentorApplication.Status.PENDING,
-        ).exists():
-            raise serializers.ValidationError("You already have a pending application for this company.")
-
-        if MentorScopeGrant.objects.filter(
-            mentor__user_id=user_id, scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR,
-            scope_id=str(org.id), is_active=True,
-        ).exists():
-            raise serializers.ValidationError("You are already an approved mentor for this company.")
-
-        data["_company"] = company
-        data["_org"] = org
-        return data
-
-    def save(self):
-        import uuid as _uuid
-        from datetime import timedelta
-
-        user_id = self.context["user_id"]
-        company = self.validated_data["_company"]
-        org = self.validated_data["_org"]
-        now = DateTimeUtils.get_current_utc_time()
-
-        application = MentorApplication.objects.create(
-            user_id=user_id,
-            tier=UserMentor.MentorTier.COMPANY_MENTOR,
-            org=org,
-            about=self.validated_data.get("about"),
-            expertise=self.validated_data.get("expertise"),
-            reason=self.validated_data.get("reason"),
-            hours=self.validated_data.get("hours", 0),
-            source=MentorApplication.SourceType.SELF_APPLIED,
-            status=MentorApplication.Status.PENDING,
-            nomination_expires_at=now + timedelta(days=14),
-            created_by_id=user_id,
-            updated_by_id=user_id,
-            created_at=now,
-            updated_at=now,
+        # Log the direct nomination action
+        nominator = _User.objects.get(id=nominator_id)
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY.value,
+            actor_user=nominator,
+            subject_user=user,
+            entity_name='mentor_application',
+            entity_id=application.id,
+            new_data={
+                'status': application.status,
+                'mentor_tier': application.mentor_tier,
+                'org_id': str(application.org.id) if application.org else None,
+                'org_title': application.org.title if application.org else None,
+                'reason': reason,
+                'nomination': True
+            },
+            remarks=f"Company owner {nominator.full_name} directly nominated {user.full_name} as a mentor for {org.title}."
         )
 
-        try:
-            from api.notification.notifications_utils import NotificationUtils
-            from django.conf import settings
-            from db.user import User
-            applicant = User.every.filter(id=user_id).first()
-            NotificationUtils.insert_notification(
-                user=company.company_user,
-                title="New Company Mentor Application",
-                description=f"{applicant.full_name} has applied to be a mentor for your company.",
-                button="View Application",
-                url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/mentor/list/",
-                created_by=applicant,
-            )
-        except Exception:
-            pass
-
         return application
+
 
 
 class CompanyMentorListSerializer(serializers.ModelSerializer):
@@ -553,6 +519,7 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
     org_name = serializers.CharField(source="org.title", read_only=True, default=None)
 
     class Meta:
+        model = MentorApplication
         model = MentorApplication
         fields = [
             "id",

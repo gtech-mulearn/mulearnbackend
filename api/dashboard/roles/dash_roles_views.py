@@ -401,36 +401,31 @@ class UserRole(APIView):
 
             # ── Mentor cleanup ──────────────────────────────────────────────
             if role_title == RoleType.MENTOR.value:
-                from db.user import UserMentor, MentorScopeGrant
+                from db.user import MentorApplication, MentorScopeGrant
                 from db.task import UserIgLink
 
-                mentor = UserMentor.objects.filter(user=user).first()
-                if mentor:
-                    grants = list(MentorScopeGrant.objects.filter(mentor=mentor, is_active=True))
-                    MentorScopeGrant.objects.filter(id__in=[g.id for g in grants]).update(
-                        is_active=False, revoked_by_id=admin_id, revoked_at=now,
-                    )
+                applications = MentorApplication.objects.filter(
+                    user=user, status=MentorApplication.Status.APPROVED
+                )
+                for app in applications:
+                    app.status = MentorApplication.Status.REJECTED
+                    app.updated_by_id = admin_id
+                    app.updated_at = now
+                    app.save(update_fields=["status", "updated_by_id", "updated_at"])
 
-                    ig_scope_ids = [
-                        g.scope_id for g in grants
-                        if g.scope_type == MentorScopeGrant.ScopeType.IG_MENTOR and g.scope_id
-                    ]
-                    if ig_scope_ids:
+                    if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
                         UserIgLink.objects.filter(
                             user=user, ig_id__in=ig_scope_ids,
                             assignment_type=UserIgLink.AssignmentType.MENTOR,
                         ).update(is_active=False)
 
-                    org_scope_ids = [
-                        g.scope_id for g in grants
-                        if g.scope_type in (MentorScopeGrant.ScopeType.CAMPUS_MENTOR, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
-                        and g.scope_id
-                    ]
-                    if org_scope_ids:
-                        from db.organization import UserOrganizationLink
-                        UserOrganizationLink.objects.filter(
-                            user=user, org_id__in=org_scope_ids,
-                        ).update(verified=False)
+                    MentorScopeGrant.objects.filter(
+                        application=app, is_active=True
+                    ).update(
+                        is_active=False,
+                        revoked_by_id=admin_id,
+                        revoked_at=now,
+                    )
 
             # ── Intern cleanup ──────────────────────────────────────────────
             elif role_title == RoleType.INTERN.value:
