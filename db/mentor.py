@@ -199,9 +199,13 @@ class MentorKarmaAward(models.Model):
 class SystemActionLog(models.Model):
 
     class ActionType(models.TextChoices):
-        PERSONA_SWITCH   = 'PERSONA_SWITCH',   'Persona Switch'
         MENTOR_APP_SUBMITTED = 'MENTOR_APP_SUBMITTED', 'Mentor App Submitted'
         MENTOR_VERIFY    = 'MENTOR_VERIFY',    'Mentor Verify'
+        MENTOR_DEACTIVATE = 'MENTOR_DEACTIVATE', 'Mentor Deactivate'
+        DELEGATE_INVITED = 'DELEGATE_INVITED', 'Delegate Invited'
+        DELEGATE_RESPONDED = 'DELEGATE_RESPONDED', 'Delegate Responded'
+        DELEGATE_REVOKED = 'DELEGATE_REVOKED', 'Delegate Revoked'
+        MENTOR_REACTIVATE = 'MENTOR_REACTIVATE', 'Mentor Reactivate'
         TASK_REVIEW      = 'TASK_REVIEW',      'Task Review'
         EVENT_REVIEW     = 'EVENT_REVIEW',     'Event Review'
         SESSION_CREATE   = 'SESSION_CREATE',   'Session Create'

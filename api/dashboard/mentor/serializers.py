@@ -1,7 +1,7 @@
 import uuid
 from rest_framework import serializers
 import re
-from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant, MentorApplication
+from db.user import Socials, UserMentor, UserRoleLink, Role, MentorScopeGrant, MentorApplication, UserSettings, User
 
 
 class MentorScopeGrantSerializer(serializers.ModelSerializer):
@@ -20,17 +20,29 @@ class MentorScopeGrantSerializer(serializers.ModelSerializer):
             "revoked_by_name",
             "revoked_at",
         ]
+
+
+class PersonaStatusSerializer(serializers.Serializer):
+    active_persona = serializers.CharField()
+    active_scope_type = serializers.CharField(allow_null=True)
+    active_scope_id = serializers.CharField(allow_null=True)
+    active_scope_name = serializers.CharField(allow_null=True)
+
+
+class PersonaSwitchSerializer(serializers.Serializer):
+    persona = serializers.ChoiceField(choices=UserSettings.PersonaType.choices)
+
 from db.task import InterestGroup, UserIgLink
 from utils.types import RoleType, OrganizationType
-from utils.utils import DateTimeUtils
+from utils.utils import DateTimeUtils, get_user_mentor_profile
 from django.db import transaction
 from django.db.models import Q
 from db.organization import Organization
 
 class MentorRegisterSerializer(serializers.ModelSerializer):
-    about = serializers.CharField(required=False, allow_blank=True)
-    expertise = serializers.CharField(required=False, allow_blank=True)
-    hours = serializers.IntegerField(required=False)
+    about = serializers.SerializerMethodField()
+    expertise = serializers.SerializerMethodField()
+    hours = serializers.SerializerMethodField()
 
     linkedin = serializers.CharField(required=False, allow_blank=True, write_only=True, max_length=60)
     mentor_tier = serializers.ChoiceField(choices=[
@@ -59,6 +71,18 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
             "org",
         ]
 
+    def get_about(self, obj):
+        user_mentor = get_user_mentor_profile(obj.user_id)
+        return user_mentor.about if user_mentor else None
+
+    def get_expertise(self, obj):
+        user_mentor = get_user_mentor_profile(obj.user_id)
+        return user_mentor.expertise if user_mentor else None
+
+    def get_hours(self, obj):
+        user_mentor = get_user_mentor_profile(obj.user_id)
+        return user_mentor.hours if user_mentor else None
+
     def validate_preferred_ig_ids(self, value):
         if not value or not isinstance(value, list) or len(value) == 0:
             raise serializers.ValidationError("At least one preferred IG ID must be provided.")
@@ -74,9 +98,9 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
         return value
 
-    def validate(self, data):
-        mentor_tier = data.get('mentor_tier')
-        org = data.get('org')
+    def validate(self, attrs):
+        mentor_tier = attrs.get('mentor_tier')
+        org = attrs.get('org')
 
         if mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR.value:
             if not org:
@@ -88,10 +112,11 @@ class MentorRegisterSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError({'org': 'Organization is required for a Campus Mentor application.'})
             if org.org_type != OrganizationType.COLLEGE.value:
                 raise serializers.ValidationError({'org': 'A valid college organization is required.'})
-        # For IG_MENTOR, an organization is optional. If provided, the
-        # PrimaryKeyRelatedField has already validated its existence.
-        
-        return data
+        elif mentor_tier == MentorApplication.MentorTier.IG_MENTOR.value:
+            # For IG_MENTOR, an organization is optional and not used for scope.
+            # It is stored for metadata purposes if provided.
+            pass
+        return attrs
 
     def create(self, validated_data):
         user_id = self.context["user_id"]
@@ -256,26 +281,26 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
                 raise serializers.ValidationError("Invalid LinkedIn profile URL format. It should be like https://www.linkedin.com/in/your-profile-name.")
         return value
 
-    def validate(self, data):
+    def validate(self, attrs):
         # Every mentor must mentor at least one Interest Group (regardless of
         # tier or any org scope) — the IG list cannot be cleared to empty.
         instance = self.instance
-        if instance and "preferred_ig_ids" in data and not data["preferred_ig_ids"]:
+        if instance and "preferred_ig_ids" in attrs and not attrs["preferred_ig_ids"]:
             raise serializers.ValidationError(
                 {"preferred_ig_ids": "You must mentor at least one Interest Group."}
             )
 
         # If neither is in payload, nothing to validate
-        if 'mentor_tier' not in data and 'org' not in data:
-            return data
+        if 'mentor_tier' not in attrs and 'org' not in attrs:
+            return attrs
 
-        mentor_tier = data.get('mentor_tier', instance.mentor_tier if instance else None)
+        mentor_tier = attrs.get('mentor_tier', instance.mentor_tier if instance else None)
         
         # Handle case where 'org' is explicitly passed as null
-        if 'org' in data and data['org'] is None:
+        if 'org' in attrs and attrs['org'] is None:
             org = None
         else:
-            org = data.get('org', instance.org if instance else None)
+            org = attrs.get('org', instance.org if instance else None)
 
         # Prevent duplicate PENDING or APPROVED applications on update.
         if instance:
@@ -309,7 +334,7 @@ class MentorUpdateSerializer(serializers.ModelSerializer):
             if org.org_type != OrganizationType.COLLEGE.value:
                 raise serializers.ValidationError({'org': 'A valid college organization is required.'})
         # For IG_MENTOR, an organization is optional, so no specific validation is needed.
-        return data
+        return attrs
 
     def update(self, instance, validated_data):
         validated_data['updated_at'] = DateTimeUtils.get_current_utc_time()
@@ -417,94 +442,118 @@ class MentorVerifySerializer(serializers.Serializer):
     status = serializers.ChoiceField(choices=[MentorApplication.Status.APPROVED, MentorApplication.Status.REJECTED])
     verification_note = serializers.CharField(required=False, allow_blank=True)
 
-    def validate(self, data):
-        if data.get("status") == MentorApplication.Status.REJECTED and not data.get("verification_note"):
+    def validate(self, attrs):
+        if attrs.get("status") == MentorApplication.Status.REJECTED and not attrs.get("verification_note"):
             raise serializers.ValidationError("Verification note is required when rejecting.")
-        return data
+        return attrs
 
     def update(self, instance, validated_data):
         user_id = self.context["user_id"]
         status = validated_data.get("status")
-
+        now = DateTimeUtils.get_current_utc_time()
+        
         instance.status = status
         instance.updated_by_id = user_id
-        instance.updated_at = DateTimeUtils.get_current_utc_time()
+        instance.updated_at = now
         
         if status == MentorApplication.Status.APPROVED:
-            instance.verified_by_id = user_id
-            instance.verified_at = DateTimeUtils.get_current_utc_time()
+            with transaction.atomic():
+                instance.verified_by_id = user_id
+                instance.verified_at = now
 
-            # Grant the tier being approved. Additive — never touches any
-            # other scope grant this mentor may already hold. IG_MENTOR is
-            # excluded here: it has no single scope_id of its own — its
-            # grants are always per-IG, created below via
-            # reconcile_mentor_ig_grants from preferred_ig_ids. Creating a
-            # scope_id=None IG_MENTOR grant here would be a meaningless
-            # "mentor for no particular IG" row alongside the real ones.
-            if instance.mentor_tier != MentorApplication.MentorTier.IG_MENTOR:
-                scope_id = str(instance.org_id) if instance.org_id else None
-                grant, grant_created = MentorScopeGrant.objects.get_or_create(
-                    application=instance,
-                    scope_type=instance.mentor_tier,
-                    scope_id=scope_id,
-                    defaults={
-                        "is_active": True,
-                        "granted_by_id": user_id,
-                        "granted_at": DateTimeUtils.get_current_utc_time(),
-                    },
-                )
-                if not grant_created and not grant.is_active:
-                    grant.is_active = True
-                    grant.revoked_by = None
-                    grant.revoked_at = None
-                    grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
-
-            # Assign global MENTOR role
-            mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
-            if mentor_role:
-                role_link, created = UserRoleLink.objects.get_or_create(
+                # Revoke other approved applications of the same tier to enforce a single active affiliation per tier.
+                other_apps_to_revoke = MentorApplication.objects.filter(
                     user=instance.user,
-                    role=mentor_role,
-                    defaults={
-                        "verified": True,
-                        "created_by_id": user_id,
-                        "created_at": DateTimeUtils.get_current_utc_time(),
-                    },
-                )
-                if not created and not role_link.verified:
-                    role_link.verified = True
-                    role_link.save(update_fields=["verified"])
+                    mentor_tier=instance.mentor_tier,
+                    status=MentorApplication.Status.APPROVED
+                ).exclude(id=instance.id)
 
-            # Auto-assign UserIgLink from preferred IGs for ANY tier — IG
-            # mentoring is an orthogonal scope, so company/campus/global mentors
-            # can also mentor Interest Groups. Uses the shared reconciler
-            # (creates/reactivates chosen IGs, deactivates removed ones, only
-            # touches MENTOR-type links).
-            if instance.preferred_ig_ids:
-                from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
+                for app_to_revoke in other_apps_to_revoke:
+                    app_to_revoke.status = MentorApplication.Status.REJECTED
+                    app_to_revoke.verification_note = f"Affiliation changed and this application was superseded on {now.strftime('%Y-%m-%d')}."
+                    app_to_revoke.updated_by_id = user_id
+                    app_to_revoke.updated_at = now
+                    app_to_revoke.save(update_fields=["status", "verification_note", "updated_by_id", "updated_at"])
 
-                reconcile_mentor_ig_links(
-                    instance.user, instance.preferred_ig_ids, user_id
-                )
-                reconcile_mentor_ig_grants(
-                    instance, user_id
-                )
+                    # Deactivate all grants associated with the revoked application
+                    MentorScopeGrant.objects.filter(
+                        application=app_to_revoke, is_active=True
+                    ).update(
+                        is_active=False,
+                        revoked_by_id=user_id,
+                        revoked_at=now,
+                    )
 
-            # Auto-link COMPANY_MENTOR to the company's Organization
-            if instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and instance.org:
-                from db.organization import UserOrganizationLink
-                org_link, created = UserOrganizationLink.objects.get_or_create(
-                    user=instance.user,
-                    org=instance.org,
-                    defaults={
-                        "verified": True,
-                        "created_by_id": user_id,
-                        "created_at": DateTimeUtils.get_current_utc_time(),
-                    },
-                )
-                if not created and not org_link.verified:
-                    org_link.verified = True
-                    org_link.save(update_fields=["verified"])
+                    # If the revoked application was an IG_MENTOR one, deactivate its UserIgLink assignments
+                    if app_to_revoke.mentor_tier == MentorApplication.MentorTier.IG_MENTOR and app_to_revoke.preferred_ig_ids:
+                        UserIgLink.objects.filter(
+                            user=app_to_revoke.user,
+                            ig_id__in=app_to_revoke.preferred_ig_ids,
+                            assignment_type=UserIgLink.AssignmentType.MENTOR,
+                            is_active=True
+                        ).update(is_active=False, unassigned_at=now)
+
+                # Grant the tier being approved.
+                if instance.mentor_tier != MentorApplication.MentorTier.IG_MENTOR:
+                    scope_id = str(instance.org_id) if instance.org_id else None
+                    grant, grant_created = MentorScopeGrant.objects.get_or_create(
+                        application=instance,
+                        scope_type=instance.mentor_tier,
+                        scope_id=scope_id,
+                        defaults={
+                            "is_active": True,
+                            "granted_by_id": user_id,
+                            "granted_at": now,
+                        },
+                    )
+                    if not grant_created and not grant.is_active:
+                        grant.is_active = True
+                        grant.revoked_by = None
+                        grant.revoked_at = None
+                        grant.save(update_fields=["is_active", "revoked_by", "revoked_at"])
+
+                # Assign global MENTOR role
+                mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+                if mentor_role:
+                    role_link, created = UserRoleLink.objects.get_or_create(
+                        user=instance.user,
+                        role=mentor_role,
+                        defaults={
+                            "verified": True,
+                            "created_by_id": user_id,
+                            "created_at": now,
+                        },
+                    )
+                    if not created and not role_link.verified:
+                        role_link.verified = True
+                        role_link.save(update_fields=["verified"])
+
+                # Auto-assign UserIgLink from preferred IGs for ANY tier
+                if instance.preferred_ig_ids:
+                    from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
+
+                    reconcile_mentor_ig_links(
+                        instance.user, instance.preferred_ig_ids, user_id
+                    )
+                    reconcile_mentor_ig_grants(
+                        instance, user_id
+                    )
+
+                # Auto-link COMPANY_MENTOR to the company's Organization
+                if instance.mentor_tier == MentorApplication.MentorTier.COMPANY_MENTOR and instance.org:
+                    from db.organization import UserOrganizationLink
+                    org_link, created = UserOrganizationLink.objects.get_or_create(
+                        user=instance.user,
+                        org=instance.org,
+                        defaults={
+                            "verified": True,
+                            "created_by_id": user_id,
+                            "created_at": now,
+                        },
+                    )
+                    if not created and not org_link.verified:
+                        org_link.verified = True
+                        org_link.save(update_fields=["verified"])
 
         elif status == MentorApplication.Status.REJECTED:
             instance.verification_note = validated_data.get("verification_note")
@@ -532,7 +581,7 @@ class MentorVerifySerializer(serializers.Serializer):
 
         try:
             if status == MentorApplication.Status.REJECTED:
-                from db.user import User, UserRoleLink
+                from db.user import User
                 from api.notification.notifications_utils import NotificationUtils
                 from django.conf import settings
 
@@ -601,24 +650,24 @@ class SessionCreateSerializer(serializers.ModelSerializer):
             )
         return []
 
-    def validate(self, data):
+    def validate(self, attrs):
         user_id = self.context.get("user_id")
         if MentorshipSession.objects.filter(
-            title=data.get('title'),
-            starts_at=data.get('starts_at'),
-            entity_id=data.get('entity_id'),
+            title=attrs.get('title'),
+            starts_at=attrs.get('starts_at'),
+            entity_id=attrs.get('entity_id'),
             created_by_id=user_id,
             is_deleted=False
         ).exists():
             raise serializers.ValidationError("A session with this exact title and start time already exists.")
 
-        if data.get('starts_at') >= data.get('ends_at'):
+        if attrs.get('starts_at') >= attrs.get('ends_at'):
             raise serializers.ValidationError("Session start time must be before end time.")
 
         # ── Mode / venue constraints ────────────────────────────────────────
-        mode = data.get('mode')
-        venue = data.get('venue') or ""
-        meeting_link = data.get('meeting_link') or ""
+        mode = attrs.get('mode')
+        venue = attrs.get('venue') or ""
+        meeting_link = attrs.get('meeting_link') or ""
 
         if mode == MentorshipSession.Mode.ONLINE:
             if venue.strip():
@@ -639,26 +688,26 @@ class SessionCreateSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
-        is_recurring = data.get('is_recurring', False)
+        is_recurring = attrs.get('is_recurring', False)
         if is_recurring:
             errors = {}
-            if not data.get('recurrence_type'):
+            if not attrs.get('recurrence_type'):
                 errors['recurrence_type'] = "recurrence_type is required when is_recurring is true."
-            if not data.get('recurrence_interval') or data.get('recurrence_interval') < 1:
+            if not attrs.get('recurrence_interval') or attrs.get('recurrence_interval') < 1:
                 errors['recurrence_interval'] = "recurrence_interval must be a positive integer when is_recurring is true."
-            if not data.get('recurrence_end_date'):
+            if not attrs.get('recurrence_end_date'):
                 errors['recurrence_end_date'] = "recurrence_end_date is required when is_recurring is true."
-            elif data.get('starts_at') and data.get('recurrence_end_date') <= data.get('starts_at').date():
+            elif attrs.get('starts_at') and attrs.get('recurrence_end_date') <= attrs.get('starts_at').date():
                 errors['recurrence_end_date'] = "recurrence_end_date must be after the session starts_at date."
 
             if errors:
                 raise serializers.ValidationError(errors)
         else:
-            data['recurrence_type'] = None
-            data['recurrence_interval'] = None
-            data['recurrence_end_date'] = None
+            attrs['recurrence_type'] = None
+            attrs['recurrence_interval'] = None
+            attrs['recurrence_end_date'] = None
 
-        return data
+        return attrs
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
@@ -702,27 +751,27 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
             "max_participants"
         ]
 
-    def validate(self, data):
+    def validate(self, attrs):
         # Allow partial updates by fetching from instance if not in data
-        starts_at = data.get('starts_at', self.instance.starts_at) if self.instance else data.get('starts_at')
-        ends_at = data.get('ends_at', self.instance.ends_at) if self.instance else data.get('ends_at')
+        starts_at = attrs.get('starts_at', self.instance.starts_at) if self.instance else attrs.get('starts_at')
+        ends_at = attrs.get('ends_at', self.instance.ends_at) if self.instance else attrs.get('ends_at')
 
         if starts_at and ends_at and starts_at >= ends_at:
             raise serializers.ValidationError("Session start time must be before end time.")
 
         # ── Mode / venue constraints (resolve from instance for partial PATCH) ──
-        mode = data.get('mode', self.instance.mode if self.instance else None)
-        venue = (data.get('venue') if 'venue' in data else (self.instance.venue if self.instance else None)) or ""
-        meeting_link = (data.get('meeting_link') if 'meeting_link' in data else (self.instance.meeting_link if self.instance else None)) or ""
+        mode = attrs.get('mode', self.instance.mode if self.instance else None)
+        venue = (attrs.get('venue') if 'venue' in attrs else (self.instance.venue if self.instance else None)) or ""
+        meeting_link = (attrs.get('meeting_link') if 'meeting_link' in attrs else (self.instance.meeting_link if self.instance else None)) or ""
 
         # On a mode change we auto-clear the field that no longer applies rather
         # than rejecting stale data. Switching an online session to offline (or
         # vice-versa) would otherwise fail because the previous meeting_link /
         # venue is still stored on the row.
         if mode == MentorshipSession.Mode.ONLINE:
-            data["venue"] = ""
+            attrs["venue"] = ""
         elif mode == MentorshipSession.Mode.OFFLINE:
-            data["meeting_link"] = ""
+            attrs["meeting_link"] = ""
         elif mode == MentorshipSession.Mode.HYBRID:
             errors = {}
             if not venue.strip():
@@ -732,7 +781,7 @@ class SessionUpdateSerializer(serializers.ModelSerializer):
             if errors:
                 raise serializers.ValidationError(errors)
 
-        return data
+        return attrs
 
     def update(self, instance, validated_data):
         user_id = self.context.get("user_id")
@@ -891,12 +940,12 @@ class AvailabilitySlotCreateUpdateSerializer(serializers.ModelSerializer):
             "valid_to"
         ]
 
-    def validate(self, data):
-        start_time = data.get('start_time', self.instance.start_time if self.instance else None)
-        end_time = data.get('end_time', self.instance.end_time if self.instance else None)
-        weekday = data.get('weekday', self.instance.weekday if self.instance else None)
-        valid_from = data.get('valid_from', self.instance.valid_from if self.instance else None)
-        valid_to = data.get('valid_to', self.instance.valid_to if self.instance else None)
+    def validate(self, attrs):
+        start_time = attrs.get('start_time', self.instance.start_time if self.instance else None)
+        end_time = attrs.get('end_time', self.instance.end_time if self.instance else None)
+        weekday = attrs.get('weekday', self.instance.weekday if self.instance else None)
+        valid_from = attrs.get('valid_from', self.instance.valid_from if self.instance else None)
+        valid_to = attrs.get('valid_to', self.instance.valid_to if self.instance else None)
         
         if start_time and end_time and start_time >= end_time:
             raise serializers.ValidationError("Start time must be before end time.")
@@ -907,7 +956,7 @@ class AvailabilitySlotCreateUpdateSerializer(serializers.ModelSerializer):
         if valid_from and valid_to and valid_from > valid_to:
             raise serializers.ValidationError("Valid from date must be before or equal to valid to date.")
             
-        return data
+        return attrs
 
     def create(self, validated_data):
         user_id = self.context.get("user_id")
@@ -1094,14 +1143,14 @@ class ParticipantFeedbackSerializer(serializers.ModelSerializer):
         model = MentorshipSessionUserLink
         fields = ["feedback"]
 
-    def validate(self, data):
-        if not data.get("feedback"):
+    def validate(self, attrs):
+        if not attrs.get("feedback"):
             raise serializers.ValidationError("Feedback cannot be empty.")
             
         if self.instance.attendance_status != MentorshipSessionUserLink.AttendanceStatus.ATTENDED:
             raise serializers.ValidationError("You can only leave feedback for sessions you have attended.")
             
-        return data
+        return attrs
 
 class MentorActivitySerializer(serializers.Serializer):
     id = serializers.CharField()
@@ -1143,18 +1192,18 @@ class AdminAssignMentorSerializer(serializers.Serializer):
     expertise    = serializers.CharField(required=False, allow_blank=True, default=None)
     hours        = serializers.IntegerField(required=False, min_value=0, default=0)
 
-    def validate(self, data):
+    def validate(self, attrs):
         from db.user import User
         from db.organization import Organization
         from utils.types import OrganizationType
 
-        tier   = data["mentor_tier"]
+        tier   = attrs["mentor_tier"]
         errors = {}
 
         # ── Resolve all user_muids ──────────────────────────────────────────
         resolved_users = {}
         invalid_muids  = []
-        for muid in data["user_muids"]:
+        for muid in attrs["user_muids"]:
             user = User.objects.filter(muid=muid, suspended_at__isnull=True).first()
             if user is None:
                 invalid_muids.append(muid)
@@ -1169,7 +1218,7 @@ class AdminAssignMentorSerializer(serializers.Serializer):
 
         # ── Tier-specific validation ────────────────────────────────────────
         if tier in (MentorApplication.MentorTier.CAMPUS_MENTOR, MentorApplication.MentorTier.COMPANY_MENTOR):
-            org_id = data.get("org_id")
+            org_id = attrs.get("org_id")
             if not org_id:
                 errors["org_id"] = f"org_id is required for {tier}."
             else:
@@ -1184,10 +1233,10 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         f"org_id must reference a valid {expected_org_type} organisation."
                     )
                 else:
-                    data["_org"] = org
+                    attrs["_org"] = org
 
         if tier == MentorApplication.MentorTier.IG_MENTOR:
-            ig_ids = data.get("ig_ids") or []
+            ig_ids = attrs.get("ig_ids") or []
             if not ig_ids:
                 errors["ig_ids"] = "ig_ids (non-empty list) is required for IG_MENTOR."
             else:
@@ -1203,8 +1252,8 @@ class AdminAssignMentorSerializer(serializers.Serializer):
         if errors:
             raise serializers.ValidationError(errors)
 
-        data["_resolved_users"] = resolved_users
-        return data
+        attrs["_resolved_users"] = resolved_users
+        return attrs
 
     def create(self, validated_data):
         """
@@ -1221,6 +1270,7 @@ class AdminAssignMentorSerializer(serializers.Serializer):
 
         # Fetch the platform-wide Mentor role once (shared across all users)
         mentor_role = Role.objects.filter(title=RoleType.MENTOR.value).first()
+        admin_user = User.objects.get(id=admin_id)
 
         with transaction.atomic():
             for muid, user in resolved_users.items():
@@ -1290,6 +1340,25 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                         defaults={"verified": True, "created_by_id": admin_id, "created_at": now}
                     )
 
+                # Log the admin assignment action
+                from db.mentor import SystemActionLog
+                SystemActionLog.objects.create(
+                    action_type=SystemActionLog.ActionType.MENTOR_VERIFY.value,
+                    actor_user=admin_user,
+                    subject_user=user,
+                    entity_name='mentor_application',
+                    entity_id=application.id,
+                    new_data={
+                        'status': application.status,
+                        'mentor_tier': application.mentor_tier,
+                        'org_id': str(application.org.id) if application.org else None,
+                        'org_title': application.org.title if application.org else None,
+                        'ig_ids': ig_ids,
+                        'admin_assign': True
+                    },
+                    remarks=f"Admin {admin_user.full_name} directly assigned {user.full_name} as a {tier}."
+                )
+
                 # 5. Side-effects (IG links + org link)
                 if ig_ids:
                     from .dash_mentor_helper import reconcile_mentor_ig_links, reconcile_mentor_ig_grants
@@ -1305,6 +1374,10 @@ class AdminAssignMentorSerializer(serializers.Serializer):
                     )
 
         return list(resolved_users.keys())
+
+
+class MentorDeactivationSerializer(serializers.Serializer):
+    reason = serializers.CharField(required=True, max_length=500)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -1342,15 +1415,15 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
             "max_participants",
         ]
 
-    def validate(self, data):
+    def validate(self, attrs):
         from db.task import UserIgLink
         from django.utils import timezone
 
         user_id     = self.context["user_id"]
-        session_type = data.get("session_type")
-        entity_id    = data.get("entity_id")
-        starts_at    = data.get("starts_at")
-        ends_at      = data.get("ends_at")
+        session_type = attrs.get("session_type")
+        entity_id    = attrs.get("entity_id")
+        starts_at    = attrs.get("starts_at")
+        ends_at      = attrs.get("ends_at")
 
         # ── Time guards ──────────────────────────────────────────────────────
         if starts_at and starts_at <= timezone.now():
@@ -1387,9 +1460,9 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
             )
 
         # ── Mode / venue / meeting-link constraints ──────────────────────────
-        mode         = data.get("mode")
-        venue        = (data.get("venue") or "").strip()
-        meeting_link = (data.get("meeting_link") or "").strip()
+        mode         = attrs.get("mode")
+        venue        = (attrs.get("venue") or "").strip()
+        meeting_link = (attrs.get("meeting_link") or "").strip()
 
         if mode == MentorshipSession.Mode.ONLINE and venue:
             raise serializers.ValidationError(
@@ -1412,7 +1485,7 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
         if MentorshipSession.objects.filter(
             requested_by_id=user_id,
             entity_id=entity_id,
-            title=data.get("title"),
+            title=attrs.get("title"),
             starts_at=starts_at,
             status=MentorshipSession.Status.REQUESTED,
             is_deleted=False,
@@ -1422,7 +1495,7 @@ class StudentSessionRequestSerializer(serializers.ModelSerializer):
                 "title and start time for this entity."
             )
 
-        return data
+        return attrs
 
     def create(self, validated_data):
         user_id = self.context["user_id"]
@@ -1518,12 +1591,12 @@ class MentorStudentRequestVerifySerializer(serializers.Serializer):
     meeting_link = serializers.CharField(required=False, allow_blank=True, allow_null=True)
     venue        = serializers.CharField(required=False, allow_blank=True, allow_null=True)
 
-    def validate(self, data):
+    def validate(self, attrs):
         from django.utils import timezone
 
-        action   = data.get("status")
-        starts_at = data.get("starts_at")
-        ends_at   = data.get("ends_at")
+        action   = attrs.get("status")
+        starts_at = attrs.get("starts_at")
+        ends_at   = attrs.get("ends_at")
 
         if action == "APPROVED":
             # Resolve effective times (override or fall back to existing session values)
@@ -1541,9 +1614,9 @@ class MentorStudentRequestVerifySerializer(serializers.Serializer):
                 )
 
             # Resolve effective mode/venue/link for consistency check
-            effective_mode  = data.get("mode")         or self.instance.mode
-            effective_venue = (data.get("venue") or self.instance.venue or "").strip()
-            effective_link  = (data.get("meeting_link") or self.instance.meeting_link or "").strip()
+            effective_mode  = attrs.get("mode")         or self.instance.mode
+            effective_venue = (attrs.get("venue") or self.instance.venue or "").strip()
+            effective_link  = (attrs.get("meeting_link") or self.instance.meeting_link or "").strip()
 
             if effective_mode == MentorshipSession.Mode.ONLINE and effective_venue:
                 raise serializers.ValidationError(
@@ -1562,7 +1635,7 @@ class MentorStudentRequestVerifySerializer(serializers.Serializer):
                 if errors:
                     raise serializers.ValidationError(errors)
 
-        return data
+        return attrs
 
     def update(self, instance, validated_data):
         mentor_id = self.context["user_id"]

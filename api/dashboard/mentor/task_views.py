@@ -152,6 +152,14 @@ class MentorTaskListCreateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         mutable_data = request.data.copy()
         mutable_data["created_by"] = user_id
         mutable_data["updated_by"] = user_id
@@ -226,6 +234,14 @@ class MentorTaskDetailAPI(APIView):
     def put(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
 
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
+
         task = TaskList.objects.filter(
             id=task_id, requested_by_id=user_id
         ).first()
@@ -281,6 +297,14 @@ class MentorTaskDetailAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def delete(self, request, task_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
 
         task = TaskList.objects.filter(
             id=task_id, requested_by_id=user_id

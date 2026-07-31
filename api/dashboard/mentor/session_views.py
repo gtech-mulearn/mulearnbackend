@@ -27,6 +27,14 @@ class MentorSessionCreateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         data = request.data.copy()
 
         # ── IG-scoped sessions only ──────────────────────────────────────────
@@ -121,6 +129,14 @@ class MentorSessionUpdateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def patch(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         session = MentorshipSession.objects.filter(id=session_id, created_by_id=user_id, is_deleted=False).first()
         
         if not session:
@@ -153,6 +169,14 @@ class MentorSessionUpdateAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def delete(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         session = MentorshipSession.objects.filter(id=session_id, created_by_id=user_id, is_deleted=False).first()
         
         if not session:

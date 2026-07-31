@@ -4,10 +4,15 @@ from django.db.models import Q, F
 from utils.permission import CustomizePermission, JWTUtils, role_required
 from utils.response import CustomResponse
 from utils.types import RoleType
-from utils.utils import CommonUtils
+from utils.utils import CommonUtils, DateTimeUtils
 from db.job import CompanyJob, UserJobApplication
-from db.company import Company
-from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes
+from db.company import Company, CompanyAdminLink
+from db.user import User
+from drf_spectacular.utils import extend_schema, OpenApiParameter, OpenApiTypes, inline_serializer
+from rest_framework import serializers
+from api.notification.notifications_utils import NotificationUtils
+from django.conf import settings
+from db.mentor import SystemActionLog
 from . import job_serializers
 from .company_views import _get_company_for_user
 
@@ -32,13 +37,46 @@ class CompanyJobAPI(APIView):
                 general_message="Verified company profile not found or access denied."
             ).get_failure_response(status_code=403)
 
+        # An owner or an accepted delegate can post/approve jobs.
+        is_owner_or_delegate = company.company_user_id == user_id
+        if not is_owner_or_delegate:
+            is_owner_or_delegate = CompanyAdminLink.objects.filter(
+                company=company,
+                user_id=user_id,
+                status='Accepted'
+            ).exists()
+
         serializer = job_serializers.JobCreateSerializer(
-            data=request.data, context={"user_id": user_id, "company": company}
+            data=request.data, context={"user_id": user_id, "company": company, "is_owner": is_owner_or_delegate}
         )
         if serializer.is_valid():
-            serializer.save()
+            job = serializer.save()
+            if is_owner_or_delegate:
+                message = "Job posted successfully."
+            else:
+                message = "Job submitted for approval successfully."
+                # Notify company owner
+                try:
+                    from api.notification.notifications_utils import NotificationUtils
+                    from django.conf import settings
+
+                    mentor = User.objects.get(id=user_id)
+                    owner = company.company_user
+
+                    NotificationUtils.insert_notification(
+                        user=owner,
+                        title="New Job Posting for Approval",
+                        description=f"Mentor {mentor.full_name} has submitted a new job posting '{job.title}' for your approval.",
+                        button="View Jobs",
+                        url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/jobs/pending/",
+                        created_by=mentor,
+                    )
+                except Exception:
+                    # Silently fail on notification error
+                    pass
+
             return CustomResponse(
-                general_message="Job posted successfully.",
+                general_message=message,
                 response=serializer.data
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()
@@ -52,9 +90,25 @@ class CompanyJobAPI(APIView):
         user_id = JWTUtils.fetch_user_id(request)
         company = _get_company_for_user(user_id)
         if not company:
-            return CustomResponse(general_message="Company profile not found or access denied.").get_failure_response(status_code=404)
+            return CustomResponse(general_message="Company profile not found or access denied.").get_failure_response(
+                status_code=404)
 
-        jobs = CompanyJob.objects.filter(company=company, is_deleted=False)
+        is_owner_or_delegate = company.company_user_id == user_id
+        if not is_owner_or_delegate:
+            is_owner_or_delegate = CompanyAdminLink.objects.filter(
+                company=company,
+                user_id=user_id,
+                status='Accepted'
+            ).exists()
+
+        if is_owner_or_delegate:
+            jobs = CompanyJob.objects.filter(company=company, is_deleted=False)
+        else:  # Mentor
+            jobs = CompanyJob.objects.filter(
+                Q(company=company, is_deleted=False, status='Active') |
+                Q(company=company, is_deleted=False, created_by_id=user_id)
+            ).distinct()
+
         paginated_queryset = CommonUtils.get_paginated_queryset(
             jobs, request,
             search_fields=["title", "location", "job_type"],
@@ -119,9 +173,107 @@ class CompanyJobDetailAPI(APIView):
             return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
         job.is_deleted = True
         job.updated_at = DateTimeUtils.get_current_utc_time()
-        job.updated_by = user_id
-        job.save()
+        job.updated_by_id = user_id
+        job.save(update_fields=['is_deleted', 'updated_at', 'updated_by'])
         return CustomResponse(general_message="Job deleted successfully.").get_success_response()
+
+
+class CompanyPendingJobListAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="List all jobs pending approval for the authenticated company owner.",
+        responses={200: job_serializers.JobListSerializer(many=True)},
+    )
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company:
+            return CustomResponse(general_message="Company profile not found or access denied.").get_failure_response(
+                status_code=404)
+
+        is_owner_or_delegate = company.company_user_id == user_id
+        if not is_owner_or_delegate:
+            is_owner_or_delegate = CompanyAdminLink.objects.filter(
+                company=company, user_id=user_id, status='Accepted'
+            ).exists()
+
+        if not is_owner_or_delegate:
+            return CustomResponse(general_message="You are not authorized to view pending jobs.").get_failure_response(
+                status_code=403)
+
+        jobs = CompanyJob.objects.filter(company=company, status='Pending Approval', is_deleted=False)
+        paginated_queryset = CommonUtils.get_paginated_queryset(
+            jobs, request,
+            search_fields=["title", "location", "job_type", "created_by__full_name"],
+            sort_fields={"title": "title", "created_at": "created_at"}
+        )
+        serializer = job_serializers.JobListSerializer(paginated_queryset.get("queryset"), many=True)
+        return CustomResponse(
+            response={
+                "data": serializer.data,
+                "pagination": paginated_queryset.get("pagination"),
+            }
+        ).get_success_response()
+
+
+class CompanyJobVerifyAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Jobs'],
+        description="Approve or reject a job posting submitted by a company mentor.",
+        request=job_serializers.JobVerifySerializer,
+        responses={200: job_serializers.JobListSerializer},
+    )
+    def patch(self, request, job_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company:
+            return CustomResponse(general_message="Company profile not found or access denied.").get_failure_response(
+                status_code=403)
+
+        is_owner_or_delegate = company.company_user_id == user_id
+        if not is_owner_or_delegate:
+            is_owner_or_delegate = CompanyAdminLink.objects.filter(
+                company=company, user_id=user_id, status='Accepted'
+            ).exists()
+
+        if not is_owner_or_delegate:
+            return CustomResponse(general_message="You are not authorized to verify jobs.").get_failure_response(status_code=403)
+
+        job = CompanyJob.objects.filter(id=job_id, company=company, status='Pending Approval').first()
+        if not job:
+            return CustomResponse(general_message="Job posting not found or not pending approval.").get_failure_response(
+                status_code=404)
+
+        serializer = job_serializers.JobVerifySerializer(job, data=request.data, context={'user_id': user_id})
+        if serializer.is_valid():
+            job = serializer.save()
+
+            try:
+                from api.notification.notifications_utils import NotificationUtils
+                from django.conf import settings
+
+                status = serializer.validated_data.get('status')
+                title = "Job Posting Approved" if status == 'Active' else "Job Posting Rejected"
+                description = f"Your job posting '{job.title}' has been {status.lower()}"
+                if status == 'Rejected':
+                    description += f". Reason: {job.rejection_reason}"
+
+                NotificationUtils.insert_notification(user=job.created_by, title=title, description=description,
+                                                      button="View Job",
+                                                      url=f"{settings.FR_DOMAIN_NAME}/dashboard/jobs/{job.id}/",
+                                                      created_by=company.company_user)
+            except Exception:
+                pass
+
+            return CustomResponse(
+                general_message=f"Job posting has been {job.status.lower()}.",
+                response=job_serializers.JobListSerializer(job).data
+            ).get_success_response()
+        return CustomResponse(message=serializer.errors).get_failure_response()
 
 class PublicJobAPI(APIView):
     permission_classes = [CustomizePermission]
@@ -382,6 +534,195 @@ class TrackJobViewAPIView(APIView):
             ).get_failure_response(status_code=500)
 
 
+class CompanyAdminLinkAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Admin'],
+        description="List all delegates for the authenticated company owner.",
+        responses={200: job_serializers.CompanyAdminLinkSerializer(many=True)},
+    )
+    @role_required([RoleType.COMPANY.value])
+    def get(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company or company.company_user_id != user_id:
+            return CustomResponse(
+                general_message="Company profile not found or you are not the owner."
+            ).get_failure_response(status_code=403)
+
+        links = CompanyAdminLink.objects.filter(company=company).select_related('user', 'created_by')
+        serializer = job_serializers.CompanyAdminLinkSerializer(links, many=True)
+        return CustomResponse(response=serializer.data).get_success_response()
+
+    @extend_schema(
+        tags=['Dashboard - Company Admin'],
+        description="Invite a user to be a company delegate.",
+        request=inline_serializer(name='CompanyDelegateInviteSerializer', fields={'muid': serializers.CharField()}),
+    )
+    @role_required([RoleType.COMPANY.value])
+    def post(self, request):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company or company.company_user_id != user_id:
+            return CustomResponse(
+                general_message="Company profile not found or you are not the owner."
+            ).get_failure_response(status_code=403)
+
+        muid = request.data.get('muid')
+        if not muid:
+            return CustomResponse(general_message="muid is required.").get_failure_response()
+
+        delegate_user = User.objects.filter(muid=muid).first()
+        if not delegate_user:
+            return CustomResponse(general_message="User not found.").get_failure_response(status_code=404)
+
+        if delegate_user.id == user_id:
+            return CustomResponse(general_message="You cannot invite yourself.").get_failure_response()
+
+        link, created = CompanyAdminLink.objects.get_or_create(
+            company=company,
+            user=delegate_user,
+            defaults={
+                'status': 'Pending',
+                'created_by_id': user_id,
+                'updated_by_id': user_id,
+            }
+        )
+
+        if not created:
+            return CustomResponse(
+                general_message=f"An invitation for this user is already {link.status.lower()}."
+            ).get_failure_response()
+
+        try:
+            owner = User.objects.get(id=user_id)
+            NotificationUtils.insert_notification(
+                user=delegate_user,
+                title="Company Delegate Invitation",
+                description=f"You have been invited by {owner.full_name} to become a delegate for {company.name}.",
+                button="View Invites",
+                url=f"{settings.FR_DOMAIN_NAME}/dashboard/company/delegate-invites/",
+                created_by=owner,
+            )
+            SystemActionLog.objects.create(
+                action_type=SystemActionLog.ActionType.DELEGATE_INVITED,
+                actor_user=owner,
+                subject_user=delegate_user,
+                entity_name='company_admin_link',
+                entity_id=link.id,
+                new_data={
+                    'company_id': str(company.id),
+                    'company_name': company.name,
+                    'delegate_muid': delegate_user.muid,
+                },
+                remarks=f"Company owner {owner.full_name} invited {delegate_user.full_name} as a delegate for {company.name}."
+            )
+        except Exception:
+            pass
+
+        return CustomResponse(
+            general_message="Delegate invited successfully. Awaiting their acceptance."
+        ).get_success_response()
+
+
+class CompanyAdminLinkRespondAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Admin'],
+        description="Accept or decline a company delegate invitation.",
+        request=inline_serializer(name='CompanyDelegateRespondSerializer', fields={'accept': serializers.BooleanField()}),
+    )
+    def post(self, request, link_id):
+        user_id = JWTUtils.fetch_user_id(request)
+
+        link = CompanyAdminLink.objects.filter(id=link_id, user_id=user_id, status='Pending').first()
+        if not link:
+            return CustomResponse(
+                general_message="Invitation not found or already responded to."
+            ).get_failure_response(status_code=404)
+
+        accept = request.data.get('accept')
+        if accept is None:
+            return CustomResponse(general_message="'accept' (true/false) is required.").get_failure_response()
+
+        actor = User.objects.get(id=user_id)
+        if accept:
+            link.status = 'Accepted'
+            link.updated_by_id = user_id
+            link.save()
+            SystemActionLog.objects.create(
+                action_type=SystemActionLog.ActionType.DELEGATE_RESPONDED,
+                actor_user=actor,
+                subject_user=link.company.company_user,
+                entity_name='company_admin_link',
+                entity_id=link.id,
+                new_data={
+                    'company_id': str(link.company.id),
+                    'company_name': link.company.name,
+                    'response': 'Accepted',
+                },
+                remarks=f"User {actor.full_name} accepted delegate invitation for {link.company.name}."
+            )
+            return CustomResponse(general_message="Invitation accepted.").get_success_response()
+        else:
+            SystemActionLog.objects.create(
+                action_type=SystemActionLog.ActionType.DELEGATE_RESPONDED,
+                actor_user=actor,
+                subject_user=link.company.company_user,
+                entity_name='company_admin_link',
+                entity_id=link.id,
+                new_data={
+                    'company_id': str(link.company.id),
+                    'company_name': link.company.name,
+                    'response': 'Declined',
+                },
+                remarks=f"User {actor.full_name} declined delegate invitation for {link.company.name}."
+            )
+            link.delete()
+            return CustomResponse(general_message="Invitation declined.").get_success_response()
+
+
+class CompanyAdminLinkRevokeAPI(APIView):
+    permission_classes = [CustomizePermission]
+
+    @extend_schema(
+        tags=['Dashboard - Company Admin'],
+        description="Revoke an accepted company delegate.",
+    )
+    @role_required([RoleType.COMPANY.value])
+    def delete(self, request, link_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        company = _get_company_for_user(user_id)
+        if not company or company.company_user_id != user_id:
+            return CustomResponse(
+                general_message="Company profile not found or you are not the owner."
+            ).get_failure_response(status_code=403)
+
+        link = CompanyAdminLink.objects.filter(id=link_id, company=company, status='Accepted').first()
+        if not link:
+            return CustomResponse(general_message="Accepted delegate link not found.").get_failure_response(status_code=404)
+
+        owner = User.objects.get(id=user_id)
+        delegate_user = link.user
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.DELEGATE_REVOKED,
+            actor_user=owner,
+            subject_user=delegate_user,
+            entity_name='company_admin_link',
+            entity_id=link.id,
+            old_data={
+                'company_id': str(company.id),
+                'company_name': company.name,
+                'delegate_muid': delegate_user.muid,
+            },
+            remarks=f"Company owner {owner.full_name} revoked delegate access for {delegate_user.full_name} from {company.name}."
+        )
+        link.delete()
+        return CustomResponse(general_message="Delegate revoked successfully.").get_success_response()
+
+
 class CompanyJobEngagementAnalyticsAPIView(APIView):
     """
     GET /company/jobs/<job_id>/analytics/
@@ -435,5 +776,3 @@ class CompanyJobEngagementAnalyticsAPIView(APIView):
                 general_message="Something went wrong",
                 message={"error_code": "SERVER_ERROR"}
             ).get_failure_response(status_code=500)
-
-

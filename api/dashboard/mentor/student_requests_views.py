@@ -228,6 +228,14 @@ class MentorStudentRequestVerifyAPI(APIView):
     def patch(self, request, session_id):
         user_id = JWTUtils.fetch_user_id(request)
 
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
+
         # Fetch the session — must be in REQUESTED state and not deleted
         session = MentorshipSession.objects.filter(
             id=session_id,
@@ -277,29 +285,22 @@ def _mentor_can_act(user_id: str, session: MentorshipSession) -> bool:
     the session. All sessions are Interest-Group scoped, so eligibility is:
 
       - Global MENTOR → may act on anything.
-      - Any other tier → may act on an IG_SESSION request for an Interest
-        Group they actively mentor (active MENTOR UserIgLink), regardless of
-        tier.
+      - Any other tier → may act on an IG_SESSION request for an Interest Group
+        they actively mentor (i.e., they have an active IG_MENTOR grant for it).
     """
-    from db.task import UserIgLink
     from db.user import MentorScopeGrant
-    from api.dashboard.mentor.dash_mentor_helper import get_mentor_scopes
-
-    scopes = get_mentor_scopes(user_id)
-
-    if not scopes:
-        return False
+    from api.dashboard.mentor.dash_mentor_helper import has_scope
 
     # Global mentor can act on anything.
-    if (MentorScopeGrant.ScopeType.MENTOR, None) in scopes:
+    if has_scope(user_id, MentorScopeGrant.ScopeType.MENTOR):
         return True
 
     if session.session_type != MentorshipSession.SessionType.IG_SESSION:
         return False
 
-    return UserIgLink.objects.filter(
-        user_id=user_id,
-        ig_id=session.entity_id,
-        assignment_type=UserIgLink.AssignmentType.MENTOR,
-        is_active=True,
-    ).exists()
+    # Check for a specific IG_MENTOR grant for this session's IG.
+    return has_scope(
+        user_id,
+        MentorScopeGrant.ScopeType.IG_MENTOR,
+        session.entity_id
+    )

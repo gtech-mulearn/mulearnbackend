@@ -4,6 +4,7 @@ Organiser / co-owner access required for all endpoints.
 """
 import uuid
 from django.utils import timezone
+from django.db.models import Q
 from django.db import transaction
 from rest_framework.parsers import FormParser, JSONParser, MultiPartParser
 from rest_framework.views import APIView
@@ -66,12 +67,24 @@ def _get_user_company_org_ids(user_id, roles):
     company_org_ids = set()
 
     if RoleType.COMPANY.value in roles:
-        from db.company import Company
+        from db.company import Company, CompanyAdminLink
         company = Company.objects.filter(company_user_id=user_id, status="verified").first()
         if company and company.org:
             company_org_ids.add(company.org_id)
 
+        # Add orgs where user is a delegate
+        delegate_links = CompanyAdminLink.objects.filter(
+            user_id=user_id,
+            status='Accepted'
+        ).select_related('company__org')
+
+        for link in delegate_links:
+            if link.company and link.company.org_id:
+                company_org_ids.add(link.company.org_id)
+
     if RoleType.MENTOR.value in roles:
+        # This part remains as is, for mentors creating events for their company.
+        # The check above handles owners and delegates.
         from db.user import MentorScopeGrant
         from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
         company_org_ids |= get_scope_ids(user_id, MentorScopeGrant.ScopeType.COMPANY_MENTOR)
@@ -166,7 +179,6 @@ class ManageEventListCreateAPI(APIView):
                 ).values_list('event_id', flat=True)
             )
 
-            from django.db.models import Q
             q_filter = Q(created_by_id=user_id) | Q(id__in=co_owned_event_ids)
             
             # Allow Company and Company Mentors to see all events for their company
@@ -188,8 +200,7 @@ class ManageEventListCreateAPI(APIView):
                     # A mentor can hold multiple tiers simultaneously (grants
                     # are additive) — union the pending-approval queues for
                     # every tier they actually hold, instead of picking one
-                    # arbitrary tier via .first().
-                    from django.db.models import Q as _Q
+                    # arbitrary tier via .first().                    from django.db.models import Q as _Q
                     from db.user import MentorScopeGrant
                     from db.task import UserIgLink
                     from api.dashboard.mentor.dash_mentor_helper import get_scope_ids
@@ -203,16 +214,16 @@ class ManageEventListCreateAPI(APIView):
                         ).values_list('ig_id', flat=True)
                     )
 
-                    scope_filter = _Q()
+                    scope_filter = Q()
                     has_any_scope = False
                     if campus_org_ids:
-                        scope_filter |= _Q(
+                        scope_filter |= Q(
                             organiser_type=Event.OrganiserType.CAMPUS_IG,
                             scope_org_id__in=campus_org_ids,
                         )
                         has_any_scope = True
                     if user_ig_ids:
-                        scope_filter |= _Q(
+                        scope_filter |= Q(
                             organiser_type=Event.OrganiserType.GLOBAL_IG,
                             organiser_ig_id__in=user_ig_ids,
                         )
@@ -1413,6 +1424,92 @@ class MyEventInvitesAPI(APIView):
 # ─────────────────────────────────────────────────────────────────────────────
 # MENTOR APPROVAL ENDPOINTS
 # ─────────────────────────────────────────────────────────────────────────────
+
+def _is_company_owner_or_delegate(user_id, org_id):
+    """
+    Checks if a user is the owner of a company or an accepted delegate,
+    given the company's organization ID.
+    """
+    if not org_id:
+        return False
+    
+    from db.company import Company, CompanyAdminLink
+    company = Company.objects.filter(org_id=org_id, status="verified").first()
+    if not company:
+        return False
+    
+    if company.company_user_id == user_id:
+        return True
+    
+    return CompanyAdminLink.objects.filter(
+        company=company,
+        user_id=user_id,
+        status='Accepted'
+    ).exists()
+
+
+class CompanyEventApproveAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'], description="Approve a company event (owner/delegate).")
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.organiser_type != Event.OrganiserType.COMPANY.value:
+            return CustomResponse(general_message='This is not a company event.').get_failure_response()
+
+        if not _is_company_owner_or_delegate(user_id, event.organiser_org_id):
+            return CustomResponse(general_message='You are not authorized to approve this event.').get_failure_response(status_code=403)
+        
+        if event.created_by_id == user_id:
+            return CustomResponse(general_message='You cannot approve your own event submission.').get_failure_response(status_code=403)
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message=f'Event is not pending approval (current: {event.status}).').get_failure_response()
+
+        old_status = event.status
+        new_status = Event.Status.PENDING_APPROVAL
+        event.status = new_status
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': old_status, 'to': new_status}})
+        return CustomResponse(general_message='Event approved, now pending admin review.').get_success_response()
+
+
+class CompanyEventRejectAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'], description="Reject a company event (owner/delegate).")
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.organiser_type != Event.OrganiserType.COMPANY.value:
+            return CustomResponse(general_message='This is not a company event.').get_failure_response()
+
+        if not _is_company_owner_or_delegate(user_id, event.organiser_org_id):
+            return CustomResponse(general_message='You are not authorized to reject this event.').get_failure_response(status_code=403)
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message=f'Event is not pending approval (current: {event.status}).').get_failure_response()
+
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return CustomResponse(general_message='A rejection reason is required.').get_failure_response()
+
+        old_status = event.status
+        event.status = Event.Status.REJECTED
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+        return CustomResponse(general_message='Event rejected.').get_success_response()
 
 class MentorEventApproveAPI(APIView):
     authentication_classes = [CustomizePermission]

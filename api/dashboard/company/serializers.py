@@ -363,7 +363,8 @@ class PublicCompanyProfileSerializer(serializers.ModelSerializer):
 # Company Mentor serializers
 # ---------------------------------------------------------------------------
 
-from db.user import User as _User, UserMentor
+from db.user import MentorApplication, User as _User, UserMentor
+from db.mentor import SystemActionLog
 
 
 class CompanyMentorNominateSerializer(serializers.Serializer):
@@ -407,14 +408,14 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
             )
 
         # ── Prevent duplicate active nominations ─────────────────────────────
-        existing = UserMentor.objects.filter(
+        existing = MentorApplication.objects.filter(
             user=user,
-            mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+            mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
             org=org,
-        ).exclude(status=UserMentor.Status.REJECTED).first()
+        ).exclude(status=MentorApplication.Status.REJECTED).first()
         if existing:
             raise serializers.ValidationError(
-                f"This user already has a {existing.status} Company Mentor nomination for your company."
+                f"This user already has a {existing.status.lower()} Company Mentor application for your company."
             )
 
         data["_user"] = user
@@ -430,14 +431,22 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         current_time = DateTimeUtils.get_current_utc_time()
 
         with transaction.atomic():
-            # 1️⃣ Create UserMentor
-            mentor = UserMentor.objects.create(
-                id=str(uuid.uuid4()),
+            # 1. Create or update UserMentor profile (can be empty)
+            UserMentor.objects.get_or_create(
                 user=user,
-                mentor_tier=UserMentor.MentorTier.COMPANY_MENTOR,
+                defaults={
+                    "created_by_id": nominator_id,
+                    "updated_by_id": nominator_id,
+                }
+            )
+
+            # 2️⃣ Create an approved MentorApplication record
+            application = MentorApplication.objects.create(
+                user=user,
+                mentor_tier=MentorApplication.MentorTier.COMPANY_MENTOR,
                 org=org,
                 reason=reason,
-                status=UserMentor.Status.APPROVED,
+                status=MentorApplication.Status.APPROVED,
                 verified_by_id=nominator_id,
                 verified_at=current_time,
                 created_by_id=nominator_id,
@@ -463,8 +472,8 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
 
             # 3️⃣ Create MentorScopeGrant
             MentorScopeGrant.objects.create(
-                mentor=mentor,
-                scope_type=MentorScopeGrant.ScopeType.COMPANY_MENTOR,
+                application=application,
+                scope_type=MentorApplication.MentorTier.COMPANY_MENTOR,
                 scope_id=str(org.id),
                 is_active=True,
                 granted_by_id=nominator_id,
@@ -477,7 +486,26 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
                 user=user, org=org
             ).update(verified=True)
 
-        return mentor
+        # Log the direct nomination action
+        nominator = _User.objects.get(id=nominator_id)
+        SystemActionLog.objects.create(
+            action_type=SystemActionLog.ActionType.MENTOR_VERIFY.value,
+            actor_user=nominator,
+            subject_user=user,
+            entity_name='mentor_application',
+            entity_id=application.id,
+            new_data={
+                'status': application.status,
+                'mentor_tier': application.mentor_tier,
+                'org_id': str(application.org.id) if application.org else None,
+                'org_title': application.org.title if application.org else None,
+                'reason': reason,
+                'nomination': True
+            },
+            remarks=f"Company owner {nominator.full_name} directly nominated {user.full_name} as a mentor for {org.title}."
+        )
+
+        return application
 
 
 
@@ -489,7 +517,7 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
     org_name = serializers.CharField(source="org.title", read_only=True, default=None)
 
     class Meta:
-        model = UserMentor
+        model = MentorApplication
         fields = [
             "id",
             "user_id",

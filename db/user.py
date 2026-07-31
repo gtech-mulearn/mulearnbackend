@@ -83,6 +83,7 @@ class MentorApplication(models.Model):
         PENDING = 'PENDING', 'Pending'
         APPROVED = 'APPROVED', 'Approved'
         REJECTED = 'REJECTED', 'Rejected'
+        GRANT_REVOKED = 'GRANT_REVOKED', 'Grant Revoked'
 
     class MentorTier(models.TextChoices):
         IG_MENTOR      = 'IG_MENTOR',      'IG Mentor'
@@ -153,6 +154,8 @@ class UserMentor(models.Model):
     expertise = models.TextField(blank=True, null=True)
 
     hours = models.PositiveIntegerField(default=0)
+
+    is_active = models.BooleanField(default=True)
 
     updated_by = models.ForeignKey(
         User,
@@ -334,25 +337,9 @@ class UserSettings(models.Model):
         choices=PersonaType.choices,
         default=PersonaType.LEARNER
     )
-
-    active_role_link = models.ForeignKey(
-        'UserRoleLink',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        db_column='active_role_link_id',
-        related_name='user_settings_active_role_link'
-    )
-
-    active_ig = models.ForeignKey(
-        'db.InterestGroup',
-        on_delete=models.SET_NULL,
-        null=True,
-        blank=True,
-        db_column='active_ig_id',
-        related_name='user_settings_active_ig'
-    )
-
+    active_scope_type = models.CharField(max_length=30, null=True, blank=True)
+    active_scope_id = models.CharField(max_length=36, null=True, blank=True)
+    
     last_persona_switched_at = models.DateTimeField(
         null=True,
         blank=True

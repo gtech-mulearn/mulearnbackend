@@ -65,6 +65,14 @@ class MentorAvailabilitySlotAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def post(self, request):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         ig_id = request.data.get("ig")
 
         # Availability is a mentor-level setting. An IG is optional: when one is
@@ -102,6 +110,14 @@ class MentorAvailabilitySlotAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def patch(self, request, slot_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         slot = MentorAvailabilitySlot.objects.filter(id=slot_id, mentor_user_id=user_id).first()
         
         if not slot:
@@ -129,6 +145,14 @@ class MentorAvailabilitySlotAPI(APIView):
     @role_required([RoleType.MENTOR.value])
     def delete(self, request, slot_id):
         user_id = JWTUtils.fetch_user_id(request)
+
+        from db.user import UserMentor
+        mentor_profile = UserMentor.objects.filter(user_id=user_id).first()
+        if mentor_profile and not mentor_profile.is_active:
+            return CustomResponse(
+                general_message="Your mentor account is deactivated. Please contact an administrator."
+            ).get_failure_response(status_code=403)
+
         slot = MentorAvailabilitySlot.objects.filter(id=slot_id, mentor_user_id=user_id).first()
         
         if not slot:

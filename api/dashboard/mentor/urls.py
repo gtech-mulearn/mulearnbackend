@@ -1,5 +1,5 @@
 from django.urls import path
-from . import mentor_views, session_views, availability_views, participant_views, task_views, student_requests_views
+from . import admin_views, mentor_views, session_views, availability_views, participant_views, task_views, student_requests_views, persona_views
 
 
 urlpatterns = [
@@ -34,6 +34,8 @@ urlpatterns = [
     path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
     path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
     path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
+    path('admin/deactivate/<str:user_mentor_id>/', admin_views.MentorDeactivationAPI.as_view(), name='mentor-deactivate'),
+    path('admin/reactivate/<str:user_mentor_id>/', admin_views.MentorReactivationAPI.as_view(), name='mentor-reactivate'),
     path('<str:mentor_id>/grants/',              mentor_views.MentorScopeGrantListAPI.as_view(), name='mentor-grant-list'),
     path('<str:mentor_id>/grants/<str:grant_id>/', mentor_views.MentorScopeGrantRevokeAPI.as_view(), name='mentor-grant-revoke'),
     path('change-company/', mentor_views.MentorChangeCompanyAPI.as_view(), name='mentor-change-company'),
@@ -43,4 +45,8 @@ urlpatterns = [
     path('session/student/my-requests/',                             student_requests_views.StudentSessionRequestListAPI.as_view(), name='student-session-request-list'),
     path('session/student-requests/',                                student_requests_views.MentorStudentRequestListAPI.as_view(),  name='mentor-student-request-list'),
     path('session/student-requests/<str:session_id>/verify/',        student_requests_views.MentorStudentRequestVerifyAPI.as_view(), name='mentor-student-request-verify'),
+
+    # Persona Switching
+    path('persona/status/', persona_views.PersonaStatusAPI.as_view(), name='mentor-persona-status'),
+    path('persona/switch/', persona_views.PersonaSwitchAPI.as_view(), name='mentor-persona-switch'),
 ]
