@@ -354,7 +354,7 @@ class MediaContent(models.Model):
     # both are stored in this single column.
     title       = models.CharField(max_length=300)
     date        = models.DateField()
-    time        = models.TimeField(blank=True, null=True)  # Grab Your Superpowers
+    time        = models.TimeField(blank=True, null=True)  # required at the serializer level for all content types
     description = models.TextField(blank=True, null=True)
     link        = models.CharField(max_length=500, blank=True, null=True)
 
