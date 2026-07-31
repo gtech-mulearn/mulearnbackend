@@ -178,16 +178,24 @@ class TaskPublicListAPI(APIView):
                 requested_by__company_profile__isnull=False,
             )
         elif task_source == "ig_mentor":
+            from db.user import MentorScopeGrant
+            ig_mentor_user_ids = MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR, is_active=True,
+                mentor__is_active=True,
+            ).values_list('mentor__user_id', flat=True)
             task_queryset = task_queryset.filter(
                 requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+                requested_by_id__in=ig_mentor_user_ids,
             ).distinct()
         elif task_source == "campus_mentor":
+            from db.user import MentorScopeGrant
+            campus_mentor_user_ids = MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR, is_active=True,
+                mentor__is_active=True,
+            ).values_list('mentor__user_id', flat=True)
             task_queryset = task_queryset.filter(
                 requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+                requested_by_id__in=campus_mentor_user_ids,
             ).distinct()
         elif task_source == "platform":
             task_queryset = task_queryset.filter(requested_by__isnull=True)
@@ -291,16 +299,24 @@ class TaskListAPI(APIView):
                 requested_by__company_profile__isnull=False,
             )
         elif task_source == "ig_mentor":
+            from db.user import MentorScopeGrant
+            ig_mentor_user_ids = MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.IG_MENTOR, is_active=True,
+                mentor__is_active=True,
+            ).values_list('mentor__user_id', flat=True)
             task_queryset = task_queryset.filter(
                 requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.IG_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+                requested_by_id__in=ig_mentor_user_ids,
             ).distinct()
         elif task_source == "campus_mentor":
+            from db.user import MentorScopeGrant
+            campus_mentor_user_ids = MentorScopeGrant.objects.filter(
+                scope_type=MentorScopeGrant.ScopeType.CAMPUS_MENTOR, is_active=True,
+                mentor__is_active=True,
+            ).values_list('mentor__user_id', flat=True)
             task_queryset = task_queryset.filter(
                 requested_by__isnull=False,
-                requested_by__user_mentor_user__mentor_tier=UserMentor.MentorTier.CAMPUS_MENTOR,
-                requested_by__user_mentor_user__status=UserMentor.Status.APPROVED,
+                requested_by_id__in=campus_mentor_user_ids,
             ).distinct()
         elif task_source == "platform":
             task_queryset = task_queryset.filter(requested_by__isnull=True)

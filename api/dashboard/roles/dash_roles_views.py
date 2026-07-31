@@ -415,7 +415,7 @@ class UserRole(APIView):
 
                     if app.mentor_tier == MentorApplication.MentorTier.IG_MENTOR:
                         UserIgLink.objects.filter(
-                            user=user,
+                            user=user, ig_id__in=ig_scope_ids,
                             assignment_type=UserIgLink.AssignmentType.MENTOR,
                         ).update(is_active=False)
 

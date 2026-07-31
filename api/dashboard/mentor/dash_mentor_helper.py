@@ -5,7 +5,7 @@ from django.core.cache import cache
 from db.user import UserMentor, MentorScopeGrant, MentorApplication
 from db.organization import UserOrganizationLink
 from db.task import InterestGroup, UserIgLink, TaskList, KarmaActivityLog
-from db.mentor import MentorshipSession, IgOpportunity
+from db.mentor import MentorshipSession, IgOpportunity, SystemActionLog
 from db.learning_circle import LearningCircle
 from utils.utils import DateTimeUtils
 
@@ -30,9 +30,9 @@ def get_mentor_scopes(user_id):
     """
     Return the set of active (scope_type, scope_id) pairs this user holds
     mentor authority over. This is the single deterministic source of truth
-    for permission checks — never query UserMentor.mentor_tier directly for
-    authorization, since a user can hold multiple tiers and grants are what
-    actually govern access.
+    for both authorization AND tier membership — a user's tiers are not
+    stored anywhere on UserMentor, they are derived entirely from which
+    MentorScopeGrant rows are active for them.
     """
     grants = MentorScopeGrant.objects.select_related('application').filter(
         application__user_id=user_id,

@@ -16,6 +16,17 @@ from db.mentor import SystemActionLog
 from . import job_serializers
 from .company_views import _get_company_for_user
 
+# Addon §6.4 — rate/abuse limit: cap how many drafts-pending-approval a
+# single mentor can have open at once, so an active grant can't be used to
+# spam postings before an owner catches it.
+MAX_PENDING_JOBS_PER_MENTOR = 5
+
+
+def _is_company_owner(user_id, company):
+    from .company_views import is_company_owner_or_admin
+    return is_company_owner_or_admin(user_id, company)
+
+
 class CompanyJobAPI(APIView):
     permission_classes = [CustomizePermission]
 
@@ -24,7 +35,8 @@ class CompanyJobAPI(APIView):
         description=(
             "Post a new job/gig. "
             "Jobs are always created with status='Draft' regardless of any status value sent in the request body. "
-            "Use PATCH /jobs/{job_id}/ to change the status to 'Active' (or any other value) after creation."
+            "Use PATCH /jobs/{job_id}/ to change the status to 'Pending Approval', then the company owner "
+            "approves via /jobs/{job_id}/approve/ to make it 'Active'. Owner-created jobs may set 'Active' directly."
         ),
         request=job_serializers.JobCreateSerializer,
         responses={200: job_serializers.JobCreateSerializer},
@@ -152,11 +164,37 @@ class CompanyJobDetailAPI(APIView):
         job = CompanyJob.objects.filter(id=job_id, company=company, is_deleted=False).first()
         if not job:
             return CustomResponse(general_message="Job not found or access denied.").get_failure_response(status_code=404)
-        serializer = job_serializers.JobUpdateSerializer(job, data=request.data, partial=True, context={'user_id': user_id})
+
+        data = request.data.copy()
+        requested_status = data.get('status')
+        if requested_status == CompanyJob.Status.ACTIVE and not _is_company_owner(user_id, company):
+            # Job publish gate (§3.1): only the owner may flip a job straight
+            # to Active. A non-owner mentor should submit for approval
+            # instead — swap the requested transition to Pending Approval.
+            data['status'] = CompanyJob.Status.PENDING_APPROVAL
+
+        serializer = job_serializers.JobUpdateSerializer(job, data=data, partial=True, context={'user_id': user_id})
         if serializer.is_valid():
             serializer.save()
+            general_message = "Job updated successfully."
+            if requested_status == CompanyJob.Status.ACTIVE and not _is_company_owner(user_id, company):
+                general_message = "Job submitted for owner approval (only the company owner can publish directly)."
+                try:
+                    from api.notification.notifications_utils import NotificationUtils
+                    from db.user import User
+                    actor = User.every.filter(id=user_id).first()
+                    NotificationUtils.insert_notification(
+                        user=company.company_user,
+                        title="Job Posting Awaiting Approval",
+                        description=f'A job "{job.title}" is awaiting your approval.',
+                        button="Review",
+                        url=None,
+                        created_by=actor,
+                    )
+                except Exception:
+                    pass
             return CustomResponse(
-                general_message="Job updated successfully.",
+                general_message=general_message,
                 response=serializer.data
             ).get_success_response()
         return CustomResponse(message=serializer.errors).get_failure_response()

@@ -2,6 +2,15 @@ import uuid
 from django.db import models
 
 class CompanyJob(models.Model):
+
+    class Status(models.TextChoices):
+        DRAFT = 'Draft', 'Draft'
+        PENDING_APPROVAL = 'Pending Approval', 'Pending Approval'
+        ACTIVE = 'Active', 'Active'
+        CLOSED = 'Closed', 'Closed'
+        EXPIRED = 'Expired', 'Expired'
+        REJECTED = 'Rejected', 'Rejected'
+
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
     company = models.ForeignKey('db.Company', on_delete=models.CASCADE, related_name='jobs')
     created_by = models.ForeignKey('db.User', on_delete=models.SET_NULL, null=True, blank=True,

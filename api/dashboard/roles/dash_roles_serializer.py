@@ -2,7 +2,7 @@ import uuid
 
 from rest_framework import serializers
 
-from db.user import Role, User, UserRoleLink, UserMentor
+from db.user import Role, User, UserRoleLink, UserMentor, MentorApplication
 from utils.permission import JWTUtils
 from utils.utils import DateTimeUtils, DiscordWebhooks
 from utils.types import WebHookActions, WebHookCategory, RoleType, InternGuild
@@ -258,8 +258,12 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                 role_link = existing
 
             # --- Mentor-specific provisioning ---
-            # When the Mentor role is assigned, auto-create/approve UserMentor
-            # plus all tier-specific linked rows (UserIgLink / UserOrganizationLink).
+            # When the Mentor role is assigned, create an already-APPROVED
+            # MentorApplication (source=ADMIN_ASSIGNED) and apply the shared
+            # approval side-effects (profile upsert, MentorScopeGrant, IG
+            # links / org link) via _apply_application_approval — the same
+            # path AdminAssignMentorAPI and CompanyMentorNominateAPI use, so
+            # tier membership always ends up backed by a real grant.
             if is_mentor_role and mentor_tier:
                 from db.task import InterestGroup
                 from db.organization import UserOrganizationLink
@@ -280,7 +284,7 @@ class UserRoleCreateSerializer(serializers.ModelSerializer):
                 # 2. Create an approved MentorApplication record
                 application, app_created = MentorApplication.objects.get_or_create(
                     user_id=target_user_id,
-                    mentor_tier=mentor_tier,
+                    tier=mentor_tier,
                     org=org,
                     defaults={
                         "status": MentorApplication.Status.APPROVED,

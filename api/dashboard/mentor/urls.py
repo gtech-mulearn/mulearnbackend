@@ -3,9 +3,16 @@ from . import admin_views, mentor_views, session_views, availability_views, part
 
 
 urlpatterns = [
+    path('opportunities/', opportunity_views.IgOpportunityListCreateAPI.as_view(), name='mentor-opportunity-list-create'),
+    path('opportunities/public/', opportunity_views.PublicIgOpportunityListAPI.as_view(), name='mentor-opportunity-public-list'),
+    path('opportunities/<str:opportunity_id>/', opportunity_views.IgOpportunityDetailAPI.as_view(), name='mentor-opportunity-detail'),
+    path('opportunities/<str:opportunity_id>/publish/', opportunity_views.IgOpportunityPublishAPI.as_view(), name='mentor-opportunity-publish'),
+    path('opportunities/<str:opportunity_id>/close/', opportunity_views.IgOpportunityCloseAPI.as_view(), name='mentor-opportunity-close'),
     path('public/profile/<str:mentor_id>/', mentor_views.MentorPublicProfileAPI.as_view(), name='mentor-public-profile'),
     path('public/availability/<str:mentor_id>/', availability_views.MentorPublicAvailabilityAPI.as_view(), name='mentor-public-availability'),
     path('overview/', mentor_views.MentorOverviewAPI.as_view(), name='mentor-overview'),
+    path('persona/current/', mentor_views.PersonaCurrentAPI.as_view(), name='mentor-persona-current'),
+    path('persona/switch/', mentor_views.PersonaSwitchAPI.as_view(), name='mentor-persona-switch'),
     path('register/', mentor_views.MentorRegistrationAPI.as_view(), name='mentor-register'),
     path('status/', mentor_views.MentorStatusAPI.as_view(), name='mentor-status'),
     path('profile/', mentor_views.MentorProfileAPI.as_view(), name='mentor-profile'),
@@ -32,6 +39,8 @@ urlpatterns = [
     path('tasks/ig-dropdown/',   task_views.MentorIGDropdownAPI.as_view(),       name='mentor-task-ig-dropdown'),
     path('tasks/',               task_views.MentorTaskListCreateAPI.as_view(),    name='mentor-task-list-create'),
     path('tasks/<str:task_id>/', task_views.MentorTaskDetailAPI.as_view(),        name='mentor-task-detail'),
+    path('admin/deactivate/<str:mentor_id>/',   mentor_views.AdminMentorDeactivateAPI.as_view(), name='admin-mentor-deactivate'),
+    path('admin/reactivate/<str:mentor_id>/',   mentor_views.AdminMentorReactivateAPI.as_view(), name='admin-mentor-reactivate'),
     path('admin/assign/',                       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-assign-mentor'),
     path('admin/assign/<str:user_muid>/',       mentor_views.AdminAssignMentorAPI.as_view(), name='admin-revoke-mentor'),
     path('admin/deactivate/<str:user_mentor_id>/', admin_views.MentorDeactivationAPI.as_view(), name='mentor-deactivate'),

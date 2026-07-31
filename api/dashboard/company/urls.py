@@ -28,7 +28,11 @@ urlpatterns = [
     path("talent-pool/analytics/",    analytics_views.CompanyTalentPoolAnalyticsAPIView.as_view()),
 
     # Company Mentor — Nomination
+    path("admin-link/",                       company_views.CompanyAdminLinkCreateAPI.as_view()),
+    path("admin-link/<str:link_id>/respond/", company_views.CompanyAdminLinkAcceptAPI.as_view()),
+    path("admin-link/<str:link_id>/",         company_views.CompanyAdminLinkRevokeAPI.as_view()),
     path("mentor/nominate/",          company_views.CompanyMentorNominateAPI.as_view()),
+    path("mentor/apply/",             company_views.CompanyMentorApplyAPI.as_view()),
     path("mentor/list/",              company_views.CompanyMentorListAPI.as_view()),
 
     # Task Management for Company

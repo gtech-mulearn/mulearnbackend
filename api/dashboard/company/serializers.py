@@ -423,6 +423,8 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
         return data
 
     def save(self):
+        from api.dashboard.mentor.serializers import _apply_application_approval
+
         nominator_id = self.context.get("user_id")
         user = self.validated_data["_user"]
         reason = self.validated_data.get("reason", "")
@@ -510,7 +512,7 @@ class CompanyMentorNominateSerializer(serializers.Serializer):
 
 
 class CompanyMentorListSerializer(serializers.ModelSerializer):
-    """Serializer for listing Company Mentor nominations."""
+    """Serializer for listing Company Mentor nominations/applications."""
 
     user_name = serializers.CharField(source="user.full_name", read_only=True)
     user_email = serializers.CharField(source="user.email", read_only=True)
@@ -518,13 +520,15 @@ class CompanyMentorListSerializer(serializers.ModelSerializer):
 
     class Meta:
         model = MentorApplication
+        model = MentorApplication
         fields = [
             "id",
             "user_id",
             "user_name",
             "user_email",
             "org_name",
-            "mentor_tier",
+            "tier",
+            "source",
             "status",
             "reason",
             "verification_note",

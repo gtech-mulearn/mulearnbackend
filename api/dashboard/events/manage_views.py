@@ -707,6 +707,19 @@ class ManageEventPublishAPI(APIView):
                 new_status = Event.Status.PUBLISHED
             else:
                 new_status = Event.Status.PENDING_CAMPUS_APPROVAL
+        elif event.organiser_type == Event.OrganiserType.COMPANY:
+            # Company events always need both the owner's leg and admin's
+            # (PRD §3.1 — no direct-publish fast path even for the owner,
+            # unlike campus/IG). Owner-created events skip only their own
+            # leg by starting one stage further along.
+            from db.company import Company
+            is_owner = Company.objects.filter(
+                org_id=event.organiser_org_id, company_user_id=user_id, status='verified'
+            ).exists()
+            if is_owner:
+                new_status = Event.Status.PENDING_APPROVAL
+            else:
+                new_status = Event.Status.PENDING_MENTOR_APPROVAL
         else:
             new_status = Event.Status.PENDING_APPROVAL
 
@@ -1552,6 +1565,8 @@ class MentorEventApproveAPI(APIView):
             if not is_assigned:
                 return CustomResponse(general_message='You are not a mentor for this Interest Group.').get_failure_response()
             new_status = Event.Status.PENDING_APPROVAL
+        elif event.organiser_type == Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='Company events are approved by the company owner via the company approval endpoint, not here.').get_failure_response()
         else:
             return CustomResponse(general_message='Event type not supported for mentor approval.').get_failure_response()
 
@@ -1616,6 +1631,8 @@ class MentorEventRejectAPI(APIView):
             ).exists()
             if not is_assigned:
                 return CustomResponse(general_message='You are not a mentor for this Interest Group.').get_failure_response()
+        elif event.organiser_type == Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='Company events are rejected by the company owner via the company approval endpoint, not here.').get_failure_response()
 
         reason = request.data.get('reason', '').strip()
         if not reason:
@@ -1636,6 +1653,117 @@ class MentorEventRejectAPI(APIView):
                 user=creator,
                 title='Event Rejected by Mentor',
                 description=f'Your event "{event.title}" was rejected by a mentor. Reason: {reason}',
+                button=None,
+                url=None,
+                created_by=actor,
+            )
+
+        return CustomResponse(general_message='Event rejected successfully.').get_success_response()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# COMPANY APPROVAL ENDPOINTS
+# ─────────────────────────────────────────────────────────────────────────────
+
+class CompanyEventApproveAPI(APIView):
+    """
+    Owner leg of the company event double-approval chain (PRD §3.1): a
+    non-owner company mentor's event lands at PENDING_MENTOR_APPROVAL; the
+    owner approves here, which always advances to PENDING_APPROVAL (admin
+    leg) — company events never fast-path past admin, unlike campus/IG.
+    """
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.organiser_type != Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='This event is not a company event.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message='Event is not pending owner approval.').get_failure_response()
+
+        if event.created_by_id == user_id:
+            return CustomResponse(general_message='You cannot approve your own event submission.').get_failure_response(status_code=403)
+
+        from db.company import Company
+        is_owner = Company.objects.filter(
+            org_id=event.organiser_org_id, company_user_id=user_id, status='verified'
+        ).exists()
+        if not is_owner and RoleType.ADMIN.value not in roles:
+            return CustomResponse(general_message='You are not authorized to approve events for this company.').get_failure_response()
+
+        new_status = Event.Status.PENDING_APPROVAL
+        event.status = new_status
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.APPROVED, changes={'Status': {'from': Event.Status.PENDING_MENTOR_APPROVAL, 'to': new_status}})
+
+        actor = User.objects.filter(id=user_id).first()
+        creator = event.created_by
+        if creator and actor:
+            NotificationUtils.insert_notification(
+                user=creator,
+                title='Event Approved by Company Owner',
+                description=f'Your event "{event.title}" has been approved by your company owner and now awaits admin approval.',
+                button=None,
+                url=None,
+                created_by=actor,
+            )
+
+        return CustomResponse(general_message='Event approved successfully.').get_success_response()
+
+
+class CompanyEventRejectAPI(APIView):
+    authentication_classes = [CustomizePermission]
+
+    @extend_schema(tags=['Dashboard - Events'])
+    def post(self, request, event_id):
+        user_id = JWTUtils.fetch_user_id(request)
+        roles = JWTUtils.fetch_role(request)
+
+        event = get_live_events().filter(id=event_id).first()
+        if not event:
+            return CustomResponse(general_message='Event not found.').get_failure_response()
+
+        if event.organiser_type != Event.OrganiserType.COMPANY:
+            return CustomResponse(general_message='This event is not a company event.').get_failure_response()
+
+        if event.status != Event.Status.PENDING_MENTOR_APPROVAL:
+            return CustomResponse(general_message='Event is not pending owner approval.').get_failure_response()
+
+        from db.company import Company
+        is_owner = Company.objects.filter(
+            org_id=event.organiser_org_id, company_user_id=user_id, status='verified'
+        ).exists()
+        if not is_owner and RoleType.ADMIN.value not in roles:
+            return CustomResponse(general_message='You are not authorized to reject events for this company.').get_failure_response()
+
+        reason = request.data.get('reason', '').strip()
+        if not reason:
+            return CustomResponse(general_message='A rejection reason is required.').get_failure_response()
+
+        old_status = event.status
+        event.status = Event.Status.REJECTED
+        event.updated_by_id = user_id
+        event.save()
+
+        log_event_action(event=event, user_id=user_id, action=EventLog.Action.REJECTED, changes={'Status': {'from': old_status, 'to': Event.Status.REJECTED}}, details={'reason': reason})
+
+        actor = User.objects.filter(id=user_id).first()
+        creator = event.created_by
+        if creator and actor:
+            NotificationUtils.insert_notification(
+                user=creator,
+                title='Event Rejected by Company Owner',
+                description=f'Your event "{event.title}" was rejected by your company owner. Reason: {reason}',
                 button=None,
                 url=None,
                 created_by=actor,

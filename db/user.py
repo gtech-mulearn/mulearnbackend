@@ -142,7 +142,6 @@ class UserEndgoals(models.Model):
 
 class UserMentor(models.Model):
     id = models.CharField(primary_key=True, max_length=36, default=uuid.uuid4)
-
     user = models.OneToOneField(
         User,
         on_delete=models.CASCADE,

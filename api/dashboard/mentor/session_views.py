@@ -37,6 +37,12 @@ class MentorSessionCreateAPI(APIView):
 
         data = request.data.copy()
 
+        from .dash_mentor_helper import is_mentor_active
+        if not is_mentor_active(user_id):
+            return CustomResponse(
+                general_message="Your mentor account is deactivated and cannot create sessions."
+            ).get_failure_response(status_code=403)
+
         # ── IG-scoped sessions only ──────────────────────────────────────────
         # Every session is for an Interest Group the mentor mentors (an active
         # MENTOR UserIgLink). There are no company- or campus-scoped sessions.
