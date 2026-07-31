@@ -388,7 +388,7 @@ class CompanyTalentPoolInsightsAPIView(APIView):
         description="Top-skills and top-colleges insights across the (optionally filtered) talent pool. Pass format=csv for a CSV download.",
         parameters=[
             OpenApiParameter("district_id", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False),
-            OpenApiParameter("format", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description="json (default) or csv"),
+            OpenApiParameter("export", OpenApiTypes.STR, OpenApiParameter.QUERY, required=False, description="Pass export=csv for a downloadable CSV file (default: json)"),
         ],
     )
     def get(self, request):
@@ -438,7 +438,7 @@ class CompanyTalentPoolInsightsAPIView(APIView):
             .order_by("-learner_count")[:10]
         )
 
-        if request.query_params.get("format", "json").lower() == "csv":
+        if request.query_params.get("export", "").lower() == "csv":
             import csv
             from django.http import HttpResponse
 
